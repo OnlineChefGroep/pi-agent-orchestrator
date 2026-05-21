@@ -1,6 +1,6 @@
 {
   "name": "@onlinechef/pi-subagents",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "description": "A pi extension extension that brings smart Claude Code-style autonomous sub-agents to pi.",
   "author": "OnlineChef",
   "license": "MIT",
@@ -42,7 +42,7 @@
     "@biomejs/biome": "^2.4.14",
     "@types/node": "^25.5.0",
     "typescript": "^6.0.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.7"
   },
   "pi": {
     "extensions": [
