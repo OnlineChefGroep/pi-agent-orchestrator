@@ -1,6 +1,6 @@
 {
   "name": "@onlinechef/pi-subagents",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "description": "A pi extension extension that brings smart Claude Code-style autonomous sub-agents to pi.",
   "author": "tintinweb",
   "license": "MIT",
@@ -47,9 +47,7 @@
   "pi": {
     "extensions": [
       "./src/index.ts"
-    ],
-    "video": "https://github.com/tintinweb/pi-subagents/raw/master/media/demo.mp4",
-    "image": "https://github.com/tintinweb/pi-subagents/raw/master/media/screenshot.png"
+    ]
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
