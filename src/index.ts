@@ -1234,7 +1234,7 @@ Guidelines:
 
   pi.registerCommand("hooks", {
     description: "Manage hooks",
-    handler: async (_args, ctx) => {
+    handler: async (_args, _ctx) => {
       const handlerMap = hookRegistry.getHandlers();
       const entries = [...handlerMap.entries()].sort(
         ([a], [b]) => a.localeCompare(b),
