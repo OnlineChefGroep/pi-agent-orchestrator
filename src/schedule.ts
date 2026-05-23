@@ -284,17 +284,23 @@ export class SubagentScheduler {
     // AgentManager's promise resolves either way (its .catch returns ""), so we
     // can't infer success/failure from the promise — read record.status instead.
     // Terminal states: completed/steered = success; error/aborted/stopped = error.
+    // Await the full chain so executeJob doesn't return before finalize completes.
+    // This ensures runCount/lastStatus are reflected before the Cron callback or
+    // interval tick resolves, preventing races with scheduler.stop() cleanup.
     if (record?.promise) {
-      record.promise
-        .then(() => {
-          const r = manager.getRecord(agentId);
-          const failed = r?.status === "error" || r?.status === "aborted" || r?.status === "stopped";
-          finalize(failed ? "error" : "success").catch(() => {});
-        })
-        .catch(() => finalize("error").catch(() => {}));
+      try {
+        await record.promise;
+        const r = manager.getRecord(agentId);
+        const failed = r?.status === "error" || r?.status === "aborted" || r?.status === "stopped";
+        await finalize(failed ? "error" : "success");
+      } catch {
+        // record.promise rejected (defensive — the real AgentManager's .catch
+        // returns "" so this should never fire, but handle it for safety).
+        await finalize("error").catch(() => {});
+      }
     } else {
       // Spawn returned without a promise (defensive — bypassQueue path always sets one).
-      finalize("success").catch(() => {});
+      await finalize("success").catch(() => {});
     }
   }
 
