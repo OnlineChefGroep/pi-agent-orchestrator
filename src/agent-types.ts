@@ -5,6 +5,7 @@
  * User agents override defaults with the same name. Disabled agents are kept but excluded from spawning.
  */
 
+import { isContextModeAvailable } from "./context-mode-bridge.js";
 import { DEFAULT_AGENTS } from "./default-agents.js";
 import type { AgentConfig } from "./types.js";
 
@@ -73,20 +74,6 @@ export const CTX_TOOL_NAMES: string[] = [
   "ctx_batch_execute",
   "ctx_stats",
 ];
-
-/** Cached context-mode availability — lazy, checked once. */
-let _ctxAvailable: boolean | null = null;
-
-function isCtxAvailable(): boolean {
-  if (_ctxAvailable !== null) return _ctxAvailable;
-  try {
-    require.resolve("@onlinechef/context-mode");
-    _ctxAvailable = true;
-  } catch {
-    _ctxAvailable = false;
-  }
-  return _ctxAvailable;
-}
 
 /** Unified runtime registry of all agents (defaults + user-defined). */
 const agents = new Map<string, AgentConfig>();
@@ -231,6 +218,26 @@ export interface EffectiveConfig {
   skills: true | string[] | false;
 }
 
+/**
+ * Apply partition filtering to builtinToolNames — must run after
+ * parent permission inheritance to produce the final intersection.
+ * Partition restrictions never expand tool access; only further narrow it.
+ * Hoisted to module level to avoid recreating on every getConfig() call.
+ */
+function applyPartitionFilter(
+  membership: Record<string, string[]> | undefined,
+  partitions: string[] | undefined,
+  toolNames: string[],
+): string[] {
+  // Early exit: no partitions specified → no filtering (backward compat)
+  if (!partitions || partitions.length === 0) return toolNames;
+  const allowed = resolvePartitionTools(membership, partitions);
+  // If partition membership is not configured (allowed is empty), feature is
+  // disabled → intersection returns everything (no restriction)
+  if (allowed.length === 0 && !membership) return toolNames;
+  return intersectToolNames(toolNames, allowed);
+}
+
 /** Get config for a type (case-insensitive, returns a SubagentTypeConfig-compatible object). Falls back to general-purpose. */
 export function getConfig(
   type: string,
@@ -246,21 +253,6 @@ export function getConfig(
 } {
   const key = resolveKey(type);
   const config = key ? agents.get(key) : undefined;
-
-  /**
-   * Apply partition filtering to builtinToolNames — must run after
-   * parent permission inheritance to produce the final intersection.
-   * Partition restrictions never expand tool access; only further narrow it.
-   */
-  function applyPartitionFilter(membership: Record<string, string[]> | undefined, toolNames: string[]): string[] {
-    // Early exit: no partitions specified → no filtering (backward compat)
-    if (!partitions || partitions.length === 0) return toolNames;
-    const allowed = resolvePartitionTools(membership, partitions);
-    // If partition membership is not configured (allowed is empty), feature is
-    // disabled → intersection returns everything (no restriction)
-    if (allowed.length === 0 && !membership) return toolNames;
-    return intersectToolNames(toolNames, allowed);
-  }
 
   /**
    * Apply parent permission inheritance to a raw effective config.
@@ -288,14 +280,14 @@ export function getConfig(
     });
 
     // Inject ctx_* tools when context-mode is installed and agent opts in
-    const builtinToolNames = config.useContextMode && isCtxAvailable()
+    const builtinToolNames = config.useContextMode && isContextModeAvailable()
       ? [...restricted.builtinToolNames, ...CTX_TOOL_NAMES]
       : restricted.builtinToolNames;
 
     return {
       displayName: config.displayName ?? config.name,
       description: config.description,
-      builtinToolNames: applyPartitionFilter(config.partitionMembership, builtinToolNames),
+      builtinToolNames: applyPartitionFilter(config.partitionMembership, partitions, builtinToolNames),
       extensions: restricted.extensions,
       skills: restricted.skills,
       promptMode: config.promptMode,
@@ -313,7 +305,7 @@ export function getConfig(
     return {
       displayName: gp.displayName ?? gp.name,
       description: gp.description,
-      builtinToolNames: applyPartitionFilter(gp.partitionMembership, restricted.builtinToolNames),
+      builtinToolNames: applyPartitionFilter(gp.partitionMembership, partitions, restricted.builtinToolNames),
       extensions: restricted.extensions,
       skills: restricted.skills,
       promptMode: gp.promptMode,
@@ -329,7 +321,7 @@ export function getConfig(
   return {
     displayName: "Agent",
     description: "General-purpose agent for complex, multi-step tasks",
-    builtinToolNames: applyPartitionFilter(undefined, restricted.builtinToolNames),
+    builtinToolNames: applyPartitionFilter(undefined, partitions, restricted.builtinToolNames),
     extensions: restricted.extensions,
     skills: restricted.skills,
     promptMode: "append",

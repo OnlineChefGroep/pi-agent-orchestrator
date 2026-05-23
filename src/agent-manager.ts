@@ -155,7 +155,7 @@ export class AgentManager {
       : (options.currentLevel ?? 0);
 
     // Inherit taskBudget/levelLimit from parent unless explicitly overridden
-    const childInvocation: AgentInvocation = { ...options.invocation };
+    const childInvocation: AgentInvocation = structuredClone(options.invocation ?? {});
     if (parentRecord?.invocation) {
       if (childInvocation.taskBudget === undefined) {
         childInvocation.taskBudget = parentRecord.invocation.taskBudget;
@@ -193,7 +193,9 @@ export class AgentManager {
         description: options.description,
         isBackground: options.isBackground ?? false,
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn(`[pi-subagents] Hook dispatch failed:`, err);
+      });
 
     const args: SpawnArgs = { pi, ctx, type, prompt, options };
 
@@ -309,16 +311,9 @@ export class AgentManager {
       });
     })
       .then(({ responseText, session, aborted, steered, validationResults, validated }) => {
-        // Pop this agent from the active stack now that it's done
-        this.activeAgentIdStack.pop();
-
-        // Don't overwrite status if externally stopped via abort()
-        if (record.status !== "stopped") {
-          record.status = aborted ? "aborted" : steered ? "steered" : "completed";
-        }
         record.result = responseText;
         record.session = session;
-        record.completedAt ??= Date.now();
+        const status = aborted ? "aborted" : steered ? "steered" : "completed";
 
         // Store validation results on the record
         if (validationResults) {
@@ -342,67 +337,69 @@ export class AgentManager {
           }
         }
 
-        detach();
-
-        // Final flush of streaming output file
-        if (record.outputCleanup) {
-          try { record.outputCleanup(); } catch { /* ignore */ }
-          record.outputCleanup = undefined;
-        }
-
-        // Clean up worktree if used
-        if (record.worktree) {
-          const wtResult = cleanupWorktree(ctx.cwd, record.worktree, options.description);
-          record.worktreeResult = wtResult;
-          if (wtResult.hasChanges && wtResult.branch) {
-            record.result = (record.result ?? "") +
-              `\n\n---\nChanges saved to branch \`${wtResult.branch}\`. Merge with: \`git merge ${wtResult.branch}\``;
-          }
-        }
-
-        if (options.isBackground) {
-          this.runningBackground--;
-          try { this.onComplete?.(record); } catch { /* ignore completion side-effect errors */ }
-          this.drainQueue();
-        }
+        this.finalizeAgent(record, ctx, options.description, !!options.isBackground, detach, status);
         return responseText;
       })
       .catch((err) => {
-        // Pop this agent from the active stack now that it's done (errored)
-        this.activeAgentIdStack.pop();
-
-        // Don't overwrite status if externally stopped via abort()
-        if (record.status !== "stopped") {
-          record.status = "error";
-        }
-        record.error = err instanceof Error ? err.message : String(err);
-        record.completedAt ??= Date.now();
-
-        detach();
-
-        // Final flush of streaming output file on error
-        if (record.outputCleanup) {
-          try { record.outputCleanup(); } catch { /* ignore */ }
-          record.outputCleanup = undefined;
-        }
-
-        // Best-effort worktree cleanup on error
-        if (record.worktree) {
-          try {
-            const wtResult = cleanupWorktree(ctx.cwd, record.worktree, options.description);
-            record.worktreeResult = wtResult;
-          } catch { /* ignore cleanup errors */ }
-        }
-
-        if (options.isBackground) {
-          this.runningBackground--;
-          this.onComplete?.(record);
-          this.drainQueue();
-        }
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        this.finalizeAgent(record, ctx, options.description, !!options.isBackground, detach, "error", errorMsg);
         return "";
       });
 
     record.promise = promise;
+  }
+
+  /**
+   * Shared cleanup for agent completion (success or error).
+   * Handles stack pop, status/error assignment, output flush, worktree cleanup,
+   * and background queue drain. Called from both .then() and .catch() after
+   * result-specific logic.
+   */
+  private finalizeAgent(
+    record: AgentRecord,
+    ctx: ExtensionContext,
+    description: string,
+    isBackground: boolean,
+    detach: () => void,
+    status?: "completed" | "aborted" | "steered" | "error",
+    error?: string,
+  ): void {
+    // Pop this agent from the active stack now that it's done
+    this.activeAgentIdStack.pop();
+
+    // Don't overwrite status if externally stopped via abort()
+    if (record.status !== "stopped" && status) {
+      record.status = status;
+    }
+    record.completedAt ??= Date.now();
+    if (error) record.error = error;
+
+    detach();
+
+    // Final flush of streaming output file
+    if (record.outputCleanup) {
+      try { record.outputCleanup(); } catch { /* ignore */ }
+      record.outputCleanup = undefined;
+    }
+
+    // Clean up worktree if used
+    if (record.worktree) {
+      try {
+        const wtResult = cleanupWorktree(ctx.cwd, record.worktree, description);
+        record.worktreeResult = wtResult;
+        if (!error && wtResult.hasChanges && wtResult.branch) {
+          record.result = (record.result ?? "") +
+            `\n\n---\nChanges saved to branch \`${wtResult.branch}\`. Merge with: \`git merge ${wtResult.branch}\``;
+        }
+      } catch { /* ignore cleanup errors */ }
+    }
+
+    // Background agent bookkeeping
+    if (isBackground) {
+      this.runningBackground--;
+      try { this.onComplete?.(record); } catch { /* ignore completion side-effect errors */ }
+      this.drainQueue();
+    }
   }
 
   /** Start queued agents up to the concurrency limit. */

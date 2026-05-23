@@ -347,7 +347,7 @@ describe("Backward compat: existing agent types", () => {
 
     it("uses haiku model", () => {
       const agentCfg = getAgentConfig("Explore");
-      expect(agentCfg?.model).toBe("anthropic/claude-haiku-4-5-20251001");
+      expect(agentCfg?.model).toBe("anthropic/claude-haiku-4-5");
     });
 
     it("uses replace prompt mode", () => {

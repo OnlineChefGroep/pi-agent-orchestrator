@@ -65,8 +65,7 @@ export function parseValidationResult(text: string, agentId: string): Validation
         ? parsed.criteria
         : [];
       const passed = parsed.overallPassed
-        ?? criteria.every((c: ValidationCriterion) => c.passed)
-        ?? false;
+        ?? criteria.every((c: ValidationCriterion) => c.passed);
       return {
         agentId,
         passed,

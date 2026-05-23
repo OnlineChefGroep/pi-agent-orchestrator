@@ -45,11 +45,11 @@ describe("ScheduleStore", () => {
     expect(p).toBe("/repo/.pi/subagent-schedules/abc123.json");
   });
 
-  it("starts empty and round-trips a job through add/list", () => {
+  it("starts empty and round-trips a job through add/list", async () => {
     const store = new ScheduleStore(join(tmp, "s.json"));
     expect(store.list()).toEqual([]);
     const job = makeJob();
-    store.add(job);
+    await store.add(job);
     expect(store.list()).toEqual([job]);
 
     // New instance on same file — verifies persistence
@@ -57,66 +57,66 @@ describe("ScheduleStore", () => {
     expect(fresh.list()).toEqual([job]);
   });
 
-  it("update returns merged record and persists the patch", () => {
+  it("update returns merged record and persists the patch", async () => {
     const store = new ScheduleStore(join(tmp, "s.json"));
     const job = makeJob({ name: "before" });
-    store.add(job);
+    await store.add(job);
 
-    const updated = store.update(job.id, { name: "after", runCount: 3 });
+    const updated = await store.update(job.id, { name: "after", runCount: 3 });
     expect(updated).toMatchObject({ id: job.id, name: "after", runCount: 3 });
 
     const fresh = new ScheduleStore(join(tmp, "s.json"));
     expect(fresh.list()[0]).toMatchObject({ name: "after", runCount: 3 });
   });
 
-  it("update returns undefined for unknown id and does not create a record", () => {
+  it("update returns undefined for unknown id and does not create a record", async () => {
     const store = new ScheduleStore(join(tmp, "s.json"));
-    const r = store.update("nonexistent", { name: "x" });
+    const r = await store.update("nonexistent", { name: "x" });
     expect(r).toBeUndefined();
     expect(store.list()).toEqual([]);
   });
 
-  it("remove returns true on existing job and false on missing", () => {
+  it("remove returns true on existing job and false on missing", async () => {
     const store = new ScheduleStore(join(tmp, "s.json"));
     const job = makeJob();
-    store.add(job);
-    expect(store.remove(job.id)).toBe(true);
+    await store.add(job);
+    expect(await store.remove(job.id)).toBe(true);
     expect(store.list()).toEqual([]);
-    expect(store.remove(job.id)).toBe(false);
+    expect(await store.remove(job.id)).toBe(false);
   });
 
-  it("hasName excludes a given id (for rename safety)", () => {
+  it("hasName excludes a given id (for rename safety)", async () => {
     const store = new ScheduleStore(join(tmp, "s.json"));
     const job = makeJob({ name: "alpha" });
-    store.add(job);
+    await store.add(job);
     expect(store.hasName("alpha")).toBe(true);
     expect(store.hasName("alpha", job.id)).toBe(false);  // excluded — own record
     expect(store.hasName("beta")).toBe(false);
   });
 
-  it("uses atomic temp+rename — write produces final file, no .tmp leftover", () => {
+  it("uses atomic temp+rename — write produces final file, no .tmp leftover", async () => {
     const file = join(tmp, "s.json");
     const store = new ScheduleStore(file);
-    store.add(makeJob());
+    await store.add(makeJob());
     expect(existsSync(file)).toBe(true);
     expect(existsSync(file + ".tmp")).toBe(false);
   });
 
-  it("self-heals from a corrupt JSON file — load silently empties, next save rewrites", () => {
+  it("self-heals from a corrupt JSON file — load silently empties, next save rewrites", async () => {
     const file = join(tmp, "s.json");
     writeFileSync(file, "{ this is not valid JSON");
     const store = new ScheduleStore(file);
     expect(store.list()).toEqual([]);
 
     // Next mutation overwrites the broken file with healthy JSON
-    store.add(makeJob({ id: "fresh" }));
+    await store.add(makeJob({ id: "fresh" }));
     const data = JSON.parse(readFileSync(file, "utf-8"));
     expect(data.version).toBe(1);
     expect(data.jobs).toHaveLength(1);
     expect(data.jobs[0].id).toBe("fresh");
   });
 
-  it("recovers from a stale lock left by a dead process", () => {
+  it("recovers from a stale lock left by a dead process", async () => {
     const file = join(tmp, "s.json");
     const lockFile = file + ".lock";
     // Simulate a stale lock file containing a non-existent PID.
@@ -125,21 +125,21 @@ describe("ScheduleStore", () => {
 
     const store = new ScheduleStore(file);
     // The mutation will detect the stale lock, unlink it, and proceed.
-    expect(() => store.add(makeJob())).not.toThrow();
+    await expect(store.add(makeJob())).resolves.toBeUndefined();
     expect(store.list()).toHaveLength(1);
     expect(existsSync(lockFile)).toBe(false);
   });
 
-  it("releases the lock after a successful mutation so subsequent ones don't deadlock", () => {
+  it("releases the lock after a successful mutation so subsequent ones don't deadlock", async () => {
     const store = new ScheduleStore(join(tmp, "s.json"));
     const a = makeJob({ id: "a" });
     const b = makeJob({ id: "b" });
-    store.add(a);
-    store.add(b);  // would hang if the lock from the first add wasn't released
+    await store.add(a);
+    await store.add(b);  // would hang if the lock from the first add wasn't released
     expect(store.list().map(j => j.id).sort()).toEqual(["a", "b"]);
   });
 
-  it("does not create the backing directory until a mutation persists", () => {
+  it("does not create the backing directory until a mutation persists", async () => {
     const dir = join(tmp, ".pi", "subagent-schedules");
     const file = join(dir, "sess.json");
 
@@ -149,31 +149,31 @@ describe("ScheduleStore", () => {
     expect(existsSync(dir)).toBe(false);
 
     // First mutation lazily creates the directory.
-    store.add(makeJob());
+    await store.add(makeJob());
     expect(existsSync(dir)).toBe(true);
     expect(existsSync(file)).toBe(true);
   });
 
-  it("no-op update/remove of an unknown id never creates the backing directory", () => {
+  it("no-op update/remove of an unknown id never creates the backing directory", async () => {
     const dir = join(tmp, ".pi", "subagent-schedules");
     const file = join(dir, "sess.json");
     const store = new ScheduleStore(file);
 
-    expect(store.update("nonexistent", { name: "x" })).toBeUndefined();
-    expect(store.remove("nonexistent")).toBe(false);
+    expect(await store.update("nonexistent", { name: "x" })).toBeUndefined();
+    expect(await store.remove("nonexistent")).toBe(false);
     expect(existsSync(dir)).toBe(false);
   });
 
-  it("deleteFileIfEmpty unlinks file only when no jobs remain", () => {
+  it("deleteFileIfEmpty unlinks file only when no jobs remain", async () => {
     const file = join(tmp, "s.json");
     const store = new ScheduleStore(file);
     const job = makeJob();
-    store.add(job);
-    store.deleteFileIfEmpty();  // not empty — should be a no-op
+    await store.add(job);
+    await store.deleteFileIfEmpty();  // not empty — should be a no-op
     expect(existsSync(file)).toBe(true);
 
-    store.remove(job.id);
-    store.deleteFileIfEmpty();
+    await store.remove(job.id);
+    await store.deleteFileIfEmpty();
     expect(existsSync(file)).toBe(false);
   });
 });

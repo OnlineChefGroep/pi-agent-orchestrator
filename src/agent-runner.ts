@@ -29,7 +29,11 @@ import { type HookRegistry } from "./hooks.js";
 import { buildCtxInjection } from "./context-mode-bridge.js";
 
 /** Names of tools registered by this extension that subagents must NOT inherit. */
-const EXCLUDED_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"];
+const EXCLUDED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "Agent",
+  "get_subagent_result",
+  "steer_subagent",
+]);
 
 /** Default max turns. undefined = unlimited (no turn limit). */
 let defaultMaxTurns: number | undefined;
@@ -404,7 +408,7 @@ export async function runAgent(
   if (extensions !== false) {
     const builtinToolNameSet = new Set(toolNames);
     const activeTools = session.getActiveToolNames().filter((t) => {
-      if (EXCLUDED_TOOL_NAMES.includes(t)) return false;
+      if (EXCLUDED_TOOL_NAMES.has(t)) return false;
       if (disallowedSet?.has(t)) return false;
       if (builtinToolNameSet.has(t)) return true;
       if (Array.isArray(extensions)) {
@@ -477,7 +481,8 @@ export async function runAgent(
       options.onToolActivity?.({ type: "end", toolName: event.toolName });
     }
     if (event.type === "message_end" && event.message.role === "assistant") {
-      const u = (event.message as any).usage;
+      const msg = event.message as { usage?: { input?: number; output?: number; cacheWrite?: number } };
+      const u = msg.usage;
       if (u) options.onAssistantUsage?.({
         input: u.input ?? 0,
         output: u.output ?? 0,
@@ -558,7 +563,7 @@ export async function runAgent(
           model: options.model,
           isolated: true,
           skipValidators: true,
-          levelLimit: undefined,
+          levelLimit: 0,
           signal: options.signal,
         }).then((result) => parseValidationResult(result.responseText, v.agentId))
           .catch((err) => ({
@@ -636,7 +641,8 @@ export async function resumeAgent(
         if (event.type === "tool_execution_start") options.onToolActivity?.({ type: "start", toolName: event.toolName });
         if (event.type === "tool_execution_end") options.onToolActivity?.({ type: "end", toolName: event.toolName });
         if (event.type === "message_end" && event.message.role === "assistant") {
-          const u = (event.message as any).usage;
+          const msg = event.message as { usage?: { input?: number; output?: number; cacheWrite?: number } };
+          const u = msg.usage;
           if (u) options.onAssistantUsage?.({
             input: u.input ?? 0,
             output: u.output ?? 0,

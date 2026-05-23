@@ -54,14 +54,14 @@ export class SubagentScheduler {
   private manager: AgentManager | undefined;
 
   /** Start the scheduler: bind to a session's store and arm enabled jobs. */
-  start(pi: ExtensionAPI, ctx: ExtensionContext, manager: AgentManager, store: ScheduleStore): void {
+  async start(pi: ExtensionAPI, ctx: ExtensionContext, manager: AgentManager, store: ScheduleStore): Promise<void> {
     this.pi = pi;
     this.ctx = ctx;
     this.manager = manager;
     this.store = store;
 
     for (const job of store.list()) {
-      if (job.enabled) this.scheduleJob(job);
+      if (job.enabled) await this.scheduleJob(job);
     }
   }
 
@@ -113,34 +113,34 @@ export class SubagentScheduler {
   }
 
   /** Add a job, persist, and arm if enabled. Returns the stored job. */
-  addJob(input: NewJobInput): ScheduledSubagent {
+  async addJob(input: NewJobInput): Promise<ScheduledSubagent> {
     const store = this.requireStore();
     if (store.hasName(input.name)) {
       throw new Error(`A scheduled job named "${input.name}" already exists.`);
     }
     const job = this.buildJob(input);
-    store.add(job);
-    if (job.enabled) this.scheduleJob(job);
+    await store.add(job);
+    if (job.enabled) await this.scheduleJob(job);
     this.emit({ type: "added", job });
     return job;
   }
 
-  removeJob(id: string): boolean {
+  async removeJob(id: string): Promise<boolean> {
     const store = this.requireStore();
     if (!store.get(id)) return false;
     this.unscheduleJob(id);
-    const ok = store.remove(id);
+    const ok = await store.remove(id);
     if (ok) this.emit({ type: "removed", jobId: id });
     return ok;
   }
 
   /** Toggle / mutate a job. Re-arms based on the new `enabled` state. */
-  updateJob(id: string, patch: Partial<ScheduledSubagent>): ScheduledSubagent | undefined {
+  async updateJob(id: string, patch: Partial<ScheduledSubagent>): Promise<ScheduledSubagent | undefined> {
     const store = this.requireStore();
-    const updated = store.update(id, patch);
+    const updated = await store.update(id, patch);
     if (!updated) return undefined;
     this.unscheduleJob(id);
-    if (updated.enabled) this.scheduleJob(updated);
+    if (updated.enabled) await this.scheduleJob(updated);
     this.emit({ type: "updated", job: updated });
     return updated;
   }
@@ -164,13 +164,16 @@ export class SubagentScheduler {
 
   // ── Scheduling primitives ────────────────────────────────────────────
 
-  private scheduleJob(job: ScheduledSubagent): void {
+  private async scheduleJob(job: ScheduledSubagent): Promise<void> {
     const store = this.store;
     if (!store) return;
     try {
       if (job.scheduleType === "interval" && job.intervalMs) {
         // Cap interval at max 24 days to avoid setTimeout limits
         const MAX_INTERVAL = 2147483647;
+        if (job.intervalMs > MAX_INTERVAL) {
+          console.warn(`[pi-subagents] Interval ${job.intervalMs}ms exceeds max ${MAX_INTERVAL}ms; capping to ${MAX_INTERVAL}ms`);
+        }
         const interval = Math.min(job.intervalMs, MAX_INTERVAL);
         const t = setInterval(() => this.executeJob(job.id), interval);
         this.intervals.set(job.id, t);
@@ -179,17 +182,15 @@ export class SubagentScheduler {
         if (target.getTime() > Date.now()) {
           // Use Cron for one-shot dates. It natively handles dates far in the future
           // that would otherwise exceed Node.js's 32-bit setTimeout limits.
-          const cron = new Cron(target, () => {
-            this.executeJob(job.id).catch(() => {});
-            // Auto-disable one-shots after they fire (mirrors pi-cron-schedule)
-            store.update(job.id, { enabled: false });
-            const updated = store.get(job.id);
-            if (updated) this.emit({ type: "updated", job: updated });
+          const cron = new Cron(target, async () => {
+            // executeJob handles status updates and one-shot auto-disable
+            // atomically inside its finalize path.
+            await this.executeJob(job.id).catch(() => {});
           });
           this.jobs.set(job.id, cron);
         } else {
           // Past timestamp — disable, mark error, never fire
-          store.update(job.id, { enabled: false, lastStatus: "error" });
+          await store.update(job.id, { enabled: false, lastStatus: "error" });
           this.emit({ type: "error", jobId: job.id, error: `Scheduled time ${job.schedule} is in the past` });
         }
       } else {
@@ -229,7 +230,7 @@ export class SubagentScheduler {
     const job = store.get(id);
     if (!job?.enabled) return;
 
-    store.update(id, { lastStatus: "running" });
+    await store.update(id, { lastStatus: "running" });
 
     // Resolve model at fire time — registry contents may have changed since the
     // job was created (auth added/removed). Fall back silently to spawn-default
@@ -254,7 +255,7 @@ export class SubagentScheduler {
       });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      store.update(id, { lastRun: new Date().toISOString(), lastStatus: "error" });
+      await store.update(id, { lastRun: new Date().toISOString(), lastStatus: "error" });
       this.emit({ type: "error", jobId: id, error });
       return;
     }
@@ -265,12 +266,19 @@ export class SubagentScheduler {
     const finalize = async (status: "success" | "error") => {
       const next = this.getNextRun(id);
       const current = store.get(id);
-      store.update(id, {
+      await store.update(id, {
         lastRun: new Date().toISOString(),
         lastStatus: status,
         runCount: (current?.runCount ?? 0) + 1,
         nextRun: next,
+        // Auto-disable one-shots atomically with the status update to
+        // prevent races with a concurrent store.update from the Cron callback.
+        ...(current?.scheduleType === "once" ? { enabled: false } : {}),
       });
+      if (current?.scheduleType === "once") {
+        const updated = store.get(id);
+        if (updated) this.emit({ type: "updated", job: updated });
+      }
     };
 
     // AgentManager's promise resolves either way (its .catch returns ""), so we

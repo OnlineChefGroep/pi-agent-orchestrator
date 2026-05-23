@@ -73,7 +73,7 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
   let store: ScheduleStore;
   let scheduler: SubagentScheduler;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tmp = mkdtempSync(join(tmpdir(), "schedule-e2e-"));
     store = new ScheduleStore(join(tmp, "schedules.json"));
     scheduler = new SubagentScheduler();
@@ -87,12 +87,12 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
   it("one-shot job: real setTimeout fires, agent runs, store reflects success", async () => {
     const manager = makeFaithfulManager("completed");
     const pi = makePi();
-    scheduler.start(pi, makeCtx(), manager, store);
+    await scheduler.start(pi, makeCtx(), manager, store);
 
     // Fire ~100ms in the future. detectSchedule normalizes "+100ms" — but our
     // parser only accepts s/m/h/d, so use a near-future ISO timestamp instead.
     const future = new Date(Date.now() + 100).toISOString();
-    const job = scheduler.addJob({
+    const job = await scheduler.addJob({
       name: "e2e-once",
       description: "test",
       schedule: future,
@@ -116,10 +116,10 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
   it("one-shot job that errors: store records lastStatus error (regression — bug #1)", async () => {
     const manager = makeFaithfulManager("error");  // Agent terminates with error status
     const pi = makePi();
-    scheduler.start(pi, makeCtx(), manager, store);
+    await scheduler.start(pi, makeCtx(), manager, store);
 
     const future = new Date(Date.now() + 100).toISOString();
-    const job = scheduler.addJob({
+    const job = await scheduler.addJob({
       name: "e2e-fail",
       description: "test",
       schedule: future,
@@ -137,10 +137,10 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
   it("interval job: fires repeatedly, runCount grows", async () => {
     const manager = makeFaithfulManager("completed");
     const pi = makePi();
-    scheduler.start(pi, makeCtx(), manager, store);
+    await scheduler.start(pi, makeCtx(), manager, store);
 
     // 100ms interval — wait for ~3 fires
-    const job = scheduler.addJob({
+    const job = await scheduler.addJob({
       name: "e2e-interval",
       description: "test",
       schedule: "100s",  // Will be too long; override below.
@@ -149,7 +149,7 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
     });
     // Replace with a literal 100ms interval — easier than crafting a parseable shorthand for ms.
     // (parseInterval doesn't accept "ms"; we patch the persisted job and re-arm.)
-    scheduler.updateJob(job.id, { intervalMs: 100, schedule: "100ms" });
+    await scheduler.updateJob(job.id, { intervalMs: 100, schedule: "100ms" });
 
     await waitFor(() => manager.spawn.mock.calls.length >= 3, 2000);
 
@@ -158,16 +158,16 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
     expect(final.lastStatus).toBe("success");
     expect(final.enabled).toBe(true);  // intervals don't auto-disable
 
-    scheduler.removeJob(job.id);
+    await scheduler.removeJob(job.id);
   });
 
   it("persistence: schedules survive re-instantiating the store on the same file", async () => {
     const manager = makeFaithfulManager("completed");
     const pi = makePi();
-    scheduler.start(pi, makeCtx(), manager, store);
+    await scheduler.start(pi, makeCtx(), manager, store);
 
     const future = new Date(Date.now() + 60_000).toISOString();  // far enough not to fire
-    const job = scheduler.addJob({
+    const job = await scheduler.addJob({
       name: "persistent",
       description: "x",
       schedule: future,
@@ -186,9 +186,9 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
   it("on-disk file shape: version=1 plus jobs array", async () => {
     const manager = makeFaithfulManager("completed");
     const pi = makePi();
-    scheduler.start(pi, makeCtx(), manager, store);
+    await scheduler.start(pi, makeCtx(), manager, store);
 
-    scheduler.addJob({
+    await scheduler.addJob({
       name: "shape-test",
       description: "x",
       schedule: "1h",
@@ -211,10 +211,10 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
   it("subagents:scheduled events fire across the lifecycle", async () => {
     const manager = makeFaithfulManager("completed");
     const pi = makePi();
-    scheduler.start(pi, makeCtx(), manager, store);
+    await scheduler.start(pi, makeCtx(), manager, store);
 
     const future = new Date(Date.now() + 100).toISOString();
-    const job = scheduler.addJob({
+    const job = await scheduler.addJob({
       name: "events", description: "x", schedule: future,
       subagent_type: "general-purpose", prompt: "x",
     });
@@ -228,7 +228,7 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
     expect(eventTypes).toContain("added");
     expect(eventTypes).toContain("fired");
 
-    scheduler.removeJob(job.id);
+    await scheduler.removeJob(job.id);
     const after = pi.events.emit.mock.calls
       .filter((c: any[]) => c[0] === "subagents:scheduled")
       .map((c: any[]) => c[1].type);

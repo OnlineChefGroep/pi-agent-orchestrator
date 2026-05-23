@@ -151,8 +151,12 @@ export class HookRegistry {
     return hasModify ? "modify" : "allow";
   }
 
-  /** Get the internal handler map for inspection/testing. */
-  getHandlers(): Map<HookEvent, HookHandler[]> {
-    return this.handlers;
+  /** Get a frozen snapshot of the handler map for inspection/testing. */
+  getHandlers(): ReadonlyMap<HookEvent, ReadonlyArray<HookHandler>> {
+    const snapshot = new Map<HookEvent, ReadonlyArray<HookHandler>>();
+    for (const [event, handlers] of this.handlers) {
+      snapshot.set(event, [...handlers]);
+    }
+    return snapshot;
   }
 }

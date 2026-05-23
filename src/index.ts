@@ -435,7 +435,10 @@ export default function (pi: ExtensionAPI) {
   // Extensions and other packages can discover and register hooks by reading:
   //   (globalThis as any)[Symbol.for('pi-subagents:hooks')]
   const HOOKS_KEY = Symbol.for("pi-subagents:hooks");
-  (globalThis as any)[HOOKS_KEY] = hookRegistry;
+  (globalThis as any)[HOOKS_KEY] = {
+    getHandlers: () => hookRegistry.getHandlers(),
+    // NO register, NO unregister, NO dispatch
+  };
 
   // Expose manager via Symbol.for() global registry for cross-package access.
   // Standard Node.js pattern for cross-package singletons (used by OpenTelemetry, etc.).
@@ -443,9 +446,14 @@ export default function (pi: ExtensionAPI) {
   (globalThis as any)[MANAGER_KEY] = {
     waitForAll: () => manager.waitForAll(),
     hasRunning: () => manager.hasRunning(),
-    spawn: (piRef: any, ctx: any, type: string, prompt: string, options: any) =>
-      manager.spawn(piRef, ctx, type, prompt, options),
-    getRecord: (id: string) => manager.getRecord(id),
+    getRecord: (id: string) => {
+      const r = manager.getRecord(id);
+      if (!r) return undefined;
+      // Only return safe, non-sensitive fields
+      return { id: r.id, type: r.type, status: r.status, description: r.description };
+    },
+    // NO spawn, NO listAgents (that goes through the Agent tool or API)
+    listAgentIds: (type: string) => manager.listAgents().filter(a => a.type === type).map(a => a.id),
   };
 
   // --- Cross-extension RPC via pi.events ---
@@ -457,13 +465,13 @@ export default function (pi: ExtensionAPI) {
   // schedules reset on /new, restore on /resume.
   const scheduler = new SubagentScheduler();
 
-  function startScheduler(ctx: ExtensionContext) {
+  async function startScheduler(ctx: ExtensionContext) {
     try {
       const sessionId = ctx.sessionManager?.getSessionId?.();
       if (!sessionId) return;  // sessionId not yet available — try again on next event
       const path = resolveStorePath(ctx.cwd, sessionId);
       const store = new ScheduleStore(path);
-      scheduler.start(pi, ctx, manager, store);
+      await scheduler.start(pi, ctx, manager, store);
       pi.events.emit("subagents:scheduler_ready", { sessionId, jobCount: store.list().length });
     } catch (err) {
       // Scheduling is non-essential — log and move on so the rest of the
@@ -476,7 +484,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     currentCtx = ctx;
     manager.clearCompleted();
-    if (isSchedulingEnabled() && !scheduler.isActive()) startScheduler(ctx);
+    if (isSchedulingEnabled() && !scheduler.isActive()) await startScheduler(ctx);
   });
 
   pi.on("session_before_switch", () => {
@@ -502,6 +510,7 @@ export default function (pi: ExtensionAPI) {
     unsubPingRpc();
     currentCtx = undefined;
     delete (globalThis as any)[MANAGER_KEY];
+    delete (globalThis as any)[HOOKS_KEY];
     scheduler.stop();
     manager.abortAll();
     for (const timer of pendingNudges.values()) clearTimeout(timer);
@@ -555,10 +564,23 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
+  // Track tool calls per turn so we only age the widget once per turn boundary,
+  // avoiding premature agent aging during validator retries within a turn.
+  let currentTurnToolCount = 0;
+
   // Grab UI context from first tool execution + clear lingering widget on new turn
   pi.on("tool_execution_start", async (_event, ctx) => {
-    widget.setUICtx(ctx.ui as UICtx);
-    widget.onTurnStart();
+    const uiCtx = ctx && typeof ctx.ui === 'object' ? (ctx.ui as UICtx) : undefined;
+    if (uiCtx) widget.setUICtx(uiCtx);
+    currentTurnToolCount++;
+    if (currentTurnToolCount === 1) {
+      widget.onTurnStart();
+    }
+  });
+
+  // Reset tool counter at end of each turn
+  pi.on("turn_end", () => {
+    currentTurnToolCount = 0;
   });
 
   const typeListText = buildTypeListText();
@@ -781,7 +803,8 @@ Guidelines:
 
     execute: async (toolCallId, params, signal, onUpdate, ctx) => {
       // Ensure we have UI context for widget rendering
-      widget.setUICtx(ctx.ui as UICtx);
+      const uiCtx = ctx && typeof ctx.ui === 'object' ? (ctx.ui as UICtx) : undefined;
+      if (uiCtx) widget.setUICtx(uiCtx);
 
       // Reload custom agents so new .pi/agents/*.md files are picked up without restart
       reloadCustomAgents();
@@ -909,35 +932,40 @@ Guidelines:
       if (runInBackground) {
         const { state: bgState, callbacks: bgCallbacks } = createActivityTracker(effectiveMaxTurns);
 
-        // Wrap onSessionCreated to wire output file streaming.
-        // The callback lazily reads record.outputFile (set right after spawn)
-        // rather than closing over a value that doesn't exist yet.
+        // Build spawn options upfront so we can mutate the same object after
+        // spawn returns — the manager stores this reference internally.
+        const spawnOptions = {
+          description: params.description,
+          model,
+          maxTurns: effectiveMaxTurns,
+          isolated,
+          inheritContext,
+          thinkingLevel: thinking,
+          isBackground: true,
+          isolation,
+          invocation: agentInvocation,
+          ...bgCallbacks,
+        };
+
         let id: string;
-        const origBgOnSession = bgCallbacks.onSessionCreated;
-        bgCallbacks.onSessionCreated = (session: any) => {
+        try {
+          id = manager.spawn(pi, ctx, subagentType, params.prompt, spawnOptions);
+        } catch (err) {
+          return textResult(err instanceof Error ? err.message : String(err));
+        }
+
+        // Wire output file streaming now that id is available.
+        // Mutating spawnOptions (same object stored in manager) before the
+        // async session callback fires ensures the streaming hook runs when
+        // the session is created.
+        const origBgOnSession = spawnOptions.onSessionCreated!;
+        spawnOptions.onSessionCreated = (session: any) => {
           origBgOnSession(session);
           const rec = manager.getRecord(id);
           if (rec?.outputFile) {
             rec.outputCleanup = streamToOutputFile(session, rec.outputFile, id, ctx.cwd);
           }
         };
-
-        try {
-          id = manager.spawn(pi, ctx, subagentType, params.prompt, {
-            description: params.description,
-            model,
-            maxTurns: effectiveMaxTurns,
-            isolated,
-            inheritContext,
-            thinkingLevel: thinking,
-            isBackground: true,
-            isolation,
-            invocation: agentInvocation,
-            ...bgCallbacks,
-          });
-        } catch (err) {
-          return textResult(err instanceof Error ? err.message : String(err));
-        }
 
         // Set output file + join mode synchronously after spawn, before the
         // event loop yields — onSessionCreated is async so this is safe.

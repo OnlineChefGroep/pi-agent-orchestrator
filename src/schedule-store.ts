@@ -10,7 +10,8 @@
  * from disk, applies the change, atomic-writes via temp+rename, releases.
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { promises as fs } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ScheduledSubagent, ScheduleStoreData } from "./types.js";
 
@@ -18,30 +19,36 @@ const LOCK_RETRY_MS = 50;
 const LOCK_MAX_RETRIES = 100;
 
 function isProcessRunning(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch { return false; }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-/** Synchronous busy-wait for lock retry. Max ~5 seconds; contention is rare. */
-function syncSleep(ms: number): void {
-  const end = Date.now() + ms;
-  while (Date.now() < end) { /* spin */ }
+async function sleep(ms: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms));
 }
 
-function acquireLock(lockPath: string): void {
+/** Acquire a PID-based lock file — async retry with exponential backoff. */
+async function acquireLock(lockPath: string): Promise<void> {
   for (let i = 0; i < LOCK_MAX_RETRIES; i++) {
     try {
-      writeFileSync(lockPath, `${process.pid}`, { flag: "wx" });
+      await fs.writeFile(lockPath, `${process.pid}`, { flag: "wx" });
       return;
     } catch (e: any) {
       if (e.code === "EEXIST") {
         try {
-          const pid = parseInt(readFileSync(lockPath, "utf-8"), 10);
+          const pid = parseInt(await fs.readFile(lockPath, "utf-8"), 10);
           if (pid && !isProcessRunning(pid)) {
-            unlinkSync(lockPath);
+            await fs.unlink(lockPath);
             continue;
           }
-        } catch { /* ignore — try again */ }
-        syncSleep(LOCK_RETRY_MS);
+        } catch {
+          /* ignore — try again */
+        }
+        await sleep(LOCK_RETRY_MS);
         continue;
       }
       throw e;
@@ -50,8 +57,12 @@ function acquireLock(lockPath: string): void {
   throw new Error(`Failed to acquire schedule lock: ${lockPath}`);
 }
 
-function releaseLock(lockPath: string): void {
-  try { unlinkSync(lockPath); } catch { /* ignore */ }
+async function releaseLock(lockPath: string): Promise<void> {
+  try {
+    await fs.unlink(lockPath);
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Resolve the storage path for a session-scoped store. */
@@ -67,43 +78,63 @@ export class ScheduleStore {
   constructor(filePath: string) {
     this.filePath = filePath;
     this.lockPath = filePath + ".lock";
-    this.load();
+    this.loadSync();
   }
 
   /** Create the backing directory lazily — only when we're about to persist. */
-  private ensureDir(): void {
-    mkdirSync(dirname(this.filePath), { recursive: true });
+  private async ensureDir(): Promise<void> {
+    await fs.mkdir(dirname(this.filePath), { recursive: true });
   }
 
-  /** Load from disk into the in-memory cache. Silent on parse errors. */
-  private load(): void {
+  /** Synchronous initial load from disk for the constructor. */
+  private loadSync(): void {
     if (!existsSync(this.filePath)) return;
     try {
-      const data: ScheduleStoreData = JSON.parse(readFileSync(this.filePath, "utf-8"));
+      const data: ScheduleStoreData = JSON.parse(
+        readFileSync(this.filePath, "utf-8"),
+      );
       this.jobs.clear();
       for (const j of data.jobs ?? []) this.jobs.set(j.id, j);
-    } catch { /* corrupt — start fresh, next save rewrites */ }
+    } catch {
+      /* corrupt — start fresh, next save rewrites */
+    }
+  }
+
+  /** Reload from disk into the in-memory cache (async). */
+  private async load(): Promise<void> {
+    try {
+      const data: ScheduleStoreData = JSON.parse(
+        await fs.readFile(this.filePath, "utf-8"),
+      );
+      this.jobs.clear();
+      for (const j of data.jobs ?? []) this.jobs.set(j.id, j);
+    } catch {
+      /* corrupt — start fresh, next save rewrites */
+    }
   }
 
   /** Atomic write via temp file + rename (POSIX-atomic). */
-  private save(): void {
-    const data: ScheduleStoreData = { version: 1, jobs: [...this.jobs.values()] };
+  private async save(): Promise<void> {
+    const data: ScheduleStoreData = {
+      version: 1,
+      jobs: [...this.jobs.values()],
+    };
     const tmp = this.filePath + ".tmp";
-    writeFileSync(tmp, JSON.stringify(data, null, 2));
-    renameSync(tmp, this.filePath);
+    await fs.writeFile(tmp, JSON.stringify(data, null, 2));
+    await fs.rename(tmp, this.filePath);
   }
 
   /** Acquire lock → reload → mutate → save → release. */
-  private withLock<T>(fn: () => T): T {
-    this.ensureDir();
-    acquireLock(this.lockPath);
+  private async withLock<T>(fn: () => T): Promise<T> {
+    await this.ensureDir();
+    await acquireLock(this.lockPath);
     try {
-      this.load();
+      await this.load();
       const result = fn();
-      this.save();
+      await this.save();
       return result;
     } finally {
-      releaseLock(this.lockPath);
+      await releaseLock(this.lockPath);
     }
   }
 
@@ -124,13 +155,16 @@ export class ScheduleStore {
     return this.jobs.get(id);
   }
 
-  add(job: ScheduledSubagent): void {
-    this.withLock(() => {
+  async add(job: ScheduledSubagent): Promise<void> {
+    await this.withLock(() => {
       this.jobs.set(job.id, job);
     });
   }
 
-  update(id: string, patch: Partial<ScheduledSubagent>): ScheduledSubagent | undefined {
+  async update(
+    id: string,
+    patch: Partial<ScheduledSubagent>,
+  ): Promise<ScheduledSubagent | undefined> {
     // No-op fast path — an unknown id changes nothing, so don't lock or touch
     // disk (which would otherwise lazily create the backing directory).
     if (!this.jobs.has(id)) return undefined;
@@ -143,16 +177,20 @@ export class ScheduleStore {
     });
   }
 
-  remove(id: string): boolean {
+  async remove(id: string): Promise<boolean> {
     // No-op fast path — see update().
     if (!this.jobs.has(id)) return false;
     return this.withLock(() => this.jobs.delete(id));
   }
 
   /** Delete the backing file (used when no jobs remain, optional cleanup). */
-  deleteFileIfEmpty(): void {
-    if (this.jobs.size === 0 && existsSync(this.filePath)) {
-      try { unlinkSync(this.filePath); } catch { /* ignore */ }
+  async deleteFileIfEmpty(): Promise<void> {
+    if (this.jobs.size === 0) {
+      try {
+        await fs.unlink(this.filePath);
+      } catch {
+        /* ignore */
+      }
     }
   }
 }
