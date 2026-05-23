@@ -21,7 +21,7 @@ function isProcessRunning(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
-function acquireLock(lockPath: string): void {
+async function acquireLock(lockPath: string): Promise<void> {
   for (let i = 0; i < LOCK_MAX_RETRIES; i++) {
     try {
       writeFileSync(lockPath, `${process.pid}`, { flag: "wx" });
@@ -35,8 +35,7 @@ function acquireLock(lockPath: string): void {
             continue;
           }
         } catch { /* ignore — try again */ }
-        const start = Date.now();
-        while (Date.now() - start < LOCK_RETRY_MS) { /* busy wait */ }
+        await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS));
         continue;
       }
       throw e;
@@ -89,9 +88,9 @@ export class ScheduleStore {
   }
 
   /** Acquire lock → reload → mutate → save → release. */
-  private withLock<T>(fn: () => T): T {
+  private async withLock<T>(fn: () => T): Promise<T> {
     this.ensureDir();
-    acquireLock(this.lockPath);
+    await acquireLock(this.lockPath);
     try {
       this.load();
       const result = fn();
@@ -119,17 +118,17 @@ export class ScheduleStore {
     return this.jobs.get(id);
   }
 
-  add(job: ScheduledSubagent): void {
-    this.withLock(() => {
+  async add(job: ScheduledSubagent): Promise<void> {
+    await this.withLock(() => {
       this.jobs.set(job.id, job);
     });
   }
 
-  update(id: string, patch: Partial<ScheduledSubagent>): ScheduledSubagent | undefined {
+  async update(id: string, patch: Partial<ScheduledSubagent>): Promise<ScheduledSubagent | undefined> {
     // No-op fast path — an unknown id changes nothing, so don't lock or touch
     // disk (which would otherwise lazily create the backing directory).
     if (!this.jobs.has(id)) return undefined;
-    return this.withLock(() => {
+    return await this.withLock(() => {
       const existing = this.jobs.get(id);
       if (!existing) return undefined;
       const updated = { ...existing, ...patch };
@@ -138,10 +137,10 @@ export class ScheduleStore {
     });
   }
 
-  remove(id: string): boolean {
+  async remove(id: string): Promise<boolean> {
     // No-op fast path — see update().
     if (!this.jobs.has(id)) return false;
-    return this.withLock(() => this.jobs.delete(id));
+    return await this.withLock(() => this.jobs.delete(id));
   }
 
   /** Delete the backing file (used when no jobs remain, optional cleanup). */

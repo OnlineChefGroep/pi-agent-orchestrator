@@ -99,6 +99,6 @@ export async function showSchedulesMenu(
   const ok = await ctx.ui.confirm(`Cancel "${job.name}"?`, formatDetails(job, scheduler));
   if (!ok) return;
 
-  scheduler.removeJob(job.id);
+  await scheduler.removeJob(job.id);
   ctx.ui.notify(`Cancelled "${job.name}".`, "info");
 }

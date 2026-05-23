@@ -20,6 +20,7 @@ import { getAgentConfig, getAvailableTypes, resolveType } from "./agent-types.js
 import { getDefaultJoinMode, setDefaultJoinMode, isSchedulingEnabled, setSchedulingEnabled, reloadCustomAgents, buildTypeListText } from "./agent-registry.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
 import { GroupJoinManager } from "./group-join.js";
+import { HookRegistry } from "./hooks.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./invocation-config.js";
 import { resolveModel } from "./model-resolver.js";
 import { createOutputFilePath, streamToOutputFile, writeInitialEntry } from "./output-file.js";
@@ -368,6 +369,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   // Background completion: route through group join or send individual nudge
+  const hookRegistry = new HookRegistry();
   const manager = new AgentManager((record) => {
     // Emit lifecycle event based on terminal status
     const isError = record.status === "error" || record.status === "stopped" || record.status === "aborted";
@@ -425,6 +427,15 @@ export default function (pi: ExtensionAPI) {
       compactionCount: record.compactionCount,
     });
   });
+
+  // Attach the global hook registry to the agent manager
+  manager.hooks = hookRegistry;
+
+  // Expose hook registry via Symbol.for() global registry for cross-package access.
+  // Extensions and other packages can discover and register hooks by reading:
+  //   (globalThis as any)[Symbol.for('pi-subagents:hooks')]
+  const HOOKS_KEY = Symbol.for("pi-subagents:hooks");
+  (globalThis as any)[HOOKS_KEY] = hookRegistry;
 
   // Expose manager via Symbol.for() global registry for cross-package access.
   // Standard Node.js pattern for cross-package singletons (used by OpenTelemetry, etc.).
@@ -852,7 +863,7 @@ Guidelines:
           return textResult("Scheduler is not active in this session yet. Try again after the session has fully started.");
         }
         try {
-          const job = scheduler.addJob({
+          const job = await scheduler.addJob({
             name: params.description as string,
             description: params.description as string,
             schedule: params.schedule as string,
@@ -1188,6 +1199,9 @@ Guidelines:
 
       try {
         await steerAgent(record.session, params.message);
+        hookRegistry
+          .dispatch("subagent:steer", record.id, { message: params.message })
+          .catch(() => {});
         pi.events.emit("subagents:steered", { id: record.id, message: params.message });
         const tokens = formatLifetimeTokens(record);
         const contextPercent = getSessionContextPercent(record.session);
@@ -1215,6 +1229,37 @@ Guidelines:
         getDefaultJoinMode, setDefaultMaxTurns, setGraceTurns,
         setDefaultJoinMode, setSchedulingEnabled,
       );
+    },
+  });
+
+  pi.registerCommand("hooks", {
+    description: "Manage hooks",
+    handler: async (_args, ctx) => {
+      const handlerMap = hookRegistry.getHandlers();
+      const entries = [...handlerMap.entries()].sort(
+        ([a], [b]) => a.localeCompare(b),
+      );
+
+      if (entries.length === 0) {
+        pi.sendMessage({
+          customType: "hooks-list",
+          content: "No hooks registered.",
+          display: true,
+        });
+        return;
+      }
+
+      const lines: string[] = ["## Registered Hooks\n"];
+      for (const [event, handlers] of entries) {
+        lines.push(`- **${event}**: ${handlers.length} handler${handlers.length === 1 ? "" : "s"}`);
+      }
+      lines.push(`\n*Total: ${entries.reduce((sum, [, h]) => sum + h.length, 0)} handler(s) across ${entries.length} event(s)*`);
+
+      pi.sendMessage({
+        customType: "hooks-list",
+        content: lines.join("\n"),
+        display: true,
+      });
     },
   });
 }
