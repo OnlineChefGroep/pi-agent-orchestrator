@@ -16,13 +16,14 @@ import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { AgentManager } from "./agent-manager.js";
 import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTurns, setDefaultMaxTurns, setGraceTurns, steerAgent } from "./agent-runner.js";
-import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes, getAvailableTypes, getDefaultAgentNames, getUserAgentNames, registerAgents, resolveType } from "./agent-types.js";
+import { getAgentConfig, getAvailableTypes, resolveType } from "./agent-types.js";
+import { getDefaultJoinMode, setDefaultJoinMode, isSchedulingEnabled, setSchedulingEnabled, reloadCustomAgents, buildTypeListText } from "./agent-registry.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
-import { loadCustomAgents } from "./custom-agents.js";
 import { GroupJoinManager } from "./group-join.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./invocation-config.js";
 import { resolveModel } from "./model-resolver.js";
 import { createOutputFilePath, streamToOutputFile, writeInitialEntry } from "./output-file.js";
+import { showAgentsMenu } from "./output-handler.js";
 import { SubagentScheduler } from "./schedule.js";
 import { resolveStorePath, ScheduleStore } from "./schedule-store.js";
 import { applyAndEmitLoaded } from "./settings.js";
@@ -43,7 +44,6 @@ import {
   type UICtx,
 } from "./ui/agent-widget.js";
 import { addUsage, getLifetimeTotal, getSessionContextPercent, type LifetimeUsage } from "./usage.js";
-import { showAgentsMenu } from "./output-handler.js";
 
 // ---- Shared helpers ----
 
@@ -162,7 +162,7 @@ function formatTaskNotification(record: AgentRecord, resultMaxLen: number): stri
 /** Build AgentDetails from a base + record-specific fields. */
 function buildDetails(
   base: Pick<AgentDetails, "displayName" | "description" | "subagentType" | "modelName" | "tags">,
-  record: { toolUses: number; startedAt: number; completedAt?: number; status: string; error?: string; id?: string; session?: any; lifetimeUsage: LifetimeUsage },
+  record: { toolUses: number; startedAt: number; completedAt?: number; status: string; error?: string; id?: string; session?: any; lifetimeUsage: LifetimeUsage; validated?: boolean },
   activity?: AgentActivity,
   overrides?: Partial<AgentDetails>,
 ): AgentDetails {
@@ -176,6 +176,7 @@ function buildDetails(
     status: record.status as AgentDetails["status"],
     agentId: record.id,
     error: record.error,
+    validated: record.validated,
     ...overrides,
   };
 }
@@ -195,6 +196,7 @@ function buildNotificationDetails(record: AgentRecord, resultMaxLen: number, act
     durationMs: record.completedAt ? record.completedAt - record.startedAt : 0,
     outputFile: record.outputFile,
     error: record.error,
+    validated: record.validated,
     resultPreview: record.result
       ? record.result.length > resultMaxLen
         ? record.result.slice(0, resultMaxLen) + "…"
@@ -217,9 +219,12 @@ export default function (pi: ExtensionAPI) {
         const statusText = isError ? d.status
           : d.status === "steered" ? "completed (steered)"
           : "completed";
+        const validationIcon = d.validated !== undefined
+          ? (d.validated ? theme.fg("success", " ✅") : theme.fg("error", " ❌"))
+          : "";
 
-        // Line 1: icon + agent description + status
-        let line = `${icon} ${theme.bold(d.description)} ${theme.fg("dim", statusText)}`;
+        // Line 1: icon + agent description + validation + status
+        let line = `${icon} ${theme.bold(d.description)}${validationIcon} ${theme.fg("dim", statusText)}`;
 
         // Line 2: stats
         const parts: string[] = [];
@@ -252,12 +257,6 @@ export default function (pi: ExtensionAPI) {
       return new Text(all.map(renderOne).join("\n"), 0, 0);
     }
   );
-
-  /** Reload agents from .pi/agents/*.md and merge with defaults (called on init and each Agent invocation). */
-  const reloadCustomAgents = () => {
-    const userAgents = loadCustomAgents(process.cwd());
-    registerAgents(userAgents);
-  };
 
   // Initial load
   reloadCustomAgents();
@@ -502,21 +501,6 @@ export default function (pi: ExtensionAPI) {
   // Live widget: show running agents above editor
   const widget = new AgentWidget(manager, agentActivity);
 
-  // ---- Join mode configuration ----
-  let defaultJoinMode: JoinMode = 'smart';
-  function getDefaultJoinMode(): JoinMode { return defaultJoinMode; }
-  function setDefaultJoinMode(mode: JoinMode) { defaultJoinMode = mode; }
-
-  // Master switch for the schedule subagent feature. Defaults to enabled.
-  // Read once at extension init (before tool registration) so the Agent tool's
-  // param schema reflects the persisted setting. Runtime toggles via /agents
-  // → Settings short-circuit the menu entry + the execute-time addJob path
-  // immediately, but the schema-level removal only takes effect on next
-  // extension load (next pi session). Documented in CHANGELOG/README.
-  let schedulingEnabled = true;
-  function isSchedulingEnabled(): boolean { return schedulingEnabled; }
-  function setSchedulingEnabled(b: boolean) { schedulingEnabled = b; }
-
   // ---- Batch tracking for smart join mode ----
   // Collects background agent IDs spawned in the current turn for smart grouping.
   // Uses a debounced timer: each new agent resets the 100ms window so that all
@@ -565,39 +549,6 @@ export default function (pi: ExtensionAPI) {
     widget.setUICtx(ctx.ui as UICtx);
     widget.onTurnStart();
   });
-
-  /** Build the full type list text dynamically from the unified registry. */
-  const buildTypeListText = () => {
-    const defaultNames = getDefaultAgentNames();
-    const userNames = getUserAgentNames();
-
-    const defaultDescs = defaultNames.map((name) => {
-      const cfg = getAgentConfig(name);
-      const modelSuffix = cfg?.model ? ` (${getModelLabelFromConfig(cfg.model)})` : "";
-      return `- ${name}: ${cfg?.description ?? name}${modelSuffix}`;
-    });
-
-    const customDescs = userNames.map((name) => {
-      const cfg = getAgentConfig(name);
-      return `- ${name}: ${cfg?.description ?? name}`;
-    });
-
-    return [
-      "Default agents:",
-      ...defaultDescs,
-      ...(customDescs.length > 0 ? ["", "Custom agents:", ...customDescs] : []),
-      "",
-      `Custom agents can be defined in .pi/agents/<name>.md (project) or ${getAgentDir()}/agents/<name>.md (global) — they are picked up automatically. Project-level agents override global ones. Creating a .md file with the same name as a default agent overrides it.`,
-    ].join("\n");
-  };
-
-  /** Derive a short model label from a model string. */
-  function getModelLabelFromConfig(model: string): string {
-    // Strip provider prefix (e.g. "anthropic/claude-sonnet-4-6" → "claude-sonnet-4-6")
-    const name = model.includes("/") ? model.split("/").pop()! : model;
-    // Strip trailing date suffix (e.g. "claude-haiku-4-5-20251001" → "claude-haiku-4-5")
-    return name.replace(/-\d{8}$/, "");
-  }
 
   const typeListText = buildTypeListText();
 
@@ -768,6 +719,13 @@ Guidelines:
         const s = stats(details);
         let line = icon + (s ? " " + s : "");
         line += " " + theme.fg("dim", "·") + " " + theme.fg("dim", duration);
+
+        // Validation badge
+        if (details.validated !== undefined) {
+          line += details.validated
+            ? " " + theme.fg("success", "✅")
+            : " " + theme.fg("error", "❌");
+        }
 
         if (expanded) {
           const resultText = result.content[0]?.type === "text" ? result.content[0].text : "";
@@ -972,7 +930,7 @@ Guidelines:
 
         // Set output file + join mode synchronously after spawn, before the
         // event loop yields — onSessionCreated is async so this is safe.
-        const joinMode = resolveJoinMode(defaultJoinMode, true);
+        const joinMode = resolveJoinMode(getDefaultJoinMode(), true);
         const record = manager.getRecord(id);
         if (record && joinMode) {
           record.joinMode = joinMode;
