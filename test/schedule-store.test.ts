@@ -42,7 +42,8 @@ describe("ScheduleStore", () => {
 
   it("resolveStorePath produces session-scoped path under .pi/subagent-schedules/", () => {
     const p = resolveStorePath("/repo", "abc123");
-    expect(p).toBe("/repo/.pi/subagent-schedules/abc123.json");
+    // Normaliseer backslashes (Windows) naar forward slashes voor cross-platform vergelijking
+    expect(p.replace(/\\/g, "/")).toBe("/repo/.pi/subagent-schedules/abc123.json");
   });
 
   it("starts empty and round-trips a job through add/list", async () => {
