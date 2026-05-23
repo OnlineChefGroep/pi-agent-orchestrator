@@ -4,6 +4,7 @@
 
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
+import type { CompactResult } from "./compaction.js";
 import type { LifetimeUsage } from "./usage.js";
 
 export type { ThinkingLevel };
@@ -60,6 +61,16 @@ export interface AgentConfig {
   source?: "default" | "project" | "global";
   /** true = produce a structured JSON handoff at end of response for chain-of-agents */
   handoff?: boolean;
+  /**
+   * Maximum age in ms of a previously-built context before it is considered
+   * stale and must be rebuilt. 0 (default) means always rebuild — context is
+   * never cached across runs. Only relevant when context caching is active.
+   */
+  contextStalenessMs?: number;
+  /** Per-agent override for MAX_MEMORY_LINES. Falls back to global default (200) when not set. */
+  maxMemoryLines?: number;
+  /** Number of conversation turns to keep fully intact during pruning. Default: DEFAULT_KEEP_TURNS (5). */
+  compactionKeepTurns?: number;
 }
 
 export type JoinMode = 'async' | 'group' | 'smart';
@@ -72,6 +83,9 @@ export interface AgentRecord {
   result?: string;
   error?: string;
   toolUses: number;
+  /** Timestamp when the agent was spawned (record created). Never reset. */
+  spawnedAt: number;
+  /** Timestamp when the agent actually started executing (set in startAgent). */
   startedAt: number;
   completedAt?: number;
   session?: AgentSession;
@@ -101,6 +115,8 @@ export interface AgentRecord {
   lifetimeUsage: LifetimeUsage;
   /** Number of times this agent's session has compacted. Initialized to 0 at spawn. */
   compactionCount: number;
+  /** Metrics from the most recent compaction (undefined if never compacted). */
+  lastCompaction?: CompactResult;
   /** Resolved spawn params, captured for UI display. Fixed at spawn time. */
   invocation?: AgentInvocation;
   /** Validation results if validators were configured */
@@ -111,6 +127,16 @@ export interface AgentRecord {
   currentLevel: number;
   /** Number of subagents spawned from this agent so far. */
   totalSpawned: number;
+  /**
+   * Timestamp when parent context was last built for this agent.
+   * Set during runAgent at the deferred context build point.
+   */
+  contextBuiltAt?: number;
+  /**
+   * Inputs needed to build the deferred context. Stored at spawn time
+   * so context can be built at the last moment before session creation.
+   */
+  contextInputs?: { inheritContext: boolean };
 }
 
 /** Result of a single validator pass. */

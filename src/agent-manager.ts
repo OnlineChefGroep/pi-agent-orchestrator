@@ -173,6 +173,7 @@ export class AgentManager {
       description: options.description,
       status: options.isBackground ? "queued" : "running",
       toolUses: 0,
+      spawnedAt: Date.now(),
       startedAt: Date.now(),
       abortController,
       lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
@@ -180,6 +181,7 @@ export class AgentManager {
       invocation: Object.keys(childInvocation).length > 0 ? childInvocation : undefined,
       currentLevel: childLevel,
       totalSpawned: 0,
+      contextInputs: { inheritContext: options.inheritContext ?? false },
     };
     this.agents.set(id, record);
 
@@ -269,6 +271,10 @@ export class AgentManager {
         cwd: worktreeCwd,
         signal: record.abortController!.signal,
         hooks: this.hooks,
+        spawnedAt: record.spawnedAt,
+        onContextBuilt: (timestamp) => {
+          record.contextBuiltAt = timestamp;
+        },
         onToolActivity: (activity) => {
           if (activity.type === "end") record.toolUses++;
           options.onToolActivity?.(activity);
