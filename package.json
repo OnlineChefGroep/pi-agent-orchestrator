@@ -25,6 +25,11 @@
     "@mariozechner/pi-coding-agent": ">=0.70.5",
     "@mariozechner/pi-tui": ">=0.70.5"
   },
+  "peerDependenciesMeta": {
+    "@onlinechef/context-mode": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",
     "croner": "^10.0.1",

@@ -73,6 +73,8 @@ export interface AgentConfig {
   compactionKeepTurns?: number;
   /** Partitioned state: mapping partition name → allowed tool names for that partition. */
   partitionMembership?: Record<string, string[]>;
+  /** Enable @onlinechef/context-mode ctx_* tools for sandboxed code execution and search. */
+  useContextMode?: boolean;
 }
 
 export type JoinMode = 'async' | 'group' | 'smart';

@@ -64,6 +64,30 @@ export function filterByPartitions(config: AgentConfig, partitions?: string[]): 
 /** All known built-in tool names. */
 export const BUILTIN_TOOL_NAMES: string[] = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
+/** Context-mode sandbox tool names from @onlinechef/context-mode (optional dependency). */
+export const CTX_TOOL_NAMES: string[] = [
+  "ctx_execute",
+  "ctx_execute_file",
+  "ctx_search",
+  "ctx_index",
+  "ctx_batch_execute",
+  "ctx_stats",
+];
+
+/** Cached context-mode availability — lazy, checked once. */
+let _ctxAvailable: boolean | null = null;
+
+function isCtxAvailable(): boolean {
+  if (_ctxAvailable !== null) return _ctxAvailable;
+  try {
+    require.resolve("@onlinechef/context-mode");
+    _ctxAvailable = true;
+  } catch {
+    _ctxAvailable = false;
+  }
+  return _ctxAvailable;
+}
+
 /** Unified runtime registry of all agents (defaults + user-defined). */
 const agents = new Map<string, AgentConfig>();
 
@@ -262,10 +286,16 @@ export function getConfig(
       extensions: config.extensions,
       skills: config.skills,
     });
+
+    // Inject ctx_* tools when context-mode is installed and agent opts in
+    const builtinToolNames = config.useContextMode && isCtxAvailable()
+      ? [...restricted.builtinToolNames, ...CTX_TOOL_NAMES]
+      : restricted.builtinToolNames;
+
     return {
       displayName: config.displayName ?? config.name,
       description: config.description,
-      builtinToolNames: applyPartitionFilter(config.partitionMembership, restricted.builtinToolNames),
+      builtinToolNames: applyPartitionFilter(config.partitionMembership, builtinToolNames),
       extensions: restricted.extensions,
       skills: restricted.skills,
       promptMode: config.promptMode,

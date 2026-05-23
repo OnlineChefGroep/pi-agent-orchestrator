@@ -26,6 +26,7 @@ import { preloadSkills } from "./skill-loader.js";
 import type { SubagentType, ThinkingLevel, ValidationResult } from "./types.js";
 import { buildValidatorPrompt, getAgentDescription, hasValidators, parseValidationResult } from "./validators.js";
 import { type HookRegistry } from "./hooks.js";
+import { buildCtxInjection } from "./context-mode-bridge.js";
 
 /** Names of tools registered by this extension that subagents must NOT inherit. */
 const EXCLUDED_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"];
@@ -308,6 +309,17 @@ export async function runAgent(
     const fallback = DEFAULT_AGENTS.get("general-purpose");
     if (!fallback) throw new Error(`No fallback config available for unknown type "${type}"`);
     systemPrompt = buildAgentPrompt({ ...fallback, name: type }, effectiveCwd, env, parentSystemPrompt, extras);
+  }
+
+  // Inject context-mode sandbox tools when @onlinechef/context-mode is installed.
+  // Gracefully skips when unavailable — context-mode is an optional peerDependency.
+  const ctxInjection = buildCtxInjection();
+  if (ctxInjection) {
+    systemPrompt = systemPrompt + "\n\n" + ctxInjection.systemPromptAddition;
+    toolNames = [...toolNames, ...ctxInjection.toolAllowList];
+    console.log(
+      `[pi-subagents] context-mode tools injected for agent ${options.agentId ?? "unknown"}`,
+    );
   }
 
   // When skills is string[], we've already preloaded them into the prompt.
