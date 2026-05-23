@@ -14,15 +14,17 @@ import {
   SessionManager,
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
-import { getAgentConfig, getConfig, getMemoryToolNames, getReadOnlyMemoryToolNames, getToolNamesForType } from "./agent-types.js";
+import { type EffectiveConfig, getAgentConfig, getConfig, getMemoryToolNames, getReadOnlyMemoryToolNames, getToolNamesForType } from "./agent-types.js";
 import { buildParentContext, extractText } from "./context.js";
 import { DEFAULT_AGENTS } from "./default-agents.js";
 import { detectEnv } from "./env.js";
+import { buildHandoffPrompt, parseHandoff, renderHandoffForParent, type AgentHandoff } from "./handoff.js";
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "./memory.js";
 import { buildAgentPrompt, type PromptExtras } from "./prompts.js";
 import { preloadSkills } from "./skill-loader.js";
 import type { SubagentType, ThinkingLevel, ValidationResult } from "./types.js";
 import { buildValidatorPrompt, getAgentDescription, hasValidators, parseValidationResult } from "./validators.js";
+import { type HookRegistry } from "./hooks.js";
 
 /** Names of tools registered by this extension that subagents must NOT inherit. */
 const EXCLUDED_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"];
@@ -130,6 +132,10 @@ export interface RunOptions {
   currentLevel?: number;
   /** Max nesting depth limit for this agent. From invocation.levelLimit. undefined = unlimited. */
   levelLimit?: number;
+  /** Parent's effective config for directional permission inheritance. */
+  parentConfig?: EffectiveConfig;
+  /** Hook registry for lifecycle event dispatch. */
+  hooks?: HookRegistry;
 }
 
 export interface RunResult {
@@ -143,6 +149,8 @@ export interface RunResult {
   validationResults?: ValidationResult[];
   /** Whether all validators passed (undefined if no validators configured). */
   validated?: boolean;
+  /** Structured handoff parsed from agent output (only when handoff is enabled). */
+  handoff?: AgentHandoff;
 }
 
 /**
@@ -190,7 +198,7 @@ export async function runAgent(
   prompt: string,
   options: RunOptions,
 ): Promise<RunResult> {
-  const config = getConfig(type);
+  const config = getConfig(type, options.parentConfig);
   const agentConfig = getAgentConfig(type);
 
   // Early exit: check level limit before any work is done
@@ -247,6 +255,11 @@ export async function runAgent(
       extras.memoryBlock = buildReadOnlyMemoryBlock(agentConfig.name, agentConfig.memory, effectiveCwd);
     }
   }
+
+  // Apply parent permission inheritance: filter tools to only those the parent can also use.
+  // The config.builtinToolNames already reflects the intersection with parent's effective tools.
+  const allowedTools = new Set(config.builtinToolNames);
+  toolNames = toolNames.filter((t) => allowedTools.has(t));
 
   // Build system prompt from agent config
   let systemPrompt: string;
@@ -307,6 +320,17 @@ export async function runAgent(
     sessionOpts.thinkingLevel = thinkingLevel;
   }
 
+  // Dispatch blocking hook before session creation
+  if (options.hooks) {
+    const hookResult = await options.hooks.dispatch(
+      "subagent:start",
+      options.agentId ?? "unknown",
+    );
+    if (hookResult === "block") {
+      throw new Error("Blocked by hook");
+    }
+  }
+
   const { session } = await createAgentSession(sessionOpts);
 
   const baseSessionName = agentConfig?.name ?? type;
@@ -363,6 +387,9 @@ export async function runAgent(
   let currentMessageText = "";
   const unsubTurns = session.subscribe((event: AgentSessionEvent) => {
     if (event.type === "turn_end") {
+      options.hooks
+        ?.dispatch("turn:end", options.agentId ?? "unknown")
+        .catch(() => {});
       turnCount++;
       options.onTurnEnd?.(turnCount);
       if (maxTurns != null) {
@@ -374,6 +401,11 @@ export async function runAgent(
           session.abort();
         }
       }
+    }
+    if (event.type === "turn_start") {
+      options.hooks
+        ?.dispatch("turn:start", options.agentId ?? "unknown")
+        .catch(() => {});
     }
     if (event.type === "message_start") {
       currentMessageText = "";
@@ -397,7 +429,20 @@ export async function runAgent(
       });
     }
     if (event.type === "compaction_end" && !event.aborted && event.result) {
+      options.hooks
+        ?.dispatch("compaction:end", options.agentId ?? "unknown", {
+          reason: event.reason,
+          tokensBefore: event.result.tokensBefore,
+        })
+        .catch(() => {});
       options.onCompaction?.({ reason: event.reason, tokensBefore: event.result.tokensBefore });
+    }
+    if (event.type === "compaction_start") {
+      options.hooks
+        ?.dispatch("compaction:start", options.agentId ?? "unknown", {
+          reason: event.reason,
+        })
+        .catch(() => {});
     }
   });
 
@@ -415,6 +460,16 @@ export async function runAgent(
 
   try {
     await session.prompt(effectivePrompt);
+    options.hooks
+      ?.dispatch("subagent:end", options.agentId ?? "unknown")
+      .catch(() => {});
+  } catch (err) {
+    options.hooks
+      ?.dispatch("subagent:error", options.agentId ?? "unknown", {
+        error: err instanceof Error ? err.message : String(err),
+      })
+      .catch(() => {});
+    throw err;
   } finally {
     unsubTurns();
     collector.unsubscribe();
@@ -422,6 +477,17 @@ export async function runAgent(
   }
 
   let responseText = collector.getText().trim() || getLastAssistantText(session);
+
+  // ---- Structured handoff parsing (before validators) ----
+  let handoff: AgentHandoff | undefined;
+  if (agentConfig?.handoff) {
+    const parsed = parseHandoff(responseText);
+    if (parsed) {
+      handoff = parsed;
+      responseText = renderHandoffForParent(parsed);
+    }
+    // Graceful degrade: if parse fails (null), keep original responseText
+  }
 
   // ---- Adversarial validation ----
   let validationResults: ValidationResult[] | undefined;
@@ -490,7 +556,7 @@ export async function runAgent(
     }
   }
 
-  return { responseText, session, aborted, steered: softLimitReached, validationResults, validated };
+  return { responseText, session, aborted, steered: softLimitReached, validationResults, validated, handoff };
 }
 
 /**

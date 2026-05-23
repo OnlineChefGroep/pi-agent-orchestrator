@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   BUILTIN_TOOL_NAMES,
+  type EffectiveConfig,
   getAgentConfig,
   getAvailableTypes,
   getConfig,
@@ -285,6 +286,233 @@ describe("agent type registry", () => {
     it("returns empty when read already exists", () => {
       const names = getReadOnlyMemoryToolNames(new Set(["read"]));
       expect(names).toHaveLength(0);
+    });
+  });
+
+  describe("permission inheritance", () => {
+    const READ_ONLY_TOOLS = ["read", "bash", "grep", "find", "ls"];
+    const ALL_TOOLS = BUILTIN_TOOL_NAMES;
+
+    it("RO parent spawns child → child tools are subset of parent RO tools", () => {
+      // Explore (RO) spawns general-purpose (RW-configured) child
+      // Child must be restricted to parent's RO tool set
+      const parentConfig: EffectiveConfig = {
+        builtinToolNames: READ_ONLY_TOOLS,
+        extensions: true,
+        skills: true,
+      };
+
+      const child = getConfig("general-purpose", parentConfig);
+
+      // Child should not have write/edit (parent doesn't have them)
+      expect(child.builtinToolNames).not.toContain("write");
+      expect(child.builtinToolNames).not.toContain("edit");
+      // Child should have read-only tools (intersection with parent)
+      expect(child.builtinToolNames).toContain("read");
+      expect(child.builtinToolNames).toContain("bash");
+      expect(child.builtinToolNames).toContain("grep");
+      expect(child.builtinToolNames).toContain("find");
+      expect(child.builtinToolNames).toContain("ls");
+      // Child's tool count should equal parent's (intersection = parent's smaller set)
+      expect(child.builtinToolNames).toEqual(READ_ONLY_TOOLS);
+    });
+
+    it("RO parent → RO child: child keeps RO tools (no further restriction needed)", () => {
+      // Explore (RO) spawns Plan (also RO) child
+      const parentConfig: EffectiveConfig = {
+        builtinToolNames: READ_ONLY_TOOLS,
+        extensions: true,
+        skills: true,
+      };
+
+      const child = getConfig("Plan", parentConfig);
+
+      // Plan is already RO, intersection with RO parent = still RO
+      expect(child.builtinToolNames).not.toContain("write");
+      expect(child.builtinToolNames).not.toContain("edit");
+      expect(child.builtinToolNames).toEqual(READ_ONLY_TOOLS);
+    });
+
+    it("RW parent spawns RO child → child has only RO tools", () => {
+      // General-purpose (RW) spawns Explore (RO) child
+      const parentConfig: EffectiveConfig = {
+        builtinToolNames: ALL_TOOLS,
+        extensions: true,
+        skills: true,
+      };
+
+      const child = getConfig("Explore", parentConfig);
+
+      // Child's own config restricts to RO; parent allows all; intersection = RO
+      expect(child.builtinToolNames).not.toContain("write");
+      expect(child.builtinToolNames).not.toContain("edit");
+      expect(child.builtinToolNames).toEqual(READ_ONLY_TOOLS);
+    });
+
+    it("RO parent → RW child: child is FORCED to RO (key security guarantee)", () => {
+      // Explore (RO) spawns general-purpose (RW-configured) child
+      // Parent's restriction wins: child can only use what parent can use
+      const parentConfig: EffectiveConfig = {
+        builtinToolNames: READ_ONLY_TOOLS,
+        extensions: true,
+        skills: true,
+      };
+
+      const child = getConfig("general-purpose", parentConfig);
+
+      // Even though general-purpose is configured with all tools,
+      // the intersection with RO parent forces RO
+      expect(child.builtinToolNames).not.toContain("write");
+      expect(child.builtinToolNames).not.toContain("edit");
+      expect(child.builtinToolNames).toEqual(READ_ONLY_TOOLS);
+    });
+
+    it("restricted parent (deny write_file) spawns child → child cannot use write_file even if configured", () => {
+      // Parent has all tools except "write"
+      const parentTools = ALL_TOOLS.filter((t) => t !== "write");
+      const parentConfig: EffectiveConfig = {
+        builtinToolNames: parentTools,
+        extensions: true,
+        skills: true,
+      };
+
+      const child = getConfig("general-purpose", parentConfig);
+
+      // Child should NOT have write
+      expect(child.builtinToolNames).not.toContain("write");
+      // Child should have all other tools
+      expect(child.builtinToolNames).toContain("read");
+      expect(child.builtinToolNames).toContain("bash");
+      expect(child.builtinToolNames).toContain("edit");
+      expect(child.builtinToolNames).toContain("grep");
+      expect(child.builtinToolNames).toContain("find");
+      expect(child.builtinToolNames).toContain("ls");
+    });
+
+    it("parent with no restrictions → child gets full configured tools (no inheritance when no restrictions)", () => {
+      // No parentConfig passed
+      const child = getConfig("general-purpose");
+
+      // Child gets full tool set (general-purpose has no builtinToolNames → BUILTIN_TOOL_NAMES fallback)
+      expect(child.builtinToolNames).toContain("read");
+      expect(child.builtinToolNames).toContain("write");
+      expect(child.builtinToolNames).toContain("edit");
+      expect(child.builtinToolNames).toContain("bash");
+    });
+
+    it("parent restricts extensions → child inherits restriction", () => {
+      // Register a user agent with extensions: true
+      const agents = new Map([["worker", makeAgentConfig({
+        name: "worker",
+        description: "Worker agent",
+        extensions: true,
+        skills: true,
+      })]]);
+      registerAgents(agents);
+
+      // Parent only allows web-search extension
+      const parentConfig: EffectiveConfig = {
+        builtinToolNames: ALL_TOOLS,
+        extensions: ["web-search"],
+        skills: true,
+      };
+
+      const child = getConfig("worker", parentConfig);
+
+      // Child's extensions: true → intersected with parent's ["web-search"] → ["web-search"]
+      expect(child.extensions).toEqual(["web-search"]);
+    });
+
+    it("parent denies all extensions → child gets none", () => {
+      const agents = new Map([["worker", makeAgentConfig({
+        name: "worker",
+        description: "Worker agent",
+        extensions: true,
+        skills: true,
+      })]]);
+      registerAgents(agents);
+
+      const parentConfig: EffectiveConfig = {
+        builtinToolNames: ALL_TOOLS,
+        extensions: false,
+        skills: true,
+      };
+
+      const child = getConfig("worker", parentConfig);
+
+      expect(child.extensions).toBe(false);
+    });
+
+    it("parent restricts skills → child inherits restriction", () => {
+      const agents = new Map([["worker", makeAgentConfig({
+        name: "worker",
+        description: "Worker agent",
+        extensions: true,
+        skills: true,
+      })]]);
+      registerAgents(agents);
+
+      // Parent only allows specific skills
+      const parentConfig: EffectiveConfig = {
+        builtinToolNames: ALL_TOOLS,
+        extensions: true,
+        skills: ["planning", "code-review"],
+      };
+
+      const child = getConfig("worker", parentConfig);
+
+      // Child's skills: true → intersected with parent's ["planning","code-review"] → parent's list
+      expect(child.skills).toEqual(["planning", "code-review"]);
+    });
+
+    it("both parent and child have extension allowlists → intersection", () => {
+      const agents = new Map([["worker", makeAgentConfig({
+        name: "worker",
+        description: "Worker agent",
+        extensions: ["web-search", "file-ops", "tools"],
+        skills: true,
+      })]]);
+      registerAgents(agents);
+
+      const parentConfig: EffectiveConfig = {
+        builtinToolNames: ALL_TOOLS,
+        extensions: ["web-search", "data-fetch"],
+        skills: true,
+      };
+
+      const child = getConfig("worker", parentConfig);
+
+      // Intersection of ["web-search","file-ops","tools"] ∩ ["web-search","data-fetch"] = ["web-search"]
+      expect(child.extensions).toEqual(["web-search"]);
+    });
+
+    it("existing tests are not broken: getConfig without parentConfig works as before", () => {
+      // This tests the backward-compatible path
+      const withoutParent = getConfig("Explore");
+      expect(withoutParent.builtinToolNames).toEqual(READ_ONLY_TOOLS);
+      expect(withoutParent.extensions).toBe(true);
+      expect(withoutParent.skills).toBe(true);
+
+      const gp = getConfig("general-purpose");
+      expect(gp.builtinToolNames).toEqual(ALL_TOOLS);
+      expect(gp.extensions).toBe(true);
+      expect(gp.skills).toBe(true);
+    });
+
+    it("fallback configs also respect parent restrictions", () => {
+      // When type is unknown, fallback to general-purpose. Parent restrictions still apply.
+      const parentConfig: EffectiveConfig = {
+        builtinToolNames: READ_ONLY_TOOLS,
+        extensions: false,
+        skills: false,
+      };
+
+      const child = getConfig("nonexistent", parentConfig);
+
+      // Fallback general-purpose config, restricted by parent
+      expect(child.builtinToolNames).toEqual(READ_ONLY_TOOLS);
+      expect(child.extensions).toBe(false);
+      expect(child.skills).toBe(false);
     });
   });
 });

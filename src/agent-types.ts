@@ -116,8 +116,49 @@ export function getToolNamesForType(type: string): string[] {
   return names;
 }
 
+/**
+ * Intersect two permission values using directional inheritance.
+ * Parent overrides child: if parent has a restriction, the child cannot exceed it.
+ *
+ * - parent false → child gets false (parent denies all)
+ * - parent true  → child keeps own value (parent allows all)
+ * - parent string[] + child true  → restricted to parent's allowlist
+ * - parent string[] + child string[] → intersection of both
+ * - parent string[] + child false → child stays false
+ */
+function intersectPermission(
+  child: true | string[] | false,
+  parent: true | string[] | false,
+): true | string[] | false {
+  if (parent === false) return false;
+  if (parent === true) return child;
+  if (child === false) return false;
+  if (child === true) return parent;
+  const parentSet = new Set(parent);
+  return child.filter((item) => parentSet.has(item));
+}
+
+/**
+ * Intersect tool names: child can only use tools the parent also has access to.
+ * Pure function — no side effects.
+ */
+function intersectToolNames(childNames: string[], parentNames: string[]): string[] {
+  const parentSet = new Set(parentNames);
+  return childNames.filter((t) => parentSet.has(t));
+}
+
+/** Effective config shape used for permission inheritance. Distinct from the full return type. */
+export interface EffectiveConfig {
+  builtinToolNames: string[];
+  extensions: true | string[] | false;
+  skills: true | string[] | false;
+}
+
 /** Get config for a type (case-insensitive, returns a SubagentTypeConfig-compatible object). Falls back to general-purpose. */
-export function getConfig(type: string): {
+export function getConfig(
+  type: string,
+  parentConfig?: EffectiveConfig,
+): {
   displayName: string;
   description: string;
   builtinToolNames: string[];
@@ -127,13 +168,37 @@ export function getConfig(type: string): {
 } {
   const key = resolveKey(type);
   const config = key ? agents.get(key) : undefined;
-  if (config && config.enabled !== false) {
+
+  /**
+   * Apply parent permission inheritance to a raw effective config.
+   * Runs after the child's own config is resolved, before returning.
+   * This is the boundary where illegal states are made unrepresentable.
+   */
+  function applyParentRestrictions(raw: {
+    builtinToolNames: string[];
+    extensions: true | string[] | false;
+    skills: true | string[] | false;
+  }) {
+    if (!parentConfig) return raw;
     return {
-      displayName: config.displayName ?? config.name,
-      description: config.description,
+      builtinToolNames: intersectToolNames(raw.builtinToolNames, parentConfig.builtinToolNames),
+      extensions: intersectPermission(raw.extensions, parentConfig.extensions),
+      skills: intersectPermission(raw.skills, parentConfig.skills),
+    };
+  }
+
+  if (config && config.enabled !== false) {
+    const restricted = applyParentRestrictions({
       builtinToolNames: config.builtinToolNames ?? BUILTIN_TOOL_NAMES,
       extensions: config.extensions,
       skills: config.skills,
+    });
+    return {
+      displayName: config.displayName ?? config.name,
+      description: config.description,
+      builtinToolNames: restricted.builtinToolNames,
+      extensions: restricted.extensions,
+      skills: restricted.skills,
       promptMode: config.promptMode,
     };
   }
@@ -141,23 +206,33 @@ export function getConfig(type: string): {
   // Fallback for unknown/disabled types — general-purpose config
   const gp = agents.get("general-purpose");
   if (gp && gp.enabled !== false) {
-    return {
-      displayName: gp.displayName ?? gp.name,
-      description: gp.description,
+    const restricted = applyParentRestrictions({
       builtinToolNames: gp.builtinToolNames ?? BUILTIN_TOOL_NAMES,
       extensions: gp.extensions,
       skills: gp.skills,
+    });
+    return {
+      displayName: gp.displayName ?? gp.name,
+      description: gp.description,
+      builtinToolNames: restricted.builtinToolNames,
+      extensions: restricted.extensions,
+      skills: restricted.skills,
       promptMode: gp.promptMode,
     };
   }
 
   // Absolute fallback (should never happen)
-  return {
-    displayName: "Agent",
-    description: "General-purpose agent for complex, multi-step tasks",
+  const restricted = applyParentRestrictions({
     builtinToolNames: BUILTIN_TOOL_NAMES,
     extensions: true,
     skills: true,
+  });
+  return {
+    displayName: "Agent",
+    description: "General-purpose agent for complex, multi-step tasks",
+    builtinToolNames: restricted.builtinToolNames,
+    extensions: restricted.extensions,
+    skills: restricted.skills,
     promptMode: "append",
   };
 }

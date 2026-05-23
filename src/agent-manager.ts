@@ -13,9 +13,11 @@ export const activeAgentStorage = new AsyncLocalStorage<string>();
 import type { Model } from "@mariozechner/pi-ai";
 import type { AgentSession, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { resumeAgent, runAgent, type ToolActivity } from "./agent-runner.js";
+import { type HookRegistry } from "./hooks.js";
 import type { AgentInvocation, AgentRecord, IsolationMode, SubagentType, ThinkingLevel } from "./types.js";
 import { addUsage } from "./usage.js";
 import { cleanupWorktree, createWorktree, pruneWorktrees, } from "./worktree.js";
+import { getConfig } from "./agent-types.js";
 
 export type OnAgentComplete = (record: AgentRecord) => void;
 export type OnAgentStart = (record: AgentRecord) => void;
@@ -76,6 +78,7 @@ export class AgentManager {
   private onStart?: OnAgentStart;
   private onCompact?: OnAgentCompact;
   private maxConcurrent: number;
+  hooks?: HookRegistry;
 
   /** Queue of background agents waiting to start. */
   private queue: { id: string; args: SpawnArgs }[] = [];
@@ -180,6 +183,15 @@ export class AgentManager {
     };
     this.agents.set(id, record);
 
+    // Dispatch subagent:spawn hook (non-blocking, fire-and-forget)
+    this.hooks
+      ?.dispatch("subagent:spawn", id, {
+        type,
+        description: options.description,
+        isBackground: options.isBackground ?? false,
+      })
+      .catch(() => {});
+
     const args: SpawnArgs = { pi, ctx, type, prompt, options };
 
     if (options.isBackground && !options.bypassQueue && this.runningBackground >= this.maxConcurrent) {
@@ -222,6 +234,13 @@ export class AgentManager {
     if (options.isBackground) this.runningBackground++;
     this.onStart?.(record);
 
+    // Compute parent's effective config for directional permission inheritance.
+    // Must be done BEFORE pushing this child onto the active stack — the parent
+    // is whatever agent currently sits at the top of the stack.
+    const parentId = this.getActiveAgentId();
+    const parentRecord = parentId ? this.agents.get(parentId) : undefined;
+    const parentConfig = parentRecord ? getConfig(parentRecord.type) : undefined;
+
     // Push this agent onto the active stack for budget/depth tracking.
     // Pop when the run completes (or errors), regardless of outcome.
     this.activeAgentIdStack.push(id);
@@ -246,8 +265,10 @@ export class AgentManager {
         thinkingLevel: options.thinkingLevel,
         currentLevel: record.currentLevel,
         levelLimit: record.invocation?.levelLimit,
+        parentConfig,
         cwd: worktreeCwd,
         signal: record.abortController!.signal,
+        hooks: this.hooks,
         onToolActivity: (activity) => {
           if (activity.type === "end") record.toolUses++;
           options.onToolActivity?.(activity);
