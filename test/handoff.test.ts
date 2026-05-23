@@ -52,8 +52,9 @@ describe("parseHandoff", () => {
 
     const result = parseHandoff(text);
     expect(result).toBeNull();
+    // CVE-008 FIX: Error message now includes JSON parse error details
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("malformed JSON"),
+      expect.stringContaining("Failed to parse handoff JSON"),
     );
 
     warnSpy.mockRestore();

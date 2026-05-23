@@ -15,7 +15,7 @@ import { defineTool, type ExtensionAPI, type ExtensionCommandContext, type Exten
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { AgentManager } from "./agent-manager.js";
-import { buildTypeListText, getDefaultJoinMode, isSchedulingEnabled, reloadCustomAgents, setDefaultJoinMode, setSchedulingEnabled, getAnimationStyle, setAnimationStyle, getUiStyle, setUiStyle } from "./agent-registry.js";
+import { buildTypeListText, getAnimationStyle, getDefaultJoinMode, getUiStyle, isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setDefaultJoinMode, setSchedulingEnabled, setUiStyle } from "./agent-registry.js";
 import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTurns, setDefaultMaxTurns, setGraceTurns, steerAgent } from "./agent-runner.js";
 import { getAgentConfig, getAvailableTypes, resolveType } from "./agent-types.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";

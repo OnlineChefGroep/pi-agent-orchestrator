@@ -9,9 +9,9 @@
 
 import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 import { visibleWidth } from "@mariozechner/pi-tui";
+import { getUiStyle } from "../agent-registry.js";
 import type { SubagentScheduler } from "../schedule.js";
 import type { ScheduledSubagent } from "../types.js";
-import { getUiStyle } from "../agent-registry.js";
 
 /** Helper to pad a string to a specific visible width, accounting for ANSI codes. */
 function padVisible(s: string, targetLen: number, padChar = " "): string {

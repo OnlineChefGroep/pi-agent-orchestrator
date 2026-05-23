@@ -6,12 +6,14 @@
  */
 
 import { truncateToWidth } from "@mariozechner/pi-tui";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import { spawn, type ChildProcess } from "child_process";
 import type { AgentManager } from "../agent-manager.js";
+import { getAnimationStyle, getUiStyle } from "../agent-registry.js";
 import { getConfig } from "../agent-types.js";
 import type { AgentInvocation, SubagentType } from "../types.js";
 import { getLifetimeTotal, getSessionContextPercent, type LifetimeUsage, type SessionLike } from "../usage.js";
-
-import { getUiStyle, getAnimationStyle } from "../agent-registry.js";
 
 // ---- Constants ----
 
@@ -250,9 +252,18 @@ export class AgentWidget {
       // UICtx changed — the widget registered on the old context is gone.
       // Force re-registration on next update().
       this.uiCtx = ctx;
+      this.uiCtx = ctx;
       this.widgetRegistered = false;
       this.tui = undefined;
       this.lastStatusText = undefined;
+    }
+  }
+
+  private sidecar: ChildProcess | undefined;
+  private stopSidecar() {
+    if (this.sidecar) {
+      this.sidecar.kill();
+      this.sidecar = undefined;
     }
   }
 
@@ -353,6 +364,36 @@ export class AgentWidget {
     if (!hasActive && !hasFinished) return [];
 
     const activeUiStyle = getUiStyle();
+    
+    // Cinematic Sidecar Logic
+    if (activeUiStyle === "cinematic") {
+      if (!this.sidecar) {
+        const extDir = dirname(dirname(fileURLToPath(import.meta.url)));
+        const binPath = join(extDir, "cinematic-renderer", "cinematic-tui");
+        this.sidecar = spawn(binPath, [], { stdio: ["pipe", "inherit", "inherit"] });
+        this.sidecar.on("exit", () => { this.sidecar = undefined; });
+      }
+      
+      if (this.sidecar.stdin) {
+        const payload = {
+          agents: allAgents.map(a => ({
+            id: a.id,
+            type: a.type,
+            role: getDisplayName(a.type),
+            status: a.status,
+            tokens: this.agentActivity.get(a.id)?.toolUses || 0,
+            progress: 50 // Mock progress for now
+          }))
+        };
+        this.sidecar.stdin.write(JSON.stringify(payload) + "\n");
+      }
+      
+      // Return empty so Pi's default widget doesn't render over it
+      return [];
+    } else {
+      this.stopSidecar();
+    }
+
     // Wrapper for plain theme
     const plainTheme: Theme = {
       fg: (color, text) => text,

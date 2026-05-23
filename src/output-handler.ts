@@ -13,7 +13,7 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "./agent-manager.js";
-import { getModelLabelFromConfig, reloadCustomAgents, getAnimationStyle, setAnimationStyle, getUiStyle, setUiStyle } from "./agent-registry.js";
+import { getAnimationStyle, getModelLabelFromConfig, getUiStyle, reloadCustomAgents, setAnimationStyle, setUiStyle } from "./agent-registry.js";
 import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, steerAgent } from "./agent-runner.js";
 import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes } from "./agent-types.js";
 import type { ModelRegistry } from "./model-resolver.js";
@@ -731,9 +731,10 @@ export async function showSettings(
       "premium — truecolor gradients and rounded connectors (default)",
       "retro — 16-color fallback and straight box lines",
       "plain — minimal markers, plain text with no ANSI styles",
+      "cinematic — ultra-rich fullscreen Go motion renderer via sidecar",
     ]);
     if (val) {
-      const style = val.split(" ")[0] as "premium" | "retro" | "plain";
+      const style = val.split(" ")[0] as "premium" | "retro" | "plain" | "cinematic";
       setUiStyle(style);
       notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `UI/UX style set to ${style}`);
     }

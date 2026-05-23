@@ -27,7 +27,7 @@ export interface SubagentsSettings {
    */
   schedulingEnabled?: boolean;
   animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";
-  uiStyle?: "premium" | "retro" | "plain";
+  uiStyle?: "premium" | "retro" | "plain" | "cinematic";
 }
 
 /** Setter hooks used by applySettings to wire persisted values into in-memory state. */
@@ -38,7 +38,7 @@ export interface SettingsAppliers {
   setDefaultJoinMode: (mode: JoinMode) => void;
   setSchedulingEnabled: (b: boolean) => void;
   setAnimationStyle: (style: "braille" | "dots" | "lines" | "classic" | "none") => void;
-  setUiStyle: (style: "premium" | "retro" | "plain") => void;
+  setUiStyle: (style: "premium" | "retro" | "plain" | "cinematic") => void;
 }
 
 /** Emit callback — a subset of `pi.events.emit` to keep helpers testable. */
