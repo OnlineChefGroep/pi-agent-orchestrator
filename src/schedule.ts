@@ -169,20 +169,24 @@ export class SubagentScheduler {
     if (!store) return;
     try {
       if (job.scheduleType === "interval" && job.intervalMs) {
-        const t = setInterval(() => this.executeJob(job.id), job.intervalMs);
+        // Cap interval at max 24 days to avoid setTimeout limits
+        const MAX_INTERVAL = 2147483647;
+        const interval = Math.min(job.intervalMs, MAX_INTERVAL);
+        const t = setInterval(() => this.executeJob(job.id), interval);
         this.intervals.set(job.id, t);
       } else if (job.scheduleType === "once") {
-        const target = new Date(job.schedule).getTime();
-        const delay = target - Date.now();
-        if (delay > 0) {
-          const t = setTimeout(() => {
-            this.executeJob(job.id);
+        const target = new Date(job.schedule);
+        if (target.getTime() > Date.now()) {
+          // Use Cron for one-shot dates. It natively handles dates far in the future
+          // that would otherwise exceed Node.js's 32-bit setTimeout limits.
+          const cron = new Cron(target, () => {
+            this.executeJob(job.id).catch(() => {});
             // Auto-disable one-shots after they fire (mirrors pi-cron-schedule)
             store.update(job.id, { enabled: false });
             const updated = store.get(job.id);
             if (updated) this.emit({ type: "updated", job: updated });
-          }, delay);
-          this.intervals.set(job.id, t);
+          });
+          this.jobs.set(job.id, cron);
         } else {
           // Past timestamp — disable, mark error, never fire
           store.update(job.id, { enabled: false, lastStatus: "error" });
@@ -216,7 +220,7 @@ export class SubagentScheduler {
    * queue), persist completion. Fire-and-forget: the timer tick returns
    * immediately so other jobs keep firing.
    */
-  private executeJob(id: string): void {
+  private async executeJob(id: string): Promise<void> {
     const store = this.store;
     const pi = this.pi;
     const ctx = this.ctx;
@@ -258,7 +262,7 @@ export class SubagentScheduler {
     this.emit({ type: "fired", jobId: id, agentId, name: job.name });
 
     const record = manager.getRecord(agentId);
-    const finalize = (status: "success" | "error") => {
+    const finalize = async (status: "success" | "error") => {
       const next = this.getNextRun(id);
       const current = store.get(id);
       store.update(id, {
@@ -277,12 +281,12 @@ export class SubagentScheduler {
         .then(() => {
           const r = manager.getRecord(agentId);
           const failed = r?.status === "error" || r?.status === "aborted" || r?.status === "stopped";
-          finalize(failed ? "error" : "success");
+          finalize(failed ? "error" : "success").catch(() => {});
         })
-        .catch(() => finalize("error"));
+        .catch(() => finalize("error").catch(() => {}));
     } else {
       // Spawn returned without a promise (defensive — bypassQueue path always sets one).
-      finalize("success");
+      finalize("success").catch(() => {});
     }
   }
 

@@ -21,6 +21,12 @@ function isProcessRunning(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
+/** Synchronous busy-wait for lock retry. Max ~5 seconds; contention is rare. */
+function syncSleep(ms: number): void {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { /* spin */ }
+}
+
 function acquireLock(lockPath: string): void {
   for (let i = 0; i < LOCK_MAX_RETRIES; i++) {
     try {
@@ -35,8 +41,7 @@ function acquireLock(lockPath: string): void {
             continue;
           }
         } catch { /* ignore — try again */ }
-        const start = Date.now();
-        while (Date.now() - start < LOCK_RETRY_MS) { /* busy wait */ }
+        syncSleep(LOCK_RETRY_MS);
         continue;
       }
       throw e;

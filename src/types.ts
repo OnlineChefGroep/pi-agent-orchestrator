@@ -4,6 +4,7 @@
 
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
+import type { CompactResult } from "./compaction.js";
 import type { LifetimeUsage } from "./usage.js";
 
 export type { ThinkingLevel };
@@ -47,12 +48,33 @@ export interface AgentConfig {
   memory?: MemoryScope;
   /** Isolation mode — "worktree" runs the agent in a temporary git worktree */
   isolation?: IsolationMode;
+  /** Adversarial validators to run after this agent completes */
+  validators?: {
+    agentId: string;
+    criteria: string[];
+  }[];
   /** true = this is an embedded default agent (informational) */
   isDefault?: boolean;
   /** false = agent is hidden from the registry */
   enabled?: boolean;
   /** Where this agent was loaded from */
   source?: "default" | "project" | "global";
+  /** true = produce a structured JSON handoff at end of response for chain-of-agents */
+  handoff?: boolean;
+  /**
+   * Maximum age in ms of a previously-built context before it is considered
+   * stale and must be rebuilt. 0 (default) means always rebuild — context is
+   * never cached across runs. Only relevant when context caching is active.
+   */
+  contextStalenessMs?: number;
+  /** Per-agent override for MAX_MEMORY_LINES. Falls back to global default (200) when not set. */
+  maxMemoryLines?: number;
+  /** Number of conversation turns to keep fully intact during pruning. Default: DEFAULT_KEEP_TURNS (5). */
+  compactionKeepTurns?: number;
+  /** Partitioned state: mapping partition name → allowed tool names for that partition. */
+  partitionMembership?: Record<string, string[]>;
+  /** Enable @onlinechef/context-mode ctx_* tools for sandboxed code execution and search. */
+  useContextMode?: boolean;
 }
 
 export type JoinMode = 'async' | 'group' | 'smart';
@@ -65,6 +87,9 @@ export interface AgentRecord {
   result?: string;
   error?: string;
   toolUses: number;
+  /** Timestamp when the agent was spawned (record created). Never reset. */
+  spawnedAt: number;
+  /** Timestamp when the agent actually started executing (set in startAgent). */
   startedAt: number;
   completedAt?: number;
   session?: AgentSession;
@@ -94,8 +119,45 @@ export interface AgentRecord {
   lifetimeUsage: LifetimeUsage;
   /** Number of times this agent's session has compacted. Initialized to 0 at spawn. */
   compactionCount: number;
+  /** Metrics from the most recent compaction (undefined if never compacted). */
+  lastCompaction?: CompactResult;
   /** Resolved spawn params, captured for UI display. Fixed at spawn time. */
   invocation?: AgentInvocation;
+  /** Validation results if validators were configured */
+  validationResults?: ValidationResult[];
+  /** Whether all validators passed */
+  validated?: boolean;
+  /** Current nesting depth (0 = root, 1 = first child, etc.) */
+  currentLevel: number;
+  /** Number of subagents spawned from this agent so far. */
+  totalSpawned: number;
+  /**
+   * Timestamp when parent context was last built for this agent.
+   * Set during runAgent at the deferred context build point.
+   */
+  contextBuiltAt?: number;
+  /**
+   * Inputs needed to build the deferred context. Stored at spawn time
+   * so context can be built at the last moment before session creation.
+   */
+  contextInputs?: { inheritContext: boolean };
+  /** Active partition for this agent (first partition from invocation.partitions). */
+  activePartition?: string;
+}
+
+/** Result of a single validator pass. */
+export interface ValidationResult {
+  agentId: string;
+  passed: boolean;
+  criteria: ValidationCriterion[];
+  summary: string;
+}
+
+/** Single criterion result from a validator. */
+export interface ValidationCriterion {
+  criterion: string;
+  passed: boolean;
+  feedback: string;
 }
 
 export interface AgentInvocation {
@@ -107,6 +169,12 @@ export interface AgentInvocation {
   inheritContext?: boolean;
   runInBackground?: boolean;
   isolation?: IsolationMode;
+  /** Max total subagents that can be spawned recursively from this invocation. undefined = unlimited. */
+  taskBudget?: number;
+  /** Max nesting depth for recursive subagents. undefined = unlimited (default: 5). */
+  levelLimit?: number;
+  /** Partitions this agent belongs to — restricts tools to partition memberships. */
+  partitions?: string[];
 }
 
 /** Details attached to custom notification messages for visual rendering. */
@@ -124,6 +192,8 @@ export interface NotificationDetails {
   resultPreview: string;
   /** Additional agents in a group notification. */
   others?: NotificationDetails[];
+  /** Validation status for display. */
+  validated?: boolean;
 }
 
 export interface EnvInfo {

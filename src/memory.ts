@@ -7,12 +7,38 @@
  *   - "local"   → .pi/agent-memory-local/{agent-name}/
  */
 
-import { existsSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import type { MemoryScope } from "./types.js";
 
-/** Maximum lines to read from MEMORY.md */
+/**
+ * If the given directory is a Git worktree, returns the root of the main repository.
+ * Otherwise returns the original directory.
+ */
+function getProjectRoot(cwd: string): string {
+  try {
+    const gitPath = join(cwd, ".git");
+    const stat = statSync(gitPath);
+    if (stat.isFile()) {
+      // It's a worktree. The .git file contains "gitdir: /path/to/main/repo/.git/worktrees/X"
+      const content = readFileSync(gitPath, "utf-8");
+      const match = content.match(/^gitdir:\s+(.*)$/m);
+      if (match) {
+        let gitdir = match[1].trim();
+        if (!isAbsolute(gitdir)) gitdir = join(cwd, gitdir);
+        // gitdir is typically /path/to/main/repo/.git/worktrees/branch-name
+        // so moving 3 levels up gets us the main repo root
+        return dirname(dirname(dirname(gitdir)));
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return cwd;
+}
+
+/** Maximum lines to read from MEMORY.md (global default). */
 const MAX_MEMORY_LINES = 200;
 
 /**
@@ -61,9 +87,9 @@ export function resolveMemoryDir(agentName: string, scope: MemoryScope, cwd: str
     case "user":
       return join(homedir(), ".pi", "agent-memory", agentName);
     case "project":
-      return join(cwd, ".pi", "agent-memory", agentName);
+      return join(getProjectRoot(cwd), ".pi", "agent-memory", agentName);
     case "local":
-      return join(cwd, ".pi", "agent-memory-local", agentName);
+      return join(getProjectRoot(cwd), ".pi", "agent-memory-local", agentName);
   }
 }
 
@@ -86,8 +112,10 @@ export function ensureMemoryDir(memoryDir: string): void {
 /**
  * Read the first N lines of MEMORY.md from the memory directory, if it exists.
  * Returns undefined if no MEMORY.md exists or if the path is a symlink.
+ *
+ * @param maxLines - Per-agent override for max lines. Falls back to MAX_MEMORY_LINES (200).
  */
-export function readMemoryIndex(memoryDir: string): string | undefined {
+export function readMemoryIndex(memoryDir: string, maxLines?: number): string | undefined {
   // Reject symlinked memory directories
   if (isSymlink(memoryDir)) return undefined;
 
@@ -95,9 +123,10 @@ export function readMemoryIndex(memoryDir: string): string | undefined {
   const content = safeReadFile(memoryFile);
   if (content === undefined) return undefined;
 
+  const limit = maxLines ?? MAX_MEMORY_LINES;
   const lines = content.split("\n");
-  if (lines.length > MAX_MEMORY_LINES) {
-    return lines.slice(0, MAX_MEMORY_LINES).join("\n") + "\n... (truncated at 200 lines)";
+  if (lines.length > limit) {
+    return lines.slice(0, limit).join("\n") + `\n... (truncated at ${limit} lines)`;
   }
   return content;
 }
@@ -105,13 +134,20 @@ export function readMemoryIndex(memoryDir: string): string | undefined {
 /**
  * Build the memory block to inject into the agent's system prompt.
  * Also ensures the memory directory exists (creates it if needed).
+ *
+ * @param maxMemoryLines - Per-agent override for max memory lines.
  */
-export function buildMemoryBlock(agentName: string, scope: MemoryScope, cwd: string): string {
+export function buildMemoryBlock(
+  agentName: string,
+  scope: MemoryScope,
+  cwd: string,
+  maxMemoryLines?: number,
+): string {
   const memoryDir = resolveMemoryDir(agentName, scope, cwd);
   // Create the memory directory so the agent can immediately write to it
   ensureMemoryDir(memoryDir);
 
-  const existingMemory = readMemoryIndex(memoryDir);
+  const existingMemory = readMemoryIndex(memoryDir, maxMemoryLines);
 
   const header = `# Agent Memory
 
@@ -120,6 +156,7 @@ Memory scope: ${scope}
 
 This memory persists across sessions. Use it to build up knowledge over time.`;
 
+  const limit = maxMemoryLines ?? MAX_MEMORY_LINES;
   const memoryContent = existingMemory
     ? `\n\n## Current MEMORY.md\n${existingMemory}`
     : `\n\nNo MEMORY.md exists yet. Create one at ${join(memoryDir, "MEMORY.md")} to start building persistent memory.`;
@@ -127,7 +164,7 @@ This memory persists across sessions. Use it to build up knowledge over time.`;
   const instructions = `
 
 ## Memory Instructions
-- MEMORY.md is an index file — keep it concise (under 200 lines). Lines after 200 are truncated.
+- MEMORY.md is an index file — keep it concise (under ${limit} lines). Lines after ${limit} are truncated.
 - Store detailed memories in separate files within ${memoryDir}/ and link to them from MEMORY.md.
 - Each memory file should use this frontmatter format:
   \`\`\`markdown
@@ -148,9 +185,14 @@ This memory persists across sessions. Use it to build up knowledge over time.`;
  * Build a read-only memory block for agents that lack write/edit tools.
  * Does NOT create the memory directory — agents can only consume existing memory.
  */
-export function buildReadOnlyMemoryBlock(agentName: string, scope: MemoryScope, cwd: string): string {
+export function buildReadOnlyMemoryBlock(
+  agentName: string,
+  scope: MemoryScope,
+  cwd: string,
+  maxMemoryLines?: number,
+): string {
   const memoryDir = resolveMemoryDir(agentName, scope, cwd);
-  const existingMemory = readMemoryIndex(memoryDir);
+  const existingMemory = readMemoryIndex(memoryDir, maxMemoryLines);
 
   const header = `# Agent Memory (read-only)
 

@@ -14,14 +14,19 @@ import {
   SessionManager,
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
-import { getAgentConfig, getConfig, getMemoryToolNames, getReadOnlyMemoryToolNames, getToolNamesForType } from "./agent-types.js";
+import { type EffectiveConfig, getAgentConfig, getConfig, getMemoryToolNames, getReadOnlyMemoryToolNames, getToolNamesForType } from "./agent-types.js";
 import { buildParentContext, extractText } from "./context.js";
 import { DEFAULT_AGENTS } from "./default-agents.js";
 import { detectEnv } from "./env.js";
+import { buildHandoffPrompt, parseHandoff, renderHandoffForParent, type AgentHandoff } from "./handoff.js";
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "./memory.js";
+import { type CompactableMessage, DEFAULT_KEEP_TURNS, pruneOldToolOutputs, type CompactResult } from "./compaction.js";
 import { buildAgentPrompt, type PromptExtras } from "./prompts.js";
 import { preloadSkills } from "./skill-loader.js";
-import type { SubagentType, ThinkingLevel } from "./types.js";
+import type { SubagentType, ThinkingLevel, ValidationResult } from "./types.js";
+import { buildValidatorPrompt, getAgentDescription, hasValidators, parseValidationResult } from "./validators.js";
+import { type HookRegistry } from "./hooks.js";
+import { buildCtxInjection } from "./context-mode-bridge.js";
 
 /** Names of tools registered by this extension that subagents must NOT inherit. */
 const EXCLUDED_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"];
@@ -116,6 +121,29 @@ export interface RunOptions {
    * pre-compaction context size estimate. Aborted compactions don't fire.
    */
   onCompaction?: (info: { reason: "manual" | "threshold" | "overflow"; tokensBefore: number }) => void;
+  /**
+   * Set to true to prevent validator recursion.
+   * Validators spawned during validation will have this flag set.
+   */
+  skipValidators?: boolean;
+  /**
+   * Called when validation completes. Receives all validation results.
+   */
+  onValidationComplete?: (results: ValidationResult[]) => void;
+  /** Current nesting depth of this agent (0 = root). Used for depth-limit enforcement. */
+  currentLevel?: number;
+  /** Max nesting depth limit for this agent. From invocation.levelLimit. undefined = unlimited. */
+  levelLimit?: number;
+  /** Parent's effective config for directional permission inheritance. */
+  parentConfig?: EffectiveConfig;
+  /** Partitions this agent belongs to — restricts tools to partition memberships. */
+  partitions?: string[];
+  /** Hook registry for lifecycle event dispatch. */
+  hooks?: HookRegistry;
+  /** Timestamp when the agent record was created (for deferred-context latency logging). */
+  spawnedAt?: number;
+  /** Called after deferred context is built with the build timestamp. */
+  onContextBuilt?: (timestamp: number) => void;
 }
 
 export interface RunResult {
@@ -125,6 +153,12 @@ export interface RunResult {
   aborted: boolean;
   /** True if the agent was steered to wrap up (hit soft turn limit) but finished in time. */
   steered: boolean;
+  /** Validation results if validators were configured and run. */
+  validationResults?: ValidationResult[];
+  /** Whether all validators passed (undefined if no validators configured). */
+  validated?: boolean;
+  /** Structured handoff parsed from agent output (only when handoff is enabled). */
+  handoff?: AgentHandoff;
 }
 
 /**
@@ -166,14 +200,53 @@ function forwardAbortSignal(session: AgentSession, signal?: AbortSignal): () => 
   return () => signal.removeEventListener("abort", onAbort);
 }
 
+/**
+ * Build the effective prompt, deferring parent-context serialization
+ * to the last possible moment before session creation.
+ *
+ * This is the core of the deferred context engine: by building context
+ * just before session.create() rather than at agent-spawn time, queued
+ * agents capture the freshest parent state, saving 15-48% tokens that
+ * would otherwise be wasted on stale accumulated context while waiting.
+ */
+function buildEffectivePrompt(
+  ctx: ExtensionContext,
+  prompt: string,
+  options: RunOptions,
+): string {
+  if (!options.inheritContext) return prompt;
+
+  const parentContext = buildParentContext(ctx);
+
+  const builtAt = Date.now();
+  options.onContextBuilt?.(builtAt);
+
+  const spawnedAgo = options.spawnedAt ? builtAt - options.spawnedAt : 0;
+  console.log(
+    `[pi-subagents] Context built ${spawnedAgo}ms after spawn for ${options.agentId ?? "unknown"}`,
+  );
+
+  if (!parentContext) return prompt;
+  return parentContext + prompt;
+}
+
 export async function runAgent(
   ctx: ExtensionContext,
   type: SubagentType,
   prompt: string,
   options: RunOptions,
 ): Promise<RunResult> {
-  const config = getConfig(type);
+  const config = getConfig(type, options.parentConfig, options.partitions);
   const agentConfig = getAgentConfig(type);
+
+  // Early exit: check level limit before any work is done
+  const currentLevel = options.currentLevel ?? 0;
+  const depthLimit = options.levelLimit ?? 5;
+  if (currentLevel >= depthLimit) {
+    throw new Error(
+      `Max agent depth reached (${currentLevel}/${depthLimit})`,
+    );
+  }
 
   // Resolve working directory: worktree override > parent cwd
   const effectiveCwd = options.cwd ?? ctx.cwd;
@@ -212,14 +285,19 @@ export async function runAgent(
       // Read-write memory: add any missing memory tool names (read/write/edit)
       const extraNames = getMemoryToolNames(existingNames);
       if (extraNames.length > 0) toolNames = [...toolNames, ...extraNames];
-      extras.memoryBlock = buildMemoryBlock(agentConfig.name, agentConfig.memory, effectiveCwd);
+      extras.memoryBlock = buildMemoryBlock(agentConfig.name, agentConfig.memory, effectiveCwd, agentConfig.maxMemoryLines);
     } else {
       // Read-only memory: only add read tool name, use read-only prompt
       const extraNames = getReadOnlyMemoryToolNames(existingNames);
       if (extraNames.length > 0) toolNames = [...toolNames, ...extraNames];
-      extras.memoryBlock = buildReadOnlyMemoryBlock(agentConfig.name, agentConfig.memory, effectiveCwd);
+      extras.memoryBlock = buildReadOnlyMemoryBlock(agentConfig.name, agentConfig.memory, effectiveCwd, agentConfig.maxMemoryLines);
     }
   }
+
+  // Apply parent permission inheritance: filter tools to only those the parent can also use.
+  // The config.builtinToolNames already reflects the intersection with parent's effective tools.
+  const allowedTools = new Set(config.builtinToolNames);
+  toolNames = toolNames.filter((t) => allowedTools.has(t));
 
   // Build system prompt from agent config
   let systemPrompt: string;
@@ -231,6 +309,17 @@ export async function runAgent(
     const fallback = DEFAULT_AGENTS.get("general-purpose");
     if (!fallback) throw new Error(`No fallback config available for unknown type "${type}"`);
     systemPrompt = buildAgentPrompt({ ...fallback, name: type }, effectiveCwd, env, parentSystemPrompt, extras);
+  }
+
+  // Inject context-mode sandbox tools when @onlinechef/context-mode is installed.
+  // Gracefully skips when unavailable — context-mode is an optional peerDependency.
+  const ctxInjection = buildCtxInjection();
+  if (ctxInjection) {
+    systemPrompt = systemPrompt + "\n\n" + ctxInjection.systemPromptAddition;
+    toolNames = [...toolNames, ...ctxInjection.toolAllowList];
+    console.log(
+      `[pi-subagents] context-mode tools injected for agent ${options.agentId ?? "unknown"}`,
+    );
   }
 
   // When skills is string[], we've already preloaded them into the prompt.
@@ -279,6 +368,24 @@ export async function runAgent(
   if (thinkingLevel) {
     sessionOpts.thinkingLevel = thinkingLevel;
   }
+
+  // Dispatch blocking hook before session creation
+  if (options.hooks) {
+    const hookResult = await options.hooks.dispatch(
+      "subagent:start",
+      options.agentId ?? "unknown",
+    );
+    if (hookResult === "block") {
+      throw new Error("Blocked by hook");
+    }
+  }
+
+  // Deferred context: build at session.create boundary to capture
+  // freshest state, saving 15-48% tokens on queued agents.
+  // Context is serialized AFTER all setup (extensions, skills, tools,
+  // memory) but BEFORE the session is created, so the gap between
+  // serialization and first prompt is minimized.
+  const effectivePrompt = buildEffectivePrompt(ctx, prompt, options);
 
   const { session } = await createAgentSession(sessionOpts);
 
@@ -336,6 +443,9 @@ export async function runAgent(
   let currentMessageText = "";
   const unsubTurns = session.subscribe((event: AgentSessionEvent) => {
     if (event.type === "turn_end") {
+      options.hooks
+        ?.dispatch("turn:end", options.agentId ?? "unknown")
+        .catch(() => {});
       turnCount++;
       options.onTurnEnd?.(turnCount);
       if (maxTurns != null) {
@@ -347,6 +457,11 @@ export async function runAgent(
           session.abort();
         }
       }
+    }
+    if (event.type === "turn_start") {
+      options.hooks
+        ?.dispatch("turn:start", options.agentId ?? "unknown")
+        .catch(() => {});
     }
     if (event.type === "message_start") {
       currentMessageText = "";
@@ -370,32 +485,130 @@ export async function runAgent(
       });
     }
     if (event.type === "compaction_end" && !event.aborted && event.result) {
+      options.hooks
+        ?.dispatch("compaction:end", options.agentId ?? "unknown", {
+          reason: event.reason,
+          tokensBefore: event.result.tokensBefore,
+        })
+        .catch(() => {});
       options.onCompaction?.({ reason: event.reason, tokensBefore: event.result.tokensBefore });
+    }
+    if (event.type === "compaction_start") {
+      options.hooks
+        ?.dispatch("compaction:start", options.agentId ?? "unknown", {
+          reason: event.reason,
+        })
+        .catch(() => {});
+      // --- Compaction hook point ---
+      // Callers can use pruneOldToolOutputs(session.messages, keepTurns) here
+      // to pre-prune tool outputs before the upstream LLM summary compaction.
+      // The onCompaction callback reports the pre-compaction context size estimate.
     }
   });
 
   const collector = collectResponseText(session);
   const cleanupAbort = forwardAbortSignal(session, options.signal);
 
-  // Build the effective prompt: optionally prepend parent context
-  let effectivePrompt = prompt;
-  if (options.inheritContext) {
-    const parentContext = buildParentContext(ctx);
-    if (parentContext) {
-      effectivePrompt = parentContext + prompt;
-    }
-  }
-
   try {
+    // Deferred context: effectivePrompt was built before session creation
     await session.prompt(effectivePrompt);
+    options.hooks
+      ?.dispatch("subagent:end", options.agentId ?? "unknown")
+      .catch(() => {});
+  } catch (err) {
+    options.hooks
+      ?.dispatch("subagent:error", options.agentId ?? "unknown", {
+        error: err instanceof Error ? err.message : String(err),
+      })
+      .catch(() => {});
+    throw err;
   } finally {
     unsubTurns();
     collector.unsubscribe();
     cleanupAbort();
   }
 
-  const responseText = collector.getText().trim() || getLastAssistantText(session);
-  return { responseText, session, aborted, steered: softLimitReached };
+  let responseText = collector.getText().trim() || getLastAssistantText(session);
+
+  // ---- Structured handoff parsing (before validators) ----
+  let handoff: AgentHandoff | undefined;
+  if (agentConfig?.handoff) {
+    const parsed = parseHandoff(responseText);
+    if (parsed) {
+      handoff = parsed;
+      responseText = renderHandoffForParent(parsed);
+    }
+    // Graceful degrade: if parse fails (null), keep original responseText
+  }
+
+  // ---- Adversarial validation ----
+  let validationResults: ValidationResult[] | undefined;
+  let validated: boolean | undefined;
+
+  if (!options.skipValidators && hasValidators(agentConfig)) {
+    const validators = agentConfig!.validators!;
+    const agentDescription = getAgentDescription(agentConfig);
+    const maxRetries = 2; // Hard limit to prevent infinite loops
+    let retries = 0;
+
+    while (retries <= maxRetries) {
+      const validatorPromises = validators.map((v) =>
+        runAgent(ctx, v.agentId, buildValidatorPrompt(responseText, v.criteria, agentDescription), {
+          pi: options.pi,
+          model: options.model,
+          isolated: true,
+          skipValidators: true,
+          levelLimit: undefined,
+          signal: options.signal,
+        }).then((result) => parseValidationResult(result.responseText, v.agentId))
+          .catch((err) => ({
+            agentId: v.agentId,
+            passed: false,
+            criteria: [],
+            summary: `Validator error: ${err instanceof Error ? err.message : String(err)}`,
+          })),
+      );
+
+      validationResults = await Promise.all(validatorPromises);
+      validated = validationResults.every((r) => r.passed);
+      
+      if (validated || retries >= maxRetries) {
+        options.onValidationComplete?.(validationResults);
+        break;
+      }
+
+      // Self-healing: feed the failures back to the agent
+      const failedFeedback = validationResults
+        .filter((r) => !r.passed)
+        .map((r) => {
+          const failedCriteria = r.criteria.filter((c) => !c.passed);
+          const details = failedCriteria.length > 0
+            ? "\n" + failedCriteria.map((c) => `  - ${c.criterion}: ${c.feedback}`).join("\n")
+            : "";
+          return `[${r.agentId}] ${r.summary}${details}`;
+        })
+        .join("\n\n");
+        
+      const fixPrompt = `Validation failed. Please fix the following issues and provide an updated final response:\n\n${failedFeedback}`;
+      
+      try {
+        responseText = await resumeAgent(session, fixPrompt, {
+          onToolActivity: options.onToolActivity,
+          onAssistantUsage: options.onAssistantUsage,
+          onCompaction: options.onCompaction,
+          signal: options.signal,
+        });
+      } catch {
+        // If resume fails (e.g. aborted), break out
+        options.onValidationComplete?.(validationResults);
+        break;
+      }
+
+      retries++;
+    }
+  }
+
+  return { responseText, session, aborted, steered: softLimitReached, validationResults, validated, handoff };
 }
 
 /**
@@ -409,6 +622,10 @@ export async function resumeAgent(
     onAssistantUsage?: (usage: { input: number; output: number; cacheWrite: number }) => void;
     onCompaction?: (info: { reason: "manual" | "threshold" | "overflow"; tokensBefore: number }) => void;
     signal?: AbortSignal;
+    /** If true, prepend parent context (deferred — built just before prompt). */
+    inheritContext?: boolean;
+    /** Required when inheritContext is true. */
+    ctx?: ExtensionContext;
   } = {},
 ): Promise<string> {
   const collector = collectResponseText(session);
@@ -432,8 +649,19 @@ export async function resumeAgent(
       })
     : () => {};
 
+  // Deferred context: build parent context just before prompt on resume.
+  // Mirrors runAgent's deferred strategy — context is serialized at the last
+  // moment so it captures the freshest conversation state.
+  let effectivePrompt = prompt;
+  if (options.inheritContext && options.ctx) {
+    const parentContext = buildParentContext(options.ctx);
+    if (parentContext) {
+      effectivePrompt = parentContext + prompt;
+    }
+  }
+
   try {
-    await session.prompt(prompt);
+    await session.prompt(effectivePrompt);
   } finally {
     collector.unsubscribe();
     unsubEvents();
