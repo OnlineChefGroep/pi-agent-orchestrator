@@ -58,6 +58,8 @@ export interface AgentConfig {
   enabled?: boolean;
   /** Where this agent was loaded from */
   source?: "default" | "project" | "global";
+  /** true = produce a structured JSON handoff at end of response for chain-of-agents */
+  handoff?: boolean;
 }
 
 export type JoinMode = 'async' | 'group' | 'smart';

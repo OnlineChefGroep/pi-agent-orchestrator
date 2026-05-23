@@ -11,23 +11,23 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
-import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes } from "./agent-types.js";
-import type { AgentConfig, AgentRecord, JoinMode } from "./types.js";
-import { getDisplayName, formatDuration, formatMs, formatTokens, formatTurns } from "./ui/agent-widget.js";
-import { showSchedulesMenu } from "./ui/schedule-menu.js";
+import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "./agent-manager.js";
+import { getModelLabelFromConfig, reloadCustomAgents } from "./agent-registry.js";
 import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, steerAgent } from "./agent-runner.js";
-import type { SubagentScheduler } from "./schedule.js";
+import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes } from "./agent-types.js";
 import type { ModelRegistry } from "./model-resolver.js";
 import { resolveModel } from "./model-resolver.js";
-import { getModelLabelFromConfig, reloadCustomAgents } from "./agent-registry.js";
-import { saveAndEmitChanged, type SubagentsSettings } from "./settings.js";
-import { getAgentDir } from "@mariozechner/pi-coding-agent";
+import type { SubagentScheduler } from "./schedule.js";
+import { type SubagentsSettings, saveAndEmitChanged } from "./settings.js";
+import type { AgentConfig, AgentRecord, JoinMode } from "./types.js";
 import type { AgentActivity } from "./ui/agent-widget.js";
+import { formatDuration, formatMs, formatTokens, formatTurns, getDisplayName } from "./ui/agent-widget.js";
+import { showSchedulesMenu } from "./ui/schedule-menu.js";
 import { getLifetimeTotal, getSessionContextPercent } from "./usage.js";
 
 /** @internal Re-export for use from index.ts */
-export type { AgentManager, SubagentScheduler, ModelRegistry };
+export type { AgentManager, ModelRegistry, SubagentScheduler };
 
 // ---- Agent file helpers ----
 
