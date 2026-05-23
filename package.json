@@ -49,12 +49,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
-    "@eslint/js": "^10.0.1",
     "@types/node": "^25.5.0",
-    "eslint": "^10.4.0",
-    "globals": "^17.6.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.4",
     "vitest": "^4.1.7"
   },
   "pi": {

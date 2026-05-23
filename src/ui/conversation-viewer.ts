@@ -77,7 +77,7 @@ export class ConversationViewer implements Component {
     if (width < 6) return []; // too narrow for any meaningful rendering
     const activeUiStyle = getUiStyle();
     const plainTheme: Theme = {
-      fg: (color, text) => text,
+      fg: (_color, text) => text,
       bold: (text) => text,
     };
     const th = activeUiStyle === "plain" ? plainTheme : this.theme;
@@ -202,7 +202,7 @@ export class ConversationViewer implements Component {
   private invocationLine(): string | undefined {
     const activeUiStyle = getUiStyle();
     const plainTheme: Theme = {
-      fg: (color, text) => text,
+      fg: (_color, text) => text,
       bold: (text) => text,
     };
     const th = activeUiStyle === "plain" ? plainTheme : this.theme;
@@ -218,7 +218,7 @@ export class ConversationViewer implements Component {
 
     const activeUiStyle = getUiStyle();
     const plainTheme: Theme = {
-      fg: (color, text) => text,
+      fg: (_color, text) => text,
       bold: (text) => text,
     };
     const th = activeUiStyle === "plain" ? plainTheme : this.theme;
