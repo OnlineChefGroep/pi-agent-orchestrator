@@ -7,10 +7,36 @@
  *   - "local"   → .pi/agent-memory-local/{agent-name}/
  */
 
-import { existsSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import type { MemoryScope } from "./types.js";
+
+/**
+ * If the given directory is a Git worktree, returns the root of the main repository.
+ * Otherwise returns the original directory.
+ */
+function getProjectRoot(cwd: string): string {
+  try {
+    const gitPath = join(cwd, ".git");
+    const stat = statSync(gitPath);
+    if (stat.isFile()) {
+      // It's a worktree. The .git file contains "gitdir: /path/to/main/repo/.git/worktrees/X"
+      const content = readFileSync(gitPath, "utf-8");
+      const match = content.match(/^gitdir:\s+(.*)$/m);
+      if (match) {
+        let gitdir = match[1].trim();
+        if (!isAbsolute(gitdir)) gitdir = join(cwd, gitdir);
+        // gitdir is typically /path/to/main/repo/.git/worktrees/branch-name
+        // so moving 3 levels up gets us the main repo root
+        return dirname(dirname(dirname(gitdir)));
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return cwd;
+}
 
 /** Maximum lines to read from MEMORY.md */
 const MAX_MEMORY_LINES = 200;
@@ -61,9 +87,9 @@ export function resolveMemoryDir(agentName: string, scope: MemoryScope, cwd: str
     case "user":
       return join(homedir(), ".pi", "agent-memory", agentName);
     case "project":
-      return join(cwd, ".pi", "agent-memory", agentName);
+      return join(getProjectRoot(cwd), ".pi", "agent-memory", agentName);
     case "local":
-      return join(cwd, ".pi", "agent-memory-local", agentName);
+      return join(getProjectRoot(cwd), ".pi", "agent-memory-local", agentName);
   }
 }
 

@@ -21,7 +21,8 @@ import { detectEnv } from "./env.js";
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "./memory.js";
 import { buildAgentPrompt, type PromptExtras } from "./prompts.js";
 import { preloadSkills } from "./skill-loader.js";
-import type { SubagentType, ThinkingLevel } from "./types.js";
+import type { SubagentType, ThinkingLevel, ValidationResult } from "./types.js";
+import { buildValidatorPrompt, getAgentDescription, hasValidators, parseValidationResult } from "./validators.js";
 
 /** Names of tools registered by this extension that subagents must NOT inherit. */
 const EXCLUDED_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"];
@@ -116,6 +117,19 @@ export interface RunOptions {
    * pre-compaction context size estimate. Aborted compactions don't fire.
    */
   onCompaction?: (info: { reason: "manual" | "threshold" | "overflow"; tokensBefore: number }) => void;
+  /**
+   * Set to true to prevent validator recursion.
+   * Validators spawned during validation will have this flag set.
+   */
+  skipValidators?: boolean;
+  /**
+   * Called when validation completes. Receives all validation results.
+   */
+  onValidationComplete?: (results: ValidationResult[]) => void;
+  /** Current nesting depth of this agent (0 = root). Used for depth-limit enforcement. */
+  currentLevel?: number;
+  /** Max nesting depth limit for this agent. From invocation.levelLimit. undefined = unlimited. */
+  levelLimit?: number;
 }
 
 export interface RunResult {
@@ -125,6 +139,10 @@ export interface RunResult {
   aborted: boolean;
   /** True if the agent was steered to wrap up (hit soft turn limit) but finished in time. */
   steered: boolean;
+  /** Validation results if validators were configured and run. */
+  validationResults?: ValidationResult[];
+  /** Whether all validators passed (undefined if no validators configured). */
+  validated?: boolean;
 }
 
 /**
@@ -174,6 +192,15 @@ export async function runAgent(
 ): Promise<RunResult> {
   const config = getConfig(type);
   const agentConfig = getAgentConfig(type);
+
+  // Early exit: check level limit before any work is done
+  const currentLevel = options.currentLevel ?? 0;
+  const depthLimit = options.levelLimit ?? 5;
+  if (currentLevel >= depthLimit) {
+    throw new Error(
+      `Max agent depth reached (${currentLevel}/${depthLimit})`,
+    );
+  }
 
   // Resolve working directory: worktree override > parent cwd
   const effectiveCwd = options.cwd ?? ctx.cwd;
@@ -394,8 +421,76 @@ export async function runAgent(
     cleanupAbort();
   }
 
-  const responseText = collector.getText().trim() || getLastAssistantText(session);
-  return { responseText, session, aborted, steered: softLimitReached };
+  let responseText = collector.getText().trim() || getLastAssistantText(session);
+
+  // ---- Adversarial validation ----
+  let validationResults: ValidationResult[] | undefined;
+  let validated: boolean | undefined;
+
+  if (!options.skipValidators && hasValidators(agentConfig)) {
+    const validators = agentConfig!.validators!;
+    const agentDescription = getAgentDescription(agentConfig);
+    const maxRetries = 2; // Hard limit to prevent infinite loops
+    let retries = 0;
+
+    while (retries <= maxRetries) {
+      const validatorPromises = validators.map((v) =>
+        runAgent(ctx, v.agentId, buildValidatorPrompt(responseText, v.criteria, agentDescription), {
+          pi: options.pi,
+          model: options.model,
+          isolated: true,
+          skipValidators: true,
+          levelLimit: undefined,
+          signal: options.signal,
+        }).then((result) => parseValidationResult(result.responseText, v.agentId))
+          .catch((err) => ({
+            agentId: v.agentId,
+            passed: false,
+            criteria: [],
+            summary: `Validator error: ${err instanceof Error ? err.message : String(err)}`,
+          })),
+      );
+
+      validationResults = await Promise.all(validatorPromises);
+      validated = validationResults.every((r) => r.passed);
+      
+      if (validated || retries >= maxRetries) {
+        options.onValidationComplete?.(validationResults);
+        break;
+      }
+
+      // Self-healing: feed the failures back to the agent
+      const failedFeedback = validationResults
+        .filter((r) => !r.passed)
+        .map((r) => {
+          const failedCriteria = r.criteria.filter((c) => !c.passed);
+          const details = failedCriteria.length > 0
+            ? "\n" + failedCriteria.map((c) => `  - ${c.criterion}: ${c.feedback}`).join("\n")
+            : "";
+          return `[${r.agentId}] ${r.summary}${details}`;
+        })
+        .join("\n\n");
+        
+      const fixPrompt = `Validation failed. Please fix the following issues and provide an updated final response:\n\n${failedFeedback}`;
+      
+      try {
+        responseText = await resumeAgent(session, fixPrompt, {
+          onToolActivity: options.onToolActivity,
+          onAssistantUsage: options.onAssistantUsage,
+          onCompaction: options.onCompaction,
+          signal: options.signal,
+        });
+      } catch {
+        // If resume fails (e.g. aborted), break out
+        options.onValidationComplete?.(validationResults);
+        break;
+      }
+
+      retries++;
+    }
+  }
+
+  return { responseText, session, aborted, steered: softLimitReached, validationResults, validated };
 }
 
 /**

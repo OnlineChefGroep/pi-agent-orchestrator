@@ -6,7 +6,10 @@
  * Foreground agents bypass the queue (they block the parent anyway).
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+
+export const activeAgentStorage = new AsyncLocalStorage<string>();
 import type { Model } from "@mariozechner/pi-ai";
 import type { AgentSession, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { resumeAgent, runAgent, type ToolActivity } from "./agent-runner.js";
@@ -62,6 +65,8 @@ interface SpawnOptions {
   onAssistantUsage?: (usage: { input: number; output: number; cacheWrite: number }) => void;
   /** Called when the session successfully compacts. */
   onCompaction?: (info: CompactionInfo) => void;
+  /** Nesting depth for this spawn (0 = root). Passed through to the agent record and runner. */
+  currentLevel?: number;
 }
 
 export class AgentManager {
@@ -76,6 +81,8 @@ export class AgentManager {
   private queue: { id: string; args: SpawnArgs }[] = [];
   /** Number of currently running background agents. */
   private runningBackground = 0;
+  /** Stack of currently executing agent IDs (for budget/depth tracking). */
+  private activeAgentIdStack: string[] = [];
 
   constructor(
     onComplete?: OnAgentComplete,
@@ -103,6 +110,11 @@ export class AgentManager {
     return this.maxConcurrent;
   }
 
+  /** Get the ID of the currently executing agent (top of active stack). */
+  getActiveAgentId(): string | undefined {
+    return this.activeAgentIdStack[this.activeAgentIdStack.length - 1];
+  }
+
   /**
    * Spawn an agent and return its ID immediately (for background use).
    * If the concurrency limit is reached, the agent is queued.
@@ -114,6 +126,42 @@ export class AgentManager {
     prompt: string,
     options: SpawnOptions,
   ): string {
+    // --- Budget / depth enforcement & inheritance ---
+    const parentId = this.getActiveAgentId();
+    const parentRecord = parentId ? this.agents.get(parentId) : undefined;
+
+    if (parentRecord) {
+      const taskBudget = parentRecord.invocation?.taskBudget;
+      if (taskBudget != null && parentRecord.totalSpawned >= taskBudget) {
+        throw new Error(
+          `Task budget exhausted (${parentRecord.totalSpawned}/${taskBudget})`,
+        );
+      }
+      const levelLimit = parentRecord.invocation?.levelLimit ?? 5;
+      const childLevel = (parentRecord.currentLevel ?? 0) + 1;
+      if (childLevel > levelLimit) {
+        throw new Error(
+          `Max agent depth reached (${childLevel}/${levelLimit})`,
+        );
+      }
+      parentRecord.totalSpawned++;
+    }
+
+    const childLevel = parentRecord
+      ? (parentRecord.currentLevel ?? 0) + 1
+      : (options.currentLevel ?? 0);
+
+    // Inherit taskBudget/levelLimit from parent unless explicitly overridden
+    const childInvocation: AgentInvocation = { ...options.invocation };
+    if (parentRecord?.invocation) {
+      if (childInvocation.taskBudget === undefined) {
+        childInvocation.taskBudget = parentRecord.invocation.taskBudget;
+      }
+      if (childInvocation.levelLimit === undefined) {
+        childInvocation.levelLimit = parentRecord.invocation.levelLimit;
+      }
+    }
+
     const id = randomUUID().slice(0, 17);
     const abortController = new AbortController();
     const record: AgentRecord = {
@@ -126,7 +174,9 @@ export class AgentManager {
       abortController,
       lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
       compactionCount: 0,
-      invocation: options.invocation,
+      invocation: Object.keys(childInvocation).length > 0 ? childInvocation : undefined,
+      currentLevel: childLevel,
+      totalSpawned: 0,
     };
     this.agents.set(id, record);
 
@@ -181,44 +231,49 @@ export class AgentManager {
     }
     const detach = () => { detachParentSignal?.(); detachParentSignal = undefined; };
 
-    const promise = runAgent(ctx, type, prompt, {
-      pi,
-      agentId: id,
-      model: options.model,
-      maxTurns: options.maxTurns,
-      isolated: options.isolated,
-      inheritContext: options.inheritContext,
-      thinkingLevel: options.thinkingLevel,
-      cwd: worktreeCwd,
-      signal: record.abortController!.signal,
-      onToolActivity: (activity) => {
-        if (activity.type === "end") record.toolUses++;
-        options.onToolActivity?.(activity);
-      },
-      onTurnEnd: options.onTurnEnd,
-      onTextDelta: options.onTextDelta,
-      onAssistantUsage: (usage) => {
-        addUsage(record.lifetimeUsage, usage);
-        options.onAssistantUsage?.(usage);
-      },
-      onCompaction: (info) => {
-        record.compactionCount++;
-        this.onCompact?.(record, info);
-        options.onCompaction?.(info);
-      },
-      onSessionCreated: (session) => {
-        record.session = session;
-        // Flush any steers that arrived before the session was ready
-        if (record.pendingSteers?.length) {
-          for (const msg of record.pendingSteers) {
-            session.steer(msg).catch(() => {});
+    const promise = activeAgentStorage.run(id, () => {
+      return runAgent(ctx, type, prompt, {
+        pi,
+        agentId: id,
+        model: options.model,
+        maxTurns: options.maxTurns,
+        isolated: options.isolated,
+        inheritContext: options.inheritContext,
+        thinkingLevel: options.thinkingLevel,
+        currentLevel: record.currentLevel,
+        levelLimit: record.invocation?.levelLimit,
+        cwd: worktreeCwd,
+        signal: record.abortController!.signal,
+        onToolActivity: (activity) => {
+          if (activity.type === "end") record.toolUses++;
+          options.onToolActivity?.(activity);
+        },
+        onTurnEnd: options.onTurnEnd,
+        onTextDelta: options.onTextDelta,
+        onAssistantUsage: (usage) => {
+          addUsage(record.lifetimeUsage, usage);
+          options.onAssistantUsage?.(usage);
+        },
+        onCompaction: (info) => {
+          record.compactionCount++;
+          this.onCompact?.(record, info);
+          options.onCompaction?.(info);
+        },
+        onSessionCreated: (session) => {
+          record.session = session;
+          // Flush any steers that arrived before the session was ready
+          if (record.pendingSteers?.length) {
+            for (const msg of record.pendingSteers) {
+              session.steer(msg).catch(() => {});
+            }
+            record.pendingSteers = undefined;
           }
-          record.pendingSteers = undefined;
-        }
-        options.onSessionCreated?.(session);
-      },
+          options.onSessionCreated?.(session);
+        },
+      });
     })
-      .then(({ responseText, session, aborted, steered }) => {
+      .then(({ responseText, session, aborted, steered, validationResults, validated }) => {
+
         // Don't overwrite status if externally stopped via abort()
         if (record.status !== "stopped") {
           record.status = aborted ? "aborted" : steered ? "steered" : "completed";
@@ -226,6 +281,28 @@ export class AgentManager {
         record.result = responseText;
         record.session = session;
         record.completedAt ??= Date.now();
+
+        // Store validation results on the record
+        if (validationResults) {
+          record.validationResults = validationResults;
+          record.validated = validated;
+
+          // Append validation feedback when validators fail
+          if (!validated) {
+            const failedFeedback = validationResults
+              .filter((r) => !r.passed)
+              .map((r) => {
+                const failedCriteria = r.criteria.filter((c) => !c.passed);
+                const details = failedCriteria.length > 0
+                  ? "\n" + failedCriteria.map((c) => `  - ${c.criterion}: ${c.feedback}`).join("\n")
+                  : "";
+                return `[${r.agentId}] ${r.summary}${details}`;
+              })
+              .join("\n\n");
+            record.result = (record.result ?? "") +
+              `\n\n---\n## Validation Feedback (FAILED)\n${failedFeedback}`;
+          }
+        }
 
         detach();
 
@@ -253,6 +330,7 @@ export class AgentManager {
         return responseText;
       })
       .catch((err) => {
+
         // Don't overwrite status if externally stopped via abort()
         if (record.status !== "stopped") {
           record.status = "error";
