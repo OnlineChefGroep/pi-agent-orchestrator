@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/OnlineChef/bubbletea-cinematic/widget"
+	"github.com/OnlineChef/pi-subagents-fork/cinematic-renderer/internal/widget"
 )
 
 // AgentState represents the JSON structure we expect from the Node.js extension.
