@@ -6,12 +6,14 @@
  */
 
 import { truncateToWidth } from "@mariozechner/pi-tui";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import { spawn, type ChildProcess } from "child_process";
 import type { AgentManager } from "../agent-manager.js";
+import { getAnimationStyle, getUiStyle, isCinematicEnabled, isShowActivityStream, isShowTokenUsage, isShowTurnProgress } from "../agent-registry.js";
 import { getConfig } from "../agent-types.js";
 import type { AgentInvocation, SubagentType } from "../types.js";
 import { getLifetimeTotal, getSessionContextPercent, type LifetimeUsage, type SessionLike } from "../usage.js";
-
-import { getUiStyle, getAnimationStyle } from "../agent-registry.js";
 
 // ---- Constants ----
 
@@ -256,6 +258,14 @@ export class AgentWidget {
     }
   }
 
+  private sidecar: ChildProcess | undefined;
+  private stopSidecar() {
+    if (this.sidecar) {
+      this.sidecar.kill();
+      this.sidecar = undefined;
+    }
+  }
+
   /**
    * Called on each new turn (tool_execution_start).
    * Ages finished agents and clears those that have lingered long enough.
@@ -353,6 +363,59 @@ export class AgentWidget {
     if (!hasActive && !hasFinished) return [];
 
     const activeUiStyle = getUiStyle();
+    
+    // Cinematic Sidecar Logic - only spawn if enabled AND uiStyle is cinematic
+    if (activeUiStyle === "cinematic" && isCinematicEnabled()) {
+      if (!this.sidecar) {
+        try {
+          const extDir = dirname(dirname(fileURLToPath(import.meta.url)));
+          const binName = process.platform === "win32" ? "cinematic-tui.exe" : "cinematic-tui";
+          const binPath = join(extDir, "cinematic-renderer", binName);
+          this.sidecar = spawn(binPath, [], { stdio: ["pipe", "pipe", "pipe"] });
+          this.sidecar.on("exit", () => { this.sidecar = undefined; });
+          this.sidecar.on("error", (err: Error) => {
+            console.warn(`[pi-subagents] Failed to start cinematic sidecar: ${err.message}`);
+            this.sidecar = undefined;
+          });
+        } catch (err) {
+          console.warn(`[pi-subagents] Failed to spawn cinematic sidecar: ${err}`);
+        }
+      }
+      
+      if (this.sidecar?.stdin) {
+        const payload = {
+          agents: allAgents.map(a => {
+            const activity = this.agentActivity.get(a.id);
+            const maxTurns = activity?.maxTurns;
+            const turnCount = activity?.turnCount || 0;
+            return {
+              id: a.id,
+              type: a.type,
+              role: getDisplayName(a.type),
+              status: a.status,
+              tokens: activity?.toolUses || 0,
+              progress: maxTurns ? Math.round(turnCount / maxTurns * 100) : 50,
+              activity: activity?.responseText?.slice(0, 100),
+            };
+          }),
+          showActivityStream: isShowActivityStream(),
+          showTokenUsage: isShowTokenUsage(),
+          showTurnProgress: isShowTurnProgress(),
+        };
+        
+        try {
+          this.sidecar.stdin.write(JSON.stringify(payload) + "\n");
+        } catch (err) {
+          // Silently ignore write errors - sidecar may have exited
+        }
+      }
+      
+      // Return empty so Pi's default widget doesn't render over it
+      return [];
+    } else {
+      this.stopSidecar();
+    }
+
     // Wrapper for plain theme
     const plainTheme: Theme = {
       fg: (color, text) => text,
@@ -568,6 +631,9 @@ export class AgentWidget {
   }
 
   dispose() {
+    // CRITICAL FIX: Stop Go sidecar to prevent orphan processes
+    this.stopSidecar();
+    
     if (this.widgetInterval) {
       clearInterval(this.widgetInterval);
       this.widgetInterval = undefined;

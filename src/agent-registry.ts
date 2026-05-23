@@ -51,10 +51,18 @@ export function setSchedulingEnabled(b: boolean): void {
 // ---- Animation & UI/UX Style configuration ----
 
 export type AnimationStyle = "braille" | "dots" | "lines" | "classic" | "none";
-export type UiStyle = "premium" | "retro" | "plain";
+export type UiStyle = "premium" | "retro" | "plain" | "cinematic";
+
+let activeUiStyle: UiStyle = "premium";
 
 let animationStyle: AnimationStyle = "braille";
-let uiStyle: UiStyle = "premium";
+
+// ---- Cinematic and display settings ----
+
+let cinematicEnabled = true;  // Default enabled when uiStyle is cinematic
+let showActivityStream = true;
+let showTokenUsage = true;
+let showTurnProgress = true;
 
 export function getAnimationStyle(): AnimationStyle {
   return animationStyle;
@@ -65,11 +73,38 @@ export function setAnimationStyle(style: AnimationStyle): void {
 }
 
 export function getUiStyle(): UiStyle {
-  return uiStyle;
+  return activeUiStyle;
+}
+export function setUiStyle(style: UiStyle): void {
+  activeUiStyle = style;
 }
 
-export function setUiStyle(style: UiStyle): void {
-  uiStyle = style;
+export function isCinematicEnabled(): boolean {
+  return cinematicEnabled && activeUiStyle === "cinematic";
+}
+export function setCinematicEnabled(b: boolean): void {
+  cinematicEnabled = b;
+}
+
+export function isShowActivityStream(): boolean {
+  return showActivityStream;
+}
+export function setShowActivityStream(b: boolean): void {
+  showActivityStream = b;
+}
+
+export function isShowTokenUsage(): boolean {
+  return showTokenUsage;
+}
+export function setShowTokenUsage(b: boolean): void {
+  showTokenUsage = b;
+}
+
+export function isShowTurnProgress(): boolean {
+  return showTurnProgress;
+}
+export function setShowTurnProgress(b: boolean): void {
+  showTurnProgress = b;
 }
 
 // ---- Custom agent reloading ----

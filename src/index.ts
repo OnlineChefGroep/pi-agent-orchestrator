@@ -15,7 +15,7 @@ import { defineTool, type ExtensionAPI, type ExtensionCommandContext, type Exten
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { AgentManager } from "./agent-manager.js";
-import { buildTypeListText, getDefaultJoinMode, isSchedulingEnabled, reloadCustomAgents, setDefaultJoinMode, setSchedulingEnabled, getAnimationStyle, setAnimationStyle, getUiStyle, setUiStyle } from "./agent-registry.js";
+import { buildTypeListText, getAnimationStyle, getDefaultJoinMode, getUiStyle, isCinematicEnabled, isSchedulingEnabled, isShowActivityStream, isShowTokenUsage, isShowTurnProgress, reloadCustomAgents, setAnimationStyle, setCinematicEnabled, setDefaultJoinMode, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setUiStyle } from "./agent-registry.js";
 import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTurns, setDefaultMaxTurns, setGraceTurns, steerAgent } from "./agent-runner.js";
 import { getAgentConfig, getAvailableTypes, resolveType } from "./agent-types.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
@@ -601,6 +601,10 @@ export default function (pi: ExtensionAPI) {
         setSpinnerStyle(style);
       },
       setUiStyle,
+      setCinematicEnabled,
+      setShowActivityStream,
+      setShowTokenUsage,
+      setShowTurnProgress,
     },
     (event, payload) => pi.events.emit(event, payload),
   );
