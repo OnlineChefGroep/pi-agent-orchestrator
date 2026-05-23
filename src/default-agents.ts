@@ -93,6 +93,7 @@ export const DEFAULT_AGENTS: Map<string, AgentConfig> = new Map([
       displayName: "Explore",
       description: "Fast codebase exploration agent (read-only)",
       builtinToolNames: READ_ONLY_TOOLS,
+      disallowedTools: ["write", "edit"],
       extensions: true,
       skills: true,
       model: "anthropic/claude-haiku-4-5",
@@ -113,6 +114,7 @@ export const DEFAULT_AGENTS: Map<string, AgentConfig> = new Map([
       displayName: "Plan",
       description: "Software architect for implementation planning (read-only)",
       builtinToolNames: READ_ONLY_TOOLS,
+      disallowedTools: ["write", "edit"],
       extensions: true,
       skills: true,
       systemPrompt: AgentPromptTemplates.createReadOnlyPrompt({
@@ -151,6 +153,7 @@ List 3-5 files most critical for implementing this plan:
       displayName: "Analysis",
       description: "Data analysis sub-agent with sandboxed code execution",
       builtinToolNames: READ_ONLY_TOOLS,
+      disallowedTools: ["write", "edit"],
       extensions: false,
       skills: false,
       model: "anthropic/claude-sonnet-4-5-20250901",
