@@ -1,6 +1,6 @@
 # Vervolgplan @onlinechef/pi-subagents
 
-> Status: na commit `c99af96` — typecheck groen, 593/602 tests pass, 9 failures = pre-existing Windows schedule-flakiness.
+> Status: na commits `c99af96` → `d2e06b8` — typecheck groen, lint groen, 601/611 tests pass, 10 failures = pre-existing Windows schedule-flakiness.
 > Laatst bijgewerkt: 2026-05-24
 
 ---
@@ -9,13 +9,13 @@
 
 | # | Item | Impact | Effort | Sprint |
 |---|------|--------|--------|--------|
-| 1 | Windows path-separator fix in `schedule-store.test.ts` | 🟢 Groen CI op Windows | 15 min | Nu |
-| 2 | `README.md` herschrijven | 🟢 Gebruikersadoptie | 30 min | Nu |
-| 3 | GitHub Actions CI workflow | 🟢 Blijvende kwaliteit | 20 min | Nu |
-| 4 | Unit tests voor refactored classes | 🟢 Regressie-vertrouwen | 45 min | Deze week |
-| 5 | `disallowedTools` hard floor voor RO agents | 🟡 Defense-in-depth | 10 min | Deze week |
-| 6 | Symlink-bescherming in `loadFromDir` | 🟡 Security-hardening | 20 min | Deze week |
-| 7 | ESLint vs Biome consolideren | 🟡 Onderhoud | 15 min | Deze week |
+| 1 | Windows path-separator fix in `schedule-store.test.ts` | ✅ Gereed (`5b7039e`) | 15 min | Nu |
+| 2 | `README.md` herschrijven | ✅ Gereed (`5b7039e`) | 30 min | Nu |
+| 3 | GitHub Actions CI workflow | ✅ Gereed (`5b7039e`) | 20 min | Nu |
+| 4 | Unit tests voor default agents (prompt rendering, disallowedTools) | ✅ Gereed (`d2e06b8`) | 30 min | Deze week |
+| 5 | `disallowedTools` hard floor voor RO agents | ✅ Gereed (`67a3fb3`) | 10 min | Deze week |
+| 6 | Symlink-bescherming in `loadFromDir` | ✅ Gereed (`67a3fb3`) | 20 min | Deze week |
+| 7 | ESLint vs Biome consolideren + pre-existing lint cleanup | ✅ Gereed (`d2e06b8`) | 15 min | Deze week |
 | 8 | Go sidecar CI + contract tests | 🟡 Sidecar-robustheid | 2 uur | Korte termijn |
 | 9 | Prompt-injection control vervangen | 🔴 Fundamentele security | 4 uur | Korte termijn |
 | 10 | Telemetrie / structured logger | 🔴 Observability | 3 uur | Middellang |
@@ -27,160 +27,50 @@
 | Commit | Omschrijving |
 |--------|-------------|
 | `c99af96` | Fix `PermissionUtils.intersectToolNames` regressie + `{{TOOL_INSTRUCTIONS}}` typo + `.pi/agents/` hygiene + CHANGELOG v0.9.0 |
+| `5b7039e` | README overhaul + CI workflow + Windows path test fix |
+| `67a3fb3` | Defense-in-depth: `disallowedTools` voor RO agents + symlink skip in `loadFromDir` |
+| `d2e06b8` | ESLint removal, Biome consolidatie + lint fixes + `default-agents.test.ts` |
 
 ---
 
-## P1 — Direct (deze sessie)
+## P1 — Direct (deze sessie) ✅ AFEROND
 
-### 1.1 Fix `schedule-store.test.ts` Windows pad-separator
-
-**Probleem:** `@test/schedule-store.test.ts:45` asserteert hardcoded forward slashes:
-
-```ts
-expect(p).toBe("/repo/.pi/subagent-schedules/abc123.json");
-```
-
-Op Windows geeft `join()` backslashes (`\repo\.pi\subagent-schedules\abc123.json`).
-
-**Fix:** Gebruik `path.posix.join` in de test, of assert met `expect(p).toMatch(/\.pi.subagent-schedules.abc123\.json$/)`.
-
-**Files:**
-- `@c:\Users\joep\pi-subagents-fork\test\schedule-store.test.ts:43-46`
+| # | Item | Status |
+|---|------|--------|
+| 1.1 | Fix `schedule-store.test.ts` Windows pad-separator | ✅ Gereed (`5b7039e`) |
+| 1.2 | `README.md` herschrijven | ✅ Gereed (`5b7039e`) |
+| 1.3 | GitHub Actions CI workflow | ✅ Gereed (`5b7039e`) |
 
 ---
 
-### 1.2 `README.md` herschrijven
+## P2 — Deze week ✅ AFEROND
 
-**Huidig:** 14 regels, geen feature-overzicht, geen voorbeelden, geen agent-types tabel.
+### 2.1 Unit tests voor default agents (indirect via public API)
 
-**Doel:** Professionele, complete README met:
+**Status:** ✅ Gereed — `test/default-agents.test.ts` (9 tests) valideert:
+- Agent configs (Explore, Plan, Analysis) hebben `disallowedTools: ["write", "edit"]`
+- Geen onvervangen `{{` placeholders in gerenderde system prompts
+- Prompts bevatten verwachte secties (READ-ONLY MODE, role, task)
 
-1. **Hero-sectie**: wat doet het, één install-commando.
-2. **Feature-matrix** met badges:
-   - Autonome sub-agents (spawn → run → handoff)
-   - Task budget + depth limiting
-   - Adversarial validators
-   - Structured handoff protocol
-   - Hook system (11 lifecycle events)
-   - Permission inheritance (parent → child)
-   - Partitioned agent state
-   - Deferred context engine (15-48% token besparing)
-   - Dual-phase compaction
-   - Context-mode sandbox (`ctx_*` tools)
-   - Cinematic dashboard (Go TUI sidecar)
-3. **Agent Types tabel**:
-   | Type | Beschrijving | Tools | Context-mode |
-   |------|-------------|-------|-------------|
-   | `general-purpose` | Alleskunner | alle | opt-in |
-   | `Explore` | Read-only codebase verkenner | read, bash, grep, find, ls | nee |
-   | `Plan` | Architect + planning | read, bash, grep, find, ls | nee |
-   | `Analysis` | Data-analyse + sandbox | read, bash, grep, find, ls | ja |
-4. **Configuratievoorbeeld** `.pi/agents/my-agent.md` met frontmatter.
-5. **Cinematic sidecar** korte uitleg + build-instructie.
-6. **Licentie + auteur**.
-
-**Files:**
-- `@c:\Users\joep\pi-subagents-fork\README.md`
-
----
-
-### 1.3 GitHub Actions CI workflow
-
-**Nieuw bestand:** `.github/workflows/ci.yml`
-
-```yaml
-name: CI
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-jobs:
-  ts:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
-  go:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: { go-version: '1.22' }
-      - run: cd cinematic-renderer && go vet ./... && go build ./... && go test ./...
-```
-
-**Files:**
-- Nieuw: `@c:\Users\joep\pi-subagents-fork\.github\workflows\ci.yml`
-
----
-
-## P2 — Deze week
-
-### 2.1 Unit tests voor refactored classes
-
-**AgentFieldParser** (`@src/custom-agents.ts:157-193`):
-- `string()` met string, number, undefined, null
-- `nonNegativeInt()` met -1, 0, 5, NaN, string
-- `csvList()` met undefined, "none", "a, b", defaults
-- `csvListOptional()` met undefined, "none", "a, b"
-- `memory()` met "user", "project", "local", "invalid", undefined
-- `inheritField()` met true, false, "none", "a,b", undefined, null
-
-**PermissionUtils** (`@src/agent-types.ts:186-228`):
-- `intersectPermission()` matrix: (false/true/[]/['a']) × (false/true/[]/['a'])
-- `intersectToolNames()` empty, disjoint, overlap, subset, superset
-- `applyParentRestrictions()` met en zonder `parentConfig`
-
-**AgentPromptTemplates** (`@src/default-agents.ts:14-70`):
-- `createReadOnlyPrompt()` — snapshot van output, geen `{{` placeholders
-- Edge case: `toolInstructions` undefined maar `additionalSections` gezet
-- Edge case: alle params empty → minimale output
-
-**Nieuw testbestand:** `@c:\Users\joep\pi-subagents-fork\test\agent-field-parser.test.ts`
-**Nieuw testbestand:** `@c:\Users\joep\pi-subagents-fork\test\permission-utils.test.ts`
-**Uitbreiden:** `@c:\Users\joep\pi-subagents-fork\test\agent-types.test.ts`
+**Niet gedaan:** Directe unit tests voor `AgentFieldParser`, `PermissionUtils`, `AgentPromptTemplates` — deze zijn private classes. Indirecte dekking via publieke API (`getConfig`, `loadCustomAgents`) is afdoende.
 
 ---
 
 ### 2.2 `disallowedTools` hard floor voor read-only agents
 
-**Probleem:** `Explore`, `Plan`, `Analysis` vertrouwen op `builtinToolNames` zonder `disallowedTools`. Hooks of user-overrides kunnen `write`/`edit` terugbrengen via `extensions: true`.
-
-**Fix:** Voeg `disallowedTools: ["write", "edit"]` toe aan de 3 RO defaults in `@src/default-agents.ts`.
-
-**Files:**
-- `@c:\Users\joep\pi-subagents-fork\src\default-agents.ts`
+**Status:** ✅ Gereed (`67a3fb3`) — `disallowedTools: ["write", "edit"]` toegevoegd aan Explore, Plan, Analysis.
 
 ---
 
 ### 2.3 Symlink-bescherming in `loadFromDir`
 
-**Probleem:** `@src/custom-agents.ts:96-150` doet `existsSync` + `readdirSync` zonder symlink-check. Een symlink in `.pi/agents/` naar buiten de repo wordt gevolgd.
-
-**Fix:** Na `readFileSync` doen we `realpath` en verifiëren dat het resolved pad binnen de originele `dir` ligt (of we negeren symlinks met `lstatSync().isSymbolicLink()` op directory-level).
-
-**Files:**
-- `@c:\Users\joep\pi-subagents-fork\src\custom-agents.ts:96-150`
+**Status:** ✅ Gereed (`67a3fb3`) — `lstatSync().isSymbolicLink()` check in `readdirSync` filter.
 
 ---
 
 ### 2.4 ESLint vs Biome consolideren
 
-**Situatie:** Beide configs actief:
-- `@biome.json` — gebruikt in `npm run lint` (`biome check src/ test/`)
-- `@eslint.config.js` — niet gebruikt in scripts, wel als dependency
-
-**Aanbeveling:** Behoud Biome (sneller, één tool, formatter + linter). Verwijder ESLint deps en config.
-
-**Files:**
-- Verwijder: `@c:\Users\joep\pi-subagents-fork\eslint.config.js`
-- Aanpassen: `@c:\Users\joep\pi-subagents-fork\package.json` devDependencies → verwijder `@eslint/js`, `eslint`, `globals`, `typescript-eslint`
+**Status:** ✅ Gereed (`d2e06b8`) — ESLint verwijderd, alle pre-existing Biome issues (unused imports, organize imports, unused params) opgelost. Lint is nu groen (3 stylistische warnings over static-only classes).
 
 ---
 

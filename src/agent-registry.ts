@@ -8,7 +8,7 @@
  */
 
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
-import { getAgentConfig, getAllTypes, getDefaultAgentNames, getUserAgentNames, registerAgents } from "./agent-types.js";
+import { getAgentConfig, getDefaultAgentNames, getUserAgentNames, registerAgents } from "./agent-types.js";
 import { loadCustomAgents } from "./custom-agents.js";
 import type { JoinMode } from "./types.js";
 

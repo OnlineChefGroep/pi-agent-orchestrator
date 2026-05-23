@@ -17,9 +17,19 @@
 - `cinematic-renderer/cinematic-renderer.exe` toegevoegd aan `.gitignore`.
 - `auditor.md` verwijderd uit git tracking (was dev-only agent).
 
-### 📊 Metrics
-- 602 tests, 33 test files
+### � Documentation
+- **README.md volledig herschreven**: feature matrix, agent types tabel, custom agent frontmatter reference, cinematic dashboard docs, architecture diagram, development guide.
+- **CI workflow**: GitHub Actions CI voor TypeScript (typecheck, lint, test) en Go sidecar (vet, build, test).
+- **Vervolgplan**: `VERVOLG_PLAN.md` toegevoegd met prioriteitenlijst P0–P4.
+
+### 🧹 Code cleanup
+- **Lint**: ESLint verwijderd, Biome is enige linter. Alle pre-existing unused imports en organize-imports warnings opgelost.
+- **Biome fixes**: unused parameters/variables in `agent-widget.ts`, `output-handler.ts`, `conversation-viewer.ts`.
+
+### �📊 Metrics
+- 611 tests, 34 test files (+ `default-agents.test.ts`)
 - Typecheck: groen
+- Lint: groen (3 stylistische warnings over static classes)
 
 ## v0.8.0 (2026-05-23)
 

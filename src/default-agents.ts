@@ -47,17 +47,17 @@ You are STRICTLY PROHIBITED from:
     additionalSections?: string[];
   }): string {
     const sections = [
-      this.READ_ONLY_WARNING.replace('{{ROLE}}', params.role)
+      AgentPromptTemplates.READ_ONLY_WARNING.replace('{{ROLE}}', params.role)
         .replace('{{TASK}}', params.task),
     ];
 
     if (params.toolInstructions || params.additionalSections) {
-      sections.push(this.TOOL_USAGE
+      sections.push(AgentPromptTemplates.TOOL_USAGE
         .replace('{{TOOL_INSTRUCTIONS}}', params.toolInstructions || ""));
     }
 
     if (params.outputInstructions) {
-      sections.push(this.OUTPUT_FORMAT
+      sections.push(AgentPromptTemplates.OUTPUT_FORMAT
         .replace('{{OUTPUT_INSTRUCTIONS}}', params.outputInstructions));
     }
 

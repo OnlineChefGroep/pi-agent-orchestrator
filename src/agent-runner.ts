@@ -15,12 +15,11 @@ import {
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 import { type EffectiveConfig, getAgentConfig, getConfig, getMemoryToolNames, getReadOnlyMemoryToolNames, getToolNamesForType } from "./agent-types.js";
-import { type CompactableMessage, type CompactResult, DEFAULT_KEEP_TURNS, pruneOldToolOutputs } from "./compaction.js";
 import { buildParentContext, extractText } from "./context.js";
 import { buildCtxInjection } from "./context-mode-bridge.js";
 import { DEFAULT_AGENTS } from "./default-agents.js";
 import { detectEnv } from "./env.js";
-import { type AgentHandoff, buildHandoffPrompt, parseHandoff, renderHandoffForParent } from "./handoff.js";
+import { type AgentHandoff, parseHandoff, renderHandoffForParent } from "./handoff.js";
 import { type HookRegistry } from "./hooks.js";
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "./memory.js";
 import { buildAgentPrompt, type PromptExtras } from "./prompts.js";

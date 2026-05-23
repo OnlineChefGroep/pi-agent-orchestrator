@@ -42,7 +42,7 @@ describe("DEFAULT_AGENTS", () => {
   });
 
   it("rendered systemPrompts contain no unreplaced {{ placeholders", () => {
-    for (const [name, config] of DEFAULT_AGENTS) {
+    for (const [_name, config] of DEFAULT_AGENTS) {
       if (config.systemPrompt) {
         // Any remaining {{ indicates a template bug (missing closing }} or missing replace)
         expect(config.systemPrompt).not.toMatch(/\{\{/);
@@ -53,7 +53,7 @@ describe("DEFAULT_AGENTS", () => {
   });
 
   it("rendered systemPrompts contain no unreplaced }} without opening {{", () => {
-    for (const [name, config] of DEFAULT_AGENTS) {
+    for (const [_name, config] of DEFAULT_AGENTS) {
       if (config.systemPrompt) {
         // Stray closing braces would indicate malformed templates
         const strayClose = config.systemPrompt.match(/\}\}/g);

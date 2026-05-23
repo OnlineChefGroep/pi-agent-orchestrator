@@ -6,11 +6,11 @@
  */
 
 import { truncateToWidth } from "@mariozechner/pi-tui";
-import { fileURLToPath } from "url";
+import { type ChildProcess, spawn } from "child_process";
 import { dirname, join } from "path";
-import { spawn, type ChildProcess } from "child_process";
+import { fileURLToPath } from "url";
 import type { AgentManager } from "../agent-manager.js";
-import { getAnimationStyle, getUiStyle, isCinematicEnabled, isShowActivityStream, isShowTokenUsage, isShowTurnProgress } from "../agent-registry.js";
+import { getUiStyle, isCinematicEnabled, isShowActivityStream, isShowTokenUsage, isShowTurnProgress } from "../agent-registry.js";
 import { getConfig } from "../agent-types.js";
 import type { AgentInvocation, SubagentType } from "../types.js";
 import { getLifetimeTotal, getSessionContextPercent, type LifetimeUsage, type SessionLike } from "../usage.js";
@@ -405,7 +405,7 @@ export class AgentWidget {
         
         try {
           this.sidecar.stdin.write(JSON.stringify(payload) + "\n");
-        } catch (err) {
+        } catch (_err) {
           // Silently ignore write errors - sidecar may have exited
         }
       }
@@ -418,7 +418,7 @@ export class AgentWidget {
 
     // Wrapper for plain theme
     const plainTheme: Theme = {
-      fg: (color, text) => text,
+      fg: (_color, text) => text,
       bold: (text) => text,
     };
     const activeTheme = activeUiStyle === "plain" ? plainTheme : theme;

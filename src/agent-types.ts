@@ -220,9 +220,9 @@ class PermissionUtils {
   ) {
     if (!parentConfig) return raw;
     return {
-      builtinToolNames: this.intersectToolNames(raw.builtinToolNames, parentConfig.builtinToolNames),
-      extensions: this.intersectPermission(raw.extensions, parentConfig.extensions),
-      skills: this.intersectPermission(raw.skills, parentConfig.skills),
+      builtinToolNames: PermissionUtils.intersectToolNames(raw.builtinToolNames, parentConfig.builtinToolNames),
+      extensions: PermissionUtils.intersectPermission(raw.extensions, parentConfig.extensions),
+      skills: PermissionUtils.intersectPermission(raw.skills, parentConfig.skills),
     };
   }
 }

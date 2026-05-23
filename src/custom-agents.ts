@@ -180,11 +180,11 @@ class AgentFieldParser {
 
   static csvList(val: unknown, defaults: string[]): string[] {
     if (val === undefined || val === null) return defaults;
-    return this.parseCsvField(val) ?? [];
+    return AgentFieldParser.parseCsvField(val) ?? [];
   }
 
   static csvListOptional(val: unknown): string[] | undefined {
-    return this.parseCsvField(val);
+    return AgentFieldParser.parseCsvField(val);
   }
 
   static memory(val: unknown): MemoryScope | undefined {
@@ -194,7 +194,7 @@ class AgentFieldParser {
   static inheritField(val: unknown): true | string[] | false {
     if (val === undefined || val === null || val === true) return true;
     if (val === false || val === "none") return false;
-    const items = this.csvList(val, []);
+    const items = AgentFieldParser.csvList(val, []);
     return items.length > 0 ? items : false;
   }
 }
