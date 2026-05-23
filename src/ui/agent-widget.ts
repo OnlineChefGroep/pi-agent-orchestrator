@@ -86,6 +86,8 @@ export interface AgentDetails {
   maxTurns?: number;
   agentId?: string;
   error?: string;
+  /** Whether the agent passed validation (undefined if no validators). */
+  validated?: boolean;
 }
 
 // ---- Formatting helpers ----
@@ -273,7 +275,7 @@ export class AgentWidget {
   }
 
   /** Render a finished agent line. */
-  private renderFinishedLine(a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number; error?: string }, theme: Theme): string {
+  private renderFinishedLine(a: { id: string; type: SubagentType; status: string; description: string; toolUses: number; startedAt: number; completedAt?: number; error?: string; validated?: boolean; validationResults?: any[] }, theme: Theme): string {
     const name = getDisplayName(a.type);
     const modeLabel = getPromptModeLabel(a.type);
     const duration = formatMs((a.completedAt ?? Date.now()) - a.startedAt);
@@ -306,7 +308,12 @@ export class AgentWidget {
     parts.push(duration);
 
     const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
-    return `${icon} ${theme.fg("dim", name)}${modeTag}  ${theme.fg("dim", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusText}`;
+    const validationIcon = a.validationResults
+      ? a.validated
+        ? ` ${theme.fg("success", "✅")}`
+        : ` ${theme.fg("error", "❌")}`
+      : "";
+    return `${icon} ${theme.fg("dim", name)}${validationIcon}${modeTag}  ${theme.fg("dim", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusText}`;
   }
 
   /**

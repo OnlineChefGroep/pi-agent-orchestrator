@@ -47,6 +47,11 @@ export interface AgentConfig {
   memory?: MemoryScope;
   /** Isolation mode — "worktree" runs the agent in a temporary git worktree */
   isolation?: IsolationMode;
+  /** Adversarial validators to run after this agent completes */
+  validators?: {
+    agentId: string;
+    criteria: string[];
+  }[];
   /** true = this is an embedded default agent (informational) */
   isDefault?: boolean;
   /** false = agent is hidden from the registry */
@@ -96,6 +101,29 @@ export interface AgentRecord {
   compactionCount: number;
   /** Resolved spawn params, captured for UI display. Fixed at spawn time. */
   invocation?: AgentInvocation;
+  /** Validation results if validators were configured */
+  validationResults?: ValidationResult[];
+  /** Whether all validators passed */
+  validated?: boolean;
+  /** Current nesting depth (0 = root, 1 = first child, etc.) */
+  currentLevel: number;
+  /** Number of subagents spawned from this agent so far. */
+  totalSpawned: number;
+}
+
+/** Result of a single validator pass. */
+export interface ValidationResult {
+  agentId: string;
+  passed: boolean;
+  criteria: ValidationCriterion[];
+  summary: string;
+}
+
+/** Single criterion result from a validator. */
+export interface ValidationCriterion {
+  criterion: string;
+  passed: boolean;
+  feedback: string;
 }
 
 export interface AgentInvocation {
@@ -107,6 +135,10 @@ export interface AgentInvocation {
   inheritContext?: boolean;
   runInBackground?: boolean;
   isolation?: IsolationMode;
+  /** Max total subagents that can be spawned recursively from this invocation. undefined = unlimited. */
+  taskBudget?: number;
+  /** Max nesting depth for recursive subagents. undefined = unlimited (default: 5). */
+  levelLimit?: number;
 }
 
 /** Details attached to custom notification messages for visual rendering. */
@@ -124,6 +156,8 @@ export interface NotificationDetails {
   resultPreview: string;
   /** Additional agents in a group notification. */
   others?: NotificationDetails[];
+  /** Validation status for display. */
+  validated?: boolean;
 }
 
 export interface EnvInfo {

@@ -222,6 +222,10 @@ export class AgentManager {
     if (options.isBackground) this.runningBackground++;
     this.onStart?.(record);
 
+    // Push this agent onto the active stack for budget/depth tracking.
+    // Pop when the run completes (or errors), regardless of outcome.
+    this.activeAgentIdStack.push(id);
+
     // Wire parent abort signal to stop the subagent when the parent is interrupted
     let detachParentSignal: (() => void) | undefined;
     if (options.signal) {
@@ -273,6 +277,8 @@ export class AgentManager {
       });
     })
       .then(({ responseText, session, aborted, steered, validationResults, validated }) => {
+        // Pop this agent from the active stack now that it's done
+        this.activeAgentIdStack.pop();
 
         // Don't overwrite status if externally stopped via abort()
         if (record.status !== "stopped") {
@@ -330,6 +336,8 @@ export class AgentManager {
         return responseText;
       })
       .catch((err) => {
+        // Pop this agent from the active stack now that it's done (errored)
+        this.activeAgentIdStack.pop();
 
         // Don't overwrite status if externally stopped via abort()
         if (record.status !== "stopped") {
@@ -551,6 +559,7 @@ export class AgentManager {
     clearInterval(this.cleanupInterval);
     // Clear queue
     this.queue = [];
+    this.activeAgentIdStack = [];
     for (const record of this.agents.values()) {
       record.session?.dispose();
     }
