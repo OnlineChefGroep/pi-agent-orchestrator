@@ -15,10 +15,15 @@
 - **Code health**: Removed agent-registry.ts duplication. Fixed 35 pre-existing schedule test failures.
 
 ### 📊 Metrics
-- 391 → 518 tests (+127, 0 failures)
-- 22 → 30 test files
+- 391 → 518 → 595 tests (+204, 0 failures)
+- 22 → 30 → 33 test files
 - 11 commits
 - 4 plan review cycles (all APPROVED)
+
+### 🧪 Test Suite Expansion (post v0.8.0)
+- **E2E chain tests** (`test/e2e-chain.test.ts`): 28 tests covering budget enforcement, depth limit, validator isolation, permission inheritance, handoff parsing/graceful degrade, hooks dispatch, partition filtering, ctx_* tools, and full chain (spawn → run → validators → handoff → result)
+- **Performance baseline** (`test/performance-baseline.test.ts`): 18 tests measuring spawn latency, context building, compaction reduction, deferred context timing, token estimation, batch throughput, and hook dispatch overhead
+- **Backward compatibility** (`test/backward-compat.test.ts`): 31 tests verifying old AgentConfig loads, new field defaults, old-style invocation, and existing agent type integrity
 
 ## 0.7.6
 - Fix: author -> OnlineChef, clean README
