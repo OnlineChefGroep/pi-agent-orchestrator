@@ -8,6 +8,59 @@
 import { DEFAULT_AGENTS } from "./default-agents.js";
 import type { AgentConfig } from "./types.js";
 
+/**
+ * Resolve which tool names are allowed for given partitions.
+ * Pure function — no side effects, same input = same output.
+ *
+ * - No membership configured → returns empty (feature disabled at boundary)
+ * - Partitions specified → union of all tool names from matching partition memberships
+ * - Partition name not in membership → contributes nothing (isolated)
+ */
+function resolvePartitionTools(
+  membership: Record<string, string[]> | undefined,
+  partitions: string[],
+): string[] {
+  // No membership configured → empty (no restriction — feature not enabled)
+  if (!membership) return [];
+
+  // Union of all tool names from matching partition memberships
+  const tools = new Set<string>();
+  for (const partition of partitions) {
+    const partitionTools = membership[partition];
+    if (partitionTools) {
+      for (const tool of partitionTools) {
+        tools.add(tool);
+      }
+    }
+    // Else: partition name not in membership → contributes nothing (isolated)
+  }
+
+  return [...tools];
+}
+
+/**
+ * Resolve which tools are allowed based on partition memberships.
+ * Pure function — no side effects, same input = same output.
+ *
+ * - Early exit: no partitions → all of config's built-in tools (no filtering)
+ * - Early exit: no partitionMembership on config → feature disabled, all tools
+ * - Partitions specified → union of all tool names from matching partition memberships
+ * - Empty partitionMembership ({}) → empty set = isolated
+ */
+export function filterByPartitions(config: AgentConfig, partitions?: string[]): string[] {
+  // Early exit: no partitions → all tools (no filtering)
+  if (!partitions || partitions.length === 0) {
+    return config.builtinToolNames ?? [...BUILTIN_TOOL_NAMES];
+  }
+
+  // Early exit: no partition membership configured → feature disabled
+  if (!config.partitionMembership) {
+    return config.builtinToolNames ?? [...BUILTIN_TOOL_NAMES];
+  }
+
+  return resolvePartitionTools(config.partitionMembership, partitions);
+}
+
 /** All known built-in tool names. */
 export const BUILTIN_TOOL_NAMES: string[] = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
@@ -158,6 +211,7 @@ export interface EffectiveConfig {
 export function getConfig(
   type: string,
   parentConfig?: EffectiveConfig,
+  partitions?: string[],
 ): {
   displayName: string;
   description: string;
@@ -168,6 +222,21 @@ export function getConfig(
 } {
   const key = resolveKey(type);
   const config = key ? agents.get(key) : undefined;
+
+  /**
+   * Apply partition filtering to builtinToolNames — must run after
+   * parent permission inheritance to produce the final intersection.
+   * Partition restrictions never expand tool access; only further narrow it.
+   */
+  function applyPartitionFilter(membership: Record<string, string[]> | undefined, toolNames: string[]): string[] {
+    // Early exit: no partitions specified → no filtering (backward compat)
+    if (!partitions || partitions.length === 0) return toolNames;
+    const allowed = resolvePartitionTools(membership, partitions);
+    // If partition membership is not configured (allowed is empty), feature is
+    // disabled → intersection returns everything (no restriction)
+    if (allowed.length === 0 && !membership) return toolNames;
+    return intersectToolNames(toolNames, allowed);
+  }
 
   /**
    * Apply parent permission inheritance to a raw effective config.
@@ -196,7 +265,7 @@ export function getConfig(
     return {
       displayName: config.displayName ?? config.name,
       description: config.description,
-      builtinToolNames: restricted.builtinToolNames,
+      builtinToolNames: applyPartitionFilter(config.partitionMembership, restricted.builtinToolNames),
       extensions: restricted.extensions,
       skills: restricted.skills,
       promptMode: config.promptMode,
@@ -214,7 +283,7 @@ export function getConfig(
     return {
       displayName: gp.displayName ?? gp.name,
       description: gp.description,
-      builtinToolNames: restricted.builtinToolNames,
+      builtinToolNames: applyPartitionFilter(gp.partitionMembership, restricted.builtinToolNames),
       extensions: restricted.extensions,
       skills: restricted.skills,
       promptMode: gp.promptMode,
@@ -230,7 +299,7 @@ export function getConfig(
   return {
     displayName: "Agent",
     description: "General-purpose agent for complex, multi-step tasks",
-    builtinToolNames: restricted.builtinToolNames,
+    builtinToolNames: applyPartitionFilter(undefined, restricted.builtinToolNames),
     extensions: restricted.extensions,
     skills: restricted.skills,
     promptMode: "append",

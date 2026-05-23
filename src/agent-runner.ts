@@ -135,6 +135,8 @@ export interface RunOptions {
   levelLimit?: number;
   /** Parent's effective config for directional permission inheritance. */
   parentConfig?: EffectiveConfig;
+  /** Partitions this agent belongs to — restricts tools to partition memberships. */
+  partitions?: string[];
   /** Hook registry for lifecycle event dispatch. */
   hooks?: HookRegistry;
   /** Timestamp when the agent record was created (for deferred-context latency logging). */
@@ -233,7 +235,7 @@ export async function runAgent(
   prompt: string,
   options: RunOptions,
 ): Promise<RunResult> {
-  const config = getConfig(type, options.parentConfig);
+  const config = getConfig(type, options.parentConfig, options.partitions);
   const agentConfig = getAgentConfig(type);
 
   // Early exit: check level limit before any work is done

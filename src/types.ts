@@ -71,6 +71,8 @@ export interface AgentConfig {
   maxMemoryLines?: number;
   /** Number of conversation turns to keep fully intact during pruning. Default: DEFAULT_KEEP_TURNS (5). */
   compactionKeepTurns?: number;
+  /** Partitioned state: mapping partition name → allowed tool names for that partition. */
+  partitionMembership?: Record<string, string[]>;
 }
 
 export type JoinMode = 'async' | 'group' | 'smart';
@@ -137,6 +139,8 @@ export interface AgentRecord {
    * so context can be built at the last moment before session creation.
    */
   contextInputs?: { inheritContext: boolean };
+  /** Active partition for this agent (first partition from invocation.partitions). */
+  activePartition?: string;
 }
 
 /** Result of a single validator pass. */
@@ -167,6 +171,8 @@ export interface AgentInvocation {
   taskBudget?: number;
   /** Max nesting depth for recursive subagents. undefined = unlimited (default: 5). */
   levelLimit?: number;
+  /** Partitions this agent belongs to — restricts tools to partition memberships. */
+  partitions?: string[];
 }
 
 /** Details attached to custom notification messages for visual rendering. */

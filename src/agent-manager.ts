@@ -179,6 +179,7 @@ export class AgentManager {
       lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
       compactionCount: 0,
       invocation: Object.keys(childInvocation).length > 0 ? childInvocation : undefined,
+      activePartition: childInvocation.partitions?.[0],
       currentLevel: childLevel,
       totalSpawned: 0,
       contextInputs: { inheritContext: options.inheritContext ?? false },
@@ -243,6 +244,9 @@ export class AgentManager {
     const parentRecord = parentId ? this.agents.get(parentId) : undefined;
     const parentConfig = parentRecord ? getConfig(parentRecord.type) : undefined;
 
+    // Resolve partitions from child record for partitioned state
+    const childPartitions = record.invocation?.partitions;
+
     // Push this agent onto the active stack for budget/depth tracking.
     // Pop when the run completes (or errors), regardless of outcome.
     this.activeAgentIdStack.push(id);
@@ -268,6 +272,7 @@ export class AgentManager {
         currentLevel: record.currentLevel,
         levelLimit: record.invocation?.levelLimit,
         parentConfig,
+        partitions: childPartitions,
         cwd: worktreeCwd,
         signal: record.abortController!.signal,
         hooks: this.hooks,
