@@ -113,31 +113,31 @@ export class SubagentScheduler {
   }
 
   /** Add a job, persist, and arm if enabled. Returns the stored job. */
-  async addJob(input: NewJobInput): Promise<ScheduledSubagent> {
+  addJob(input: NewJobInput): ScheduledSubagent {
     const store = this.requireStore();
     if (store.hasName(input.name)) {
       throw new Error(`A scheduled job named "${input.name}" already exists.`);
     }
     const job = this.buildJob(input);
-    await store.add(job);
+    store.add(job);
     if (job.enabled) this.scheduleJob(job);
     this.emit({ type: "added", job });
     return job;
   }
 
-  async removeJob(id: string): Promise<boolean> {
+  removeJob(id: string): boolean {
     const store = this.requireStore();
     if (!store.get(id)) return false;
     this.unscheduleJob(id);
-    const ok = await store.remove(id);
+    const ok = store.remove(id);
     if (ok) this.emit({ type: "removed", jobId: id });
     return ok;
   }
 
   /** Toggle / mutate a job. Re-arms based on the new `enabled` state. */
-  async updateJob(id: string, patch: Partial<ScheduledSubagent>): Promise<ScheduledSubagent | undefined> {
+  updateJob(id: string, patch: Partial<ScheduledSubagent>): ScheduledSubagent | undefined {
     const store = this.requireStore();
-    const updated = await store.update(id, patch);
+    const updated = store.update(id, patch);
     if (!updated) return undefined;
     this.unscheduleJob(id);
     if (updated.enabled) this.scheduleJob(updated);
@@ -179,17 +179,17 @@ export class SubagentScheduler {
         if (target.getTime() > Date.now()) {
           // Use Cron for one-shot dates. It natively handles dates far in the future
           // that would otherwise exceed Node.js's 32-bit setTimeout limits.
-          const cron = new Cron(target, async () => {
-            await this.executeJob(job.id);
+          const cron = new Cron(target, () => {
+            this.executeJob(job.id).catch(() => {});
             // Auto-disable one-shots after they fire (mirrors pi-cron-schedule)
-            await store.update(job.id, { enabled: false });
+            store.update(job.id, { enabled: false });
             const updated = store.get(job.id);
             if (updated) this.emit({ type: "updated", job: updated });
           });
           this.jobs.set(job.id, cron);
         } else {
           // Past timestamp — disable, mark error, never fire
-          store.update(job.id, { enabled: false, lastStatus: "error" }).catch(() => {});
+          store.update(job.id, { enabled: false, lastStatus: "error" });
           this.emit({ type: "error", jobId: job.id, error: `Scheduled time ${job.schedule} is in the past` });
         }
       } else {
@@ -229,7 +229,7 @@ export class SubagentScheduler {
     const job = store.get(id);
     if (!job?.enabled) return;
 
-    await store.update(id, { lastStatus: "running" });
+    store.update(id, { lastStatus: "running" });
 
     // Resolve model at fire time — registry contents may have changed since the
     // job was created (auth added/removed). Fall back silently to spawn-default
@@ -254,7 +254,7 @@ export class SubagentScheduler {
       });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      await store.update(id, { lastRun: new Date().toISOString(), lastStatus: "error" });
+      store.update(id, { lastRun: new Date().toISOString(), lastStatus: "error" });
       this.emit({ type: "error", jobId: id, error });
       return;
     }
@@ -265,7 +265,7 @@ export class SubagentScheduler {
     const finalize = async (status: "success" | "error") => {
       const next = this.getNextRun(id);
       const current = store.get(id);
-      await store.update(id, {
+      store.update(id, {
         lastRun: new Date().toISOString(),
         lastStatus: status,
         runCount: (current?.runCount ?? 0) + 1,
