@@ -89,8 +89,14 @@ export function cleanupWorktree(
 
     // Changes exist — stage, commit, and create a branch
     execFileSync("git", ["add", "-A"], { cwd: worktree.path, stdio: "pipe", timeout: 10000 });
-    // Truncate description for commit message (no shell sanitization needed — execFileSync uses argv)
-    const safeDesc = agentDescription.slice(0, 200);
+    // CVE-001 FIX: Sanitize commit message to prevent git hook injection
+    // Remove newlines, carriage returns, control characters, and shell metacharacters
+    const safeDesc = agentDescription
+      .replace(/[\r\n\x00-\x1F]/g, ' ')  // Remove newlines and control chars
+      .replace(/["`$\\]/g, '')            // Remove shell metacharacters
+      .replace(/\s+/g, ' ')                // Normalize whitespace
+      .trim()
+      .slice(0, 200);
     const commitMsg = `pi-agent: ${safeDesc}`;
     execFileSync("git", ["commit", "-m", commitMsg], {
       cwd: worktree.path,

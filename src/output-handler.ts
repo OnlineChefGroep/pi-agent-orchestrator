@@ -13,7 +13,7 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "./agent-manager.js";
-import { getModelLabelFromConfig, reloadCustomAgents } from "./agent-registry.js";
+import { getModelLabelFromConfig, reloadCustomAgents, getAnimationStyle, setAnimationStyle, getUiStyle, setUiStyle } from "./agent-registry.js";
 import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, steerAgent } from "./agent-runner.js";
 import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes } from "./agent-types.js";
 import type { ModelRegistry } from "./model-resolver.js";
@@ -98,6 +98,8 @@ export function buildSettingsSnapshot(
     graceTurns: getGraceTurns(),
     defaultJoinMode: getDefaultJoinMode(),
     schedulingEnabled: isSchedulingEnabled(),
+    animationStyle: getAnimationStyle(),
+    uiStyle: getUiStyle(),
   };
 }
 
@@ -630,6 +632,8 @@ export async function showSettings(
     `Grace turns (current: ${getGraceTurns()})`,
     `Join mode (current: ${getDefaultJoinMode()})`,
     `Scheduling (current: ${isSchedulingEnabled() ? "enabled" : "disabled"})`,
+    `Animation Style (current: ${getAnimationStyle()})`,
+    `UI/UX Style (current: ${getUiStyle()})`,
   ]);
   if (!choice) return;
 
@@ -706,6 +710,32 @@ export async function showSettings(
           `Scheduling ${enabled ? "enabled" : "disabled"}. Tool spec change takes effect on next pi session.`,
         );
       }
+    }
+  } else if (choice.startsWith("Animation Style")) {
+    const val = await ctx.ui.select("Animation Style", [
+      "braille — standard 10-frame spinner (default)",
+      "dots — minimal 8-frame dots",
+      "lines — classic 4-frame rotating lines",
+      "classic — asterisk only (*)",
+      "none — no spinner",
+    ]);
+    if (val) {
+      const style = val.split(" ")[0] as "braille" | "dots" | "lines" | "classic" | "none";
+      setAnimationStyle(style);
+      const { setSpinnerStyle } = await import("./ui/agent-widget.js");
+      setSpinnerStyle(style);
+      notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Animation style set to ${style}`);
+    }
+  } else if (choice.startsWith("UI/UX Style")) {
+    const val = await ctx.ui.select("UI/UX Style", [
+      "premium — truecolor gradients and rounded connectors (default)",
+      "retro — 16-color fallback and straight box lines",
+      "plain — minimal markers, plain text with no ANSI styles",
+    ]);
+    if (val) {
+      const style = val.split(" ")[0] as "premium" | "retro" | "plain";
+      setUiStyle(style);
+      notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `UI/UX style set to ${style}`);
     }
   }
 }

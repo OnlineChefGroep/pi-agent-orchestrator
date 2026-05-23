@@ -1,6 +1,6 @@
 {
   "name": "@onlinechef/pi-subagents",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "A pi extension extension that brings smart Claude Code-style autonomous sub-agents to pi.",
   "author": "OnlineChef",
   "license": "MIT",
@@ -43,13 +43,18 @@
     "lint": "biome check src/ test/",
     "lint:fix": "biome check --fix src/ test/"
   },
+  "type": "module",
   "engines": {
     "node": ">=18.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
+    "@eslint/js": "^10.0.1",
     "@types/node": "^25.5.0",
-    "typescript": "^6.0.0",
+    "eslint": "^10.4.0",
+    "globals": "^17.6.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.4",
     "vitest": "^4.1.7"
   },
   "pi": {

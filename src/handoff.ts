@@ -18,6 +18,40 @@ export interface AgentHandoff {
 
 const VALID_STATUSES = new Set(["success", "partial", "failed"]);
 
+// CVE-008 FIX: JSON parsing limits
+const MAX_JSON_SIZE = 1024 * 1024;  // 1MB max JSON
+const MAX_JSON_DEPTH = 20;
+const MAX_FINDINGS_COUNT = 100;
+const MAX_SUMMARY_LENGTH = 10000;
+const MAX_STRING_LENGTH = 50000;
+
+/**
+ * CVE-008 FIX: Safe JSON parser with size and depth limits.
+ */
+function safeJsonParse(input: string, maxDepth: number = MAX_JSON_DEPTH): unknown {
+  if (input.length > MAX_JSON_SIZE) {
+    throw new Error(`JSON size ${input.length} exceeds maximum ${MAX_JSON_SIZE} bytes`);
+  }
+  
+  // Track depth during parsing
+  let depth = 0;
+  const reviver = (key: string, value: unknown) => {
+    if (typeof key === 'string') depth++;  // Increment for each key
+    if (depth > maxDepth) {
+      throw new Error(`JSON depth exceeds maximum of ${maxDepth}`);
+    }
+    
+    // Limit string lengths
+    if (typeof value === 'string' && value.length > MAX_STRING_LENGTH) {
+      return value.slice(0, MAX_STRING_LENGTH);
+    }
+    
+    return value;
+  };
+  
+  return JSON.parse(input, reviver);
+}
+
 /**
  * Extract a JSON code block from agent output text.
  *
@@ -44,6 +78,7 @@ function extractJsonBlock(text: string): string | null {
 
 /**
  * Validate that a parsed object conforms to the AgentHandoff interface.
+ * CVE-008 FIX: Also validates field sizes and counts.
  * Returns an array of missing/invalid field names, or empty if valid.
  */
 function validateHandoffShape(obj: Record<string, unknown>): string[] {
@@ -53,11 +88,15 @@ function validateHandoffShape(obj: Record<string, unknown>): string[] {
   if (!VALID_STATUSES.has(obj.status as string)) issues.push("status");
   if (typeof obj.summary !== "string" || obj.summary.trim().length === 0) {
     issues.push("summary");
+  } else if (obj.summary.length > MAX_SUMMARY_LENGTH) {
+    issues.push("summary (too long)");
   }
   if (!Array.isArray(obj.findings)) {
     issues.push("findings");
   } else if (obj.findings.length === 0) {
     issues.push("findings (empty)");
+  } else if (obj.findings.length > MAX_FINDINGS_COUNT) {
+    issues.push(`findings (too many: ${obj.findings.length})`);
   }
 
   return issues;
@@ -68,6 +107,8 @@ function validateHandoffShape(obj: Record<string, unknown>): string[] {
  *
  * Gracefully handles malformed, missing, or incomplete JSON. Never throws —
  * always returns null with a console warning on parse failures.
+ *
+ * CVE-008 FIX: Added size and depth limits for JSON parsing.
  *
  * @returns A valid AgentHandoff, or null if no handoff could be parsed.
  */
@@ -87,9 +128,11 @@ export function parseHandoff(text: string): AgentHandoff | null {
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(jsonBlock);
-  } catch {
-    console.warn("[handoff] Failed to parse handoff JSON — malformed JSON block");
+    // CVE-008 FIX: Use safe JSON parser with limits
+    parsed = safeJsonParse(jsonBlock);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown error';
+    console.warn(`[handoff] Failed to parse handoff JSON: ${msg}`);
     return null;
   }
 

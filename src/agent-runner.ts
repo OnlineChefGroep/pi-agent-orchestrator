@@ -15,18 +15,18 @@ import {
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 import { type EffectiveConfig, getAgentConfig, getConfig, getMemoryToolNames, getReadOnlyMemoryToolNames, getToolNamesForType } from "./agent-types.js";
+import { type CompactableMessage, type CompactResult, DEFAULT_KEEP_TURNS, pruneOldToolOutputs } from "./compaction.js";
 import { buildParentContext, extractText } from "./context.js";
+import { buildCtxInjection } from "./context-mode-bridge.js";
 import { DEFAULT_AGENTS } from "./default-agents.js";
 import { detectEnv } from "./env.js";
-import { buildHandoffPrompt, parseHandoff, renderHandoffForParent, type AgentHandoff } from "./handoff.js";
+import { type AgentHandoff, buildHandoffPrompt, parseHandoff, renderHandoffForParent } from "./handoff.js";
+import { type HookRegistry } from "./hooks.js";
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "./memory.js";
-import { type CompactableMessage, DEFAULT_KEEP_TURNS, pruneOldToolOutputs, type CompactResult } from "./compaction.js";
 import { buildAgentPrompt, type PromptExtras } from "./prompts.js";
 import { preloadSkills } from "./skill-loader.js";
 import type { SubagentType, ThinkingLevel, ValidationResult } from "./types.js";
 import { buildValidatorPrompt, getAgentDescription, hasValidators, parseValidationResult } from "./validators.js";
-import { type HookRegistry } from "./hooks.js";
-import { buildCtxInjection } from "./context-mode-bridge.js";
 
 /** Names of tools registered by this extension that subagents must NOT inherit. */
 const EXCLUDED_TOOL_NAMES: ReadonlySet<string> = new Set([

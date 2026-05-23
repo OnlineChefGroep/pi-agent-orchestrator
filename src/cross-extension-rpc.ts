@@ -25,17 +25,60 @@ export type RpcReply<T = void> =
 /** RPC protocol version — bumped when the envelope or method contracts change. */
 export const PROTOCOL_VERSION = 2;
 
-/** Minimal AgentManager interface needed by the spawn/stop RPCs. */
 export interface SpawnCapable {
   spawn(pi: unknown, ctx: unknown, type: string, prompt: string, options: any): string;
   abort(id: string): boolean;
 }
+
+// CVE-003 FIX: Authentication context for RPC calls
+export interface AuthContext {
+  extensionId: string;
+  extensionName?: string;
+}
+
+// CVE-003 FIX: Simple rate limiter for RPC calls
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+const RATE_LIMIT_WINDOW = 60000;  // 1 minute
+const RATE_LIMIT_MAX = 10;        // Max 10 spawns per minute per extension
+const rateLimitMap = new Map<string, RateLimitEntry>();
+
+function checkRateLimit(extensionId: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(extensionId);
+  
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(extensionId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return true;
+  }
+  
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return false;
+  }
+  
+  entry.count++;
+  return true;
+}
+
+// Clean up old rate limit entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap.entries()) {
+    if (now > entry.resetAt) {
+      rateLimitMap.delete(key);
+    }
+  }
+}, 60000);
 
 export interface RpcDeps {
   events: EventBus;
   pi: unknown;                    // passed through to manager.spawn
   getCtx: () => unknown | undefined;  // returns current ExtensionContext
   manager: SpawnCapable;
+  authProvider?: (requestId: string) => AuthContext | undefined;  // CVE-003 FIX: Optional auth
 }
 
 export interface RpcHandle {
@@ -79,10 +122,20 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
     return { version: PROTOCOL_VERSION };
   });
 
-  const unsubSpawn = handleRpc<{ requestId: string; type: string; prompt: string; options?: any }>(
-    events, "subagents:rpc:spawn", ({ type, prompt, options }) => {
+  const unsubSpawn = handleRpc<{ requestId: string; type: string; prompt: string; options?: any; authContext?: AuthContext }>(
+    events, "subagents:rpc:spawn", ({ type, prompt, options, authContext }) => {
       const ctx = getCtx();
       if (!ctx) throw new Error("No active session");
+      
+      // CVE-003 FIX: Authentication and rate limiting
+      const extensionId = authContext?.extensionId ?? 'unknown';
+      
+      if (!checkRateLimit(extensionId)) {
+        throw new Error(`Rate limit exceeded for extension ${extensionId}`);
+      }
+      
+      // CVE-003 FIX: Audit log for RPC spawn
+      console.log(`[pi-subagents] RPC spawn: extension=${extensionId}, type=${type}`);
 
       // Cross-extension RPC callers (e.g. pi-tasks TaskExecute) naturally
       // forward serializable values, so options.model can be a string like

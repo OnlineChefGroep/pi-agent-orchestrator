@@ -15,9 +15,9 @@ import { defineTool, type ExtensionAPI, type ExtensionCommandContext, type Exten
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { AgentManager } from "./agent-manager.js";
+import { buildTypeListText, getDefaultJoinMode, isSchedulingEnabled, reloadCustomAgents, setDefaultJoinMode, setSchedulingEnabled, getAnimationStyle, setAnimationStyle, getUiStyle, setUiStyle } from "./agent-registry.js";
 import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTurns, setDefaultMaxTurns, setGraceTurns, steerAgent } from "./agent-runner.js";
 import { getAgentConfig, getAvailableTypes, resolveType } from "./agent-types.js";
-import { getDefaultJoinMode, setDefaultJoinMode, isSchedulingEnabled, setSchedulingEnabled, reloadCustomAgents, buildTypeListText } from "./agent-registry.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
 import { GroupJoinManager } from "./group-join.js";
 import { HookRegistry } from "./hooks.js";
@@ -42,6 +42,7 @@ import {
   getDisplayName,
   getPromptModeLabel,
   SPINNER,
+  setSpinnerStyle,
   type UICtx,
 } from "./ui/agent-widget.js";
 import { addUsage, getLifetimeTotal, getSessionContextPercent, type LifetimeUsage } from "./usage.js";
@@ -595,6 +596,11 @@ export default function (pi: ExtensionAPI) {
       setGraceTurns,
       setDefaultJoinMode,
       setSchedulingEnabled,
+      setAnimationStyle: (style) => {
+        setAnimationStyle(style);
+        setSpinnerStyle(style);
+      },
+      setUiStyle,
     },
     (event, payload) => pi.events.emit(event, payload),
   );

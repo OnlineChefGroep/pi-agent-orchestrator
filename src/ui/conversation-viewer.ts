@@ -11,7 +11,8 @@ import { extractText } from "../context.js";
 import type { AgentRecord } from "../types.js";
 import { getLifetimeTotal, getSessionContextPercent } from "../usage.js";
 import type { Theme } from "./agent-widget.js";
-import { type AgentActivity, buildInvocationTags, describeActivity, formatDuration, formatSessionTokens, getDisplayName, getPromptModeLabel } from "./agent-widget.js";
+import { type AgentActivity, buildInvocationTags, describeActivity, formatDuration, formatSessionTokens, getDisplayName, getPromptModeLabel, SPINNER } from "./agent-widget.js";
+import { getUiStyle } from "../agent-registry.js";
 
 /** Base lines consumed by chrome: top border + header + header sep + footer sep + footer + bottom border. */
 const CHROME_LINES_BASE = 6;
@@ -74,7 +75,13 @@ export class ConversationViewer implements Component {
 
   render(width: number): string[] {
     if (width < 6) return []; // too narrow for any meaningful rendering
-    const th = this.theme;
+    const activeUiStyle = getUiStyle();
+    const plainTheme: Theme = {
+      fg: (color, text) => text,
+      bold: (text) => text,
+    };
+    const th = activeUiStyle === "plain" ? plainTheme : this.theme;
+
     const innerW = width - 4; // border + padding
     this.lastInnerW = innerW;
     const lines: string[] = [];
@@ -83,11 +90,31 @@ export class ConversationViewer implements Component {
       const vis = visibleWidth(s);
       return s + " ".repeat(Math.max(0, len - vis));
     };
-    const row = (content: string) =>
-      th.fg("border", "│") + " " + truncateToWidth(pad(content, innerW), innerW) + " " + th.fg("border", "│");
-    const hrTop = th.fg("border", `╭${"─".repeat(width - 2)}╮`);
-    const hrBot = th.fg("border", `╰${"─".repeat(width - 2)}╯`);
-    const hrMid = row(th.fg("dim", "─".repeat(innerW)));
+
+    let c_tl = "╭", c_tr = "╮", c_bl = "╰", c_br = "╯", c_l = "│", c_r = "│", c_h = "─";
+    if (activeUiStyle === "retro") {
+      c_tl = "+"; c_tr = "+"; c_bl = "+"; c_br = "+"; c_l = "|"; c_r = "|"; c_h = "-";
+    }
+
+    const row = (content: string) => {
+      if (activeUiStyle === "plain") {
+        return "  " + truncateToWidth(pad(content, innerW), innerW) + "  ";
+      }
+      return th.fg("border", c_l) + " " + truncateToWidth(pad(content, innerW), innerW) + " " + th.fg("border", c_r);
+    };
+
+    let hrTop = "";
+    let hrBot = "";
+    let hrMid = "";
+    if (activeUiStyle === "plain") {
+      hrTop = "-".repeat(width);
+      hrBot = "-".repeat(width);
+      hrMid = "-".repeat(innerW + 4);
+    } else {
+      hrTop = th.fg("border", `${c_tl}${c_h.repeat(width - 2)}${c_tr}`);
+      hrBot = th.fg("border", `${c_bl}${c_h.repeat(width - 2)}${c_br}`);
+      hrMid = row(th.fg("dim", c_h.repeat(innerW)));
+    }
 
     // Header
     lines.push(hrTop);
@@ -173,16 +200,28 @@ export class ConversationViewer implements Component {
   }
 
   private invocationLine(): string | undefined {
+    const activeUiStyle = getUiStyle();
+    const plainTheme: Theme = {
+      fg: (color, text) => text,
+      bold: (text) => text,
+    };
+    const th = activeUiStyle === "plain" ? plainTheme : this.theme;
     const { modelName, tags } = buildInvocationTags(this.record.invocation);
     const parts = modelName ? [modelName, ...tags] : tags;
     if (parts.length === 0) return undefined;
-    return this.theme.fg("dim", `  ↳ ${parts.join(" · ")}`);
+    const arrow = activeUiStyle === "plain" ? "-> " : "  ↳ ";
+    return th.fg("dim", `${arrow}${parts.join(" · ")}`);
   }
 
   private buildContentLines(width: number): string[] {
     if (width <= 0) return [];
 
-    const th = this.theme;
+    const activeUiStyle = getUiStyle();
+    const plainTheme: Theme = {
+      fg: (color, text) => text,
+      bold: (text) => text,
+    };
+    const th = activeUiStyle === "plain" ? plainTheme : this.theme;
     const messages = this.session.messages;
     const lines: string[] = [];
 
@@ -193,15 +232,28 @@ export class ConversationViewer implements Component {
 
     let needsSeparator = false;
     for (const msg of messages) {
+      if (needsSeparator) {
+        lines.push("");
+      }
       if (msg.role === "user") {
         const text = typeof msg.content === "string"
           ? msg.content
           : extractText(msg.content);
         if (!text.trim()) continue;
-        if (needsSeparator) lines.push(th.fg("dim", "───"));
-        lines.push(th.fg("accent", "[User]"));
-        for (const line of wrapTextWithAnsi(text.trim(), width)) {
-          lines.push(line);
+        
+        let header = " \x1b[48;2;0;100;160;38;2;255;255;255;1m 👤 USER \x1b[0m";
+        let border = " \x1b[38;2;0;160;220m│\x1b[0m";
+        if (activeUiStyle === "retro") {
+          header = " \x1b[44;37;1m 👤 USER \x1b[0m";
+          border = " \x1b[36m|\x1b[0m";
+        } else if (activeUiStyle === "plain") {
+          header = " 👤 USER ";
+          border = " |";
+        }
+
+        lines.push(header);
+        for (const line of wrapTextWithAnsi(text.trim(), width - 3)) {
+          lines.push(`${border} ${line}`);
         }
       } else if (msg.role === "assistant") {
         const textParts: string[] = [];
@@ -212,35 +264,128 @@ export class ConversationViewer implements Component {
             toolCalls.push((c as any).name ?? (c as any).toolName ?? "unknown");
           }
         }
-        if (needsSeparator) lines.push(th.fg("dim", "───"));
-        lines.push(th.bold("[Assistant]"));
+        
+        let header = " \x1b[48;2;100;50;180;38;2;255;255;255;1m 🤖 HERMES \x1b[0m";
+        let border = " \x1b[38;2;150;80;220m│\x1b[0m";
+        if (activeUiStyle === "retro") {
+          header = " \x1b[45;37;1m 🤖 HERMES \x1b[0m";
+          border = " \x1b[35m|\x1b[0m";
+        } else if (activeUiStyle === "plain") {
+          header = " 🤖 HERMES ";
+          border = " |";
+        }
+
+        lines.push(header);
         if (textParts.length > 0) {
-          for (const line of wrapTextWithAnsi(textParts.join("\n").trim(), width)) {
-            lines.push(line);
+          for (const line of wrapTextWithAnsi(textParts.join("\n").trim(), width - 3)) {
+            lines.push(`${border} ${line}`);
           }
         }
         for (const name of toolCalls) {
-          lines.push(truncateToWidth(th.fg("muted", `  [Tool: ${name}]`), width));
+          let callLine = ` \x1b[38;2;150;80;220m│\x1b[0m   \x1b[38;2;220;120;0m⚡ [Tool Invoke: ${name}]\x1b[0m`;
+          if (activeUiStyle === "retro") {
+            callLine = ` \x1b[35m|\x1b[0m   \x1b[33m⚡ [Tool Invoke: ${name}]\x1b[0m`;
+          } else if (activeUiStyle === "plain") {
+            callLine = ` |   ⚡ [Tool Invoke: ${name}]`;
+          }
+          lines.push(callLine);
         }
       } else if (msg.role === "toolResult") {
         const text = extractText(msg.content);
-        const truncated = text.length > 500 ? text.slice(0, 500) + "... (truncated)" : text;
+        const truncated = text.length > 800 ? text.slice(0, 800) + "\n... (truncated)" : text;
         if (!truncated.trim()) continue;
-        if (needsSeparator) lines.push(th.fg("dim", "───"));
-        lines.push(th.fg("dim", "[Result]"));
-        for (const line of wrapTextWithAnsi(truncated.trim(), width)) {
-          lines.push(th.fg("dim", line));
+        
+        const innerW = width - 6;
+        if (innerW > 10) {
+          const headerText = ` 🔧 Tool Result `;
+          const dashCount = Math.max(2, innerW - headerText.length - 2);
+
+          let topBorder = `\x1b[38;2;220;120;0m╭──${headerText}${"─".repeat(dashCount)}╮\x1b[0m`;
+          let bottomBorder = `\x1b[38;2;220;120;0m╰${"─".repeat(innerW + 2)}╯\x1b[0m`;
+          let leftBorder = "\x1b[38;2;220;120;0m│\x1b[0m";
+          let rightBorder = "\x1b[38;2;220;120;0m│\x1b[0m";
+
+          if (activeUiStyle === "retro") {
+            topBorder = `\x1b[33m+--${headerText}${"-".repeat(dashCount)}+\x1b[0m`;
+            bottomBorder = `\x1b[33m+${"-".repeat(innerW + 2)}+\x1b[0m`;
+            leftBorder = "\x1b[33m|\x1b[0m";
+            rightBorder = "\x1b[33m|\x1b[0m";
+          } else if (activeUiStyle === "plain") {
+            topBorder = `+--${headerText}${"-".repeat(dashCount)}+`;
+            bottomBorder = `+${"-".repeat(innerW + 2)}+`;
+            leftBorder = "|";
+            rightBorder = "|";
+          }
+          
+          lines.push("   " + topBorder);
+          for (const line of wrapTextWithAnsi(truncated.trim(), innerW)) {
+            const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
+            lines.push(`   ${leftBorder} ${paddedLine} ${rightBorder}`);
+          }
+          lines.push("   " + bottomBorder);
+        } else {
+          lines.push(th.fg("warning", "[Result]"));
+          for (const line of wrapTextWithAnsi(truncated.trim(), width)) {
+            lines.push(th.fg("dim", line));
+          }
         }
       } else if ((msg as any).role === "bashExecution") {
         const bash = msg as any;
-        if (needsSeparator) lines.push(th.fg("dim", "───"));
-        lines.push(truncateToWidth(th.fg("muted", `  $ ${bash.command}`), width));
-        if (bash.output?.trim()) {
-          const out = bash.output.length > 500
-            ? bash.output.slice(0, 500) + "... (truncated)"
-            : bash.output;
-          for (const line of wrapTextWithAnsi(out.trim(), width)) {
-            lines.push(th.fg("dim", line));
+        const command = bash.command || "";
+        const output = bash.output || "";
+        
+        const innerW = width - 6;
+        if (innerW > 10) {
+          const headerText = ` 💻 Bash Command `;
+          const dashCount = Math.max(2, innerW - headerText.length - 2);
+
+          let topBorder = `\x1b[38;2;0;160;220m╭──${headerText}${"─".repeat(dashCount)}╮\x1b[0m`;
+          let bottomBorder = `\x1b[38;2;0;160;220m╰${"─".repeat(innerW + 2)}╯\x1b[0m`;
+          let leftBorder = "\x1b[38;2;0;160;220m│\x1b[0m";
+          let rightBorder = "\x1b[38;2;0;160;220m│\x1b[0m";
+          let midBorder = `\x1b[38;2;0;160;220m├${"─".repeat(innerW + 2)}┤\x1b[0m`;
+          let cmdPrefix = "\x1b[1m$ ";
+          let cmdSuffix = "\x1b[0m";
+          let outPrefix = "\x1b[2m";
+          let outSuffix = "\x1b[0m";
+
+          if (activeUiStyle === "retro") {
+            topBorder = `\x1b[36m+--${headerText}${"-".repeat(dashCount)}+\x1b[0m`;
+            bottomBorder = `\x1b[36m+${"-".repeat(innerW + 2)}+\x1b[0m`;
+            leftBorder = "\x1b[36m|\x1b[0m";
+            rightBorder = "\x1b[36m|\x1b[0m";
+            midBorder = `\x1b[36m+${"-".repeat(innerW + 2)}+\x1b[0m`;
+          } else if (activeUiStyle === "plain") {
+            topBorder = `+--${headerText}${"-".repeat(dashCount)}+`;
+            bottomBorder = `+${"-".repeat(innerW + 2)}+`;
+            leftBorder = "|";
+            rightBorder = "|";
+            midBorder = `+${"-".repeat(innerW + 2)}+`;
+            cmdPrefix = "$ ";
+            cmdSuffix = "";
+            outPrefix = "";
+            outSuffix = "";
+          }
+          
+          lines.push("   " + topBorder);
+          const cmdLineStr = `${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`;
+          lines.push(`   ${leftBorder} ${cmdLineStr}` + " ".repeat(Math.max(0, innerW - visibleWidth(`${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`))) + ` ${rightBorder}`);
+          
+          if (output.trim()) {
+            lines.push(`   ` + midBorder);
+            const outTrunc = output.length > 800 ? output.slice(0, 800) + "\n... (truncated)" : output;
+            for (const line of wrapTextWithAnsi(outTrunc.trim(), innerW)) {
+              const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
+              lines.push(`   ${leftBorder} ${outPrefix}${paddedLine}${outSuffix} ${rightBorder}`);
+            }
+          }
+          lines.push("   " + bottomBorder);
+        } else {
+          lines.push(th.fg("accent", `$ ${command}`));
+          if (output.trim()) {
+            for (const line of wrapTextWithAnsi(output.trim(), width)) {
+              lines.push(th.fg("dim", line));
+            }
           }
         }
       } else {
@@ -249,11 +394,18 @@ export class ConversationViewer implements Component {
       needsSeparator = true;
     }
 
-    // Streaming indicator for running agents
     if (this.record.status === "running" && this.activity) {
+      const spinnerFrame = SPINNER[Math.floor(Date.now() / 80) % SPINNER.length];
       const act = describeActivity(this.activity.activeTools, this.activity.responseText);
       lines.push("");
-      lines.push(truncateToWidth(th.fg("accent", "▍ ") + th.fg("dim", act), width));
+      
+      let runningLineStr = `  \x1b[38;2;255;165;0m${spinnerFrame}\x1b[0m \x1b[38;2;168;100;255mHermes is working:\x1b[0m \x1b[3m${act}\x1b[0m`;
+      if (activeUiStyle === "retro") {
+        runningLineStr = `  \x1b[33m${spinnerFrame}\x1b[0m \x1b[35;1mHermes is working:\x1b[0m \x1b[3m${act}\x1b[0m`;
+      } else if (activeUiStyle === "plain") {
+        runningLineStr = `  ${spinnerFrame} Hermes is working: ${act}`;
+      }
+      lines.push(truncateToWidth(runningLineStr, width));
     }
 
     return lines.map(l => truncateToWidth(l, width));

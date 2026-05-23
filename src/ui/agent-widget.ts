@@ -11,6 +11,8 @@ import { getConfig } from "../agent-types.js";
 import type { AgentInvocation, SubagentType } from "../types.js";
 import { getLifetimeTotal, getSessionContextPercent, type LifetimeUsage, type SessionLike } from "../usage.js";
 
+import { getUiStyle, getAnimationStyle } from "../agent-registry.js";
+
 // ---- Constants ----
 
 /** Maximum number of rendered lines before overflow collapse kicks in. */
@@ -18,6 +20,20 @@ const MAX_WIDGET_LINES = 12;
 
 /** Braille spinner frames for animated running indicator. */
 export const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+const SPINNER_FRAMES = {
+  braille: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+  dots: ["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"],
+  lines: ["-", "\\", "|", "/"],
+  classic: ["*"],
+  none: [""],
+};
+
+export function setSpinnerStyle(style: keyof typeof SPINNER_FRAMES) {
+  const frames = SPINNER_FRAMES[style] || SPINNER_FRAMES.braille;
+  SPINNER.length = 0;
+  SPINNER.push(...frames);
+}
 
 /** Statuses that indicate an error/non-success outcome (used for linger behavior and icon rendering). */
 export const ERROR_STATUSES = new Set(["error", "aborted", "steered", "stopped"]);
@@ -279,6 +295,7 @@ export class AgentWidget {
     const name = getDisplayName(a.type);
     const modeLabel = getPromptModeLabel(a.type);
     const duration = formatMs((a.completedAt ?? Date.now()) - a.startedAt);
+    const activeUiStyle = getUiStyle();
 
     let icon: string;
     let statusText: string;
@@ -310,8 +327,8 @@ export class AgentWidget {
     const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
     const validationIcon = a.validationResults
       ? a.validated
-        ? ` ${theme.fg("success", "✅")}`
-        : ` ${theme.fg("error", "❌")}`
+        ? ` ${theme.fg("success", activeUiStyle === "plain" ? "✓" : "✅")}`
+        : ` ${theme.fg("error", activeUiStyle === "plain" ? "✗" : "❌")}`
       : "";
     return `${icon} ${theme.fg("dim", name)}${validationIcon}${modeTag}  ${theme.fg("dim", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusText}`;
   }
@@ -335,10 +352,36 @@ export class AgentWidget {
     // Nothing to show — return empty (widget will be unregistered by update())
     if (!hasActive && !hasFinished) return [];
 
+    const activeUiStyle = getUiStyle();
+    // Wrapper for plain theme
+    const plainTheme: Theme = {
+      fg: (color, text) => text,
+      bold: (text) => text,
+    };
+    const activeTheme = activeUiStyle === "plain" ? plainTheme : theme;
+
+    let c_tree = "├──";
+    let c_angle = "╰──";
+    let c_bar = "│  ";
+    let c_ind = "  ⎿  ";
+    let headingIcon = hasActive ? "●" : "○";
+
+    if (activeUiStyle === "retro") {
+      c_tree = "|--";
+      c_angle = "`--";
+      c_bar = "|  ";
+      c_ind = "  `--";
+    } else if (activeUiStyle === "plain") {
+      c_tree = "- ";
+      c_angle = "- ";
+      c_bar = "  ";
+      c_ind = "  - ";
+      headingIcon = "*";
+    }
+
     const w = tui.terminal.columns;
     const truncate = (line: string) => truncateToWidth(line, w);
     const headingColor = hasActive ? "accent" : "dim";
-    const headingIcon = hasActive ? "●" : "○";
     const frame = SPINNER[this.widgetFrame % SPINNER.length];
 
     // Build sections separately for overflow-aware assembly.
@@ -346,21 +389,21 @@ export class AgentWidget {
 
     const finishedLines: string[] = [];
     for (const a of finished) {
-      finishedLines.push(truncate(theme.fg("dim", "├─") + " " + this.renderFinishedLine(a, theme)));
+      finishedLines.push(truncate(activeTheme.fg("dim", c_tree) + " " + this.renderFinishedLine(a, activeTheme)));
     }
 
     const runningLines: string[][] = []; // each entry is [header, activity]
     for (const a of running) {
       const name = getDisplayName(a.type);
       const modeLabel = getPromptModeLabel(a.type);
-      const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
+      const modeTag = modeLabel ? ` ${activeTheme.fg("dim", `(${modeLabel})`)}` : "";
       const elapsed = formatMs(Date.now() - a.startedAt);
 
       const bg = this.agentActivity.get(a.id);
       const toolUses = bg?.toolUses ?? a.toolUses;
       const tokens = getLifetimeTotal(bg?.lifetimeUsage);
       const contextPercent = getSessionContextPercent(bg?.session);
-      const tokenText = tokens > 0 ? formatSessionTokens(tokens, contextPercent, theme, a.compactionCount) : "";
+      const tokenText = tokens > 0 ? formatSessionTokens(tokens, contextPercent, activeTheme, a.compactionCount) : "";
 
       const parts: string[] = [];
       if (bg) parts.push(formatTurns(bg.turnCount, bg.maxTurns));
@@ -372,20 +415,20 @@ export class AgentWidget {
       const activity = bg ? describeActivity(bg.activeTools, bg.responseText) : "thinking…";
 
       runningLines.push([
-        truncate(theme.fg("dim", "├─") + ` ${theme.fg("accent", frame)} ${theme.bold(name)}${modeTag}  ${theme.fg("muted", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", statsText)}`),
-        truncate(theme.fg("dim", "│  ") + theme.fg("dim", `  ⎿  ${activity}`)),
+        truncate(activeTheme.fg("dim", c_tree) + ` ${activeTheme.fg("accent", frame)} ${activeTheme.bold(name)}${modeTag}  ${activeTheme.fg("muted", a.description)} ${activeTheme.fg("dim", "·")} ${activeTheme.fg("dim", statsText)}`),
+        truncate(activeTheme.fg("dim", c_bar) + activeTheme.fg("dim", `${c_ind}${activity}`)),
       ]);
     }
 
     const queuedLine = queued.length > 0
-      ? truncate(theme.fg("dim", "├─") + ` ${theme.fg("muted", "◦")} ${theme.fg("dim", `${queued.length} queued`)}`)
+      ? truncate(activeTheme.fg("dim", c_tree) + ` ${activeTheme.fg("muted", "◦")} ${activeTheme.fg("dim", `${queued.length} queued`)}`)
       : undefined;
 
     // Assemble with overflow cap (heading + overflow indicator = 2 reserved lines).
     const maxBody = MAX_WIDGET_LINES - 1; // heading takes 1 line
     const totalBody = finishedLines.length + runningLines.length * 2 + (queuedLine ? 1 : 0);
 
-    const lines: string[] = [truncate(theme.fg(headingColor, headingIcon) + " " + theme.fg(headingColor, "Agents"))];
+    const lines: string[] = [truncate(activeTheme.fg(headingColor, headingIcon) + " " + activeTheme.fg(headingColor, "Agents"))];
 
     if (totalBody <= maxBody) {
       // Everything fits — add all lines and fix up connectors for the last item.
@@ -393,17 +436,17 @@ export class AgentWidget {
       for (const pair of runningLines) lines.push(...pair);
       if (queuedLine) lines.push(queuedLine);
 
-      // Fix last connector: swap ├─ → └─ and │ → space for activity lines.
+      // Fix last connector: swap ├── → ╰── and │ → space for activity lines.
       if (lines.length > 1) {
         const last = lines.length - 1;
-        lines[last] = lines[last].replace("├─", "└─");
+        lines[last] = lines[last].replace(c_tree, c_angle);
         // If last item is a running agent activity line, fix indent of that line
         // and fix the header line above it.
         if (runningLines.length > 0 && !queuedLine) {
           // The last two lines are the last running agent's header + activity.
           if (last >= 2) {
-            lines[last - 1] = lines[last - 1].replace("├─", "└─");
-            lines[last] = lines[last].replace("│  ", "   ");
+            lines[last - 1] = lines[last - 1].replace(c_tree, c_angle);
+            lines[last] = lines[last].replace(c_bar, " ".repeat(c_bar.length));
           }
         }
       }
@@ -445,7 +488,7 @@ export class AgentWidget {
       if (hiddenRunning > 0) overflowParts.push(`${hiddenRunning} running`);
       if (hiddenFinished > 0) overflowParts.push(`${hiddenFinished} finished`);
       const overflowText = overflowParts.join(", ");
-      lines.push(truncate(theme.fg("dim", "└─") + ` ${theme.fg("dim", `+${hiddenRunning + hiddenFinished} more (${overflowText})`)}`)
+      lines.push(truncate(activeTheme.fg("dim", c_angle) + ` ${activeTheme.fg("dim", `+${hiddenRunning + hiddenFinished} more (${overflowText})`)}`)
       );
     }
 

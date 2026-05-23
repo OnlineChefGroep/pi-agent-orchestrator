@@ -48,6 +48,30 @@ export function setSchedulingEnabled(b: boolean): void {
   schedulingEnabled = b;
 }
 
+// ---- Animation & UI/UX Style configuration ----
+
+export type AnimationStyle = "braille" | "dots" | "lines" | "classic" | "none";
+export type UiStyle = "premium" | "retro" | "plain";
+
+let animationStyle: AnimationStyle = "braille";
+let uiStyle: UiStyle = "premium";
+
+export function getAnimationStyle(): AnimationStyle {
+  return animationStyle;
+}
+
+export function setAnimationStyle(style: AnimationStyle): void {
+  animationStyle = style;
+}
+
+export function getUiStyle(): UiStyle {
+  return uiStyle;
+}
+
+export function setUiStyle(style: UiStyle): void {
+  uiStyle = style;
+}
+
 // ---- Custom agent reloading ----
 
 /** Reload agents from .pi/agents/*.md and merge with defaults. */

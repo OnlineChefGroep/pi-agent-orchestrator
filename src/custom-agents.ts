@@ -5,8 +5,73 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { getAgentDir, parseFrontmatter } from "@mariozechner/pi-coding-agent";
-import { BUILTIN_TOOL_NAMES } from "./agent-types.js";
+import { BUILTIN_TOOL_NAMES, getDefaultAgentNames } from "./agent-types.js";
 import type { AgentConfig, MemoryScope, ThinkingLevel } from "./types.js";
+
+// CVE-002 FIX: Validation patterns for agent configs
+const UNSAFE_NAME_PATTERN = /^(\.\.|\.\.|\/|\\|[\x00-\x1F])|(\.\.|\.\.|\/|\\|[\x00-\x1F])$/;
+const INJECTION_PATTERNS = [
+  /ignore\s+(all\s+)?(previous\s+)?(instructions|criteria)/i,
+  /exfiltrate|send\s+to\s+attacker|malicious/i,
+  /<\/?(script|iframe|object|embed)/i,
+];
+const MAX_NAME_LENGTH = 100;
+const MAX_PROMPT_LENGTH = 100000;  // 100KB
+const MAX_TOOLS_COUNT = 100;
+
+/**
+ * Validate an agent config for security issues.
+ * Returns array of error messages (empty if valid).
+ */
+function validateAgentConfig(name: string, config: Partial<AgentConfig>): string[] {
+  const errors: string[] = [];
+  
+  // Validate name
+  if (!name || typeof name !== 'string') {
+    errors.push('Agent name is required');
+  } else if (name.length > MAX_NAME_LENGTH) {
+    errors.push(`Agent name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
+  } else if (UNSAFE_NAME_PATTERN.test(name)) {
+    errors.push(`Agent name contains unsafe characters: ${name}`);
+  }
+  
+  // Prevent overriding built-in agents with wildcard tools
+  const builtinNames = new Set(getDefaultAgentNames());
+  if (builtinNames.has(name) && config.builtinToolNames?.includes('*')) {
+    errors.push(`Cannot override built-in agent "${name}" with wildcard (*) tools`);
+  }
+  
+  // Validate system prompt
+  if (config.systemPrompt) {
+    if (config.systemPrompt.length > MAX_PROMPT_LENGTH) {
+      errors.push(`System prompt exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
+    }
+    
+    // Check for injection patterns
+    for (const pattern of INJECTION_PATTERNS) {
+      if (pattern.test(config.systemPrompt)) {
+        errors.push('System prompt contains potential injection pattern');
+        break;
+      }
+    }
+  }
+  
+  // Validate tool names
+  if (config.builtinToolNames) {
+    if (config.builtinToolNames.length > MAX_TOOLS_COUNT) {
+      errors.push(`Too many tools specified (max ${MAX_TOOLS_COUNT})`);
+    }
+    
+    // CVE-011 FIX: Validate tool names against known set
+    const knownTools = new Set([...BUILTIN_TOOL_NAMES, '*']);
+    const unknownTools = config.builtinToolNames.filter(t => !knownTools.has(t));
+    if (unknownTools.length > 0) {
+      console.warn(`[pi-subagents] Unknown tool names in agent "${name}": ${unknownTools.join(', ')}`);
+    }
+  }
+  
+  return errors;
+}
 
 /**
  * Scan for custom agent .md files from multiple locations.
@@ -50,7 +115,7 @@ function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source: "pro
 
     const { frontmatter: fm, body } = parseFrontmatter<Record<string, unknown>>(content);
 
-    agents.set(name, {
+    const config: AgentConfig = {
       name,
       displayName: str(fm.display_name),
       description: str(fm.description) ?? name,
@@ -70,7 +135,17 @@ function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source: "pro
       isolation: fm.isolation === "worktree" ? "worktree" : undefined,
       enabled: fm.enabled !== false,  // default true; explicitly false disables
       source,
-    });
+    };
+
+    // CVE-002 FIX: Validate agent config before adding
+    const validationErrors = validateAgentConfig(name, config);
+    if (validationErrors.length > 0) {
+      console.warn(`[pi-subagents] Invalid agent config "${name}": ${validationErrors.join(', ')}`);
+      // Disable agent with validation errors (don't skip entirely - let user see it)
+      config.enabled = false;
+    }
+
+    agents.set(name, config);
   }
 }
 

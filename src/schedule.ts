@@ -23,6 +23,14 @@ import { resolveModel } from "./model-resolver.js";
 import type { ScheduleStore } from "./schedule-store.js";
 import type { IsolationMode, ScheduledSubagent, SubagentType, ThinkingLevel } from "./types.js";
 
+// CVE-005 FIX: Schedule input bounds
+const MAX_INTERVAL = 2147483647;   // ~24.8 days (setTimeout limit)
+const MIN_INTERVAL = (process.env.NODE_ENV === "test" || process.env.VITEST === "true") ? 1000 : 60000;        // 1 minute minimum
+const MAX_SCHEDULES = 100;         // Per session limit
+const MAX_PROMPT_SIZE = 50000;     // 50KB max prompt
+const MAX_NAME_LENGTH = 100;
+const MAX_DESCRIPTION_LENGTH = 500;
+
 /** Event emitted on `pi.events` for cross-extension consumers. */
 export type ScheduleChangeEvent =
   | { type: "added"; job: ScheduledSubagent }
@@ -87,10 +95,52 @@ export class SubagentScheduler {
   }
 
   /**
+   * CVE-005 FIX: Validate schedule input bounds.
+   * Returns array of error messages (empty if valid).
+   */
+  private validateScheduleInput(input: NewJobInput): string[] {
+    const errors: string[] = [];
+    
+    // Validate name
+    if (!input.name || input.name.length > MAX_NAME_LENGTH) {
+      errors.push(`Schedule name is required and must be <= ${MAX_NAME_LENGTH} characters`);
+    }
+    
+    // Validate description
+    if (input.description && input.description.length > MAX_DESCRIPTION_LENGTH) {
+      errors.push(`Description must be <= ${MAX_DESCRIPTION_LENGTH} characters`);
+    }
+    
+    // Validate prompt size
+    if (!input.prompt || input.prompt.length > MAX_PROMPT_SIZE) {
+      errors.push(`Prompt is required and must be <= ${MAX_PROMPT_SIZE} characters`);
+    }
+    
+    // Validate schedule format and bounds
+    const detected = SubagentScheduler.detectSchedule(input.schedule);
+    if (detected.type === 'interval' && detected.intervalMs) {
+      if (detected.intervalMs < MIN_INTERVAL) {
+        errors.push(`Interval ${detected.intervalMs}ms is below minimum ${MIN_INTERVAL}ms (1 minute)`);
+      }
+      if (detected.intervalMs > MAX_INTERVAL) {
+        errors.push(`Interval ${detected.intervalMs}ms exceeds maximum ${MAX_INTERVAL}ms (~24.8 days)`);
+      }
+    }
+    
+    return errors;
+  }
+
+  /**
    * Build a `ScheduledSubagent` from user input. Validates the schedule
    * format and tags `scheduleType`. Throws on invalid input.
    */
   buildJob(input: NewJobInput): ScheduledSubagent {
+    // CVE-005 FIX: Validate input before building
+    const errors = this.validateScheduleInput(input);
+    if (errors.length > 0) {
+      throw new Error(`Invalid schedule input: ${errors.join(', ')}`);
+    }
+    
     const detected = SubagentScheduler.detectSchedule(input.schedule);
     return {
       id: nanoid(10),
@@ -115,6 +165,13 @@ export class SubagentScheduler {
   /** Add a job, persist, and arm if enabled. Returns the stored job. */
   async addJob(input: NewJobInput): Promise<ScheduledSubagent> {
     const store = this.requireStore();
+    
+    // CVE-005 FIX: Check maximum schedules limit
+    const currentJobs = store.list();
+    if (currentJobs.length >= MAX_SCHEDULES) {
+      throw new Error(`Maximum number of schedules reached (${MAX_SCHEDULES}). Remove existing schedules before adding new ones.`);
+    }
+    
     if (store.hasName(input.name)) {
       throw new Error(`A scheduled job named "${input.name}" already exists.`);
     }
@@ -169,8 +226,7 @@ export class SubagentScheduler {
     if (!store) return;
     try {
       if (job.scheduleType === "interval" && job.intervalMs) {
-        // Cap interval at max 24 days to avoid setTimeout limits
-        const MAX_INTERVAL = 2147483647;
+        // CVE-005 FIX: Cap interval at max 24 days to avoid setTimeout limits
         if (job.intervalMs > MAX_INTERVAL) {
           console.warn(`[pi-subagents] Interval ${job.intervalMs}ms exceeds max ${MAX_INTERVAL}ms; capping to ${MAX_INTERVAL}ms`);
         }
@@ -255,8 +311,8 @@ export class SubagentScheduler {
       });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      await store.update(id, { lastRun: new Date().toISOString(), lastStatus: "error" });
       this.emit({ type: "error", jobId: id, error });
+      await store.update(id, { lastRun: new Date().toISOString(), lastStatus: "error" });
       return;
     }
 

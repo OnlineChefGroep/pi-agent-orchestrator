@@ -26,6 +26,8 @@ export interface SubagentsSettings {
    * (next pi session); runtime menu/runtime-fire short-circuit is immediate.
    */
   schedulingEnabled?: boolean;
+  animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";
+  uiStyle?: "premium" | "retro" | "plain";
 }
 
 /** Setter hooks used by applySettings to wire persisted values into in-memory state. */
@@ -35,12 +37,16 @@ export interface SettingsAppliers {
   setGraceTurns: (n: number) => void;
   setDefaultJoinMode: (mode: JoinMode) => void;
   setSchedulingEnabled: (b: boolean) => void;
+  setAnimationStyle: (style: "braille" | "dots" | "lines" | "classic" | "none") => void;
+  setUiStyle: (style: "premium" | "retro" | "plain") => void;
 }
 
 /** Emit callback — a subset of `pi.events.emit` to keep helpers testable. */
 export type SettingsEmit = (event: string, payload: unknown) => void;
 
 const VALID_JOIN_MODES: ReadonlySet<string> = new Set<JoinMode>(["async", "group", "smart"]);
+const VALID_ANIMATION_STYLES: ReadonlySet<string> = new Set(["braille", "dots", "lines", "classic", "none"]);
+const VALID_UI_STYLES: ReadonlySet<string> = new Set(["premium", "retro", "plain"]);
 
 // Sanity ceilings — prevent hand-edited configs from asking for values that
 // make no operational sense (e.g. 1e6 concurrent subagents). Permissive enough
@@ -80,6 +86,12 @@ function sanitize(raw: unknown): SubagentsSettings {
   }
   if (typeof r.schedulingEnabled === "boolean") {
     out.schedulingEnabled = r.schedulingEnabled;
+  }
+  if (typeof r.animationStyle === "string" && VALID_ANIMATION_STYLES.has(r.animationStyle)) {
+    out.animationStyle = r.animationStyle as "braille" | "dots" | "lines" | "classic" | "none";
+  }
+  if (typeof r.uiStyle === "string" && VALID_UI_STYLES.has(r.uiStyle)) {
+    out.uiStyle = r.uiStyle as "premium" | "retro" | "plain";
   }
   return out;
 }
@@ -136,6 +148,8 @@ export function applySettings(s: SubagentsSettings, appliers: SettingsAppliers):
   if (typeof s.graceTurns === "number") appliers.setGraceTurns(s.graceTurns);
   if (s.defaultJoinMode) appliers.setDefaultJoinMode(s.defaultJoinMode);
   if (typeof s.schedulingEnabled === "boolean") appliers.setSchedulingEnabled(s.schedulingEnabled);
+  if (s.animationStyle) appliers.setAnimationStyle(s.animationStyle);
+  if (s.uiStyle) appliers.setUiStyle(s.uiStyle);
 }
 
 /**
