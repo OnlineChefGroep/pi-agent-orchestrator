@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.9.0 (2026-05-24)
+
+### 🔧 Fixes
+- **Fix refactor regressie in `agent-types.ts`**: `intersectToolNames` hernoemd naar `PermissionUtils.intersectToolNames` na class-refactor; herstelt alle 14 partition-filter tests.
+- **Fix template typo in `default-agents.ts`**: ontbrekende sluitende `}}` in `{{TOOL_INSTRUCTIONS}}` placeholder hersteld — prompts renderen nu correct.
+
+### 🏗 Refactor
+- **Consolidatie van parsing & permissie-logica**:
+  - `custom-agents.ts`: losse field-parser functies samengevoegd naar `AgentFieldParser` class.
+  - `default-agents.ts`: herhalende read-only prompt-boilerplate samengevoegd naar `AgentPromptTemplates` class.
+  - `agent-types.ts`: `intersectPermission` / `intersectToolNames` / `applyParentRestrictions` samengevoegd naar `PermissionUtils` class.
+
+### 🛡 Repo hygiene
+- `.pi/agents/` expliciet toegevoegd aan `.gitignore` (dev-only agents nooit meer per ongeluk tracken).
+- `cinematic-renderer/cinematic-renderer.exe` toegevoegd aan `.gitignore`.
+- `auditor.md` verwijderd uit git tracking (was dev-only agent).
+
+### 📊 Metrics
+- 602 tests, 33 test files
+- Typecheck: groen
+
 ## v0.8.0 (2026-05-23)
 
 ### 🚀 New Features

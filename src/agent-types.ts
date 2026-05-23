@@ -181,34 +181,50 @@ export function getToolNamesForType(type: string): string[] {
 }
 
 /**
- * Intersect two permission values using directional inheritance.
- * Parent overrides child: if parent has a restriction, the child cannot exceed it.
- *
- * - parent false → child gets false (parent denies all)
- * - parent true  → child keeps own value (parent allows all)
- * - parent string[] + child true  → restricted to parent's allowlist
- * - parent string[] + child string[] → intersection of both
- * - parent string[] + child false → child stays false
+ * Permission inheritance utilities - simplified and optimized.
  */
-function intersectPermission(
-  child: true | string[] | false,
-  parent: true | string[] | false,
-): true | string[] | false {
-  if (parent === false) return false;
-  if (parent === true) return child;
-  if (child === false) return false;
-  if (child === true) return parent;
-  const parentSet = new Set(parent);
-  return child.filter((item) => parentSet.has(item));
-}
+class PermissionUtils {
+  /**
+   * Intersect two permission values using directional inheritance.
+   * Parent overrides child: if parent has a restriction, the child cannot exceed it.
+   */
+  static intersectPermission(
+    child: true | string[] | false,
+    parent: true | string[] | false,
+  ): true | string[] | false {
+    // Early returns for common cases
+    if (parent === false) return false;
+    if (parent === true) return child;
+    if (child === false) return false;
+    if (child === true) return parent;
+    
+    // Both are arrays - return intersection
+    const parentSet = new Set(parent);
+    return child.filter((item) => parentSet.has(item));
+  }
 
-/**
- * Intersect tool names: child can only use tools the parent also has access to.
- * Pure function — no side effects.
- */
-function intersectToolNames(childNames: string[], parentNames: string[]): string[] {
-  const parentSet = new Set(parentNames);
-  return childNames.filter((t) => parentSet.has(t));
+  /**
+   * Intersect tool names: child can only use tools the parent also has access to.
+   */
+  static intersectToolNames(childNames: string[], parentNames: string[]): string[] {
+    const parentSet = new Set(parentNames);
+    return childNames.filter((t) => parentSet.has(t));
+  }
+
+  /**
+   * Apply parent restrictions to a raw effective config.
+   */
+  static applyParentRestrictions(
+    raw: { builtinToolNames: string[]; extensions: true | string[] | false; skills: true | string[] | false },
+    parentConfig?: EffectiveConfig
+  ) {
+    if (!parentConfig) return raw;
+    return {
+      builtinToolNames: this.intersectToolNames(raw.builtinToolNames, parentConfig.builtinToolNames),
+      extensions: this.intersectPermission(raw.extensions, parentConfig.extensions),
+      skills: this.intersectPermission(raw.skills, parentConfig.skills),
+    };
+  }
 }
 
 /** Effective config shape used for permission inheritance. Distinct from the full return type. */
@@ -235,7 +251,7 @@ function applyPartitionFilter(
   // If partition membership is not configured (allowed is empty), feature is
   // disabled → intersection returns everything (no restriction)
   if (allowed.length === 0 && !membership) return toolNames;
-  return intersectToolNames(toolNames, allowed);
+  return PermissionUtils.intersectToolNames(toolNames, allowed);
 }
 
 /** Get config for a type (case-insensitive, returns a SubagentTypeConfig-compatible object). Falls back to general-purpose. */
@@ -254,30 +270,13 @@ export function getConfig(
   const key = resolveKey(type);
   const config = key ? agents.get(key) : undefined;
 
-  /**
-   * Apply parent permission inheritance to a raw effective config.
-   * Runs after the child's own config is resolved, before returning.
-   * This is the boundary where illegal states are made unrepresentable.
-   */
-  function applyParentRestrictions(raw: {
-    builtinToolNames: string[];
-    extensions: true | string[] | false;
-    skills: true | string[] | false;
-  }) {
-    if (!parentConfig) return raw;
-    return {
-      builtinToolNames: intersectToolNames(raw.builtinToolNames, parentConfig.builtinToolNames),
-      extensions: intersectPermission(raw.extensions, parentConfig.extensions),
-      skills: intersectPermission(raw.skills, parentConfig.skills),
-    };
-  }
 
   if (config && config.enabled !== false) {
-    const restricted = applyParentRestrictions({
+    const restricted = PermissionUtils.applyParentRestrictions({
       builtinToolNames: config.builtinToolNames ?? BUILTIN_TOOL_NAMES,
       extensions: config.extensions,
       skills: config.skills,
-    });
+    }, parentConfig);
 
     // Inject ctx_* tools when context-mode is installed and agent opts in
     const builtinToolNames = config.useContextMode && isContextModeAvailable()
@@ -297,11 +296,11 @@ export function getConfig(
   // Fallback for unknown/disabled types — general-purpose config
   const gp = agents.get("general-purpose");
   if (gp && gp.enabled !== false) {
-    const restricted = applyParentRestrictions({
+    const restricted = PermissionUtils.applyParentRestrictions({
       builtinToolNames: gp.builtinToolNames ?? BUILTIN_TOOL_NAMES,
       extensions: gp.extensions,
       skills: gp.skills,
-    });
+    }, parentConfig);
     return {
       displayName: gp.displayName ?? gp.name,
       description: gp.description,
@@ -313,11 +312,11 @@ export function getConfig(
   }
 
   // Absolute fallback (should never happen)
-  const restricted = applyParentRestrictions({
+  const restricted = PermissionUtils.applyParentRestrictions({
     builtinToolNames: BUILTIN_TOOL_NAMES,
     extensions: true,
     skills: true,
-  });
+  }, parentConfig);
   return {
     displayName: "Agent",
     description: "General-purpose agent for complex, multi-step tasks",
