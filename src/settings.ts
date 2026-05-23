@@ -27,7 +27,32 @@ export interface SubagentsSettings {
    */
   schedulingEnabled?: boolean;
   animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";
+  /**
+   * UI rendering style. "cinematic" enables the Go TUI sidecar with plasma background.
+   * Defaults to "premium" (TypeScript-only with tree view).
+   */
   uiStyle?: "premium" | "retro" | "plain" | "cinematic";
+  /**
+   * Enable the cinematic Go TUI sidecar (plasma background + advanced animations).
+   * Requires `uiStyle: "cinematic"` to take effect.
+   * Defaults to `true` when uiStyle is "cinematic", `false` otherwise.
+   */
+  cinematicEnabled?: boolean;
+  /**
+   * Show real-time activity stream (tool calls, responses) in the widget.
+   * Defaults to `true`.
+   */
+  showActivityStream?: boolean;
+  /**
+   * Show token usage and context fill percentage.
+   * Defaults to `true`.
+   */
+  showTokenUsage?: boolean;
+  /**
+   * Show turn progress (current/max turns) for running agents.
+   * Defaults to `true`.
+   */
+  showTurnProgress?: boolean;
 }
 
 /** Setter hooks used by applySettings to wire persisted values into in-memory state. */
@@ -39,6 +64,10 @@ export interface SettingsAppliers {
   setSchedulingEnabled: (b: boolean) => void;
   setAnimationStyle: (style: "braille" | "dots" | "lines" | "classic" | "none") => void;
   setUiStyle: (style: "premium" | "retro" | "plain" | "cinematic") => void;
+  setCinematicEnabled: (b: boolean) => void;
+  setShowActivityStream: (b: boolean) => void;
+  setShowTokenUsage: (b: boolean) => void;
+  setShowTurnProgress: (b: boolean) => void;
 }
 
 /** Emit callback — a subset of `pi.events.emit` to keep helpers testable. */
@@ -46,7 +75,7 @@ export type SettingsEmit = (event: string, payload: unknown) => void;
 
 const VALID_JOIN_MODES: ReadonlySet<string> = new Set<JoinMode>(["async", "group", "smart"]);
 const VALID_ANIMATION_STYLES: ReadonlySet<string> = new Set(["braille", "dots", "lines", "classic", "none"]);
-const VALID_UI_STYLES: ReadonlySet<string> = new Set(["premium", "retro", "plain"]);
+const VALID_UI_STYLES: ReadonlySet<string> = new Set(["premium", "retro", "plain", "cinematic"]);
 
 // Sanity ceilings — prevent hand-edited configs from asking for values that
 // make no operational sense (e.g. 1e6 concurrent subagents). Permissive enough
@@ -91,7 +120,19 @@ function sanitize(raw: unknown): SubagentsSettings {
     out.animationStyle = r.animationStyle as "braille" | "dots" | "lines" | "classic" | "none";
   }
   if (typeof r.uiStyle === "string" && VALID_UI_STYLES.has(r.uiStyle)) {
-    out.uiStyle = r.uiStyle as "premium" | "retro" | "plain";
+    out.uiStyle = r.uiStyle as "premium" | "retro" | "plain" | "cinematic";
+  }
+  if (typeof r.cinematicEnabled === "boolean") {
+    out.cinematicEnabled = r.cinematicEnabled;
+  }
+  if (typeof r.showActivityStream === "boolean") {
+    out.showActivityStream = r.showActivityStream;
+  }
+  if (typeof r.showTokenUsage === "boolean") {
+    out.showTokenUsage = r.showTokenUsage;
+  }
+  if (typeof r.showTurnProgress === "boolean") {
+    out.showTurnProgress = r.showTurnProgress;
   }
   return out;
 }
@@ -150,6 +191,10 @@ export function applySettings(s: SubagentsSettings, appliers: SettingsAppliers):
   if (typeof s.schedulingEnabled === "boolean") appliers.setSchedulingEnabled(s.schedulingEnabled);
   if (s.animationStyle) appliers.setAnimationStyle(s.animationStyle);
   if (s.uiStyle) appliers.setUiStyle(s.uiStyle);
+  if (typeof s.cinematicEnabled === "boolean") appliers.setCinematicEnabled(s.cinematicEnabled);
+  if (typeof s.showActivityStream === "boolean") appliers.setShowActivityStream(s.showActivityStream);
+  if (typeof s.showTokenUsage === "boolean") appliers.setShowTokenUsage(s.showTokenUsage);
+  if (typeof s.showTurnProgress === "boolean") appliers.setShowTurnProgress(s.showTurnProgress);
 }
 
 /**

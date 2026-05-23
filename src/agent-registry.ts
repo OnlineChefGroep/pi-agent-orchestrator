@@ -55,6 +55,13 @@ let activeUiStyle: "premium" | "retro" | "plain" | "cinematic" = "premium";
 
 let animationStyle: AnimationStyle = "braille";
 
+// ---- Cinematic and display settings ----
+
+let cinematicEnabled = true;  // Default enabled when uiStyle is cinematic
+let showActivityStream = true;
+let showTokenUsage = true;
+let showTurnProgress = true;
+
 export function getAnimationStyle(): AnimationStyle {
   return animationStyle;
 }
@@ -68,6 +75,34 @@ export function getUiStyle(): "premium" | "retro" | "plain" | "cinematic" {
 }
 export function setUiStyle(style: "premium" | "retro" | "plain" | "cinematic") {
   activeUiStyle = style;
+}
+
+export function isCinematicEnabled(): boolean {
+  return cinematicEnabled && activeUiStyle === "cinematic";
+}
+export function setCinematicEnabled(b: boolean): void {
+  cinematicEnabled = b;
+}
+
+export function isShowActivityStream(): boolean {
+  return showActivityStream;
+}
+export function setShowActivityStream(b: boolean): void {
+  showActivityStream = b;
+}
+
+export function isShowTokenUsage(): boolean {
+  return showTokenUsage;
+}
+export function setShowTokenUsage(b: boolean): void {
+  showTokenUsage = b;
+}
+
+export function isShowTurnProgress(): boolean {
+  return showTurnProgress;
+}
+export function setShowTurnProgress(b: boolean): void {
+  showTurnProgress = b;
 }
 
 // ---- Custom agent reloading ----

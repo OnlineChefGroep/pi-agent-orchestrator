@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { spawn, type ChildProcess } from "child_process";
 import type { AgentManager } from "../agent-manager.js";
-import { getAnimationStyle, getUiStyle } from "../agent-registry.js";
+import { getAnimationStyle, getUiStyle, isCinematicEnabled, isShowActivityStream, isShowTokenUsage, isShowTurnProgress } from "../agent-registry.js";
 import { getConfig } from "../agent-types.js";
 import type { AgentInvocation, SubagentType } from "../types.js";
 import { getLifetimeTotal, getSessionContextPercent, type LifetimeUsage, type SessionLike } from "../usage.js";
@@ -365,27 +365,49 @@ export class AgentWidget {
 
     const activeUiStyle = getUiStyle();
     
-    // Cinematic Sidecar Logic
-    if (activeUiStyle === "cinematic") {
+    // Cinematic Sidecar Logic - only spawn if enabled AND uiStyle is cinematic
+    if (activeUiStyle === "cinematic" && isCinematicEnabled()) {
       if (!this.sidecar) {
-        const extDir = dirname(dirname(fileURLToPath(import.meta.url)));
-        const binPath = join(extDir, "cinematic-renderer", "cinematic-tui");
-        this.sidecar = spawn(binPath, [], { stdio: ["pipe", "inherit", "inherit"] });
-        this.sidecar.on("exit", () => { this.sidecar = undefined; });
+        try {
+          const extDir = dirname(dirname(fileURLToPath(import.meta.url)));
+          const binPath = join(extDir, "cinematic-renderer", "cinematic-tui");
+          this.sidecar = spawn(binPath, [], { stdio: ["pipe", "inherit", "inherit"] });
+          this.sidecar.on("exit", () => { this.sidecar = undefined; });
+          this.sidecar.on("error", (err) => {
+            console.warn(`[pi-subagents] Failed to start cinematic sidecar: ${err.message}`);
+            this.sidecar = undefined;
+          });
+        } catch (err) {
+          console.warn(`[pi-subagents] Failed to spawn cinematic sidecar: ${err}`);
+        }
       }
       
-      if (this.sidecar.stdin) {
+      if (this.sidecar?.stdin) {
         const payload = {
-          agents: allAgents.map(a => ({
-            id: a.id,
-            type: a.type,
-            role: getDisplayName(a.type),
-            status: a.status,
-            tokens: this.agentActivity.get(a.id)?.toolUses || 0,
-            progress: 50 // Mock progress for now
-          }))
+          agents: allAgents.map(a => {
+            const activity = this.agentActivity.get(a.id);
+            const maxTurns = activity?.maxTurns;
+            const turnCount = activity?.turnCount || 0;
+            return {
+              id: a.id,
+              type: a.type,
+              role: getDisplayName(a.type),
+              status: a.status,
+              tokens: activity?.toolUses || 0,
+              progress: maxTurns ? Math.round(turnCount / maxTurns * 100) : 50,
+              activity: activity?.responseText?.slice(0, 100),
+              showActivityStream: isShowActivityStream(),
+              showTokenUsage: isShowTokenUsage(),
+              showTurnProgress: isShowTurnProgress(),
+            };
+          })
         };
-        this.sidecar.stdin.write(JSON.stringify(payload) + "\n");
+        
+        try {
+          this.sidecar.stdin.write(JSON.stringify(payload) + "\n");
+        } catch (err) {
+          // Silently ignore write errors - sidecar may have exited
+        }
       }
       
       // Return empty so Pi's default widget doesn't render over it
@@ -609,6 +631,9 @@ export class AgentWidget {
   }
 
   dispose() {
+    // CRITICAL FIX: Stop Go sidecar to prevent orphan processes
+    this.stopSidecar();
+    
     if (this.widgetInterval) {
       clearInterval(this.widgetInterval);
       this.widgetInterval = undefined;

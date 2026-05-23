@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/OnlineChef/bubbletea-cinematic/widget"
@@ -12,16 +13,20 @@ import (
 
 // AgentState represents the JSON structure we expect from the Node.js extension.
 type AgentState struct {
-	Agents []AgentInfo `json:"agents"`
+	Agents            []AgentInfo `json:"agents"`
+	ShowActivityStream bool        `json:"showActivityStream"`
+	ShowTokenUsage     bool        `json:"showTokenUsage"`
+	ShowTurnProgress   bool        `json:"showTurnProgress"`
 }
 
 type AgentInfo struct {
-	ID        string `json:"id"`
-	Type      string `json:"type"`
-	Role      string `json:"role"`
-	Status    string `json:"status"`
-	Tokens    int    `json:"tokens"`
-	Progress  int    `json:"progress"`
+	ID                 string `json:"id"`
+	Type               string `json:"type"`
+	Role               string `json:"role"`
+	Status             string `json:"status"`
+	Tokens             int    `json:"tokens"`
+	Progress           int    `json:"progress"`
+	Activity           string `json:"activity,omitempty"`
 }
 
 // CinematicDashboard integrates the plasma background and overlays agent info.
@@ -71,12 +76,30 @@ func (m CinematicDashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m CinematicDashboard) View() string {
 	bgView := m.bg.View()
-	// Overlay text simply for now
-	statusLine := fmt.Sprintf("\n\n  Pi Cinematic TUI Dashboard - %d Active Agents", len(m.state.Agents))
+	
+	// Build status lines based on display settings
+	var lines []string
+	lines = append(lines, fmt.Sprintf("\n\n  Pi Cinematic TUI Dashboard - %d Active Agents", len(m.state.Agents)))
+	
 	for _, a := range m.state.Agents {
-		statusLine += fmt.Sprintf("\n  [ %s ] %s - %s (%d tokens)", a.ID, a.Role, a.Status, a.Tokens)
+		line := fmt.Sprintf("\n  [ %s ] %s - %s", a.ID, a.Role, a.Status)
+		
+		if m.state.ShowTokenUsage && a.Tokens > 0 {
+			line += fmt.Sprintf(" (%d tokens)", a.Tokens)
+		}
+		
+		if m.state.ShowTurnProgress && a.Progress > 0 {
+			line += fmt.Sprintf(" [%d%%]", a.Progress)
+		}
+		
+		if m.state.ShowActivityStream && a.Activity != "" {
+			line += fmt.Sprintf("\n    ↳ %s", a.Activity)
+		}
+		
+		lines = append(lines, line)
 	}
-	return bgView + statusLine
+	
+	return bgView + strings.Join(lines, "")
 }
 
 func listenForStateUpdates() tea.Cmd {

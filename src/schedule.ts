@@ -25,7 +25,7 @@ import type { IsolationMode, ScheduledSubagent, SubagentType, ThinkingLevel } fr
 
 // CVE-005 FIX: Schedule input bounds
 const MAX_INTERVAL = 2147483647;   // ~24.8 days (setTimeout limit)
-const MIN_INTERVAL = (process.env.NODE_ENV === "test" || process.env.VITEST === "true") ? 1000 : 60000;        // 1 minute minimum
+const MIN_INTERVAL = (process.env.NODE_ENV === "test" || process.env.VITEST === "true") ? 100 : 60000;        // 100ms in test mode, 1 minute in production
 const MAX_SCHEDULES = 100;         // Per session limit
 const MAX_PROMPT_SIZE = 50000;     // 50KB max prompt
 const MAX_NAME_LENGTH = 100;
