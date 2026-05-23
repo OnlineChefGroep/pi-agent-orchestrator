@@ -102,11 +102,14 @@ func (m CinematicDashboard) View() string {
 	return bgView + strings.Join(lines, "")
 }
 
+// Package-level scanner — must be created once to avoid multiple scanners
+// racing on os.Stdin and dropping/corrupting lines.
+var stdinScanner = bufio.NewScanner(os.Stdin)
+
 func listenForStateUpdates() tea.Cmd {
 	return func() tea.Msg {
-		scanner := bufio.NewScanner(os.Stdin)
-		if scanner.Scan() {
-			line := scanner.Text()
+		if stdinScanner.Scan() {
+			line := stdinScanner.Text()
 			var state AgentState
 			if err := json.Unmarshal([]byte(line), &state); err == nil {
 				return stateUpdateMsg(state)

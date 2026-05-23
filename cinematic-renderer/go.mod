@@ -2,7 +2,9 @@ module github.com/OnlineChef/pi-subagents-fork/cinematic-renderer
 
 go 1.26.2
 
-replace github.com/OnlineChef/bubbletea-cinematic => ../../bubbletea-cinematic
+// TODO: Publish bubbletea-cinematic as a proper Go module or vendor it.
+// The relative replace directive below only works on the original author's machine.
+// replace github.com/OnlineChef/bubbletea-cinematic => ../../bubbletea-cinematic
 
 require (
 	github.com/OnlineChef/bubbletea-cinematic v0.0.0-00010101000000-000000000000

@@ -30,3 +30,7 @@ Thumbs.db
 .pi/readcache
 .claude
 .vscode
+
+# Go compiled binaries
+cinematic-renderer/cinematic-tui
+cinematic-renderer/cinematic-tui.exe

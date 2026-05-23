@@ -252,7 +252,6 @@ export class AgentWidget {
       // UICtx changed — the widget registered on the old context is gone.
       // Force re-registration on next update().
       this.uiCtx = ctx;
-      this.uiCtx = ctx;
       this.widgetRegistered = false;
       this.tui = undefined;
       this.lastStatusText = undefined;
@@ -370,10 +369,11 @@ export class AgentWidget {
       if (!this.sidecar) {
         try {
           const extDir = dirname(dirname(fileURLToPath(import.meta.url)));
-          const binPath = join(extDir, "cinematic-renderer", "cinematic-tui");
-          this.sidecar = spawn(binPath, [], { stdio: ["pipe", "inherit", "inherit"] });
+          const binName = process.platform === "win32" ? "cinematic-tui.exe" : "cinematic-tui";
+          const binPath = join(extDir, "cinematic-renderer", binName);
+          this.sidecar = spawn(binPath, [], { stdio: ["pipe", "pipe", "pipe"] });
           this.sidecar.on("exit", () => { this.sidecar = undefined; });
-          this.sidecar.on("error", (err) => {
+          this.sidecar.on("error", (err: Error) => {
             console.warn(`[pi-subagents] Failed to start cinematic sidecar: ${err.message}`);
             this.sidecar = undefined;
           });
@@ -396,11 +396,11 @@ export class AgentWidget {
               tokens: activity?.toolUses || 0,
               progress: maxTurns ? Math.round(turnCount / maxTurns * 100) : 50,
               activity: activity?.responseText?.slice(0, 100),
-              showActivityStream: isShowActivityStream(),
-              showTokenUsage: isShowTokenUsage(),
-              showTurnProgress: isShowTurnProgress(),
             };
-          })
+          }),
+          showActivityStream: isShowActivityStream(),
+          showTokenUsage: isShowTokenUsage(),
+          showTurnProgress: isShowTurnProgress(),
         };
         
         try {

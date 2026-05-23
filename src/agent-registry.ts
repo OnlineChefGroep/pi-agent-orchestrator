@@ -51,7 +51,9 @@ export function setSchedulingEnabled(b: boolean): void {
 // ---- Animation & UI/UX Style configuration ----
 
 export type AnimationStyle = "braille" | "dots" | "lines" | "classic" | "none";
-let activeUiStyle: "premium" | "retro" | "plain" | "cinematic" = "premium";
+export type UiStyle = "premium" | "retro" | "plain" | "cinematic";
+
+let activeUiStyle: UiStyle = "premium";
 
 let animationStyle: AnimationStyle = "braille";
 
@@ -70,10 +72,10 @@ export function setAnimationStyle(style: AnimationStyle): void {
   animationStyle = style;
 }
 
-export function getUiStyle(): "premium" | "retro" | "plain" | "cinematic" {
+export function getUiStyle(): UiStyle {
   return activeUiStyle;
 }
-export function setUiStyle(style: "premium" | "retro" | "plain" | "cinematic") {
+export function setUiStyle(style: UiStyle): void {
   activeUiStyle = style;
 }
 
