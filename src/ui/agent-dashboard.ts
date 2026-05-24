@@ -271,6 +271,7 @@ export class AgentDashboard implements Component {
         "Space          Toggle multi-select",
         "k / K          Kill selected (or current)",
         "s / S          Steer selected agent",
+        "p / P          Show permissions & scope for selected agent",
         "r / R          Force refresh",
         "?              Toggle this help",
         "q / Esc        Close dashboard",
