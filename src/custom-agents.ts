@@ -75,12 +75,18 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
 
 /**
  * Scan for custom agent .md files from multiple locations.
+ *
  * Discovery hierarchy (higher priority wins):
- *   1. Project: <cwd>/.pi/agents/*.md
- *   2. Global:  $PI_CODING_AGENT_DIR/agents/*.md (default: ~/.pi/agent/agents/*.md)
+ *   1. Project: `<cwd>/.pi/agents/*.md`
+ *   2. Global:  `$PI_CODING_AGENT_DIR/agents/*.md` (default: `~/.pi/agent/agents/*.md`)
  *
  * Project-level agents override global ones with the same name.
  * Any name is allowed — names matching defaults (e.g. "Explore") override them.
+ *
+ * Security: symlinks are skipped to prevent directory traversal.
+ *
+ * @param cwd - Current working directory (project root) for agent discovery
+ * @returns Map of agent name → parsed {@link AgentConfig}
  */
 export function loadCustomAgents(cwd: string): Map<string, AgentConfig> {
   const globalDir = join(getAgentDir(), "agents");

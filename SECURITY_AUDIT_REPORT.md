@@ -1,3 +1,6 @@
+> ⚠️ **DEPRECATED / LEGACY DOCUMENT**
+> This report was generated without direct codebase inspection and contains fabricated CVE references (CVE-001 through CVE-012) that do not correspond to actual vulnerabilities in this project. It should be disregarded for security planning. See the P3 items in `VERVOLG_PLAN.md` for current security priorities.
+
 # Security Audit Report: pi-subagents
 
 **Date:** 2025-05-23

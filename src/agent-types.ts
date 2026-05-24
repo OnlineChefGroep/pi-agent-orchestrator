@@ -79,9 +79,13 @@ export const CTX_TOOL_NAMES: string[] = [
 const agents = new Map<string, AgentConfig>();
 
 /**
- * Register agents into the unified registry.
- * Starts with DEFAULT_AGENTS, then overlays user agents (overrides defaults with same name).
- * Disabled agents (enabled === false) are kept in the registry but excluded from spawning.
+ * Register default + user agents in the unified registry.
+ *
+ * Starts with {@link DEFAULT_AGENTS}, then overlays user agents. User agents with
+ * the same name as a default override the default. Disabled agents (`enabled === false`)
+ * are kept in the registry for UI listing but excluded from spawning.
+ *
+ * @param userAgents - Map of user-defined agent configs from {@link loadCustomAgents}
  */
 export function registerAgents(userAgents: Map<string, AgentConfig>): void {
   agents.clear();
@@ -254,7 +258,22 @@ function applyPartitionFilter(
   return PermissionUtils.intersectToolNames(toolNames, allowed);
 }
 
-/** Get config for a type (case-insensitive, returns a SubagentTypeConfig-compatible object). Falls back to general-purpose. */
+/**
+ * Resolve the effective configuration for an agent type.
+ *
+ * This is the main entry point for agent config resolution. It performs:
+ * 1. Lookup of the agent config (custom agents override defaults)
+ * 2. Parent permission inheritance via {@link PermissionUtils.applyParentRestrictions}
+ * 3. Context-mode tool injection (if `useContextMode` is true and ctx module available)
+ * 4. Partition-based tool filtering via {@link applyPartitionFilter}
+ *
+ * Falls back to "general-purpose" config if the type is unknown or disabled.
+ *
+ * @param type - Agent type name (case-insensitive)
+ * @param parentConfig - Optional parent agent config for permission inheritance
+ * @param partitions - Optional partition names for tool filtering
+ * @returns Effective config with resolved tools, extensions, skills, and prompt mode
+ */
 export function getConfig(
   type: string,
   parentConfig?: EffectiveConfig,

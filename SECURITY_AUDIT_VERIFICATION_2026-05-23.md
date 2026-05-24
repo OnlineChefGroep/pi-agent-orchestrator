@@ -1,3 +1,6 @@
+> ⚠️ **DEPRECATED / LEGACY DOCUMENT**
+> This verification references fabricated CVE numbers (CVE-001 through CVE-012) from an earlier AI-generated report that were never actual vulnerabilities in this codebase. The "not fixed" claims are therefore invalid. See `VERVOLG_PLAN.md` P3 for real security work.
+
 # Security Audit Verification Report
 
 **Date:** 2026-05-23  

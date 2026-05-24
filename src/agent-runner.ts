@@ -233,6 +233,27 @@ function buildEffectivePrompt(
   return parentContext + prompt;
 }
 
+/**
+ * Execute a subagent with the given type and prompt.
+ *
+ * This is the core agent execution function. It handles:
+ * - Model resolution (explicit > config > parent fallback)
+ * - Tool permission inheritance from parent agents
+ * - Context building (parent context, memory, skills)
+ * - Partition-based tool filtering
+ * - Depth limiting (prevents runaway agent trees)
+ * - Worktree isolation (optional git worktree per agent)
+ * - Session creation via ExtensionAPI
+ * - Tool call loop with compaction and hooks
+ * - Result formatting and notification
+ *
+ * @param ctx - Extension context (provides API access, session manager, cwd)
+ * @param type - Agent type name (e.g. "Explore", "general-purpose", custom name)
+ * @param prompt - The user task/prompt for this agent
+ * @param options - Execution options (model override, max turns, parent config, etc.)
+ * @returns RunResult with conversation, usage stats, and formatted output
+ * @throws When depth limit is exceeded or model resolution fails
+ */
 export async function runAgent(
   ctx: ExtensionContext,
   type: SubagentType,

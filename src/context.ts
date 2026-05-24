@@ -4,7 +4,15 @@
 
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 
-/** Extract text from a message content block array. */
+/**
+ * Extract plain text from a message content block array.
+ *
+ * Filters for objects with `type: "text"` and joins their `text` fields.
+ * Non-text blocks (images, tool calls, etc.) are silently skipped.
+ *
+ * @param content - Array of message content blocks (typically from assistant messages)
+ * @returns Concatenated text of all text blocks, joined by newlines
+ */
 export function extractText(content: unknown[]): string {
   return content
     .filter((c: any) => c.type === "text")
