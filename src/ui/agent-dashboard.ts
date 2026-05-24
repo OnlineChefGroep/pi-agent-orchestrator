@@ -73,6 +73,7 @@ export interface AgentDashboardOptions {
   onViewConversation?: (record: AgentRecord) => Promise<void>;
   onAbort?: (id: string) => boolean;           // returns true if aborted
   onSteer?: (id: string) => Promise<void>;     // menu layer handles prompting + actual steer
+  onShowPermissions?: (record: AgentRecord) => Promise<void>;
 }
 
 export class AgentDashboard implements Component {
@@ -85,6 +86,7 @@ export class AgentDashboard implements Component {
   /** Multi-select support (Space to toggle) — very powerful for bulk operations */
   private selectedIds = new Set<string>();
   private showHelp = false; // toggled by ?
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly tui: TUI,
@@ -92,6 +94,15 @@ export class AgentDashboard implements Component {
     private readonly done: () => void,
   ) {
     this.refreshAgents();
+
+    // Live reactivity: auto-refresh the view every 750ms while open
+    // (makes spinners and activity feel much more alive)
+    this.refreshTimer = setInterval(() => {
+      if (!this.closed) {
+        this.refreshAgents();
+        this.tui.requestRender?.();
+      }
+    }, 750);
   }
 
   private refreshAgents(): void {
@@ -114,6 +125,10 @@ export class AgentDashboard implements Component {
 
     if (matchesKey(data, "escape") || matchesKey(data, "q")) {
       this.closed = true;
+      if (this.refreshTimer) {
+        clearInterval(this.refreshTimer);
+        this.refreshTimer = null;
+      }
       this.done();
       return;
     }
@@ -185,6 +200,14 @@ export class AgentDashboard implements Component {
         this.closed = true;
         this.done();
         void this.options.onSteer(rec.id);
+        return;
+      }
+    } else if (matchesKey(data, "p") || matchesKey(data, "P")) {
+      // Permissions / tool scope view (very valuable for understanding what the agent can actually do)
+      if (rec && this.options.onShowPermissions) {
+        this.closed = true;
+        this.done();
+        void this.options.onShowPermissions(rec);
         return;
       }
     } else if (matchesKey(data, "r") || matchesKey(data, "R")) {
@@ -341,12 +364,13 @@ export async function showAgentDashboard(
   onViewConversation?: (record: AgentRecord) => Promise<void>,
   onAbort?: (id: string) => boolean,
   onSteer?: (id: string) => Promise<void>,
+  onShowPermissions?: (record: AgentRecord) => Promise<void>,
 ): Promise<void> {
   const { AgentDashboard, DASHBOARD_HEIGHT_PCT } = await import("./agent-dashboard.js");
 
   await ctx.ui.custom<undefined>(
     (tui, _theme, _keybindings, done) => {
-      return new AgentDashboard(tui, { manager, agentActivity, onViewConversation, onAbort, onSteer }, done);
+      return new AgentDashboard(tui, { manager, agentActivity, onViewConversation, onAbort, onSteer, onShowPermissions }, done);
     },
     {
       overlay: true,

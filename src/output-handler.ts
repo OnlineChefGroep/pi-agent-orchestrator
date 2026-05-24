@@ -199,20 +199,27 @@ export async function showAgentsMenu(
         if (!record.pendingSteers) record.pendingSteers = [];
         record.pendingSteers.push(message.trim());
         ctx.ui.notify(`Steering message queued for ${id}. Will be delivered when session is ready.`, "info");
-        return;
+      } else {
+        try {
+          const { steerAgent } = await import("./agent-runner.js");
+          await steerAgent(record.session, message.trim());
+          ctx.ui.notify(`Steering message sent to ${id}.`, "info");
+        } catch (e: any) {
+          ctx.ui.notify(`Steer failed: ${e?.message ?? e}`, "error");
+        }
       }
 
-      try {
-        // Reuse the runner helper (same as the tool)
-        const { steerAgent } = await import("./agent-runner.js");
-        await steerAgent(record.session, message.trim());
-        ctx.ui.notify(`Steering message sent to ${id}. Agent will process after current tool.`, "info");
-      } catch (e: any) {
-        ctx.ui.notify(`Steer failed: ${e?.message ?? e}`, "error");
-      }
+      // Fluid UX: immediately re-open the dashboard instead of dropping back to main menu
+      const viewConv = (rec: import("./types.js").AgentRecord) =>
+        viewAgentConversation(ctx, rec, agentActivity);
+      const reOpenOnAbort = (aid: string) => manager.abort(aid);
+      const reOpenOnSteer = async (aid: string) => { /* no-op, already handled */ };
+      const reOpenOnPerms = (r: import("./types.js").AgentRecord) => showAgentPermissions(ctx, r);
+      await showAgentDashboard(ctx, manager, agentActivity, viewConv, reOpenOnAbort, reOpenOnSteer, reOpenOnPerms);
     };
 
-    await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer);
+    const onPerms = (r: import("./types.js").AgentRecord) => showAgentPermissions(ctx, r);
+    await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer, onPerms);
     await showAgentsMenu(ctx, pi, manager, scheduler, agentActivity, isSchedulingEnabled, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, setDefaultMaxTurns, setGraceTurns, setDefaultJoinMode, setSchedulingEnabled);
   } else if (choice.startsWith("Agent types (")) {
     await showAllAgentsList(ctx, ctx.modelRegistry);
@@ -306,6 +313,35 @@ export async function showRunningAgents(
   await viewAgentConversation(ctx, record, agentActivity);
   // Back-navigation: re-show the list
   await showRunningAgents(ctx, manager, agentActivity);
+}
+
+export async function showAgentPermissions(ctx: ExtensionCommandContext, record: import("./types.js").AgentRecord): Promise<void> {
+  const { getAgentConfig } = await import("./agent-types.js");
+
+  const cfg = getAgentConfig(record.type);
+  const tools = cfg?.builtinToolNames?.join(", ") || "(default)";
+
+  const isolation = record.worktree ? `worktree (${record.worktree.branch})` : "shared";
+  const validation = record.validated === false ? "FAILED" : record.validated === true ? "passed" : "n/a";
+
+  const content = [
+    `Agent: ${record.description || record.type} (${record.id})`,
+    `Status: ${record.status}`,
+    `Isolation: ${isolation}`,
+    `Tools: ${tools}`,
+    `Validation: ${validation}`,
+    record.outputFile ? `Output file: ${record.outputFile}` : "",
+    "",
+    "Press any key to close.",
+  ].filter(Boolean).join("\n");
+
+  await ctx.ui.custom(async (_tui, _theme, _kb, done) => {
+    // Simple text renderer
+    return {
+      render() { return content.split("\n"); },
+      handleInput() { done(); }
+    };
+  }, { overlay: true, overlayOptions: { width: "70%" } });
 }
 
 export async function showAgentDetail(ctx: ExtensionCommandContext, name: string): Promise<void> {
