@@ -32,6 +32,7 @@ Thumbs.db
 .pi/readcache
 .pi/agents/
 .claude
+.autoresearch
 
 # Autoresearch generated data
 autoresearch.jsonl

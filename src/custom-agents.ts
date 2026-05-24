@@ -6,15 +6,11 @@ import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { getAgentDir, parseFrontmatter } from "@mariozechner/pi-coding-agent";
 import { BUILTIN_TOOL_NAMES, getDefaultAgentNames } from "./agent-types.js";
+import { emitTelemetry, hashContentSync } from "./telemetry.js";
 import type { AgentConfig, MemoryScope, ThinkingLevel } from "./types.js";
 
 // CVE-002 FIX: Validation patterns for agent configs
 const UNSAFE_NAME_PATTERN = /^(\.\.|\.\.|\/|\\|[\x00-\x1F])|(\.\.|\.\.|\/|\\|[\x00-\x1F])$/;
-const INJECTION_PATTERNS = [
-  /ignore\s+(all\s+)?(previous\s+)?(instructions|criteria)/i,
-  /exfiltrate|send\s+to\s+attacker|malicious/i,
-  /<\/?(script|iframe|object|embed)/i,
-];
 const MAX_NAME_LENGTH = 100;
 const MAX_PROMPT_LENGTH = 100000;  // 100KB
 const MAX_TOOLS_COUNT = 100;
@@ -22,6 +18,10 @@ const MAX_TOOLS_COUNT = 100;
 /**
  * Validate an agent config for security issues.
  * Returns array of error messages (empty if valid).
+ * 
+ * Security model: allowlist approach — only embedded defaults and .md files from
+ * .pi/agents/ are trusted sources. No regex blacklist for prompt injection
+ * (trivially bypassed with Unicode, base64, whitespace variations).
  */
 function validateAgentConfig(name: string, config: Partial<AgentConfig>): string[] {
   const errors: string[] = [];
@@ -41,19 +41,9 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
     errors.push(`Cannot override built-in agent "${name}" with wildcard (*) tools`);
   }
   
-  // Validate system prompt
-  if (config.systemPrompt) {
-    if (config.systemPrompt.length > MAX_PROMPT_LENGTH) {
-      errors.push(`System prompt exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
-    }
-    
-    // Check for injection patterns
-    for (const pattern of INJECTION_PATTERNS) {
-      if (pattern.test(config.systemPrompt)) {
-        errors.push('System prompt contains potential injection pattern');
-        break;
-      }
-    }
+  // Validate system prompt length only (no injection pattern check)
+  if (config.systemPrompt && config.systemPrompt.length > MAX_PROMPT_LENGTH) {
+    errors.push(`System prompt exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
   }
   
   // Validate tool names
@@ -62,11 +52,11 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
       errors.push(`Too many tools specified (max ${MAX_TOOLS_COUNT})`);
     }
     
-    // CVE-011 FIX: Validate tool names against known set
+    // CVE-011 FIX: Emit telemetry for unknown tool names (don't block, just log)
     const knownTools = new Set([...BUILTIN_TOOL_NAMES, '*']);
     const unknownTools = config.builtinToolNames.filter(t => !knownTools.has(t));
     if (unknownTools.length > 0) {
-      console.warn(`[pi-subagents] Unknown tool names in agent "${name}": ${unknownTools.join(', ')}`);
+      emitTelemetry("agent:unknown-tools", { name, tools: unknownTools });
     }
   }
   
@@ -153,10 +143,19 @@ function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source: "pro
     // CVE-002 FIX: Validate agent config before adding
     const validationErrors = validateAgentConfig(name, config);
     if (validationErrors.length > 0) {
-      console.warn(`[pi-subagents] Invalid agent config "${name}": ${validationErrors.join(', ')}`);
+      emitTelemetry("agent:validation-failed", { name, errors: validationErrors });
       // Disable agent with validation errors (don't skip entirely - let user see it)
       config.enabled = false;
     }
+
+    // Emit telemetry for every loaded agent with content hash
+    const contentHash = hashContentSync(content);
+    emitTelemetry("agent:loaded", { 
+      name, 
+      source, 
+      hash: contentHash, 
+      enabled: config.enabled ?? true 
+    });
 
     agents.set(name, config);
   }

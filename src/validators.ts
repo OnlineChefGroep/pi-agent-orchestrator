@@ -1,3 +1,4 @@
+import { emitTelemetry } from "./telemetry.js";
 import type { AgentConfig, ValidationCriterion, ValidationResult } from "./types.js";
 
 // CVE-004 FIX: Maximum sizes for validation inputs
@@ -31,6 +32,17 @@ function sanitizeValidatorInput(input: string, maxLength: number = MAX_OUTPUT_SI
 }
 
 /**
+ * Log validation criteria limit warning via telemetry.
+ */
+function logCriteriaLimit(criteriaCount: number, maxCount: number): void {
+  const message = `Too many validation criteria (${criteriaCount}), limiting to ${maxCount}`;
+  emitTelemetry("agent:validation-failed" as any, { 
+    name: "validator", 
+    errors: [message] 
+  });
+}
+
+/**
  * Build a system prompt for a validator agent.
  * The validator receives the main agent's output and must judge it against criteria.
  * CVE-004 FIX: Input sanitization to prevent validator manipulation.
@@ -42,7 +54,7 @@ export function buildValidatorPrompt(
 ): string {
   // CVE-004 FIX: Validate and sanitize inputs
   if (criteria.length > MAX_CRITERIA_COUNT) {
-    console.warn(`[pi-subagents] Too many validation criteria (${criteria.length}), limiting to ${MAX_CRITERIA_COUNT}`);
+    logCriteriaLimit(criteria.length, MAX_CRITERIA_COUNT);
     criteria = criteria.slice(0, MAX_CRITERIA_COUNT);
   }
   

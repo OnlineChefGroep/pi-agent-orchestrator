@@ -24,6 +24,7 @@ import { type HookRegistry } from "./hooks.js";
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "./memory.js";
 import { buildAgentPrompt, type PromptExtras } from "./prompts.js";
 import { preloadSkills } from "./skill-loader.js";
+import { emitTelemetry } from "./telemetry.js";
 import type { SubagentType, ThinkingLevel, ValidationResult } from "./types.js";
 import { buildValidatorPrompt, getAgentDescription, hasValidators, parseValidationResult } from "./validators.js";
 
@@ -260,6 +261,7 @@ export async function runAgent(
   prompt: string,
   options: RunOptions,
 ): Promise<RunResult> {
+  const startTime = Date.now();
   const config = getConfig(type, options.parentConfig, options.partitions);
   const agentConfig = getAgentConfig(type);
 
@@ -271,6 +273,14 @@ export async function runAgent(
       `Max agent depth reached (${currentLevel}/${depthLimit})`,
     );
   }
+
+  // Emit telemetry: agent spawned
+  emitTelemetry("agent:spawned", {
+    type,
+    parentType: options.parentConfig ? type : undefined, // If has parent config, there's a parent
+    depth: currentLevel,
+    budget: options.maxTurns,
+  });
 
   // Resolve working directory: worktree override > parent cwd
   const effectiveCwd = options.cwd ?? ctx.cwd;
@@ -555,6 +565,8 @@ export async function runAgent(
 
   let responseText = collector.getText().trim() || getLastAssistantText(session);
 
+  const duration = Date.now() - startTime;
+
   // ---- Structured handoff parsing (before validators) ----
   let handoff: AgentHandoff | undefined;
   if (agentConfig?.handoff) {
@@ -632,6 +644,13 @@ export async function runAgent(
       retries++;
     }
   }
+
+  // Emit telemetry: agent completed
+  emitTelemetry("agent:completed", {
+    type,
+    duration,
+    validatorResults: validationResults?.map(r => ({ passed: r.passed, summary: r.summary })),
+  });
 
   return { responseText, session, aborted, steered: softLimitReached, validationResults, validated, handoff };
 }
