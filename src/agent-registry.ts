@@ -26,6 +26,36 @@ export function setDefaultJoinMode(mode: JoinMode): void {
   defaultJoinMode = mode;
 }
 
+// ---- Orchestration mode configuration ----
+
+export type OrchestrationMode = 'auto' | 'single' | 'swarm' | 'crew';
+
+let defaultOrchestrationMode: OrchestrationMode = 'auto';
+
+/** Get the default orchestration mode for agent execution. */
+export function getOrchestrationMode(): OrchestrationMode {
+  return defaultOrchestrationMode;
+}
+
+/** Set the default orchestration mode for agent execution. */
+export function setOrchestrationMode(mode: OrchestrationMode): void {
+  defaultOrchestrationMode = mode;
+}
+
+// ---- Dashboard refresh interval configuration ----
+
+let dashboardRefreshInterval: number = 750; // milliseconds
+
+/** Get the dashboard refresh interval in milliseconds. */
+export function getDashboardRefreshInterval(): number {
+  return dashboardRefreshInterval;
+}
+
+/** Set the dashboard refresh interval in milliseconds. */
+export function setDashboardRefreshInterval(interval: number): void {
+  dashboardRefreshInterval = interval;
+}
+
 // ---- Scheduling switch ----
 
 /**

@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import type { JoinMode } from "./types.js";
+import type { OrchestrationMode } from "./agent-registry.js";
 
 export interface SubagentsSettings {
   maxConcurrent?: number;
@@ -53,6 +54,18 @@ export interface SubagentsSettings {
    * Defaults to `true`.
    */
   showTurnProgress?: boolean;
+  /**
+   * Orchestration mode for agent execution. Defaults to "auto".
+   * Controls how agents are coordinated: auto (smart selection), single (one at a time),
+   * swarm (dynamic collaborative groups), or crew (structured team).
+   */
+  orchestrationMode?: OrchestrationMode;
+  /**
+   * Dashboard refresh interval in milliseconds. Defaults to 750ms.
+   * Controls how often the agent dashboard refreshes its display.
+   * Minimum 100ms, maximum 60000ms (60 seconds).
+   */
+  dashboardRefreshInterval?: number;
 }
 
 /** Setter hooks used by applySettings to wire persisted values into in-memory state. */
@@ -68,12 +81,15 @@ export interface SettingsAppliers {
   setShowActivityStream: (b: boolean) => void;
   setShowTokenUsage: (b: boolean) => void;
   setShowTurnProgress: (b: boolean) => void;
+  setOrchestrationMode: (mode: OrchestrationMode) => void;
+  setDashboardRefreshInterval: (interval: number) => void;
 }
 
 /** Emit callback — a subset of `pi.events.emit` to keep helpers testable. */
 export type SettingsEmit = (event: string, payload: unknown) => void;
 
 const VALID_JOIN_MODES: ReadonlySet<string> = new Set<JoinMode>(["async", "group", "smart", "swarm"]);
+const VALID_ORCHESTRATION_MODES: ReadonlySet<string> = new Set<OrchestrationMode>(["auto", "single", "swarm", "crew"]);
 const VALID_ANIMATION_STYLES: ReadonlySet<string> = new Set(["braille", "dots", "lines", "classic", "none"]);
 const VALID_UI_STYLES: ReadonlySet<string> = new Set(["premium", "retro", "plain", "cinematic"]);
 
@@ -133,6 +149,16 @@ function sanitize(raw: unknown): SubagentsSettings {
   }
   if (typeof r.showTurnProgress === "boolean") {
     out.showTurnProgress = r.showTurnProgress;
+  }
+  if (typeof r.orchestrationMode === "string" && VALID_ORCHESTRATION_MODES.has(r.orchestrationMode)) {
+    out.orchestrationMode = r.orchestrationMode as OrchestrationMode;
+  }
+  if (
+    Number.isInteger(r.dashboardRefreshInterval) &&
+    (r.dashboardRefreshInterval as number) >= 100 &&
+    (r.dashboardRefreshInterval as number) <= 60000
+  ) {
+    out.dashboardRefreshInterval = r.dashboardRefreshInterval as number;
   }
   return out;
 }
@@ -195,6 +221,8 @@ export function applySettings(s: SubagentsSettings, appliers: SettingsAppliers):
   if (typeof s.showActivityStream === "boolean") appliers.setShowActivityStream(s.showActivityStream);
   if (typeof s.showTokenUsage === "boolean") appliers.setShowTokenUsage(s.showTokenUsage);
   if (typeof s.showTurnProgress === "boolean") appliers.setShowTurnProgress(s.showTurnProgress);
+  if (s.orchestrationMode) appliers.setOrchestrationMode(s.orchestrationMode);
+  if (typeof s.dashboardRefreshInterval === "number") appliers.setDashboardRefreshInterval(s.dashboardRefreshInterval);
 }
 
 /**

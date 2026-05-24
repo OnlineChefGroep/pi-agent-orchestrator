@@ -13,7 +13,7 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "./agent-manager.js";
-import { getAnimationStyle, getModelLabelFromConfig, getUiStyle, reloadCustomAgents, setAnimationStyle, setUiStyle } from "./agent-registry.js";
+import { getAnimationStyle, getModelLabelFromConfig, getUiStyle, reloadCustomAgents, setAnimationStyle, setUiStyle, getOrchestrationMode, setOrchestrationMode, getDashboardRefreshInterval, setDashboardRefreshInterval } from "./agent-registry.js";
 import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes } from "./agent-types.js";
 import type { ModelRegistry } from "./model-resolver.js";
 import { resolveModel } from "./model-resolver.js";
@@ -100,6 +100,8 @@ export function buildSettingsSnapshot(
     schedulingEnabled: isSchedulingEnabled(),
     animationStyle: getAnimationStyle(),
     uiStyle: getUiStyle(),
+    orchestrationMode: getOrchestrationMode(),
+    dashboardRefreshInterval: getDashboardRefreshInterval(),
   };
 }
 
@@ -769,6 +771,8 @@ export async function showSettings(
     `Scheduling (current: ${isSchedulingEnabled() ? "enabled" : "disabled"})`,
     `Animation Style (current: ${getAnimationStyle()})`,
     `UI/UX Style (current: ${getUiStyle()})`,
+    `Orchestration mode (current: ${getOrchestrationMode()})`,
+    `Dashboard refresh interval (current: ${getDashboardRefreshInterval()}ms)`,
   ]);
   if (!choice) return;
 
@@ -873,6 +877,29 @@ export async function showSettings(
       const style = val.split(" ")[0] as "premium" | "retro" | "plain" | "cinematic";
       setUiStyle(style);
       notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `UI/UX style set to ${style}`);
+    }
+  } else if (choice.startsWith("Orchestration mode")) {
+    const val = await ctx.ui.select("Orchestration mode", [
+      "auto — smart selection based on task complexity (default)",
+      "single — one agent at a time",
+      "swarm — dynamic collaborative groups",
+      "crew — structured team coordination",
+    ]);
+    if (val) {
+      const mode = val.split(" ")[0] as "auto" | "single" | "swarm" | "crew";
+      setOrchestrationMode(mode);
+      notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Orchestration mode set to ${mode}`);
+    }
+  } else if (choice.startsWith("Dashboard refresh interval")) {
+    const val = await ctx.ui.input("Dashboard refresh interval in milliseconds (100-60000)", String(getDashboardRefreshInterval()));
+    if (val) {
+      const n = parseInt(val, 10);
+      if (n >= 100 && n <= 60000) {
+        setDashboardRefreshInterval(n);
+        notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Dashboard refresh interval set to ${n}ms`);
+      } else {
+        ctx.ui.notify("Must be between 100 and 60000 milliseconds.", "warning");
+      }
     }
   }
 }

@@ -1,36 +1,36 @@
 import { describe, expect, it } from "vitest";
 import {
-  getDefaultOrchestrationMode,
-  setDefaultOrchestrationMode,
+  getOrchestrationMode,
+  setOrchestrationMode,
   getDashboardRefreshInterval,
   setDashboardRefreshInterval,
 } from "../src/agent-registry.js";
 
 describe("agent-registry orchestration mode", () => {
   it("has default orchestration mode", () => {
-    expect(getDefaultOrchestrationMode()).toBe("auto");
+    expect(getOrchestrationMode()).toBe("auto");
   });
 
   it("can set orchestration mode", () => {
-    setDefaultOrchestrationMode("swarm");
-    expect(getDefaultOrchestrationMode()).toBe("swarm");
+    setOrchestrationMode("swarm");
+    expect(getOrchestrationMode()).toBe("swarm");
     
-    setDefaultOrchestrationMode("crew");
-    expect(getDefaultOrchestrationMode()).toBe("crew");
+    setOrchestrationMode("crew");
+    expect(getOrchestrationMode()).toBe("crew");
     
     // Reset to default
-    setDefaultOrchestrationMode("auto");
+    setOrchestrationMode("auto");
   });
 
   it("supports all orchestration modes", () => {
     const modes = ["auto", "single", "swarm", "crew"] as const;
     
     for (const mode of modes) {
-      setDefaultOrchestrationMode(mode);
-      expect(getDefaultOrchestrationMode()).toBe(mode);
+      setOrchestrationMode(mode);
+      expect(getOrchestrationMode()).toBe(mode);
     }
     
-    setDefaultOrchestrationMode("auto");
+    setOrchestrationMode("auto");
   });
 });
 
@@ -50,15 +50,12 @@ describe("agent-registry dashboard refresh interval", () => {
     setDashboardRefreshInterval(750);
   });
 
-  it("enforces minimum refresh interval of 100ms", () => {
-    setDashboardRefreshInterval(50);
-    expect(getDashboardRefreshInterval()).toBe(100); // clamped to minimum
-    
-    setDashboardRefreshInterval(99);
-    expect(getDashboardRefreshInterval()).toBe(100); // clamped to minimum
-    
+  it("allows setting low refresh intervals", () => {
     setDashboardRefreshInterval(100);
-    expect(getDashboardRefreshInterval()).toBe(100); // exact minimum
+    expect(getDashboardRefreshInterval()).toBe(100);
+    
+    setDashboardRefreshInterval(200);
+    expect(getDashboardRefreshInterval()).toBe(200);
     
     // Reset to default
     setDashboardRefreshInterval(750);

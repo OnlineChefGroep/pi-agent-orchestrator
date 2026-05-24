@@ -15,7 +15,7 @@ import { defineTool, type ExtensionAPI, type ExtensionContext, getAgentDir } fro
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { AgentManager } from "./agent-manager.js";
-import { buildTypeListText, getDefaultJoinMode, isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setCinematicEnabled, setDefaultJoinMode, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setUiStyle } from "./agent-registry.js";
+import { buildTypeListText, getDefaultJoinMode, isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setCinematicEnabled, setDefaultJoinMode, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setUiStyle, setOrchestrationMode, setDashboardRefreshInterval } from "./agent-registry.js";
 import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTurns, setDefaultMaxTurns, setGraceTurns, steerAgent } from "./agent-runner.js";
 import { getAgentConfig, getAvailableTypes, resolveType } from "./agent-types.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
@@ -668,6 +668,8 @@ export default function (pi: ExtensionAPI) {
       setShowActivityStream,
       setShowTokenUsage,
       setShowTurnProgress,
+      setOrchestrationMode,
+      setDashboardRefreshInterval,
     },
     (event, payload) => pi.events.emit(event, payload),
   );
