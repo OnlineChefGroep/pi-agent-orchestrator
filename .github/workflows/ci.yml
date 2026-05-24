@@ -8,8 +8,11 @@ on:
 
 jobs:
   ts:
-    name: TypeScript
+    name: TypeScript (${{ matrix.peer-deps }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        peer-deps: [lowest, latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -18,7 +21,17 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      - name: Install dependencies
+        run: |
+          if [ "${{ matrix.peer-deps }}" = "lowest" ]; then
+            # Pin to minimum supported peer dep versions
+            npm install --legacy-peer-deps \
+              @mariozechner/pi-ai@0.70.5 \
+              @mariozechner/pi-coding-agent@0.70.5 \
+              @mariozechner/pi-tui@0.70.5
+          else
+            npm ci
+          fi
 
       - run: npm run typecheck
 
