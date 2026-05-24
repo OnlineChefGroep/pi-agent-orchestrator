@@ -6,11 +6,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/OnlineChef/pi-subagents-fork"
+    "url": "https://github.com/OnlineChefGroep/pi-subagents-fork"
   },
-  "homepage": "https://github.com/OnlineChef/pi-subagents-fork#readme",
+  "homepage": "https://github.com/OnlineChefGroep/pi-subagents-fork#readme",
   "bugs": {
-    "url": "https://github.com/OnlineChef/pi-subagents-fork/issues"
+    "url": "https://github.com/OnlineChefGroep/pi-subagents-fork/issues"
   },
   "keywords": [
     "pi-package",
