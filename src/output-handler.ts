@@ -170,10 +170,49 @@ export async function showAgentsMenu(
     await showRunningAgents(ctx, manager, agentActivity);
     await showAgentsMenu(ctx, pi, manager, scheduler, agentActivity, isSchedulingEnabled, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, setDefaultMaxTurns, setGraceTurns, setDefaultJoinMode, setSchedulingEnabled);
   } else if (choice === "Interactive dashboard (hotkeys • live tree • steering)") {
-    // Launch the new rich TUI dashboard (additive, non-breaking)
+    // Launch the rich interactive dashboard (100x better iteration)
     const viewConv = (rec: import("./types.js").AgentRecord) =>
       viewAgentConversation(ctx, rec, agentActivity);
-    await showAgentDashboard(ctx, manager, agentActivity, viewConv);
+
+    const onAbort = (id: string) => manager.abort(id);
+
+    const onSteer = async (id: string) => {
+      const record = manager.getRecord(id);
+      if (!record) {
+        ctx.ui.notify("Agent not found.", "warning");
+        return;
+      }
+      if (record.status !== "running") {
+        ctx.ui.notify(`Cannot steer — agent is ${record.status}.`, "warning");
+        return;
+      }
+
+      const message = await ctx.ui.editor("Steering message (injected into agent conversation)", {
+        placeholder: "Continue working on X, but also do Y first. Be careful with Z.",
+        language: "markdown",
+      });
+
+      if (!message || !message.trim()) return;
+
+      // Mirror the exact logic from the steer_subagent tool for correctness
+      if (!record.session) {
+        if (!record.pendingSteers) record.pendingSteers = [];
+        record.pendingSteers.push(message.trim());
+        ctx.ui.notify(`Steering message queued for ${id}. Will be delivered when session is ready.`, "info");
+        return;
+      }
+
+      try {
+        // Reuse the runner helper (same as the tool)
+        const { steerAgent } = await import("./agent-runner.js");
+        await steerAgent(record.session, message.trim());
+        ctx.ui.notify(`Steering message sent to ${id}. Agent will process after current tool.`, "info");
+      } catch (e: any) {
+        ctx.ui.notify(`Steer failed: ${e?.message ?? e}`, "error");
+      }
+    };
+
+    await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer);
     await showAgentsMenu(ctx, pi, manager, scheduler, agentActivity, isSchedulingEnabled, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, setDefaultMaxTurns, setGraceTurns, setDefaultJoinMode, setSchedulingEnabled);
   } else if (choice.startsWith("Agent types (")) {
     await showAllAgentsList(ctx, ctx.modelRegistry);

@@ -14,14 +14,20 @@
 
 import type { AgentManager } from "../agent-manager.js";
 import type { AgentActivity } from "./agent-widget.js";
+import {
+  describeActivity,
+  formatDuration,
+  formatTokens,
+  formatTurns,
+  getDisplayName,
+  SPINNER,
+} from "./agent-widget.js";
 import { getUiStyle } from "../agent-registry.js";
 import {
   type Component,
   matchesKey,
   type TUI,
   truncateToWidth,
-  visibleWidth,
-  wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
 import type { AgentRecord } from "../types.js";
 import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
@@ -64,6 +70,8 @@ export interface AgentDashboardOptions {
   manager: AgentManager;
   agentActivity: Map<string, AgentActivity>;
   onViewConversation?: (record: AgentRecord) => Promise<void>;
+  onAbort?: (id: string) => boolean;           // returns true if aborted
+  onSteer?: (id: string) => Promise<void>;     // menu layer handles prompting + actual steer
 }
 
 export class AgentDashboard implements Component {
@@ -71,6 +79,7 @@ export class AgentDashboard implements Component {
   private selectedIndex = 0;
   private closed = false;
   private agents: AgentRecord[] = [];
+  private spinnerFrame = 0; // for live activity animation
 
   constructor(
     private readonly tui: TUI,
@@ -91,6 +100,7 @@ export class AgentDashboard implements Component {
   handleInput(data: string): void {
     const maxScroll = Math.max(0, this.agents.length - this.getViewportHeight());
     const wasClosed = this.closed;
+    const rec = this.agents[this.selectedIndex];
 
     if (matchesKey(data, "escape") || matchesKey(data, "q")) {
       this.closed = true;
@@ -98,11 +108,10 @@ export class AgentDashboard implements Component {
       return;
     }
 
+    // Navigation (vim + arrows)
     if (matchesKey(data, "up") || matchesKey(data, "k")) {
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      if (this.selectedIndex < this.scrollOffset) {
-        this.scrollOffset = this.selectedIndex;
-      }
+      if (this.selectedIndex < this.scrollOffset) this.scrollOffset = this.selectedIndex;
     } else if (matchesKey(data, "down") || matchesKey(data, "j")) {
       if (this.agents.length === 0) return;
       this.selectedIndex = Math.min(this.agents.length - 1, this.selectedIndex + 1);
@@ -114,36 +123,50 @@ export class AgentDashboard implements Component {
       this.scrollOffset = Math.max(0, this.scrollOffset - this.getViewportHeight());
     } else if (matchesKey(data, "pageDown") || matchesKey(data, "shift+down")) {
       if (this.agents.length === 0) return;
-      this.selectedIndex = Math.min(
-        this.agents.length - 1,
-        this.selectedIndex + this.getViewportHeight(),
-      );
-      this.scrollOffset = Math.min(
-        maxScroll,
-        this.scrollOffset + this.getViewportHeight(),
-      );
+      this.selectedIndex = Math.min(this.agents.length - 1, this.selectedIndex + this.getViewportHeight());
+      this.scrollOffset = Math.min(maxScroll, this.scrollOffset + this.getViewportHeight());
     } else if (matchesKey(data, "home")) {
-      this.selectedIndex = 0;
-      this.scrollOffset = 0;
+      this.selectedIndex = 0; this.scrollOffset = 0;
     } else if (matchesKey(data, "end")) {
       if (this.agents.length === 0) return;
-      this.selectedIndex = this.agents.length - 1;
-      this.scrollOffset = maxScroll;
-    } else if (matchesKey(data, "enter") || matchesKey(data, "return")) {
-      const rec = this.agents[this.selectedIndex];
+      this.selectedIndex = this.agents.length - 1; this.scrollOffset = maxScroll;
+    }
+
+    // Actions (Claude Code / OpenCode style hotkeys)
+    else if (matchesKey(data, "enter") || matchesKey(data, "return")) {
       if (rec && this.options.onViewConversation) {
-        // Close dashboard first, then hand off to conversation viewer
         this.closed = true;
         this.done();
-        // Fire-and-forget; the caller (menu wiring) will handle sequencing
         void this.options.onViewConversation(rec);
         return;
       }
+    } else if (matchesKey(data, "k") || matchesKey(data, "K")) {
+      // Kill / Abort (very high value hotkey)
+      if (rec) {
+        const aborted = this.options.onAbort ? this.options.onAbort(rec.id) : this.options.manager.abort(rec.id);
+        if (aborted) {
+          this.refreshAgents();
+          this.tui.requestRender();
+        }
+      }
+    } else if (matchesKey(data, "s") || matchesKey(data, "S")) {
+      // Steer (the killer feature for interactive subagents)
+      if (rec && this.options.onSteer) {
+        this.closed = true;
+        this.done();
+        void this.options.onSteer(rec.id);
+        return;
+      }
     } else if (matchesKey(data, "r") || matchesKey(data, "R")) {
-      // Refresh (useful while developing / testing live updates)
       this.refreshAgents();
       this.tui.requestRender();
+    } else if (matchesKey(data, "?")) {
+      // Future: show help overlay. For now just refresh to show footer hint.
+      this.tui.requestRender();
     }
+
+    // Advance spinner for live feel on any input
+    this.spinnerFrame = (this.spinnerFrame + 1) % SPINNER.length;
 
     if (!wasClosed && this.closed) {
       this.done();
@@ -161,13 +184,16 @@ export class AgentDashboard implements Component {
   }
 
   render(width: number): string[] {
-    this.refreshAgents(); // always fresh on render
+    this.refreshAgents();
+    this.spinnerFrame = (this.spinnerFrame + 1) % SPINNER.length; // subtle live animation
+
     const th = getThemeColors();
     const lines: string[] = [];
+    const style = getUiStyle();
 
-    const title = `${th.title}Agent Dashboard${th.reset}  ${th.dim}(rich TUI — ${getUiStyle()})${th.reset}`;
+    const title = `${th.title}Agent Dashboard${th.reset}  ${th.dim}(rich TUI — ${style} • ${this.agents.length} agents)${th.reset}`;
     lines.push(title);
-    lines.push(`${th.border}${"─".repeat(Math.min(60, width))}${th.reset}`);
+    lines.push(`${th.border}${"─".repeat(Math.min(Math.max(50, width - 4), width))}${th.reset}`);
 
     const vh = this.getViewportHeight();
     const maxScroll = Math.max(0, this.agents.length - vh);
@@ -175,28 +201,58 @@ export class AgentDashboard implements Component {
     const end = Math.min(start + vh, this.agents.length);
 
     if (this.agents.length === 0) {
-      lines.push(`${th.dim}No agents yet. Create some via /agents or spawn via tools.${th.reset}`);
+      lines.push(`${th.dim}No agents in this session. Spawn some with the Agent tool or /agents → Create.${th.reset}`);
     } else {
       for (let i = start; i < end; i++) {
         const rec = this.agents[i];
         const isSel = i === this.selectedIndex;
+        const activity = this.options.agentActivity.get(rec.id);
+
         const prefix = isSel ? `${th.highlight}▶ ` : "  ";
-        const dn = rec.description || rec.type;
-        const status = `${rec.status}`;
-        const dur = rec.completedAt
-          ? `${Math.round((rec.completedAt - rec.startedAt) / 1000)}s`
-          : "running";
-        const tokens = rec.lifetimeUsage
-          ? `${rec.lifetimeUsage.input + rec.lifetimeUsage.output} tok`
-          : "";
-        const line = `${prefix}${dn} ${th.dim}· ${status} · ${dur} · ${tokens}${th.reset}`;
-        lines.push(truncateToWidth(line, width - 2));
+        const dn = getDisplayName(rec.type);
+        const desc = rec.description ? ` — ${rec.description}` : "";
+
+        // Status with color
+        let statusStr = rec.status.toUpperCase();
+        if (rec.status === "running") statusStr = style === "plain" ? "RUNNING" : `${th.highlight}RUNNING${th.reset}`;
+        else if (rec.status === "queued") statusStr = style === "plain" ? "QUEUED" : `${th.dim}QUEUED${th.reset}`;
+        else if (rec.status === "completed" || rec.status === "steered") statusStr = style === "plain" ? "DONE" : "DONE";
+        else if (rec.status === "stopped" || rec.status === "aborted") statusStr = "STOPPED";
+
+        const dur = formatDuration(rec.startedAt, rec.completedAt);
+
+        // Rich live activity line
+        let activityLine = "";
+        if (activity && rec.status === "running") {
+          const spinner = SPINNER[this.spinnerFrame % SPINNER.length];
+          const act = describeActivity(activity.activeTools, activity.responseText);
+          const turns = formatTurns(activity.turnCount, activity.maxTurns);
+          const toks = activity.lifetimeUsage ? formatTokens(activity.lifetimeUsage.input + activity.lifetimeUsage.output) : "";
+          activityLine = ` ${spinner} ${act} ${th.dim}· ${turns} ${toks ? "· " + toks : ""}${th.reset}`;
+        } else if (rec.result && (rec.status === "completed" || rec.status === "steered")) {
+          const preview = rec.result.slice(0, 80).replace(/\n/g, " ");
+          activityLine = ` ${th.dim}${preview}${preview.length >= 80 ? "…" : ""}${th.reset}`;
+        } else if (rec.error) {
+          activityLine = ` ${th.dim}Error: ${rec.error.slice(0, 60)}${th.reset}`;
+        }
+
+        const mainLine = `${prefix}${dn}${desc} ${th.dim}· ${statusStr} · ${dur}${th.reset}`;
+        lines.push(truncateToWidth(mainLine, width - 2));
+
+        if (activityLine) {
+          lines.push("   " + truncateToWidth(activityLine, width - 6));
+        }
+
+        // Separator between agents (subtle)
+        if (i < end - 1) {
+          lines.push(`${th.dim}${"·".repeat(Math.min(20, Math.floor(width / 3)))}${th.reset}`);
+        }
       }
     }
 
-    // Footer
-    lines.push(`${th.border}${"─".repeat(Math.min(60, width))}${th.reset}`);
-    const footer = `${th.dim}↑↓/k j nav · PgUp/PgDn · Enter view · r refresh · q/esc close${th.reset}`;
+    // Footer with real hotkeys (Claude/OpenCode inspired)
+    lines.push(`${th.border}${"─".repeat(Math.min(50, width))}${th.reset}`);
+    const footer = `${th.dim}↑↓/kj nav  Enter=view  s=steer  k=kill  r=refresh  ?=help  q/esc=close${th.reset}`;
     lines.push(footer);
 
     return lines;
@@ -209,18 +265,20 @@ export async function showAgentDashboard(
   manager: AgentManager,
   agentActivity: Map<string, AgentActivity>,
   onViewConversation?: (record: AgentRecord) => Promise<void>,
+  onAbort?: (id: string) => boolean,
+  onSteer?: (id: string) => Promise<void>,
 ): Promise<void> {
   const { AgentDashboard, DASHBOARD_HEIGHT_PCT } = await import("./agent-dashboard.js");
 
   await ctx.ui.custom<undefined>(
     (tui, _theme, _keybindings, done) => {
-      return new AgentDashboard(tui, { manager, agentActivity, onViewConversation }, done);
+      return new AgentDashboard(tui, { manager, agentActivity, onViewConversation, onAbort, onSteer }, done);
     },
     {
       overlay: true,
       overlayOptions: {
         anchor: "center",
-        width: "92%",
+        width: "94%",
         maxHeight: `${DASHBOARD_HEIGHT_PCT}%`,
       },
     },
