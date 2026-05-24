@@ -139,7 +139,7 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
     const pi = makePi();
     await scheduler.start(pi, makeCtx(), manager, store);
 
-    // 100ms interval — wait for ~3 fires
+    // 150ms interval — wait for ~3 fires (increased from 100ms for Windows timing)
     const job = await scheduler.addJob({
       name: "e2e-interval",
       description: "test",
@@ -147,11 +147,11 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
       subagent_type: "general-purpose",
       prompt: "tick",
     });
-    // Replace with a literal 100ms interval — easier than crafting a parseable shorthand for ms.
+    // Replace with a literal 150ms interval — easier than crafting a parseable shorthand for ms.
     // (parseInterval doesn't accept "ms"; we patch the persisted job and re-arm.)
-    await scheduler.updateJob(job.id, { intervalMs: 100, schedule: "100ms" });
+    await scheduler.updateJob(job.id, { intervalMs: 150, schedule: "150ms" });
 
-    await waitFor(() => manager.spawn.mock.calls.length >= 3, 2000);
+    await waitFor(() => manager.spawn.mock.calls.length >= 3, 5000);  // Increased timeout for Windows
 
     const final = scheduler.list().find(j => j.id === job.id)!;
     expect(final.runCount).toBeGreaterThanOrEqual(3);
