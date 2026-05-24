@@ -31,7 +31,7 @@
   - `default-agents.ts`: herhalende read-only prompt-boilerplate samengevoegd naar `AgentPromptTemplates` class.
   - `agent-types.ts`: `intersectPermission` / `intersectToolNames` / `applyParentRestrictions` samengevoegd naar `PermissionUtils` class.
 
-### 🛡 Repo hygiene
+### 🛡 Repository hygiene
 - `.pi/agents/` expliciet toegevoegd aan `.gitignore` (dev-only agents nooit meer per ongeluk tracken).
 - `cinematic-renderer/cinematic-renderer.exe` toegevoegd aan `.gitignore`.
 - `auditor.md` verwijderd uit git tracking (was dev-only agent).

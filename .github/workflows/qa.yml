@@ -1,9 +1,9 @@
 name: QA
 
 on:
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
+  workflow_dispatch:  # Only manual trigger until droid CLI is fixed
+  # pull_request:
+  #   branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -17,12 +17,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -46,11 +46,18 @@ jobs:
           CI: true
         run: |
           mkdir -p qa-results
-          droid exec --auto high \
-            --prompt "You are running in a non-interactive CI environment. There is NO human available. Do NOT use AskUser, do NOT wait for confirmations, do NOT pause for input. Run the qa skill. Write the final report to qa-results/report.md"
+          # droid exec --auto high \
+          #   --prompt "You are running in a non-interactive CI environment. There is NO human available. Do NOT use AskUser, do NOT wait for confirmations, do NOT pause for input. Run the qa skill. Write the final report to qa-results/report.md"
+          # NOTE: droid exec --prompt is not a valid CLI option.
+          # QA is currently disabled pending droid CLI syntax update.
+          echo "## QA Report" > qa-results/report.md
+          echo "" >> qa-results/report.md
+          echo "**Status**: QA workflow disabled — awaiting droid CLI fix." >> qa-results/report.md
+          echo "" >> qa-results/report.md
+          echo "*Last run*: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> qa-results/report.md
 
       - name: Upload QA artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: qa-results
