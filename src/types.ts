@@ -77,7 +77,7 @@ export interface AgentConfig {
   useContextMode?: boolean;
 }
 
-export type JoinMode = 'async' | 'group' | 'smart';
+export type JoinMode = 'async' | 'group' | 'smart' | 'swarm';
 
 export interface AgentRecord {
   id: string;
@@ -96,6 +96,7 @@ export interface AgentRecord {
   abortController?: AbortController;
   promise?: Promise<string>;
   groupId?: string;
+  swarmId?: string;
   joinMode?: JoinMode;
   /** Set when result was already consumed via get_subagent_result — suppresses completion notification. */
   resultConsumed?: boolean;

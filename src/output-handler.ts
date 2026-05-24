@@ -215,11 +215,19 @@ export async function showAgentsMenu(
       const reOpenOnAbort = (aid: string) => manager.abort(aid);
       const reOpenOnSteer = async (aid: string) => { /* no-op, already handled */ };
       const reOpenOnPerms = (r: import("./types.js").AgentRecord) => showAgentPermissions(ctx, r);
-      await showAgentDashboard(ctx, manager, agentActivity, viewConv, reOpenOnAbort, reOpenOnSteer, reOpenOnPerms);
+      const reOpenOnSwarm = async (_action: string, _ids: string[]) => {
+        // TODO (next bigger step): real swarm create/join/steer using SwarmCoordinator + ctx.ui.editor
+        ctx.ui.notify("Swarm actions coming in next slice of the dikke upgrade", "info");
+      };
+      await showAgentDashboard(ctx, manager, agentActivity, viewConv, reOpenOnAbort, reOpenOnSteer, reOpenOnPerms, reOpenOnSwarm);
     };
 
     const onPerms = (r: import("./types.js").AgentRecord) => showAgentPermissions(ctx, r);
-    await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer, onPerms);
+    const onSwarm = async (_action: string, _ids: string[]) => {
+      // TODO (next bigger step): full swarm menu + integration with SwarmCoordinator
+      ctx.ui.notify("Swarm mode actions (create/join/steer) — part of the dikke TUI upgrade", "info");
+    };
+    await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer, onPerms, onSwarm);
     await showAgentsMenu(ctx, pi, manager, scheduler, agentActivity, isSchedulingEnabled, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, setDefaultMaxTurns, setGraceTurns, setDefaultJoinMode, setSchedulingEnabled);
   } else if (choice.startsWith("Agent types (")) {
     await showAllAgentsList(ctx, ctx.modelRegistry);
@@ -763,6 +771,7 @@ export async function showSettings(
       "smart — auto-group 2+ agents in same turn (default)",
       "async — always notify individually",
       "group — always group background agents",
+      "swarm — dynamic collaborative group (agents can join at runtime)",
     ]);
     if (val) {
       const mode = val.split(" ")[0] as JoinMode;

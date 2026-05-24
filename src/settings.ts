@@ -73,7 +73,7 @@ export interface SettingsAppliers {
 /** Emit callback — a subset of `pi.events.emit` to keep helpers testable. */
 export type SettingsEmit = (event: string, payload: unknown) => void;
 
-const VALID_JOIN_MODES: ReadonlySet<string> = new Set<JoinMode>(["async", "group", "smart"]);
+const VALID_JOIN_MODES: ReadonlySet<string> = new Set<JoinMode>(["async", "group", "smart", "swarm"]);
 const VALID_ANIMATION_STYLES: ReadonlySet<string> = new Set(["braille", "dots", "lines", "classic", "none"]);
 const VALID_UI_STYLES: ReadonlySet<string> = new Set(["premium", "retro", "plain", "cinematic"]);
 

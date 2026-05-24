@@ -74,6 +74,7 @@ export interface AgentDashboardOptions {
   onAbort?: (id: string) => boolean;           // returns true if aborted
   onSteer?: (id: string) => Promise<void>;     // menu layer handles prompting + actual steer
   onShowPermissions?: (record: AgentRecord) => Promise<void>;
+  onSwarmAction?: (action: string, agentIds: string[]) => Promise<void>;  // create/join/leave/steer swarms
 }
 
 export class AgentDashboard implements Component {
@@ -216,6 +217,20 @@ export class AgentDashboard implements Component {
     } else if (matchesKey(data, "?")) {
       this.showHelp = !this.showHelp;
       this.tui.requestRender();
+    } else if (matchesKey(data, "w") || matchesKey(data, "W")) {
+      // Swarm actions (create from selection, join, leave, swarm-steer)
+      // This is the core "w" hotkey for the dikke swarm TUI experience
+      const targets = this.selectedIds.size > 0 
+        ? this.agents.filter(a => this.selectedIds.has(a.id))
+        : (rec ? [rec] : []);
+
+      if (targets.length > 0 && this.options.onSwarmAction) {
+        this.closed = true;
+        this.done();
+        // For now we pass the action type + targets; the menu layer can show a nice submenu
+        void this.options.onSwarmAction("menu", targets.map(t => t.id));
+        return;
+      }
     }
 
     // Advance spinner for live feel on any input
@@ -272,6 +287,7 @@ export class AgentDashboard implements Component {
         "k / K          Kill selected (or current)",
         "s / S          Steer selected agent",
         "p / P          Show permissions & scope for selected agent",
+        "w / W          Swarm actions (create/join/leave/steer from selection)",
         "r / R          Force refresh",
         "?              Toggle this help",
         "q / Esc        Close dashboard",
@@ -284,10 +300,22 @@ export class AgentDashboard implements Component {
     } else if (this.agents.length === 0) {
       lines.push(`${th.dim}No agents in this session. Spawn some with the Agent tool or /agents → Create.${th.reset}`);
     } else {
+      let previousSwarmId: string | undefined = undefined;
+
       for (let i = start; i < end; i++) {
         const rec = this.agents[i];
         const isSel = i === this.selectedIndex;
         const activity = this.options.agentActivity.get(rec.id);
+
+        // Visual swarm grouping header (bigger TUI presence)
+        if (rec.swarmId && rec.swarmId !== previousSwarmId) {
+          const swarmLabel = `Swarm ${rec.swarmId}`;
+          lines.push(`${th.border}${"─".repeat(Math.min(30, width - 4))}${th.reset}`);
+          lines.push(`${th.highlight}${swarmLabel}${th.reset}`);
+          previousSwarmId = rec.swarmId;
+        } else if (!rec.swarmId && previousSwarmId) {
+          previousSwarmId = undefined;
+        }
 
         const isMultiSelected = this.selectedIds.has(rec.id);
         const multiMarker = isMultiSelected ? (style === "plain" ? "[x] " : "✓ ") : "";
@@ -321,18 +349,26 @@ export class AgentDashboard implements Component {
           activityLine = ` ${th.dim}Error: ${rec.error.slice(0, 60)}${th.reset}`;
         }
 
-        const mainLine = `${prefix}${dn}${desc} ${th.dim}· ${statusStr} · ${dur}${th.reset}`;
+        // === SWARM VISUAL ENHANCEMENT (bigger TUI presence) ===
+        let swarmPrefix = "";
+        if (rec.swarmId) {
+          swarmPrefix = style === "plain" ? `[SWARM:${rec.swarmId.slice(-6)}] ` : `${th.highlight}[swarm]${th.reset} `;
+        }
+
+        const mainLine = `${prefix}${swarmPrefix}${dn}${desc} ${th.dim}· ${statusStr} · ${dur}${th.reset}`;
         lines.push(truncateToWidth(mainLine, width - 2));
 
         if (activityLine) {
           lines.push("   " + truncateToWidth(activityLine, width - 6));
         }
 
-        // Extra metadata for selected agent (worktree, group/handoff, validation)
+        // Extra metadata for selected agent (now richer for swarms)
         if (isSel) {
           const metaParts: string[] = [];
           if (rec.worktree) metaParts.push(`worktree:${rec.worktree.branch}`);
           if (rec.groupId) metaParts.push(`group:${rec.groupId}`);
+          if (rec.swarmId) metaParts.push(`swarm:${rec.swarmId}`);
+          if (rec.joinMode) metaParts.push(`mode:${rec.joinMode}`);
           if (rec.validationResults && rec.validated === false) metaParts.push("validation:FAILED");
           if (rec.outputFile) metaParts.push("has output file");
 
@@ -350,7 +386,7 @@ export class AgentDashboard implements Component {
 
     // Footer with real hotkeys (Claude/OpenCode inspired)
     lines.push(`${th.border}${"─".repeat(Math.min(50, width))}${th.reset}`);
-    const footer = `${th.dim}Space=toggle select  ↑↓/kj nav  Enter=view  s=steer  k=kill (bulk)  r=refresh  ?=help  q/esc=close${th.reset}`;
+    const footer = `${th.dim}Space=toggle  ↑↓/kj  Enter=view  s=steer  k=kill  w=swarm  p=perms  r=refresh  ?=help  q/esc=close${th.reset}`;
     lines.push(footer);
 
     return lines;
@@ -366,12 +402,13 @@ export async function showAgentDashboard(
   onAbort?: (id: string) => boolean,
   onSteer?: (id: string) => Promise<void>,
   onShowPermissions?: (record: AgentRecord) => Promise<void>,
+  onSwarmAction?: (action: string, agentIds: string[]) => Promise<void>,
 ): Promise<void> {
   const { AgentDashboard, DASHBOARD_HEIGHT_PCT } = await import("./agent-dashboard.js");
 
   await ctx.ui.custom<undefined>(
     (tui, _theme, _keybindings, done) => {
-      return new AgentDashboard(tui, { manager, agentActivity, onViewConversation, onAbort, onSteer, onShowPermissions }, done);
+      return new AgentDashboard(tui, { manager, agentActivity, onViewConversation, onAbort, onSteer, onShowPermissions, onSwarmAction }, done);
     },
     {
       overlay: true,

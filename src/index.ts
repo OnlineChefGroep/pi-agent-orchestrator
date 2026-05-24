@@ -20,6 +20,7 @@ import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTu
 import { getAgentConfig, getAvailableTypes, resolveType } from "./agent-types.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
 import { GroupJoinManager } from "./group-join.js";
+import { SwarmCoordinator } from "./swarm-join.js";
 import { HookRegistry } from "./hooks.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./invocation-config.js";
 import { resolveModel } from "./model-resolver.js";
@@ -344,6 +345,41 @@ export default function (pi: ExtensionAPI) {
     30_000,
   );
 
+  // ---- Swarm coordinator (dynamic collaborative groups) ----
+  // Supports runtime join (the "swarm mode" feature) and provides query APIs
+  // for the rich AgentDashboard.
+  const swarmJoin = new SwarmCoordinator(
+    (records, partial, swarmId) => {
+      for (const r of records) { agentActivity.delete(r.id); widget.markFinished(r.id); }
+
+      const swarmKey = `swarm:${swarmId}`;
+      scheduleNudge(swarmKey, () => {
+        const unconsumed = records.filter(r => !r.resultConsumed);
+        if (unconsumed.length === 0) { widget.update(); return; }
+
+        const notifications = unconsumed.map(r => formatTaskNotification(r, 300)).join('\n\n');
+        const label = partial
+          ? `${unconsumed.length} swarm agent(s) finished (partial — swarm still active)`
+          : `Swarm ${swarmId} wave completed`;
+
+        const [first, ...rest] = unconsumed;
+        const details = buildNotificationDetails(first, 300, agentActivity.get(first.id));
+        if (rest.length > 0) {
+          details.others = rest.map(r => buildNotificationDetails(r, 300, agentActivity.get(r.id)));
+        }
+
+        pi.sendMessage<NotificationDetails>({
+          customType: "subagent-notification",
+          content: `Swarm update: ${label}\n\n${notifications}\n\nUse get_subagent_result for full output.`,
+          display: true,
+          details,
+        }, { deliverAs: "followUp", triggerTurn: true });
+      });
+      widget.update();
+    },
+    30_000,
+  );
+
   /** Helper: build event data for lifecycle events from an AgentRecord. */
   function buildEventData(record: AgentRecord) {
     const durationMs = record.completedAt ? record.completedAt - record.startedAt : Date.now() - record.startedAt;
@@ -403,12 +439,13 @@ export default function (pi: ExtensionAPI) {
       return;
     }
 
-    const result = groupJoin.onAgentComplete(record);
-    if (result === 'pass') {
+    const groupResult = groupJoin.onAgentComplete(record);
+    const swarmResult = swarmJoin.onAgentComplete(record);
+
+    if (groupResult === 'pass' && swarmResult === 'pass') {
       sendIndividualNudge(record);
     }
-    // 'held' → do nothing, group will fire later
-    // 'delivered' → group callback already fired
+    // 'held' or 'delivered' for either → notification handled by the respective coordinator
     widget.update();
   }, undefined, (record) => {
     // Emit started event when agent transitions to running (including from queue)
@@ -531,20 +568,20 @@ export default function (pi: ExtensionAPI) {
   let batchFinalizeTimer: ReturnType<typeof setTimeout> | undefined;
   let batchCounter = 0;
 
-  /** Finalize the current batch: if 2+ smart-mode agents, register as a group. */
+  /** Finalize the current batch: smart/group get traditional fixed groups,
+   *  swarm gets a dynamic SwarmCoordinator entry (can grow later via dashboard hotkeys).
+   */
   function finalizeBatch() {
     batchFinalizeTimer = undefined;
     const batchAgents = [...currentBatchAgents];
     currentBatchAgents = [];
 
+    // Traditional smart/group batching (unchanged behavior)
     const smartAgents = batchAgents.filter(a => a.joinMode === 'smart' || a.joinMode === 'group');
     if (smartAgents.length >= 2) {
       const groupId = `batch-${++batchCounter}`;
       const ids = smartAgents.map(a => a.id);
       groupJoin.registerGroup(groupId, ids);
-      // Retroactively process agents that already completed during the debounce window.
-      // Their onComplete fired but was deferred (agent was in currentBatchAgents),
-      // so we feed them into the group now.
       for (const id of ids) {
         const record = manager.getRecord(id);
         if (!record) continue;
@@ -553,14 +590,36 @@ export default function (pi: ExtensionAPI) {
           groupJoin.onAgentComplete(record);
         }
       }
-    } else {
-      // No group formed — send individual nudges for any agents that completed
-      // during the debounce window and had their notification deferred.
-      for (const { id } of batchAgents) {
+    }
+
+    // Swarm mode — dynamic collaborative groups
+    const swarmAgents = batchAgents.filter(a => a.joinMode === 'swarm');
+    if (swarmAgents.length >= 1) {
+      const swarmId = `swarm-${++batchCounter}`;
+      const ids = swarmAgents.map(a => a.id);
+      swarmJoin.registerSwarm(swarmId, ids);
+      for (const id of ids) {
         const record = manager.getRecord(id);
-        if (record?.completedAt != null && !record.resultConsumed) {
-          sendIndividualNudge(record);
+        if (!record) continue;
+        record.swarmId = swarmId;
+        if (record.completedAt != null && !record.resultConsumed) {
+          swarmJoin.onAgentComplete(record);
         }
+      }
+    }
+
+    // Any agents that were in the debounce batch but did not form (or join) a group/swarm
+    // get their deferred individual nudges now.
+    const handled = new Set([
+      ...batchAgents.filter(a => a.joinMode === 'smart' || a.joinMode === 'group').map(a => a.id),
+      ...batchAgents.filter(a => a.joinMode === 'swarm').map(a => a.id),
+    ]);
+
+    for (const { id } of batchAgents) {
+      if (handled.has(id)) continue;
+      const record = manager.getRecord(id);
+      if (record?.completedAt != null && !record.resultConsumed) {
+        sendIndividualNudge(record);
       }
     }
   }
@@ -991,7 +1050,7 @@ Guidelines:
         if (joinMode == null || joinMode === 'async') {
           // Foreground/no join mode or explicit async — not part of any batch
         } else {
-          // smart or group — add to current batch
+          // smart / group / swarm — add to current batch (finalizeBatch routes by joinMode)
           currentBatchAgents.push({ id, joinMode });
           // Debounce: reset timer on each new agent so parallel tool calls
           // dispatched across multiple event loop ticks are captured together
