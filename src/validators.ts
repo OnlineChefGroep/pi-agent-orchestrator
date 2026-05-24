@@ -7,28 +7,21 @@ const MAX_CRITERIA_COUNT = 20;
 const MAX_CRITERION_LENGTH = 1000;
 const MAX_DESCRIPTION_LENGTH = 500;
 
-// CVE-004 FIX: Injection patterns to remove from validator prompts
-const VALIDATOR_INJECTION_PATTERNS = [
-  /ignore\s+(all\s+)?(previous\s+)?(instructions|criteria)/gi,
-  /always\s+return\s+(passed|true)/gi,
-  /```json/gi,  // Prevent JSON block injection
-];
-
 /**
  * CVE-004 FIX: Sanitize input for inclusion in validator prompt.
- * Removes potential injection patterns that could manipulate the validator.
+ *
+ * Security model: no regex blacklist — trivially bypassed with Unicode,
+ * whitespace, or encoding variations ("security theater").
+ * Instead, we rely on:
+ *   1. Control character removal (prevents terminal/encoding attacks)
+ *   2. Hard length limits (prevents prompt stuffing)
+ *   3. Sandbox isolation: validators run with isolated=true, levelLimit=0,
+ *      skipValidators=true, so even a compromised validator cannot recurse.
  */
 function sanitizeValidatorInput(input: string, maxLength: number = MAX_OUTPUT_SIZE): string {
-  let sanitized = input
+  return input
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')  // Remove control chars
     .slice(0, maxLength);
-  
-  // Remove injection patterns
-  for (const pattern of VALIDATOR_INJECTION_PATTERNS) {
-    sanitized = sanitized.replace(pattern, '[REMOVED]');
-  }
-  
-  return sanitized;
 }
 
 /**
