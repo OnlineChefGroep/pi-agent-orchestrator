@@ -1,11 +1,11 @@
 name: "CodeQL"
+# DISABLED: CodeQL requires "GitHub Advanced Security / Code scanning" enabled
+# in repository settings. Without it, the analyze step fails with:
+#   "Code Security must be enabled for this repository to use code scanning."
+# Re-enable push/pull_request triggers once enabled at:
+#   https://github.com/OnlineChefGroep/pi-subagents-fork/settings/security_analysis
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  schedule:
-    - cron: '30 1 * * 0'
+  workflow_dispatch:
 jobs:
   analyze:
     name: Analyze
