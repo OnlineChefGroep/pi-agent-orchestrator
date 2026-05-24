@@ -1,0 +1,48 @@
+project: pi-subagents
+install_date: 2026-05-24
+phase: completed
+
+questionnaire:
+  category_1_default_target:
+    default_target: development
+
+  category_2_personas:
+    personas:
+      - name: default_user
+        description: Standard extension user with default configurations
+        test_focus:
+          - agent spawning
+          - result retrieval
+          - default agent types
+        cannot_do: []
+
+  category_3_critical_flows:
+    flows:
+      - Agent spawn and result retrieval (basic lifecycle)
+      - Agent spawn + handoff + validation (multi-agent chains)
+      - All 4 default agent types (Explore, Plan, Analysis, general-purpose)
+      - Custom agent loading from .pi/agents/
+
+  category_4_external_services:
+    none: true
+
+  category_5_cleanup:
+    strategy: script
+    instructions: Run npm run test:cleanup to remove test artifacts
+
+  category_6_imagemagick:
+    installed: true
+
+  category_7_github_action:
+    enabled: true
+    required: true
+
+  category_8_failure_learning:
+    mode: suggest_in_report
+
+generated_files:
+  - .factory/skills/qa/config.yaml
+  - .factory/skills/qa/SKILL.md
+  - .factory/skills/qa/REPORT-TEMPLATE.md
+  - .factory/skills/qa-cli/SKILL.md
+  - .github/workflows/qa.yml

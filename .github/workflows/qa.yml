@@ -1,0 +1,90 @@
+name: QA
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa:
+    name: Functional QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install ImageMagick
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq imagemagick
+
+      - name: Install droid CLI
+        run: curl -fsSL https://app.factory.ai/cli | sh
+
+      - name: Run QA
+        id: qa
+        timeout-minutes: 20
+        continue-on-error: true
+        env:
+          CI: true
+        run: |
+          mkdir -p qa-results
+          droid exec --auto high \
+            --prompt "You are running in a non-interactive CI environment. There is NO human available. Do NOT use AskUser, do NOT wait for confirmations, do NOT pause for input. Run the qa skill. Write the final report to qa-results/report.md"
+
+      - name: Upload QA artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qa-results
+          path: qa-results/
+          retention-days: 14
+
+      - name: Post QA report as PR comment
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPORT_FILE="qa-results/report.md"
+          if [ -f "$REPORT_FILE" ]; then
+            REPORT=$(cat "$REPORT_FILE")
+          else
+            REPORT="## QA Report\n\nNo report generated. Check the QA artifacts for details."
+          fi
+
+          # Ensure report starts with QA Report heading
+          if ! echo "$REPORT" | head -n1 | grep -q "## QA Report"; then
+            REPORT="## QA Report\n\n${REPORT}"
+          fi
+
+          # Add artifact and workflow links
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts"
+          FOOTER="\n\n---\n*QA run [#${{ github.run_number }}](${RUN_URL}) | [Download artifacts](${ARTIFACT_URL})*"
+          COMMENT_BODY="<!-- qa-report -->\n${REPORT}${FOOTER}"
+
+          # Find existing QA comment
+          EXISTING_COMMENT=$(gh pr view ${{ github.event.pull_request.number }} --json comments --jq '.comments[] | select(.body | startswith("<!-- qa-report -->")) | .id')
+
+          if [ -n "$EXISTING_COMMENT" ]; then
+            gh pr comment ${{ github.event.pull_request.number }} --edit-last "$COMMENT_BODY"
+          else
+            gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT_BODY"
+          fi
