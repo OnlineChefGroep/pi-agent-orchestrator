@@ -132,7 +132,7 @@ export function parseHandoff(text: string): AgentHandoff | null {
     parsed = safeJsonParse(jsonBlock);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown error';
-    console.warn(`[handoff] Failed to parse handoff JSON: ${msg}`);
+    console.warn(`[handoff] Failed to parse handoff JSON — malformed JSON: ${msg}`);
     return null;
   }
 

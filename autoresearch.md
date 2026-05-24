@@ -50,3 +50,9 @@ Run until interrupted by the user.
 - **Description**: Converted `PermissionUtils` (agent-types.ts), `AgentFieldParser` (custom-agents.ts), and `AgentPromptTemplates` (default-agents.ts) from classes with only `static` members to plain module-level functions and constants
 - **Files changed**: `src/agent-types.ts`, `src/custom-agents.ts`, `src/default-agents.ts`
 - **Key insight**: All three classes had zero instance state, making the conversion trivial — functions and constants are strictly equivalent here
+
+### Experiment 3 — Enable useTemplate rule ✓
+- **Result**: KEPT — 0 warnings, 0 errors
+- **Description**: Enabled `style/useTemplate` rule and applied unsafe auto-fixes across 15 files, converting string concatenation (`+`) to template literals
+- **Files changed**: `biome.json`, 15 source/test files auto-fixed
+- **Key insight**: The `useTemplate` auto-fix is safe for string concatenation that doesn't involve complex expressions. All 15 fixes were mechanical and correct.

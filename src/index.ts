@@ -139,7 +139,7 @@ function formatTaskNotification(record: AgentRecord, resultMaxLen: number): stri
   const durationMs = record.completedAt ? record.completedAt - record.startedAt : 0;
   const totalTokens = getLifetimeTotal(record.lifetimeUsage);
   const contextPercent = getSessionContextPercent(record.session);
-  const ctxXml = contextPercent !== null ? `<context_percent>${Math.round(contextPercent)}</context_percent>` : "";
+  const ctxXml = contextPercent === null ? "" : `<context_percent>${Math.round(contextPercent)}</context_percent>`;
   const compactXml = record.compactionCount ? `<compactions>${record.compactionCount}</compactions>` : "";
 
   const resultPreview = record.result
@@ -221,9 +221,9 @@ export default function (pi: ExtensionAPI) {
         const statusText = isError ? d.status
           : d.status === "steered" ? "completed (steered)"
           : "completed";
-        const validationIcon = d.validated !== undefined
-          ? (d.validated ? theme.fg("success", " ✅") : theme.fg("error", " ❌"))
-          : "";
+        const validationIcon = d.validated === undefined
+          ? ""
+          : (d.validated ? theme.fg("success", " ✅") : theme.fg("error", " ❌"));
 
         // Line 1: icon + agent description + validation + status
         let line = `${icon} ${theme.bold(d.description)}${validationIcon} ${theme.fg("dim", statusText)}`;

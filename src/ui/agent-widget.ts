@@ -149,7 +149,7 @@ export function formatSessionTokens(
 
 /** Format turn count with optional max limit: "⟳5≤30" or "⟳5". */
 export function formatTurns(turnCount: number, maxTurns?: number | null): string {
-  return maxTurns != null ? `⟳${turnCount}≤${maxTurns}` : `⟳${turnCount}`;
+  return maxTurns == null ? `⟳${turnCount}` : `⟳${turnCount}≤${maxTurns}`;
 }
 
 /** Format milliseconds as human-readable duration. */
@@ -638,7 +638,10 @@ export class AgentWidget {
 
     // Register widget callback once; subsequent updates use requestRender()
     // which re-invokes render() without replacing the component (avoids layout thrashing).
-    if (!this.widgetRegistered) {
+    if (this.widgetRegistered) {
+      // Widget already registered — just request a re-render of existing components.
+      this.tui?.requestRender();
+    } else {
       this.uiCtx.setWidget("agents", (tui, theme) => {
         this.tui = tui;
         return {
@@ -651,9 +654,6 @@ export class AgentWidget {
         };
       }, { placement: "aboveEditor" });
       this.widgetRegistered = true;
-    } else {
-      // Widget already registered — just request a re-render of existing components.
-      this.tui?.requestRender();
     }
   }
 
