@@ -23,7 +23,8 @@ import {
   getDisplayName,
   SPINNER,
 } from "./agent-widget.js";
-import { getUiStyle } from "../agent-registry.js";
+import { getUiStyle, getDashboardRefreshInterval } from "../agent-registry.js";
+import { getSwarmCoordinator } from "../swarm-join.js";
 import {
   type Component,
   matchesKey,
@@ -96,14 +97,15 @@ export class AgentDashboard implements Component {
   ) {
     this.refreshAgents();
 
-    // Live reactivity: auto-refresh the view every 750ms while open
+    // Live reactivity: auto-refresh the view at configured interval while open
     // (makes spinners and activity feel much more alive)
+    const refreshInterval = getDashboardRefreshInterval();
     this.refreshTimer = setInterval(() => {
       if (!this.closed) {
         this.refreshAgents();
         this.tui.requestRender?.();
       }
-    }, 750);
+    }, refreshInterval);
   }
 
   private refreshAgents(): void {
@@ -117,6 +119,20 @@ export class AgentDashboard implements Component {
     for (const id of this.selectedIds) {
       if (!currentIds.has(id)) this.selectedIds.delete(id);
     }
+  }
+
+  /** Get swarm status for visualization */
+  private getSwarmStatus(swarmId: string): { active: number; completed: number; total: number } {
+    const coord = getSwarmCoordinator();
+    if (!coord) return { active: 0, completed: 0, total: 0 };
+    
+    const members = coord.getSwarmMembers(swarmId);
+    const swarmAgents = this.agents.filter(a => members.includes(a.id));
+    
+    const active = swarmAgents.filter(a => a.status === "running" || a.status === "queued").length;
+    const completed = swarmAgents.filter(a => a.status === "completed" || a.status === "steered").length;
+    
+    return { active, completed, total: swarmAgents.length };
   }
 
   handleInput(data: string): void {
@@ -227,9 +243,15 @@ export class AgentDashboard implements Component {
       if (targets.length > 0 && this.options.onSwarmAction) {
         this.closed = true;
         this.done();
-        // For now we pass the action type + targets; the menu layer can show a nice submenu
-        void this.options.onSwarmAction("menu", targets.map(t => t.id));
+        // Pass "create" action for direct swarm creation from selection
+        void this.options.onSwarmAction("create", targets.map(t => t.id));
         return;
+      }
+    } else if (matchesKey(data, "g") || matchesKey(data, "G")) {
+      // Show swarm grouping / details
+      if (rec && rec.swarmId) {
+        // Could show swarm details in future enhancement
+        this.tui.requestRender();
       }
     }
 
@@ -287,7 +309,8 @@ export class AgentDashboard implements Component {
         "k / K          Kill selected (or current)",
         "s / S          Steer selected agent",
         "p / P          Show permissions & scope for selected agent",
-        "w / W          Swarm actions (create from selection, join to swarm)",
+        "w / W          Create swarm from selection",
+        "g / G          Show swarm grouping details",
         "r / R          Force refresh",
         "?              Toggle this help",
         "q / Esc        Close dashboard",
