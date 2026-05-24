@@ -7,8 +7,17 @@
 - **UI enhancements**: Nieuwe spinner frames (`pulse`, `wave`), tool display mappings (`glob`, `webSearch`, `webFetch`).
 - **Fix animation interval**: `ANIMATION_INTERVAL` constante toegevoegd en gebruikt in `ensureTimer()`.
 
-### 🛡 Repo
-- `.npmrc` toegevoegd aan `.gitignore` (bevat token).
+### 🛡 Security
+- **CVE-004**: Regex-blacklist verwijderd uit `validators.ts` — was "security theater" (triviaal te omzeilen met Unicode/whitespace). Vervangen door defense-in-depth: control char removal + hard length limits + sandbox isolatie (`isolated=true`, `levelLimit=0`).
+- `.npmrc` toegevoegd aan `.gitignore` (bevatte harde GitHub token).
+
+### 🔧 CI
+- **Dependency compatibiliteitsmatrix**: `os [ubuntu, windows] x node [20, 22] x peer-deps [lowest, latest]`.
+- Correcte lowest peer deps install via `--no-save` (geen `package.json` mutatie).
+- Windows runner met `continue-on-error` voor pre-existing schedule flakiness.
+
+### 📊 Metrics
+- 614 tests, 34 test files (+ `validators.test.ts` regressie tests voor CVE-004)
 
 ## v0.9.0 (2026-05-24)
 
