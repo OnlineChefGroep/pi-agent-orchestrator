@@ -133,7 +133,7 @@ All items below are scoped exclusively to improving the subagent system, its orc
    - `fix: harden ScheduleStore temp handling on Windows (reduce flakiness)`
    - `chore: add living VERVOLG_PLAN.md (or link to GitHub project) replacing legacy audit references`
 
-3. **Process**: Continue all future work on dedicated branches, run full `npm run typecheck && npm run lint && npm test` (Windows schedule tolerance excepted), then open PR with reference to items in this document or future VERVOLG_PLAN entries.
+3. **Process**: Continue all future work on dedicated branches, run full `npm run typecheck && npm run lint && npm test` (Windows schedule tolerance excepted), then open PR referencing items in this document or future VERVOLG_PLAN entries.
 
 4. **Self-review tool**: The newly added `pi-subagents-extension-reviewer` agent should be used (when working inside a pi session with this extension loaded) for all non-trivial changes going forward.
 

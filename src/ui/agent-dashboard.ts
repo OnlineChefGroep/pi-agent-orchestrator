@@ -37,7 +37,10 @@ import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 const MIN_VIEWPORT = 5;
 export const DASHBOARD_HEIGHT_PCT = 85;
 
-/** Theme helper (mirrors patterns in conversation-viewer + schedule-menu). */
+/**
+ * Theme helper that returns color codes based on the current UI style.
+ * Mirrors patterns in conversation-viewer + schedule-menu.
+ */
 function getThemeColors() {
   const style = getUiStyle();
   if (style === "plain") {
@@ -90,6 +93,13 @@ export class AgentDashboard implements Component {
   private showHelp = false; // toggled by ?
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
+  /**
+   * Create a new AgentDashboard instance.
+   * @param tui - The TUI instance for rendering and input handling
+   * @param options - Dashboard configuration and callbacks
+   * @param done - Callback to invoke when the dashboard is closed
+   */
+
   constructor(
     private readonly tui: TUI,
     private readonly options: AgentDashboardOptions,
@@ -108,6 +118,9 @@ export class AgentDashboard implements Component {
     }, refreshInterval);
   }
 
+  /**
+   * Refresh the agent list from the manager and update selection bounds.
+   */
   private refreshAgents(): void {
     this.agents = this.options.manager.listAgents();
     // Clamp selection
@@ -121,7 +134,11 @@ export class AgentDashboard implements Component {
     }
   }
 
-  /** Get swarm status for visualization */
+  /**
+   * Get swarm status for visualization in the dashboard.
+   * @param swarmId - The swarm ID to query
+   * @returns Object with active, completed, and total agent counts
+   */
   private getSwarmStatus(swarmId: string): { active: number; completed: number; total: number } {
     const coord = getSwarmCoordinator();
     if (!coord) return { active: 0, completed: 0, total: 0 };
@@ -135,6 +152,10 @@ export class AgentDashboard implements Component {
     return { active, completed, total: swarmAgents.length };
   }
 
+  /**
+   * Handle keyboard input for dashboard navigation and actions.
+   * @param data - The input character or key sequence
+   */
   handleInput(data: string): void {
     const maxScroll = Math.max(0, this.agents.length - this.getViewportHeight());
     const wasClosed = this.closed;
@@ -257,22 +278,31 @@ export class AgentDashboard implements Component {
 
     // Advance spinner for live feel on any input
     this.spinnerFrame = (this.spinnerFrame + 1) % SPINNER.length;
-
-    if (!wasClosed && this.closed) {
-      this.done();
-    }
   }
 
+  /**
+   * Calculate the viewport height based on terminal size and dashboard percentage.
+   * @returns The number of rows available for agent display
+   */
   private getViewportHeight(): number {
     const rows = this.tui.terminal.rows;
     const maxRows = Math.floor((rows * DASHBOARD_HEIGHT_PCT) / 100);
     return Math.max(MIN_VIEWPORT, maxRows - this.chromeLines());
   }
 
+  /**
+   * Calculate the number of lines used for chrome (header, footer, etc.).
+   * @returns The number of chrome lines
+   */
   private chromeLines(): number {
     return 6; // header + title + footer + padding
   }
 
+  /**
+   * Render the dashboard UI as an array of strings.
+   * @param width - The available width for rendering
+   * @returns Array of strings representing the dashboard UI
+   */
   render(width: number): string[] {
     this.refreshAgents();
     this.spinnerFrame = (this.spinnerFrame + 1) % SPINNER.length; // subtle live animation
@@ -416,7 +446,19 @@ export class AgentDashboard implements Component {
   }
 }
 
-/** Launch helper (mirrors viewAgentConversation pattern exactly). */
+/**
+ * Launch the interactive agent dashboard as an overlay.
+ * Mirrors the viewAgentConversation pattern for consistency.
+ * 
+ * @param ctx - The extension command context
+ * @param manager - The agent manager instance
+ * @param agentActivity - Map of agent IDs to their activity data
+ * @param onViewConversation - Optional callback to view agent conversation
+ * @param onAbort - Optional callback to abort an agent
+ * @param onSteer - Optional callback to steer an agent
+ * @param onShowPermissions - Optional callback to show agent permissions
+ * @param onSwarmAction - Optional callback to handle swarm actions
+ */
 export async function showAgentDashboard(
   ctx: ExtensionCommandContext,
   manager: AgentManager,
@@ -427,8 +469,6 @@ export async function showAgentDashboard(
   onShowPermissions?: (record: AgentRecord) => Promise<void>,
   onSwarmAction?: (action: string, agentIds: string[]) => Promise<void>,
 ): Promise<void> {
-  const { AgentDashboard, DASHBOARD_HEIGHT_PCT } = await import("./agent-dashboard.js");
-
   await ctx.ui.custom<undefined>(
     (tui, _theme, _keybindings, done) => {
       return new AgentDashboard(tui, { manager, agentActivity, onViewConversation, onAbort, onSteer, onShowPermissions, onSwarmAction }, done);

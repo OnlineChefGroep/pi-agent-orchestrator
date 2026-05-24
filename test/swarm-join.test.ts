@@ -139,7 +139,7 @@ describe("SwarmCoordinator", () => {
       
       const result = coordinator.onAgentComplete(record);
       expect(result).toBe("delivered");
-      expect(deliveryCallback).toHaveBeenCalledWith([record], false, "test-swarm");
+      expect(deliveryCallback).toHaveBeenCalledWith([record], true, "test-swarm");
     });
 
     it("returns 'pass' for agent in delivered swarm", () => {

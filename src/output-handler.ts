@@ -83,6 +83,15 @@ export async function viewAgentConversation(
 
 // ---- Settings snapshot ----
 
+/**
+ * Build a settings snapshot for persistence.
+ * @param manager - The agent manager instance
+ * @param getDefaultMaxTurns - Function to get default max turns
+ * @param getGraceTurns - Function to get grace turns
+ * @param getDefaultJoinMode - Function to get default join mode
+ * @param isSchedulingEnabled - Function to check if scheduling is enabled
+ * @returns Current settings snapshot
+ */
 export function buildSettingsSnapshot(
   manager: AgentManager,
   getDefaultMaxTurns: () => number | undefined,
@@ -107,6 +116,22 @@ export function buildSettingsSnapshot(
 
 // ---- Agent management menu ----
 
+/**
+ * Display the main agents menu with options for dashboard, agent types, scheduling, and settings.
+ * @param ctx - The extension command context
+ * @param pi - The extension API
+ * @param manager - The agent manager instance
+ * @param scheduler - The subagent scheduler instance
+ * @param agentActivity - Map of agent IDs to their activity data
+ * @param isSchedulingEnabled - Function to check if scheduling is enabled
+ * @param getDefaultMaxTurns - Function to get default max turns
+ * @param getGraceTurns - Function to get grace turns
+ * @param getDefaultJoinMode - Function to get default join mode
+ * @param setDefaultMaxTurns - Function to set default max turns
+ * @param setGraceTurns - Function to set grace turns
+ * @param setDefaultJoinMode - Function to set default join mode
+ * @param setSchedulingEnabled - Function to enable/disable scheduling
+ */
 export async function showAgentsMenu(
   ctx: ExtensionCommandContext,
   pi: ExtensionAPI,
@@ -212,42 +237,12 @@ export async function showAgentsMenu(
         }
       }
 
-      // Fluid UX: immediately re-open the dashboard instead of dropping back to main menu
-      const viewConv = (rec: import("./types.js").AgentRecord) =>
-        viewAgentConversation(ctx, rec, agentActivity);
-      const reOpenOnAbort = (aid: string) => manager.abort(aid);
-      const reOpenOnSteer = async (aid: string) => { /* no-op, already handled */ };
-      const reOpenOnPerms = (r: import("./types.js").AgentRecord) => showAgentPermissions(ctx, r);
-      const reOpenOnSwarm = async (action: string, ids: string[]) => {
-        if (ids.length === 0) {
-          ctx.ui.notify("No agents selected for swarm action.", "warning");
-          return;
-        }
-
-        if (action === "menu" || action === "create") {
-          const swarmId = uiCreateOrJoinSwarm(ids, `Swarm from dashboard`);
-          if (swarmId) {
-            ctx.ui.notify(`Created swarm ${swarmId} with ${ids.length} agent(s).`, "info");
-          } else {
-            ctx.ui.notify("Could not create swarm right now.", "warning");
-          }
-        } else {
-          ctx.ui.notify(`Swarm action '${action}' received for ${ids.length} agents (more coming soon).`, "info");
-        }
-
-        // Fluid re-open
-        const viewConv = (rec: import("./types.js").AgentRecord) =>
-          viewAgentConversation(ctx, rec, agentActivity);
-        const reOpenOnAbort2 = (aid: string) => manager.abort(aid);
-        const reOpenOnSteer2 = async (aid: string) => {};
-        const reOpenOnPerms2 = (r: import("./types.js").AgentRecord) => showAgentPermissions(ctx, r);
-        const reOpenOnSwarm2 = reOpenOnSwarm; // keep the same handler
-        await showAgentDashboard(ctx, manager, agentActivity, viewConv, reOpenOnAbort2, reOpenOnSteer2, reOpenOnPerms2, reOpenOnSwarm2);
-      };
-      await showAgentDashboard(ctx, manager, agentActivity, viewConv, reOpenOnAbort, reOpenOnSteer, reOpenOnPerms, reOpenOnSwarm);
+      // Fluid UX: immediately re-open the dashboard after steering
+      await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer, onPerms, onSwarm);
     };
 
     const onPerms = (r: import("./types.js").AgentRecord) => showAgentPermissions(ctx, r);
+    
     const onSwarm = async (action: string, ids: string[]) => {
       if (ids.length === 0) {
         ctx.ui.notify("Select agents first (Space) then press w for swarm actions.", "info");
@@ -263,14 +258,10 @@ export async function showAgentsMenu(
         ctx.ui.notify(`Swarm action: ${action} on ${ids.length} agents`, "info");
       }
 
-      // Re-open fluidly
-      const viewConv2 = (rec: import("./types.js").AgentRecord) => viewAgentConversation(ctx, rec, agentActivity);
-      const onAbort2 = onAbort;
-      const onSteer2 = onSteer;
-      const onPerms2 = onPerms;
-      const onSwarm2 = onSwarm;
-      await showAgentDashboard(ctx, manager, agentActivity, viewConv2, onAbort2, onSteer2, onPerms2, onSwarm2);
+      // Fluid re-open after swarm action
+      await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer, onPerms, onSwarm);
     };
+    
     await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer, onPerms, onSwarm);
     await showAgentsMenu(ctx, pi, manager, scheduler, agentActivity, isSchedulingEnabled, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, setDefaultMaxTurns, setGraceTurns, setDefaultJoinMode, setSchedulingEnabled);
   } else if (choice.startsWith("Agent types (")) {
@@ -287,6 +278,11 @@ export async function showAgentsMenu(
   }
 }
 
+/**
+ * Display a list of all available agent types with their configurations.
+ * @param ctx - The extension command context
+ * @param modelRegistry - Optional model registry for model label resolution
+ */
 export async function showAllAgentsList(ctx: ExtensionCommandContext, modelRegistry?: ModelRegistry): Promise<void> {
   const allNames = getAllTypes();
   if (allNames.length === 0) {

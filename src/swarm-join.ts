@@ -158,9 +158,10 @@ export class SwarmCoordinator {
 
   /**
    * Deliver a single swarm agent's completion immediately (live collaborative feel).
+   * Marked as partial since other agents may still be running.
    */
   private deliverSingle(record: AgentRecord, swarmId: string): void {
-    this.deliverCb([record], false, swarmId);
+    this.deliverCb([record], true, swarmId);
   }
 
   private onTimeout(swarm: Swarm): void {
@@ -188,6 +189,11 @@ export class SwarmCoordinator {
     }
   }
 
+  /**
+   * Finalize swarm delivery (called when swarm is complete or explicitly terminated).
+   * This method is reserved for future use in swarm finalization logic.
+   * Currently, onTimeout() handles wave delivery directly with custom membership preservation.
+   */
   private deliver(swarm: Swarm, partial: boolean): void {
     if (swarm.timeoutHandle) {
       clearTimeout(swarm.timeoutHandle);
