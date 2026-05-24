@@ -76,7 +76,7 @@ export class ScheduleStore {
 
   constructor(filePath: string) {
     this.filePath = filePath;
-    this.lockPath = filePath + ".lock";
+    this.lockPath = `${filePath}.lock`;
     this.loadSync();
   }
 
@@ -118,7 +118,7 @@ export class ScheduleStore {
       version: 1,
       jobs: [...this.jobs.values()],
     };
-    const tmp = this.filePath + ".tmp";
+    const tmp = `${this.filePath}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(data, null, 2));
     await fs.rename(tmp, this.filePath);
   }

@@ -210,7 +210,7 @@ export async function showAllAgentsList(ctx: ExtensionCommandContext, modelRegis
   const legendParts: string[] = [];
   if (hasCustom) legendParts.push("• = project  ◦ = global");
   if (hasDisabled) legendParts.push("✕ = disabled");
-  const legend = legendParts.length ? "\n" + legendParts.join("  ") : "";
+  const legend = legendParts.length ? `\n${legendParts.join("  ")}` : "";
 
   const options = entries.map(({ prefix, desc }) =>
     `${prefix.padEnd(maxPrefix)} — ${desc}`,

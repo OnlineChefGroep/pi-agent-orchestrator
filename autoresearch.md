@@ -16,9 +16,8 @@ Eliminate all Biome lint warnings and progressively enable stricter rules for th
 ## Files in Scope
 
 - `biome.json` — Biome linter configuration (enable/disable rules)
-- `src/agent-types.ts` — Contains `PermissionUtils` static class (one `noStaticOnlyClass` warning)
-- `src/custom-agents.ts` — Contains `AgentFieldParser` static class (one `noStaticOnlyClass` warning)
-- `src/default-agents.ts` — Contains `AgentPromptTemplates` static class (one `noStaticOnlyClass` warning)
+- `biome.json` — Biome linter configuration (enable/disable rules)
+- All `src/**/*.ts` and `test/**/*.ts` files — may be modified to fix newly enabled lint rules
 - Any `.ts` files that get flagged by newly enabled Biome rules
 
 ## Off Limits
@@ -42,4 +41,12 @@ Run until interrupted by the user.
 
 ## What's Been Tried
 
-*(Initial state: 3 `noStaticOnlyClass` warnings, 0 errors, 29/34 test files passing)*
+### Experiment 1 (baseline)
+- **Result**: KEPT — 3 warnings, 0 errors
+- **Description**: Baseline measurement of current lint state
+
+### Experiment 2 — Convert static-only classes to functions ✓
+- **Result**: KEPT — 0 warnings, 0 errors (100% reduction!)
+- **Description**: Converted `PermissionUtils` (agent-types.ts), `AgentFieldParser` (custom-agents.ts), and `AgentPromptTemplates` (default-agents.ts) from classes with only `static` members to plain module-level functions and constants
+- **Files changed**: `src/agent-types.ts`, `src/custom-agents.ts`, `src/default-agents.ts`
+- **Key insight**: All three classes had zero instance state, making the conversion trivial — functions and constants are strictly equivalent here

@@ -78,7 +78,7 @@ function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => void) {
   const callbacks = {
     onToolActivity: (activity: { type: "start" | "end"; toolName: string }) => {
       if (activity.type === "start") {
-        state.activeTools.set(activity.toolName + "_" + Date.now(), activity.toolName);
+        state.activeTools.set(`${activity.toolName}_${Date.now()}`, activity.toolName);
       } else {
         for (const [key, name] of state.activeTools) {
           if (name === activity.toolName) { state.activeTools.delete(key); break; }
@@ -144,7 +144,7 @@ function formatTaskNotification(record: AgentRecord, resultMaxLen: number): stri
 
   const resultPreview = record.result
     ? record.result.length > resultMaxLen
-      ? record.result.slice(0, resultMaxLen) + "\n...(truncated, use get_subagent_result for full output)"
+      ? `${record.result.slice(0, resultMaxLen)}\n...(truncated, use get_subagent_result for full output)`
       : record.result
     : "No output.";
 
@@ -201,7 +201,7 @@ function buildNotificationDetails(record: AgentRecord, resultMaxLen: number, act
     validated: record.validated,
     resultPreview: record.result
       ? record.result.length > resultMaxLen
-        ? record.result.slice(0, resultMaxLen) + "…"
+        ? `${record.result.slice(0, resultMaxLen)}…`
         : record.result
       : "No output.",
   };
@@ -235,21 +235,21 @@ export default function (pi: ExtensionAPI) {
         if (d.totalTokens > 0) parts.push(formatTokens(d.totalTokens));
         if (d.durationMs > 0) parts.push(formatMs(d.durationMs));
         if (parts.length) {
-          line += "\n  " + parts.map(p => theme.fg("dim", p)).join(" " + theme.fg("dim", "·") + " ");
+          line += `\n  ${parts.map(p => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `)}`;
         }
 
         // Line 3: result preview (collapsed) or full (expanded)
         if (expanded) {
           const lines = d.resultPreview.split("\n").slice(0, 30);
-          for (const l of lines) line += "\n" + theme.fg("dim", `  ${l}`);
+          for (const l of lines) line += `\n${theme.fg("dim", `  ${l}`)}`;
         } else {
           const preview = d.resultPreview.split("\n")[0]?.slice(0, 80) ?? "";
-          line += "\n  " + theme.fg("dim", `⎿  ${preview}`);
+          line += `\n  ${theme.fg("dim", `⎿  ${preview}`)}`;
         }
 
         // Line 4: output file link (if present)
         if (d.outputFile) {
-          line += "\n  " + theme.fg("muted", `transcript: ${d.outputFile}`);
+          line += `\n  ${theme.fg("muted", `transcript: ${d.outputFile}`)}`;
         }
 
         return line;
@@ -717,7 +717,7 @@ Guidelines:
     renderCall(args, theme) {
       const displayName = args.subagent_type ? getDisplayName(args.subagent_type) : "Agent";
       const desc = args.description ?? "";
-      return new Text("▸ " + theme.fg("toolTitle", theme.bold(displayName)) + (desc ? "  " + theme.fg("muted", desc) : ""), 0, 0);
+      return new Text(`▸ ${theme.fg("toolTitle", theme.bold(displayName))}${desc ? `  ${theme.fg("muted", desc)}` : ""}`, 0, 0);
     },
 
     renderResult(result, { expanded, isPartial }, theme) {
@@ -737,15 +737,15 @@ Guidelines:
         }
         if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
         if (d.tokens) parts.push(d.tokens);
-        return parts.map(p => theme.fg("dim", p)).join(" " + theme.fg("dim", "·") + " ");
+        return parts.map(p => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `);
       };
 
       // ---- While running (streaming) ----
       if (isPartial || details.status === "running") {
         const frame = SPINNER[details.spinnerFrame ?? 0];
         const s = stats(details);
-        let line = theme.fg("accent", frame) + (s ? " " + s : "");
-        line += "\n" + theme.fg("dim", `  ⎿  ${details.activity ?? "thinking…"}`);
+        let line = theme.fg("accent", frame) + (s ? ` ${s}` : "");
+        line += `\n${theme.fg("dim", `  ⎿  ${details.activity ?? "thinking…"}`)}`;
         return new Text(line, 0, 0);
       }
 
@@ -760,14 +760,14 @@ Guidelines:
         const isSteered = details.status === "steered";
         const icon = isSteered ? theme.fg("warning", "✓") : theme.fg("success", "✓");
         const s = stats(details);
-        let line = icon + (s ? " " + s : "");
-        line += " " + theme.fg("dim", "·") + " " + theme.fg("dim", duration);
+        let line = icon + (s ? ` ${s}` : "");
+        line += ` ${theme.fg("dim", "·")} ${theme.fg("dim", duration)}`;
 
         // Validation badge
         if (details.validated !== undefined) {
           line += details.validated
-            ? " " + theme.fg("success", "✅")
-            : " " + theme.fg("error", "❌");
+            ? ` ${theme.fg("success", "✅")}`
+            : ` ${theme.fg("error", "❌")}`;
         }
 
         if (expanded) {
@@ -775,15 +775,15 @@ Guidelines:
           if (resultText) {
             const lines = resultText.split("\n").slice(0, 50);
             for (const l of lines) {
-              line += "\n" + theme.fg("dim", `  ${l}`);
+              line += `\n${theme.fg("dim", `  ${l}`)}`;
             }
             if (resultText.split("\n").length > 50) {
-              line += "\n" + theme.fg("muted", "  ... (use get_subagent_result with verbose for full output)");
+              line += `\n${theme.fg("muted", "  ... (use get_subagent_result with verbose for full output)")}`;
             }
           }
         } else {
           const doneText = isSteered ? "Wrapped up (turn limit)" : "Done";
-          line += "\n" + theme.fg("dim", `  ⎿  ${doneText}`);
+          line += `\n${theme.fg("dim", `  ⎿  ${doneText}`)}`;
         }
         return new Text(line, 0, 0);
       }
@@ -791,19 +791,19 @@ Guidelines:
       // ---- Stopped (user-initiated abort) ----
       if (details.status === "stopped") {
         const s = stats(details);
-        let line = theme.fg("dim", "■") + (s ? " " + s : "");
-        line += "\n" + theme.fg("dim", "  ⎿  Stopped");
+        let line = theme.fg("dim", "■") + (s ? ` ${s}` : "");
+        line += `\n${theme.fg("dim", "  ⎿  Stopped")}`;
         return new Text(line, 0, 0);
       }
 
       // ---- Error / Aborted (hard max_turns) ----
       const s = stats(details);
-      let line = theme.fg("error", "✗") + (s ? " " + s : "");
+      let line = theme.fg("error", "✗") + (s ? ` ${s}` : "");
 
       if (details.status === "error") {
-        line += "\n" + theme.fg("error", `  ⎿  Error: ${details.error ?? "unknown"}`);
+        line += `\n${theme.fg("error", `  ⎿  Error: ${details.error ?? "unknown"}`)}`;
       } else {
-        line += "\n" + theme.fg("warning", "  ⎿  Aborted (max turns exceeded)");
+        line += `\n${theme.fg("warning", "  ⎿  Aborted (max turns exceeded)")}`;
       }
 
       return new Text(line, 0, 0);

@@ -4,13 +4,23 @@
 		"enabled": true,
 		"rules": {
 			"recommended": true,
+			"complexity": {
+				"noForEach": "warn",
+				"noUselessLoneBlockStatements": "warn",
+				"noUselessTernary": "warn",
+				"useOptionalChain": "warn"
+			},
 			"style": {
-				"recommended": false
+				"recommended": false,
+				"useTemplate": "warn"
 			},
 			"suspicious": {
 				"noExplicitAny": "off",
 				"noControlCharactersInRegex": "off",
 				"noEmptyInterface": "off"
+			},
+			"correctness": {
+				"noUnusedVariables": "warn"
 			}
 		}
 	},

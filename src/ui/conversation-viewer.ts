@@ -98,9 +98,9 @@ export class ConversationViewer implements Component {
 
     const row = (content: string) => {
       if (activeUiStyle === "plain") {
-        return "  " + truncateToWidth(pad(content, innerW), innerW) + "  ";
+        return `  ${truncateToWidth(pad(content, innerW), innerW)}  `;
       }
-      return th.fg("border", c_l) + " " + truncateToWidth(pad(content, innerW), innerW) + " " + th.fg("border", c_r);
+      return `${th.fg("border", c_l)} ${truncateToWidth(pad(content, innerW), innerW)} ${th.fg("border", c_r)}`;
     };
 
     let hrTop = "";
@@ -292,7 +292,7 @@ export class ConversationViewer implements Component {
         }
       } else if (msg.role === "toolResult") {
         const text = extractText(msg.content);
-        const truncated = text.length > 800 ? text.slice(0, 800) + "\n... (truncated)" : text;
+        const truncated = text.length > 800 ? `${text.slice(0, 800)}\n... (truncated)` : text;
         if (!truncated.trim()) continue;
         
         const innerW = width - 6;
@@ -317,12 +317,12 @@ export class ConversationViewer implements Component {
             rightBorder = "|";
           }
           
-          lines.push("   " + topBorder);
+          lines.push(`   ${topBorder}`);
           for (const line of wrapTextWithAnsi(truncated.trim(), innerW)) {
             const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
             lines.push(`   ${leftBorder} ${paddedLine} ${rightBorder}`);
           }
-          lines.push("   " + bottomBorder);
+          lines.push(`   ${bottomBorder}`);
         } else {
           lines.push(th.fg("warning", "[Result]"));
           for (const line of wrapTextWithAnsi(truncated.trim(), width)) {
@@ -367,19 +367,19 @@ export class ConversationViewer implements Component {
             outSuffix = "";
           }
           
-          lines.push("   " + topBorder);
+          lines.push(`   ${topBorder}`);
           const cmdLineStr = `${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`;
-          lines.push(`   ${leftBorder} ${cmdLineStr}` + " ".repeat(Math.max(0, innerW - visibleWidth(`${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`))) + ` ${rightBorder}`);
+          lines.push(`   ${leftBorder} ${cmdLineStr}${" ".repeat(Math.max(0, innerW - visibleWidth(`${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`)))} ${rightBorder}`);
           
           if (output.trim()) {
-            lines.push(`   ` + midBorder);
-            const outTrunc = output.length > 800 ? output.slice(0, 800) + "\n... (truncated)" : output;
+            lines.push(`   ${midBorder}`);
+            const outTrunc = output.length > 800 ? `${output.slice(0, 800)}\n... (truncated)` : output;
             for (const line of wrapTextWithAnsi(outTrunc.trim(), innerW)) {
               const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
               lines.push(`   ${leftBorder} ${outPrefix}${paddedLine}${outSuffix} ${rightBorder}`);
             }
           }
-          lines.push("   " + bottomBorder);
+          lines.push(`   ${bottomBorder}`);
         } else {
           lines.push(th.fg("accent", `$ ${command}`));
           if (output.trim()) {

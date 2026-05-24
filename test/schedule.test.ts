@@ -18,7 +18,7 @@ import { SubagentScheduler } from "../src/schedule.js";
 import { ScheduleStore } from "../src/schedule-store.js";
 
 function makeMockManager() {
-  const spawnFn = vi.fn(() => "agent-" + Math.random().toString(36).slice(2, 10));
+  const spawnFn = vi.fn(() => `agent-${Math.random().toString(36).slice(2, 10)}`);
   return {
     spawn: spawnFn,
     getRecord: vi.fn(() => ({ promise: Promise.resolve("done") })),
@@ -355,7 +355,7 @@ describe("SubagentScheduler — fire path", () => {
     function installFaithfulMock(): Map<string, FakeRecord> {
       const records = new Map<string, FakeRecord>();
       manager.spawn.mockImplementation(() => {
-        const id = "agent-" + Math.random().toString(36).slice(2, 10);
+        const id = `agent-${Math.random().toString(36).slice(2, 10)}`;
         let resolve!: () => void;
         const promise = new Promise<string>(r => { resolve = () => r(""); });
         records.set(id, { status: "running", promise, resolve });

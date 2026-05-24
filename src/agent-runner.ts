@@ -339,7 +339,7 @@ export async function runAgent(
   // Gracefully skips when unavailable — context-mode is an optional peerDependency.
   const ctxInjection = buildCtxInjection();
   if (ctxInjection) {
-    systemPrompt = systemPrompt + "\n\n" + ctxInjection.systemPromptAddition;
+    systemPrompt = `${systemPrompt}\n\n${ctxInjection.systemPromptAddition}`;
     toolNames = [...toolNames, ...ctxInjection.toolAllowList];
     console.log(
       `[pi-subagents] context-mode tools injected for agent ${options.agentId ?? "unknown"}`,
@@ -608,7 +608,7 @@ export async function runAgent(
         .map((r) => {
           const failedCriteria = r.criteria.filter((c) => !c.passed);
           const details = failedCriteria.length > 0
-            ? "\n" + failedCriteria.map((c) => `  - ${c.criterion}: ${c.feedback}`).join("\n")
+            ? `\n${failedCriteria.map((c) => `  - ${c.criterion}: ${c.feedback}`).join("\n")}`
             : "";
           return `[${r.agentId}] ${r.summary}${details}`;
         })
@@ -731,7 +731,7 @@ export function getAgentConversation(session: AgentSession): string {
       if (toolCalls.length > 0) parts.push(`[Tool Calls]:\n${toolCalls.join("\n")}`);
     } else if (msg.role === "toolResult") {
       const text = extractText(msg.content);
-      const truncated = text.length > 200 ? text.slice(0, 200) + "..." : text;
+      const truncated = text.length > 200 ? `${text.slice(0, 200)}...` : text;
       parts.push(`[Tool Result (${msg.toolName})]: ${truncated}`);
     }
   }
