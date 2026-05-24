@@ -23,6 +23,7 @@ import type { AgentConfig, AgentRecord, JoinMode } from "./types.js";
 import type { AgentActivity } from "./ui/agent-widget.js";
 import { formatDuration, getDisplayName } from "./ui/agent-widget.js";
 import { showSchedulesMenu } from "./ui/schedule-menu.js";
+import { showAgentDashboard } from "./ui/agent-dashboard.js";
 
 /** @internal Re-export for use from index.ts */
 export type { AgentManager, ModelRegistry, SubagentScheduler };
@@ -132,6 +133,11 @@ export async function showAgentsMenu(
     options.push(`Running agents (${agents.length}) — ${running} running, ${done} done`);
   }
 
+  // NEW: Rich interactive dashboard (highest-impact entry point for the TUI work)
+  if (agents.length > 0) {
+    options.push("Interactive dashboard (hotkeys • live tree • steering)");
+  }
+
   // Agent types list
   if (allNames.length > 0) {
     options.push(`Agent types (${allNames.length})`);
@@ -162,6 +168,12 @@ export async function showAgentsMenu(
 
   if (choice.startsWith("Running agents (")) {
     await showRunningAgents(ctx, manager, agentActivity);
+    await showAgentsMenu(ctx, pi, manager, scheduler, agentActivity, isSchedulingEnabled, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, setDefaultMaxTurns, setGraceTurns, setDefaultJoinMode, setSchedulingEnabled);
+  } else if (choice === "Interactive dashboard (hotkeys • live tree • steering)") {
+    // Launch the new rich TUI dashboard (additive, non-breaking)
+    const viewConv = (rec: import("./types.js").AgentRecord) =>
+      viewAgentConversation(ctx, rec, agentActivity);
+    await showAgentDashboard(ctx, manager, agentActivity, viewConv);
     await showAgentsMenu(ctx, pi, manager, scheduler, agentActivity, isSchedulingEnabled, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, setDefaultMaxTurns, setGraceTurns, setDefaultJoinMode, setSchedulingEnabled);
   } else if (choice.startsWith("Agent types (")) {
     await showAllAgentsList(ctx, ctx.modelRegistry);
