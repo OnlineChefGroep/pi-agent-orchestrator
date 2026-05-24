@@ -3,15 +3,13 @@
  *
  * Displays a tree of agents with animated spinners, live stats, and activity descriptions.
  * Uses the callback form of setWidget for themed rendering.
+ *
+ * UI styles: premium (default), retro, plain
  */
 
 import { truncateToWidth } from "@mariozechner/pi-tui";
-import { type ChildProcess, spawn } from "child_process";
-import { existsSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import type { AgentManager } from "../agent-manager.js";
-import { getUiStyle, isCinematicEnabled, isShowActivityStream, isShowTokenUsage, isShowTurnProgress } from "../agent-registry.js";
+import { getUiStyle } from "../agent-registry.js";
 import { getConfig } from "../agent-types.js";
 import type { AgentInvocation, SubagentType } from "../types.js";
 import { getLifetimeTotal, getSessionContextPercent, type LifetimeUsage, type SessionLike } from "../usage.js";
@@ -21,6 +19,9 @@ import { getLifetimeTotal, getSessionContextPercent, type LifetimeUsage, type Se
 /** Maximum number of rendered lines before overflow collapse kicks in. */
 const MAX_WIDGET_LINES = 12;
 
+/** Animation frame interval (ms) — controls spinner speed. */
+const ANIMATION_INTERVAL = 80;
+
 /** Braille spinner frames for animated running indicator. */
 export const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -29,6 +30,8 @@ const SPINNER_FRAMES = {
   dots: ["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"],
   lines: ["-", "\\", "|", "/"],
   classic: ["*"],
+  pulse: ["○", "●", "○", "●"],
+  wave: ["░", "▒", "▓", "█", "▓", "▒"],
   none: [""],
 };
 
@@ -50,6 +53,9 @@ const TOOL_DISPLAY: Record<string, string> = {
   grep: "searching",
   find: "finding files",
   ls: "listing",
+  glob: "matching patterns",
+  webSearch: "searching web",
+  webFetch: "fetching URL",
 };
 
 // ---- Types ----
@@ -259,14 +265,6 @@ export class AgentWidget {
     }
   }
 
-  private sidecar: ChildProcess | undefined;
-  private stopSidecar() {
-    if (this.sidecar) {
-      this.sidecar.kill();
-      this.sidecar = undefined;
-    }
-  }
-
   /**
    * Called on each new turn (tool_execution_start).
    * Ages finished agents and clears those that have lingered long enough.
@@ -283,7 +281,7 @@ export class AgentWidget {
   /** Ensure the widget update timer is running. */
   ensureTimer() {
     if (!this.widgetInterval) {
-      this.widgetInterval = setInterval(() => this.update(), 80);
+      this.widgetInterval = setInterval(() => this.update(), ANIMATION_INTERVAL);
     }
   }
 
@@ -364,84 +362,6 @@ export class AgentWidget {
     if (!hasActive && !hasFinished) return [];
 
     const activeUiStyle = getUiStyle();
-    
-    // Cinematic Sidecar Logic - only spawn if enabled AND uiStyle is cinematic
-    if (activeUiStyle === "cinematic" && isCinematicEnabled()) {
-      if (!this.sidecar) {
-        try {
-          const binName = process.platform === "win32" ? "cinematic-tui.exe" : "cinematic-tui";
-
-          // Search for the binary: PATH → env override → bundled fallback
-          let binPath: string | undefined;
-          const pathDirs = (process.env.PATH || "").split(process.platform === "win32" ? ";" : ":");
-          for (const dir of pathDirs) {
-            const candidate = join(dir, binName);
-            if (existsSync(candidate)) {
-              binPath = candidate;
-              break;
-            }
-          }
-          if (!binPath && process.env.PI_CINEMATIC_TUI_PATH) {
-            if (existsSync(process.env.PI_CINEMATIC_TUI_PATH)) {
-              binPath = process.env.PI_CINEMATIC_TUI_PATH;
-            }
-          }
-          if (!binPath) {
-            const extDir = dirname(dirname(fileURLToPath(import.meta.url)));
-            const fallback = join(extDir, "cinematic-renderer", binName);
-            if (existsSync(fallback)) {
-              binPath = fallback;
-            }
-          }
-
-          if (binPath) {
-            this.sidecar = spawn(binPath, [], { stdio: ["pipe", "pipe", "pipe"] });
-            this.sidecar.on("exit", () => { this.sidecar = undefined; });
-            this.sidecar.on("error", (err: Error) => {
-              console.warn(`[pi-subagents] Failed to start cinematic sidecar: ${err.message}`);
-              this.sidecar = undefined;
-            });
-          } else {
-            console.warn(`[pi-subagents] cinematic-tui binary not found in PATH, PI_CINEMATIC_TUI_PATH, or bundled cinematic-renderer directory. Skipping sidecar.`);
-          }
-        } catch (err) {
-          console.warn(`[pi-subagents] Failed to spawn cinematic sidecar: ${err}`);
-        }
-      }
-      
-      if (this.sidecar?.stdin) {
-        const payload = {
-          agents: allAgents.map(a => {
-            const activity = this.agentActivity.get(a.id);
-            const maxTurns = activity?.maxTurns;
-            const turnCount = activity?.turnCount || 0;
-            return {
-              id: a.id,
-              type: a.type,
-              role: getDisplayName(a.type),
-              status: a.status,
-              tokens: activity?.toolUses || 0,
-              progress: maxTurns ? Math.round(turnCount / maxTurns * 100) : 50,
-              activity: activity?.responseText?.slice(0, 100),
-            };
-          }),
-          showActivityStream: isShowActivityStream(),
-          showTokenUsage: isShowTokenUsage(),
-          showTurnProgress: isShowTurnProgress(),
-        };
-        
-        try {
-          this.sidecar.stdin.write(`${JSON.stringify(payload)}\n`);
-        } catch (_err) {
-          // Silently ignore write errors - sidecar may have exited
-        }
-      }
-      
-      // Return empty so Pi's default widget doesn't render over it
-      return [];
-    } else {
-      this.stopSidecar();
-    }
 
     // Wrapper for plain theme
     const plainTheme: Theme = {
@@ -658,8 +578,6 @@ export class AgentWidget {
   }
 
   dispose() {
-    // CRITICAL FIX: Stop Go sidecar to prevent orphan processes
-    this.stopSidecar();
     
     if (this.widgetInterval) {
       clearInterval(this.widgetInterval);
