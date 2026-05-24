@@ -27,9 +27,18 @@ Thumbs.db
 # Temporary files
 *.tmp
 .temp/
+
+# pi local state
 .pi/readcache
 .pi/agents/
 .claude
-.vscode
 
+# Autoresearch generated data
+autoresearch.jsonl
+
+# Factory dev tooling
+.factory/
+
+# Personal planning
+VERVOLG_PLAN.md
 
