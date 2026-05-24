@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.9.1 (2026-05-24)
+
+### 🧹 Cleanup
+- **Cinematic sidecar removal**: Go binary spawning logic verwijderd uit `agent-widget.ts`; sidecar wordt niet meer gebruikt.
+- **UI enhancements**: Nieuwe spinner frames (`pulse`, `wave`), tool display mappings (`glob`, `webSearch`, `webFetch`).
+- **Fix animation interval**: `ANIMATION_INTERVAL` constante toegevoegd en gebruikt in `ensureTimer()`.
+
+### 🛡 Repo
+- `.npmrc` toegevoegd aan `.gitignore` (bevat token).
+
 ## v0.9.0 (2026-05-24)
 
 ### 🔧 Fixes
