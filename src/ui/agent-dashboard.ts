@@ -1,15 +1,16 @@
 /**
  * agent-dashboard.ts — Rich interactive TUI dashboard for subagent management.
  *
- * First slice (per plan): 
- * - Full Component implementation modeled exactly after ConversationViewer
- * - Vim + arrow keyboard navigation (matchesKey)
- * - Themed rendering (premium/retro/plain via getUiStyle)
- * - Overlay via ctx.ui.custom (same pattern)
- * - Safe, additive, no changes to existing behavior
+ * Current state (strong iteration on feat/rich-subagent-tui):
+ * - Full Component + vim navigation (matchesKey)
+ * - Live rich activity (spinners, describeActivity, turns, tokens)
+ * - Multi-select (Space) + bulk kill
+ * - Real hotkeys: k=kill, s=steer (with editor), Enter=view
+ * - Toggleable ? help screen
+ * - Rich per-agent metadata (worktree, group/handoff, validation, outputFile)
+ * - Themed (premium/retro/plain)
  *
- * Later slices: live data from AgentManager + AgentActivity, steering, kill/bulk actions,
- * handoff visualization, global shortcut registration, tighter cinematic synergy.
+ * Still fully additive. Matches the spirit of OpenCode + Claude Code agent control.
  */
 
 import type { AgentManager } from "../agent-manager.js";
@@ -81,6 +82,10 @@ export class AgentDashboard implements Component {
   private agents: AgentRecord[] = [];
   private spinnerFrame = 0; // for live activity animation
 
+  /** Multi-select support (Space to toggle) — very powerful for bulk operations */
+  private selectedIds = new Set<string>();
+  private showHelp = false; // toggled by ?
+
   constructor(
     private readonly tui: TUI,
     private readonly options: AgentDashboardOptions,
@@ -94,6 +99,11 @@ export class AgentDashboard implements Component {
     // Clamp selection
     if (this.selectedIndex >= this.agents.length) {
       this.selectedIndex = Math.max(0, this.agents.length - 1);
+    }
+    // Remove any selected IDs that no longer exist (agents finished/cleaned)
+    const currentIds = new Set(this.agents.map(a => a.id));
+    for (const id of this.selectedIds) {
+      if (!currentIds.has(id)) this.selectedIds.delete(id);
     }
   }
 
@@ -140,17 +150,37 @@ export class AgentDashboard implements Component {
         void this.options.onViewConversation(rec);
         return;
       }
-    } else if (matchesKey(data, "k") || matchesKey(data, "K")) {
-      // Kill / Abort (very high value hotkey)
+    } 
+    // Multi-select toggle (Space) - foundation for bulk operations
+    else if (matchesKey(data, " ")) {
       if (rec) {
-        const aborted = this.options.onAbort ? this.options.onAbort(rec.id) : this.options.manager.abort(rec.id);
-        if (aborted) {
-          this.refreshAgents();
-          this.tui.requestRender();
+        if (this.selectedIds.has(rec.id)) {
+          this.selectedIds.delete(rec.id);
+        } else {
+          this.selectedIds.add(rec.id);
         }
+        this.tui.requestRender();
       }
-    } else if (matchesKey(data, "s") || matchesKey(data, "S")) {
-      // Steer (the killer feature for interactive subagents)
+    }
+    // Kill / Abort — supports both single and bulk (multi-select)
+    else if (matchesKey(data, "k") || matchesKey(data, "K")) {
+      const idsToKill = this.selectedIds.size > 0 
+        ? Array.from(this.selectedIds) 
+        : (rec ? [rec.id] : []);
+
+      let anyAborted = false;
+      for (const id of idsToKill) {
+        const aborted = this.options.onAbort ? this.options.onAbort(id) : this.options.manager.abort(id);
+        if (aborted) anyAborted = true;
+      }
+      if (anyAborted) {
+        this.selectedIds.clear(); // clear selection after bulk action
+        this.refreshAgents();
+        this.tui.requestRender();
+      }
+    } 
+    else if (matchesKey(data, "s") || matchesKey(data, "S")) {
+      // Steer (currently only supports single; multi-steer is advanced)
       if (rec && this.options.onSteer) {
         this.closed = true;
         this.done();
@@ -161,7 +191,7 @@ export class AgentDashboard implements Component {
       this.refreshAgents();
       this.tui.requestRender();
     } else if (matchesKey(data, "?")) {
-      // Future: show help overlay. For now just refresh to show footer hint.
+      this.showHelp = !this.showHelp;
       this.tui.requestRender();
     }
 
@@ -191,7 +221,10 @@ export class AgentDashboard implements Component {
     const lines: string[] = [];
     const style = getUiStyle();
 
-    const title = `${th.title}Agent Dashboard${th.reset}  ${th.dim}(rich TUI — ${style} • ${this.agents.length} agents)${th.reset}`;
+    const multiInfo = this.selectedIds.size > 0 
+      ? ` • ${this.selectedIds.size} selected` 
+      : "";
+    const title = `${th.title}Agent Dashboard${th.reset}  ${th.dim}(rich TUI — ${style} • ${this.agents.length} agents${multiInfo})${th.reset}`;
     lines.push(title);
     lines.push(`${th.border}${"─".repeat(Math.min(Math.max(50, width - 4), width))}${th.reset}`);
 
@@ -200,7 +233,31 @@ export class AgentDashboard implements Component {
     const start = Math.min(this.scrollOffset, maxScroll);
     const end = Math.min(start + vh, this.agents.length);
 
-    if (this.agents.length === 0) {
+    if (this.showHelp) {
+      // Beautiful in-component help (no extra callbacks needed)
+      lines.push(`${th.title}Keyboard Shortcuts${th.reset}`);
+      lines.push(`${th.border}${"─".repeat(Math.min(45, width))}${th.reset}`);
+      const helpLines = [
+        "↑ / k          Move selection up",
+        "↓ / j          Move selection down",
+        "PageUp / Shift+↑   Page up",
+        "PageDown / Shift+↓ Page down",
+        "Home / End     Jump to first/last",
+        "",
+        "Enter          View full conversation",
+        "Space          Toggle multi-select",
+        "k / K          Kill selected (or current)",
+        "s / S          Steer selected agent",
+        "r / R          Force refresh",
+        "?              Toggle this help",
+        "q / Esc        Close dashboard",
+      ];
+      for (const h of helpLines) {
+        lines.push(`${th.dim}${h}${th.reset}`);
+      }
+      lines.push(`${th.border}${"─".repeat(Math.min(45, width))}${th.reset}`);
+      lines.push(`${th.dim}Press ? again to return to agent list${th.reset}`);
+    } else if (this.agents.length === 0) {
       lines.push(`${th.dim}No agents in this session. Spawn some with the Agent tool or /agents → Create.${th.reset}`);
     } else {
       for (let i = start; i < end; i++) {
@@ -208,7 +265,11 @@ export class AgentDashboard implements Component {
         const isSel = i === this.selectedIndex;
         const activity = this.options.agentActivity.get(rec.id);
 
-        const prefix = isSel ? `${th.highlight}▶ ` : "  ";
+        const isMultiSelected = this.selectedIds.has(rec.id);
+        const multiMarker = isMultiSelected ? (style === "plain" ? "[x] " : "✓ ") : "";
+        const prefix = isSel 
+          ? `${th.highlight}▶ ${multiMarker}` 
+          : `  ${multiMarker}`;
         const dn = getDisplayName(rec.type);
         const desc = rec.description ? ` — ${rec.description}` : "";
 
@@ -243,6 +304,19 @@ export class AgentDashboard implements Component {
           lines.push("   " + truncateToWidth(activityLine, width - 6));
         }
 
+        // Extra metadata for selected agent (worktree, group/handoff, validation)
+        if (isSel) {
+          const metaParts: string[] = [];
+          if (rec.worktree) metaParts.push(`worktree:${rec.worktree.branch}`);
+          if (rec.groupId) metaParts.push(`group:${rec.groupId}`);
+          if (rec.validationResults && rec.validated === false) metaParts.push("validation:FAILED");
+          if (rec.outputFile) metaParts.push("has output file");
+
+          if (metaParts.length > 0) {
+            lines.push(`   ${th.dim}[ ${metaParts.join("  ")} ]${th.reset}`);
+          }
+        }
+
         // Separator between agents (subtle)
         if (i < end - 1) {
           lines.push(`${th.dim}${"·".repeat(Math.min(20, Math.floor(width / 3)))}${th.reset}`);
@@ -252,7 +326,7 @@ export class AgentDashboard implements Component {
 
     // Footer with real hotkeys (Claude/OpenCode inspired)
     lines.push(`${th.border}${"─".repeat(Math.min(50, width))}${th.reset}`);
-    const footer = `${th.dim}↑↓/kj nav  Enter=view  s=steer  k=kill  r=refresh  ?=help  q/esc=close${th.reset}`;
+    const footer = `${th.dim}Space=toggle select  ↑↓/kj nav  Enter=view  s=steer  k=kill (bulk)  r=refresh  ?=help  q/esc=close${th.reset}`;
     lines.push(footer);
 
     return lines;
