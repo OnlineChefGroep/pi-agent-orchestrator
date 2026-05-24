@@ -32,7 +32,4 @@ Thumbs.db
 .claude
 .vscode
 
-# Go compiled binaries
-cinematic-renderer/cinematic-tui
-cinematic-renderer/cinematic-tui.exe
-cinematic-renderer/cinematic-renderer.exe
+

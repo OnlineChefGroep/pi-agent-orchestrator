@@ -129,7 +129,7 @@ spawn → build context → create session → run loop
 ### `src/ui/agent-widget.ts` — Widget & Sidecar
 
 When `getUiStyle() === "cinematic"` and `isCinematicEnabled()`:
-1. Spawns `cinematic-renderer/cinematic-tui[.exe]` as child process
+1. Uses the optional `@onlinechefgroep/pi-subagents-tui` package (installed separately)
 2. Sends JSON payload with agent tree, activity, token usage every tick
 3. Sidecar renders rich TUI; main process returns empty widget (to avoid double rendering)
 

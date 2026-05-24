@@ -116,15 +116,13 @@ npm install --legacy-peer-deps
 
 **Checklist:**
 1. `isCinematicEnabled()` returns true (check settings)
-2. The Go binary exists: `cinematic-renderer/cinematic-tui` (Linux/macOS) or `cinematic-tui.exe` (Windows)
-3. Binary is executable (Unix: `chmod +x cinematic-renderer/cinematic-tui`)
-4. No stderr output from the sidecar process (check logs)
-5. `getUiStyle()` is actually `"cinematic"` (not just set in settings but not applied)
+2. The `@onlinechefgroep/pi-subagents-tui` package is installed
+3. No stderr output from the sidecar process (check logs)
+4. `getUiStyle()` is actually `"cinematic"` (not just set in settings but not applied)
 
-**Build from source:**
+**Install the cinematic TUI:**
 ```bash
-cd cinematic-renderer
-go build -o cinematic-tui ./...
+npm install @onlinechefgroep/pi-subagents-tui
 ```
 
 ---

@@ -100,21 +100,27 @@ Output findings as a markdown list with severity (Critical / High / Medium / Low
 
 ## Cinematic Dashboard (TUI Sidecar)
 
-A Go Bubble Tea application renders agent status in real time.
+The cinematic dashboard is an **optional** Go Bubble Tea application that renders agent status in real time with animated backgrounds.
 
-### Build
+### Installation
+
+The TUI sidecar is now a separate package: **[@onlinechefgroep/pi-subagents-tui](https://github.com/OnlineChefGroep/pi-subagents-tui)**
+
+To enable cinematic mode:
+
+1. Install the TUI package: `pi install npm:@onlinechefgroep/pi-subagents-tui`
+2. Set `subagents.cinematic.uiStyle` to `"cinematic"` in settings
+
+Without the TUI package installed, cinematic mode will gracefully fall back to the standard TUI display.
+
+### Manual Build
+
+If you prefer to build from source:
 
 ```bash
-cd cinematic-renderer
+git clone https://github.com/OnlineChefGroep/pi-subagents-tui.git
+cd pi-subagents-tui
 go build -o cinematic-tui .
-```
-
-### Run
-
-The sidecar is launched automatically by the pi extension when agents are active. Manual invocation:
-
-```bash
-./cinematic-tui --style=dark --animation=smooth
 ```
 
 ---
@@ -144,9 +150,10 @@ pi host
         ├── AgentRunner (spawn → execute → handoff → validate)
         ├── ScheduleStore (file-backed persistence, PID-locked)
         ├── Hooks (lifecycle events)
-        ├── PartitionedState (isolated tool/skill subsets)
-        └── cinematic-renderer/ (Go TUI sidecar)
-              └── internal/widget/ (Bubble Tea components)
+        └── PartitionedState (isolated tool/skill subsets)
+
+[Optional] pi-subagents-tui sidecar
+        └── Go Bubble Tea cinematic dashboard
 ```
 
 ---
@@ -165,9 +172,6 @@ npm test
 
 # Lint
 npm run lint
-
-# Build Go sidecar
-cd cinematic-renderer && go build ./...
 ```
 
 ---

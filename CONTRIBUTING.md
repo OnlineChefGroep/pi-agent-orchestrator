@@ -7,7 +7,6 @@ Thank you for contributing. This document covers build, test, lint, and PR workf
 ## Development Environment
 
 - **Node.js:** 20+ (LTS)
-- **Go:** 1.22+ (only for cinematic sidecar)
 - **OS:** Linux, macOS, Windows (CI tests run on ubuntu-latest)
 
 ---
@@ -56,9 +55,6 @@ src/
   worktree.ts              # Git worktree operations
   cross-extension-rpc.ts   # Inter-extension RPC
   ui/                      # TUI components (widget, menus, viewer)
-  cinematic-renderer/        # Go sidecar for cinematic dashboard
-    main.go
-    internal/widget/
 ```
 
 ---
@@ -101,19 +97,6 @@ npm test -- --coverage
 ```
 
 **Known issue:** On Windows, `schedule.test.ts` and `schedule-store.test.ts` have pre-existing flaky tests related to temp directory races. These are tracked separately and should not block PRs.
-
----
-
-## Go Sidecar
-
-```bash
-cd cinematic-renderer
-go vet ./...
-go build ./...
-go test ./...
-```
-
-The Go sidecar is a separate binary (`cinematic-tui` / `cinematic-tui.exe`) spawned by `src/ui/agent-widget.ts` when UI style is set to `"cinematic"`. It communicates via JSON over stdin.
 
 ---
 

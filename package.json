@@ -28,6 +28,9 @@
   "peerDependenciesMeta": {
     "@onlinechef/context-mode": {
       "optional": true
+    },
+    "@onlinechefgroep/pi-subagents-tui": {
+      "optional": true
     }
   },
   "dependencies": {
