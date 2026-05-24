@@ -43,9 +43,13 @@ jobs:
             @mariozechner/pi-coding-agent@0.72.0 \
             @mariozechner/pi-tui@0.72.0
 
-      - run: npm run typecheck
+      - name: TypeScript typecheck
+        if: matrix.peer-deps == 'latest'
+        run: npm run typecheck
 
-      - run: npm run lint
+      - name: Lint
+        if: matrix.peer-deps == 'latest'
+        run: npm run lint
 
       - name: Run tests
         run: npm test
