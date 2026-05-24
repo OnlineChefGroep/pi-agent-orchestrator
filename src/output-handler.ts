@@ -24,6 +24,7 @@ import type { AgentActivity } from "./ui/agent-widget.js";
 import { formatDuration, getDisplayName } from "./ui/agent-widget.js";
 import { showSchedulesMenu } from "./ui/schedule-menu.js";
 import { showAgentDashboard } from "./ui/agent-dashboard.js";
+import { getSwarmCoordinator, uiCreateOrJoinSwarm } from "./swarm-join.js";
 
 /** @internal Re-export for use from index.ts */
 export type { AgentManager, ModelRegistry, SubagentScheduler };
@@ -215,17 +216,58 @@ export async function showAgentsMenu(
       const reOpenOnAbort = (aid: string) => manager.abort(aid);
       const reOpenOnSteer = async (aid: string) => { /* no-op, already handled */ };
       const reOpenOnPerms = (r: import("./types.js").AgentRecord) => showAgentPermissions(ctx, r);
-      const reOpenOnSwarm = async (_action: string, _ids: string[]) => {
-        // TODO (next bigger step): real swarm create/join/steer using SwarmCoordinator + ctx.ui.editor
-        ctx.ui.notify("Swarm actions coming in next slice of the dikke upgrade", "info");
+      const reOpenOnSwarm = async (action: string, ids: string[]) => {
+        if (ids.length === 0) {
+          ctx.ui.notify("No agents selected for swarm action.", "warning");
+          return;
+        }
+
+        if (action === "menu" || action === "create") {
+          const swarmId = uiCreateOrJoinSwarm(ids, `Swarm from dashboard`);
+          if (swarmId) {
+            ctx.ui.notify(`Created swarm ${swarmId} with ${ids.length} agent(s).`, "info");
+          } else {
+            ctx.ui.notify("Could not create swarm right now.", "warning");
+          }
+        } else {
+          ctx.ui.notify(`Swarm action '${action}' received for ${ids.length} agents (more coming soon).`, "info");
+        }
+
+        // Fluid re-open
+        const viewConv = (rec: import("./types.js").AgentRecord) =>
+          viewAgentConversation(ctx, rec, agentActivity);
+        const reOpenOnAbort2 = (aid: string) => manager.abort(aid);
+        const reOpenOnSteer2 = async (aid: string) => {};
+        const reOpenOnPerms2 = (r: import("./types.js").AgentRecord) => showAgentPermissions(ctx, r);
+        const reOpenOnSwarm2 = reOpenOnSwarm; // keep the same handler
+        await showAgentDashboard(ctx, manager, agentActivity, viewConv, reOpenOnAbort2, reOpenOnSteer2, reOpenOnPerms2, reOpenOnSwarm2);
       };
       await showAgentDashboard(ctx, manager, agentActivity, viewConv, reOpenOnAbort, reOpenOnSteer, reOpenOnPerms, reOpenOnSwarm);
     };
 
     const onPerms = (r: import("./types.js").AgentRecord) => showAgentPermissions(ctx, r);
-    const onSwarm = async (_action: string, _ids: string[]) => {
-      // TODO (next bigger step): full swarm menu + integration with SwarmCoordinator
-      ctx.ui.notify("Swarm mode actions (create/join/steer) — part of the dikke TUI upgrade", "info");
+    const onSwarm = async (action: string, ids: string[]) => {
+      if (ids.length === 0) {
+        ctx.ui.notify("Select agents first (Space) then press w for swarm actions.", "info");
+        return;
+      }
+
+      if (action === "menu" || action === "create") {
+        const swarmId = uiCreateOrJoinSwarm(ids, `Dashboard Swarm`);
+        if (swarmId) {
+          ctx.ui.notify(`Swarm created: ${swarmId} — ${ids.length} agents joined.`, "success");
+        }
+      } else {
+        ctx.ui.notify(`Swarm action: ${action} on ${ids.length} agents`, "info");
+      }
+
+      // Re-open fluidly
+      const viewConv2 = (rec: import("./types.js").AgentRecord) => viewAgentConversation(ctx, rec, agentActivity);
+      const onAbort2 = onAbort;
+      const onSteer2 = onSteer;
+      const onPerms2 = onPerms;
+      const onSwarm2 = onSwarm;
+      await showAgentDashboard(ctx, manager, agentActivity, viewConv2, onAbort2, onSteer2, onPerms2, onSwarm2);
     };
     await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer, onPerms, onSwarm);
     await showAgentsMenu(ctx, pi, manager, scheduler, agentActivity, isSchedulingEnabled, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, setDefaultMaxTurns, setGraceTurns, setDefaultJoinMode, setSchedulingEnabled);

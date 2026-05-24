@@ -236,3 +236,32 @@ export class SwarmCoordinator {
     this.agentToSwarm.clear();
   }
 }
+
+// === Singleton for cross-module access (used by dashboard callbacks) ===
+// The real instance with delivery callback is created in index.ts.
+// The UI layer can get a reference to perform membership operations.
+let activeSwarmCoordinator: SwarmCoordinator | null = null;
+
+export function setActiveSwarmCoordinator(coordinator: SwarmCoordinator) {
+  activeSwarmCoordinator = coordinator;
+}
+
+export function getSwarmCoordinator(): SwarmCoordinator | null {
+  return activeSwarmCoordinator;
+}
+
+/**
+ * Convenience: create or join a swarm from the UI layer.
+ * If no active coordinator exists yet, this is a no-op (graceful during early init).
+ */
+export function uiCreateOrJoinSwarm(agentIds: string[], suggestedName?: string): string | null {
+  const coord = getSwarmCoordinator();
+  if (!coord || agentIds.length === 0) return null;
+
+  // Create a new swarm if none specified, or join to first existing if we want (for v1 we always create fresh for simplicity)
+  const swarmId = coord.createSwarm(suggestedName);
+  for (const id of agentIds) {
+    coord.addAgentToSwarm(swarmId, id);
+  }
+  return swarmId;
+}

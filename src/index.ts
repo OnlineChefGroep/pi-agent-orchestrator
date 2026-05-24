@@ -20,7 +20,7 @@ import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTu
 import { getAgentConfig, getAvailableTypes, resolveType } from "./agent-types.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
 import { GroupJoinManager } from "./group-join.js";
-import { SwarmCoordinator } from "./swarm-join.js";
+import { SwarmCoordinator, setActiveSwarmCoordinator } from "./swarm-join.js";
 import { HookRegistry } from "./hooks.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./invocation-config.js";
 import { resolveModel } from "./model-resolver.js";
@@ -379,6 +379,10 @@ export default function (pi: ExtensionAPI) {
     },
     30_000,
   );
+
+  // Make the real coordinator available to the dashboard / output-handler layer
+  // so 'w' hotkey actions can actually create and join swarms at runtime.
+  setActiveSwarmCoordinator(swarmJoin);
 
   /** Helper: build event data for lifecycle events from an AgentRecord. */
   function buildEventData(record: AgentRecord) {

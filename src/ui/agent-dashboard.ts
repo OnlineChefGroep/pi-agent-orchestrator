@@ -287,7 +287,7 @@ export class AgentDashboard implements Component {
         "k / K          Kill selected (or current)",
         "s / S          Steer selected agent",
         "p / P          Show permissions & scope for selected agent",
-        "w / W          Swarm actions (create/join/leave/steer from selection)",
+        "w / W          Swarm actions (create from selection, join to swarm)",
         "r / R          Force refresh",
         "?              Toggle this help",
         "q / Esc        Close dashboard",
