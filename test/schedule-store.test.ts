@@ -14,7 +14,7 @@ import type { ScheduledSubagent } from "../src/types.js";
 
 function makeJob(overrides: Partial<ScheduledSubagent> = {}): ScheduledSubagent {
   return {
-    id: "job-" + Math.random().toString(36).slice(2, 10),
+    id: `job-${Math.random().toString(36).slice(2, 10)}`,
     name: "test-job",
     description: "test",
     schedule: "5m",
@@ -100,7 +100,7 @@ describe("ScheduleStore", () => {
     const store = new ScheduleStore(file);
     await store.add(makeJob());
     expect(existsSync(file)).toBe(true);
-    expect(existsSync(file + ".tmp")).toBe(false);
+    expect(existsSync(`${file}.tmp`)).toBe(false);
   });
 
   it("self-heals from a corrupt JSON file — load silently empties, next save rewrites", async () => {
@@ -119,7 +119,7 @@ describe("ScheduleStore", () => {
 
   it("recovers from a stale lock left by a dead process", async () => {
     const file = join(tmp, "s.json");
-    const lockFile = file + ".lock";
+    const lockFile = `${file}.lock`;
     // Simulate a stale lock file containing a non-existent PID.
     // PID 999_999_999 is virtually never a live process — kill -0 returns ESRCH.
     writeFileSync(lockFile, "999999999");

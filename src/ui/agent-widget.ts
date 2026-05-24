@@ -149,7 +149,7 @@ export function formatSessionTokens(
 
 /** Format turn count with optional max limit: "⟳5≤30" or "⟳5". */
 export function formatTurns(turnCount: number, maxTurns?: number | null): string {
-  return maxTurns != null ? `⟳${turnCount}≤${maxTurns}` : `⟳${turnCount}`;
+  return maxTurns == null ? `⟳${turnCount}` : `⟳${turnCount}≤${maxTurns}`;
 }
 
 /** Format milliseconds as human-readable duration. */
@@ -193,7 +193,7 @@ export function buildInvocationTags(
 function truncateLine(text: string, len = 60): string {
   const line = text.split("\n").find(l => l.trim())?.trim() ?? "";
   if (line.length <= len) return line;
-  return line.slice(0, len) + "…";
+  return `${line.slice(0, len)}…`;
 }
 
 /** Build a human-readable activity string from currently-running tools or response text. */
@@ -213,7 +213,7 @@ export function describeActivity(activeTools: Map<string, string>, responseText?
         parts.push(action);
       }
     }
-    return parts.join(", ") + "…";
+    return `${parts.join(", ")}…`;
   }
 
   // No tools active — show truncated response text if available
@@ -431,7 +431,7 @@ export class AgentWidget {
         };
         
         try {
-          this.sidecar.stdin.write(JSON.stringify(payload) + "\n");
+          this.sidecar.stdin.write(`${JSON.stringify(payload)}\n`);
         } catch (_err) {
           // Silently ignore write errors - sidecar may have exited
         }
@@ -479,7 +479,7 @@ export class AgentWidget {
 
     const finishedLines: string[] = [];
     for (const a of finished) {
-      finishedLines.push(truncate(activeTheme.fg("dim", c_tree) + " " + this.renderFinishedLine(a, activeTheme)));
+      finishedLines.push(truncate(`${activeTheme.fg("dim", c_tree)} ${this.renderFinishedLine(a, activeTheme)}`));
     }
 
     const runningLines: string[][] = []; // each entry is [header, activity]
@@ -505,20 +505,20 @@ export class AgentWidget {
       const activity = bg ? describeActivity(bg.activeTools, bg.responseText) : "thinking…";
 
       runningLines.push([
-        truncate(activeTheme.fg("dim", c_tree) + ` ${activeTheme.fg("accent", frame)} ${activeTheme.bold(name)}${modeTag}  ${activeTheme.fg("muted", a.description)} ${activeTheme.fg("dim", "·")} ${activeTheme.fg("dim", statsText)}`),
+        truncate(`${activeTheme.fg("dim", c_tree)} ${activeTheme.fg("accent", frame)} ${activeTheme.bold(name)}${modeTag}  ${activeTheme.fg("muted", a.description)} ${activeTheme.fg("dim", "·")} ${activeTheme.fg("dim", statsText)}`),
         truncate(activeTheme.fg("dim", c_bar) + activeTheme.fg("dim", `${c_ind}${activity}`)),
       ]);
     }
 
     const queuedLine = queued.length > 0
-      ? truncate(activeTheme.fg("dim", c_tree) + ` ${activeTheme.fg("muted", "◦")} ${activeTheme.fg("dim", `${queued.length} queued`)}`)
+      ? truncate(`${activeTheme.fg("dim", c_tree)} ${activeTheme.fg("muted", "◦")} ${activeTheme.fg("dim", `${queued.length} queued`)}`)
       : undefined;
 
     // Assemble with overflow cap (heading + overflow indicator = 2 reserved lines).
     const maxBody = MAX_WIDGET_LINES - 1; // heading takes 1 line
     const totalBody = finishedLines.length + runningLines.length * 2 + (queuedLine ? 1 : 0);
 
-    const lines: string[] = [truncate(activeTheme.fg(headingColor, headingIcon) + " " + activeTheme.fg(headingColor, "Agents"))];
+    const lines: string[] = [truncate(`${activeTheme.fg(headingColor, headingIcon)} ${activeTheme.fg(headingColor, "Agents")}`)];
 
     if (totalBody <= maxBody) {
       // Everything fits — add all lines and fix up connectors for the last item.
@@ -578,7 +578,7 @@ export class AgentWidget {
       if (hiddenRunning > 0) overflowParts.push(`${hiddenRunning} running`);
       if (hiddenFinished > 0) overflowParts.push(`${hiddenFinished} finished`);
       const overflowText = overflowParts.join(", ");
-      lines.push(truncate(activeTheme.fg("dim", c_angle) + ` ${activeTheme.fg("dim", `+${hiddenRunning + hiddenFinished} more (${overflowText})`)}`)
+      lines.push(truncate(`${activeTheme.fg("dim", c_angle)} ${activeTheme.fg("dim", `+${hiddenRunning + hiddenFinished} more (${overflowText})`)}`)
       );
     }
 
@@ -638,7 +638,10 @@ export class AgentWidget {
 
     // Register widget callback once; subsequent updates use requestRender()
     // which re-invokes render() without replacing the component (avoids layout thrashing).
-    if (!this.widgetRegistered) {
+    if (this.widgetRegistered) {
+      // Widget already registered — just request a re-render of existing components.
+      this.tui?.requestRender();
+    } else {
       this.uiCtx.setWidget("agents", (tui, theme) => {
         this.tui = tui;
         return {
@@ -651,9 +654,6 @@ export class AgentWidget {
         };
       }, { placement: "aboveEditor" });
       this.widgetRegistered = true;
-    } else {
-      // Widget already registered — just request a re-render of existing components.
-      this.tui?.requestRender();
     }
   }
 

@@ -18,18 +18,20 @@ describe("memory", () => {
   describe("resolveMemoryDir", () => {
     it("resolves project scope to .pi/agent-memory/<name>", () => {
       const dir = resolveMemoryDir("auditor", "project", "/workspace");
-      expect(dir).toBe("/workspace/.pi/agent-memory/auditor");
+      expect(dir).toBe(join("/workspace", ".pi", "agent-memory", "auditor"));
     });
 
     it("resolves local scope to .pi/agent-memory-local/<name>", () => {
       const dir = resolveMemoryDir("auditor", "local", "/workspace");
-      expect(dir).toBe("/workspace/.pi/agent-memory-local/auditor");
+      expect(dir).toBe(join("/workspace", ".pi", "agent-memory-local", "auditor"));
     });
 
     it("resolves user scope to ~/.pi/agent-memory/<name>", () => {
-      const dir = resolveMemoryDir("auditor", "user", "/workspace");
-      expect(dir).toContain(".pi/agent-memory/auditor");
-      expect(dir).not.toContain("/workspace");
+      const dirA = resolveMemoryDir("auditor", "user", "/workspace-a");
+      const dirB = resolveMemoryDir("auditor", "user", "/workspace-b");
+      // User scope is independent of cwd
+      expect(dirA).toBe(dirB);
+      expect(dirA).toContain(join(".pi", "agent-memory", "auditor"));
     });
 
     it("throws on names with path traversal (..)", () => {
@@ -208,7 +210,7 @@ describe("memory", () => {
     it("builds memory block with no existing MEMORY.md", () => {
       const block = buildMemoryBlock("test-agent", "project", tmpDir);
       expect(block).toContain("Agent Memory");
-      expect(block).toContain("agent-memory/test-agent");
+      expect(block).toContain(join("agent-memory", "test-agent"));
       expect(block).toContain("No MEMORY.md exists yet");
       expect(block).toContain("Memory Instructions");
     });
@@ -237,12 +239,12 @@ describe("memory", () => {
 
     it("uses correct directory for local scope", () => {
       const block = buildMemoryBlock("test-agent", "local", tmpDir);
-      expect(block).toContain("agent-memory-local/test-agent");
+      expect(block).toContain(join("agent-memory-local", "test-agent"));
     });
 
     it("uses correct directory for user scope", () => {
       const block = buildMemoryBlock("test-agent", "user", tmpDir);
-      expect(block).toContain(".pi/agent-memory/test-agent");
+      expect(block).toContain(join(".pi", "agent-memory", "test-agent"));
       expect(block).not.toContain(tmpDir);
     });
 

@@ -31,7 +31,7 @@ function makeFaithfulManager(initialStatus = "completed") {
     records,
     initialStatus,
     spawn: vi.fn(function (this: any) {
-      const id = "agent-" + Math.random().toString(36).slice(2, 10);
+      const id = `agent-${Math.random().toString(36).slice(2, 10)}`;
       let resolve!: () => void;
       const promise = new Promise<string>(r => { resolve = () => r(""); });
       records.set(id, { status: initialStatus, promise, resolve });

@@ -126,7 +126,7 @@ export function readMemoryIndex(memoryDir: string, maxLines?: number): string | 
   const limit = maxLines ?? MAX_MEMORY_LINES;
   const lines = content.split("\n");
   if (lines.length > limit) {
-    return lines.slice(0, limit).join("\n") + `\n... (truncated at ${limit} lines)`;
+    return `${lines.slice(0, limit).join("\n")}\n... (truncated at ${limit} lines)`;
   }
   return content;
 }

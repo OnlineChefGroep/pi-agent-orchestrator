@@ -328,7 +328,7 @@ export class AgentManager {
               .map((r) => {
                 const failedCriteria = r.criteria.filter((c) => !c.passed);
                 const details = failedCriteria.length > 0
-                  ? "\n" + failedCriteria.map((c) => `  - ${c.criterion}: ${c.feedback}`).join("\n")
+                  ? `\n${failedCriteria.map((c) => `  - ${c.criterion}: ${c.feedback}`).join("\n")}`
                   : "";
                 return `[${r.agentId}] ${r.summary}${details}`;
               })

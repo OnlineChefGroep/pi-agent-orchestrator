@@ -162,13 +162,15 @@ describe("Backward compat: default values for new fields", () => {
     }
   });
 
-  it("disallowedTools defaults to undefined", () => {
+  it("disallowedTools defaults to undefined for general-purpose, set for read-only agents", () => {
     registerAgents(new Map());
 
-    for (const name of ["general-purpose", "Explore", "Plan"]) {
-      const config = getAgentConfig(name);
-      expect(config?.disallowedTools).toBeUndefined();
-    }
+    // general-purpose has no restriction (uses all tools)
+    expect(getAgentConfig("general-purpose")?.disallowedTools).toBeUndefined();
+
+    // Explore and Plan are read-only agents with explicit disallowedTools
+    expect(getAgentConfig("Explore")?.disallowedTools).toEqual(["write", "edit"]);
+    expect(getAgentConfig("Plan")?.disallowedTools).toEqual(["write", "edit"]);
   });
 
   it("compactionKeepTurns defaults to undefined (falls back to DEFAULT_KEEP_TURNS=5)", () => {
