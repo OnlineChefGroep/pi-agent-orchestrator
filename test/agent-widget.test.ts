@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatSessionTokens } from "../src/ui/agent-widget.js";
+import { formatSessionTokens } from "../src/ui/agent-format.js";
 
 describe("formatSessionTokens", () => {
   const theme = { fg: (c: string, s: string) => `<${c}>${s}</${c}>`, bold: (s: string) => s };

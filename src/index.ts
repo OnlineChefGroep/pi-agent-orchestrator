@@ -29,236 +29,23 @@ import { SubagentScheduler } from "./schedule.js";
 import { resolveStorePath, ScheduleStore } from "./schedule-store.js";
 import { applyAndEmitLoaded } from "./settings.js";
 import { SwarmCoordinator, setActiveSwarmCoordinator } from "./swarm-join.js";
-import { type AgentInvocation, type AgentRecord, type JoinMode, type NotificationDetails, type SubagentType } from "./types.js";
 import {
-  type AgentActivity,
-  type AgentDetails,
-  AgentWidget,
-  buildInvocationTags,
-  describeActivity,
-  formatDuration,
-  formatMs,
-  formatTokens,
-  formatTurns,
-  getDisplayName,
-  getPromptModeLabel,
-  SPINNER,
-  setSpinnerStyle,
-  type UICtx,
-} from "./ui/agent-widget.js";
-import { addUsage, getLifetimeTotal, getSessionContextPercent, type LifetimeUsage } from "./usage.js";
-
-// ---- Shared helpers ----
-
-/** Tool execute return value for a text response. */
-function textResult(msg: string, details?: AgentDetails) {
-  return { content: [{ type: "text" as const, text: msg }], details: details as any };
-}
-
-/** Format an agent's lifetime token total, or "" when zero. */
-function formatLifetimeTokens(o: { lifetimeUsage: LifetimeUsage }): string {
-  const t = getLifetimeTotal(o.lifetimeUsage);
-  return t > 0 ? formatTokens(t) : "";
-}
-
-/**
- * Create an AgentActivity state and spawn callbacks for tracking tool usage.
- * Used by both foreground and background paths to avoid duplication.
- */
-function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => void) {
-  const state: AgentActivity = {
-    activeTools: new Map(),
-    toolUses: 0,
-    turnCount: 1,
-    maxTurns,
-    responseText: "",
-    session: undefined,
-    lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
-  };
-
-  const callbacks = {
-    onToolActivity: (activity: { type: "start" | "end"; toolName: string }) => {
-      if (activity.type === "start") {
-        state.activeTools.set(`${activity.toolName}_${Date.now()}`, activity.toolName);
-      } else {
-        for (const [key, name] of state.activeTools) {
-          if (name === activity.toolName) { state.activeTools.delete(key); break; }
-        }
-        state.toolUses++;
-      }
-      onStreamUpdate?.();
-    },
-    onTextDelta: (_delta: string, fullText: string) => {
-      state.responseText = fullText;
-      onStreamUpdate?.();
-    },
-    onTurnEnd: (turnCount: number) => {
-      state.turnCount = turnCount;
-      onStreamUpdate?.();
-    },
-    onSessionCreated: (session: any) => {
-      state.session = session;
-    },
-    onAssistantUsage: (usage: { input: number; output: number; cacheWrite: number }) => {
-      addUsage(state.lifetimeUsage, usage);
-      onStreamUpdate?.();
-    },
-  };
-
-  return { state, callbacks };
-}
-
-/** Human-readable status label for agent completion. */
-function getStatusLabel(status: string, error?: string): string {
-  switch (status) {
-    case "error": return `Error: ${error ?? "unknown"}`;
-    case "aborted": return "Aborted (max turns exceeded)";
-    case "steered": return "Wrapped up (turn limit)";
-    case "stopped": return "Stopped";
-    default: return "Done";
-  }
-}
-
-/** Parenthetical status note for completed agent result text. */
-function getStatusNote(status: string): string {
-  switch (status) {
-    case "aborted": return " (aborted — max turns exceeded, output may be incomplete)";
-    case "steered": return " (wrapped up — reached turn limit)";
-    case "stopped": return " (stopped by user)";
-    default: return "";
-  }
-}
-
-/** Escape XML special characters to prevent injection in structured notifications. */
-function escapeXml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-/** Format a structured task notification matching Claude Code's <task-notification> XML. */
-function formatTaskNotification(record: AgentRecord, resultMaxLen: number): string {
-  const status = getStatusLabel(record.status, record.error);
-  const durationMs = record.completedAt ? record.completedAt - record.startedAt : 0;
-  const totalTokens = getLifetimeTotal(record.lifetimeUsage);
-  const contextPercent = getSessionContextPercent(record.session);
-  const ctxXml = contextPercent === null ? "" : `<context_percent>${Math.round(contextPercent)}</context_percent>`;
-  const compactXml = record.compactionCount ? `<compactions>${record.compactionCount}</compactions>` : "";
-
-  const resultPreview = record.result
-    ? record.result.length > resultMaxLen
-      ? `${record.result.slice(0, resultMaxLen)}\n...(truncated, use get_subagent_result for full output)`
-      : record.result
-    : "No output.";
-
-  return [
-    `<task-notification>`,
-    `<task-id>${record.id}</task-id>`,
-    record.toolCallId ? `<tool-use-id>${escapeXml(record.toolCallId)}</tool-use-id>` : null,
-    record.outputFile ? `<output-file>${escapeXml(record.outputFile)}</output-file>` : null,
-    `<status>${escapeXml(status)}</status>`,
-    `<summary>Agent "${escapeXml(record.description)}" ${record.status}</summary>`,
-    `<result>${escapeXml(resultPreview)}</result>`,
-    `<usage><total_tokens>${totalTokens}</total_tokens><tool_uses>${record.toolUses}</tool_uses>${ctxXml}${compactXml}<duration_ms>${durationMs}</duration_ms></usage>`,
-    `</task-notification>`,
-  ].filter(Boolean).join('\n');
-}
-
-/** Build AgentDetails from a base + record-specific fields. */
-function buildDetails(
-  base: Pick<AgentDetails, "displayName" | "description" | "subagentType" | "modelName" | "tags">,
-  record: { toolUses: number; startedAt: number; completedAt?: number; status: string; error?: string; id?: string; session?: any; lifetimeUsage: LifetimeUsage; validated?: boolean },
-  activity?: AgentActivity,
-  overrides?: Partial<AgentDetails>,
-): AgentDetails {
-  return {
-    ...base,
-    toolUses: record.toolUses,
-    tokens: formatLifetimeTokens(record),
-    turnCount: activity?.turnCount,
-    maxTurns: activity?.maxTurns,
-    durationMs: (record.completedAt ?? Date.now()) - record.startedAt,
-    status: record.status as AgentDetails["status"],
-    agentId: record.id,
-    error: record.error,
-    validated: record.validated,
-    ...overrides,
-  };
-}
-
-/** Build notification details for the custom message renderer. */
-function buildNotificationDetails(record: AgentRecord, resultMaxLen: number, activity?: AgentActivity): NotificationDetails {
-  const totalTokens = getLifetimeTotal(record.lifetimeUsage);
-
-  return {
-    id: record.id,
-    description: record.description,
-    status: record.status,
-    toolUses: record.toolUses,
-    turnCount: activity?.turnCount ?? 0,
-    maxTurns: activity?.maxTurns,
-    totalTokens,
-    durationMs: record.completedAt ? record.completedAt - record.startedAt : 0,
-    outputFile: record.outputFile,
-    error: record.error,
-    validated: record.validated,
-    resultPreview: record.result
-      ? record.result.length > resultMaxLen
-        ? `${record.result.slice(0, resultMaxLen)}…`
-        : record.result
-      : "No output.",
-  };
-}
+  buildDetails, buildNotificationDetails, createActivityTracker, formatLifetimeTokens,
+  formatTaskNotification, getStatusNote, textResult,
+} from "./tool-result-helpers.js";
+import { type AgentInvocation, type AgentRecord, type JoinMode, type NotificationDetails, type SubagentType } from "./types.js";
+import { buildInvocationTags, describeActivity, formatDuration, formatMs, formatTurns, getDisplayName, getPromptModeLabel } from "./ui/agent-format.js";
+import type { AgentActivity, AgentDetails, UICtx } from "./ui/agent-ui-types.js";
+import { AgentWidget } from "./ui/agent-widget.js";
+import { getSpinnerFrame, setSpinnerStyle } from "./ui/animation.js";
+import { createNotificationRenderer } from "./ui/notification-renderer.js";
+import { getLifetimeTotal, getSessionContextPercent, } from "./usage.js";
 
 export default function (pi: ExtensionAPI) {
   // ---- Register custom notification renderer ----
   pi.registerMessageRenderer<NotificationDetails>(
     "subagent-notification",
-    (message, { expanded }, theme) => {
-      const d = message.details;
-      if (!d) return undefined;
-
-      function renderOne(d: NotificationDetails): string {
-        const isError = d.status === "error" || d.status === "stopped" || d.status === "aborted";
-        const icon = isError ? theme.fg("error", "✗") : theme.fg("success", "✓");
-        const statusText = isError ? d.status
-          : d.status === "steered" ? "completed (steered)"
-          : "completed";
-        const validationIcon = d.validated === undefined
-          ? ""
-          : (d.validated ? theme.fg("success", " ✅") : theme.fg("error", " ❌"));
-
-        // Line 1: icon + agent description + validation + status
-        let line = `${icon} ${theme.bold(d.description)}${validationIcon} ${theme.fg("dim", statusText)}`;
-
-        // Line 2: stats
-        const parts: string[] = [];
-        if (d.turnCount > 0) parts.push(formatTurns(d.turnCount, d.maxTurns));
-        if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
-        if (d.totalTokens > 0) parts.push(formatTokens(d.totalTokens));
-        if (d.durationMs > 0) parts.push(formatMs(d.durationMs));
-        if (parts.length) {
-          line += `\n  ${parts.map(p => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `)}`;
-        }
-
-        // Line 3: result preview (collapsed) or full (expanded)
-        if (expanded) {
-          const lines = d.resultPreview.split("\n").slice(0, 30);
-          for (const l of lines) line += `\n${theme.fg("dim", `  ${l}`)}`;
-        } else {
-          const preview = d.resultPreview.split("\n")[0]?.slice(0, 80) ?? "";
-          line += `\n  ${theme.fg("dim", `⎿  ${preview}`)}`;
-        }
-
-        // Line 4: output file link (if present)
-        if (d.outputFile) {
-          line += `\n  ${theme.fg("muted", `transcript: ${d.outputFile}`)}`;
-        }
-
-        return line;
-      }
-
-      const all = [d, ...(d.others ?? [])];
-      return new Text(all.map(renderOne).join("\n"), 0, 0);
-    }
+    (message, opts, theme) => createNotificationRenderer(theme)(message, opts),
   );
 
   // Initial load
@@ -809,7 +596,7 @@ Guidelines:
 
       // ---- While running (streaming) ----
       if (isPartial || details.status === "running") {
-        const frame = SPINNER[details.spinnerFrame ?? 0];
+        const frame = getSpinnerFrame(details.spinnerFrame ?? 0);
         const s = stats(details);
         let line = theme.fg("accent", frame) + (s ? ` ${s}` : "");
         line += `\n${theme.fg("dim", `  ⎿  ${details.activity ?? "thinking…"}`)}`;
@@ -1108,7 +895,7 @@ Guidelines:
           durationMs: Date.now() - startedAt,
           status: "running",
           activity: describeActivity(fgState.activeTools, fgState.responseText),
-          spinnerFrame: spinnerFrame % SPINNER.length,
+          spinnerFrame,
         };
         onUpdate?.({
           content: [{ type: "text", text: `${fgState.toolUses} tool uses...` }],
@@ -1328,12 +1115,20 @@ Guidelines:
   pi.registerCommand("agents", {
     description: "Manage agents",
     handler: async (_args, ctx) => {
-      await showAgentsMenu(
-        ctx, pi, manager, scheduler, agentActivity,
-        isSchedulingEnabled, getDefaultMaxTurns, getGraceTurns,
-        getDefaultJoinMode, setDefaultMaxTurns, setGraceTurns,
-        setDefaultJoinMode, setSchedulingEnabled,
-      );
+      await showAgentsMenu(ctx, {
+        pi,
+        manager,
+        scheduler,
+        agentActivity,
+        isSchedulingEnabled,
+        getDefaultMaxTurns,
+        getGraceTurns,
+        getDefaultJoinMode,
+        setDefaultMaxTurns,
+        setGraceTurns,
+        setDefaultJoinMode,
+        setSchedulingEnabled,
+      });
     },
   });
 

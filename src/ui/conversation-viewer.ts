@@ -11,8 +11,10 @@ import { getUiStyle } from "../agent-registry.js";
 import { extractText } from "../context.js";
 import type { AgentRecord } from "../types.js";
 import { getLifetimeTotal, getSessionContextPercent } from "../usage.js";
-import type { Theme } from "./agent-widget.js";
-import { type AgentActivity, buildInvocationTags, describeActivity, formatDuration, formatSessionTokens, getDisplayName, getPromptModeLabel, SPINNER } from "./agent-widget.js";
+import { buildInvocationTags, describeActivity, formatDuration, formatSessionTokens, getDisplayName, getPromptModeLabel } from "./agent-format.js";
+import type { AgentActivity } from "./agent-ui-types.js";
+import { getTimeSpinnerFrame } from "./animation.js";
+import { activeTheme, getBoxChars, padVisible, type Theme } from "./theme.js";
 
 /** Base lines consumed by chrome: top border + header + header sep + footer sep + footer + bottom border. */
 const CHROME_LINES_BASE = 6;
@@ -75,32 +77,20 @@ export class ConversationViewer implements Component {
 
   render(width: number): string[] {
     if (width < 6) return []; // too narrow for any meaningful rendering
+    const th = activeTheme(this.theme);
+    const box = getBoxChars();
     const activeUiStyle = getUiStyle();
-    const plainTheme: Theme = {
-      fg: (_color, text) => text,
-      bold: (text) => text,
-    };
-    const th = activeUiStyle === "plain" ? plainTheme : this.theme;
 
     const innerW = width - 4; // border + padding
     this.lastInnerW = innerW;
     const lines: string[] = [];
 
-    const pad = (s: string, len: number) => {
-      const vis = visibleWidth(s);
-      return s + " ".repeat(Math.max(0, len - vis));
-    };
-
-    let c_tl = "╭", c_tr = "╮", c_bl = "╰", c_br = "╯", c_l = "│", c_r = "│", c_h = "─";
-    if (activeUiStyle === "retro") {
-      c_tl = "+"; c_tr = "+"; c_bl = "+"; c_br = "+"; c_l = "|"; c_r = "|"; c_h = "-";
-    }
-
     const row = (content: string) => {
+      const body = truncateToWidth(padVisible(content, innerW), innerW);
       if (activeUiStyle === "plain") {
-        return `  ${truncateToWidth(pad(content, innerW), innerW)}  `;
+        return `  ${body}  `;
       }
-      return `${th.fg("border", c_l)} ${truncateToWidth(pad(content, innerW), innerW)} ${th.fg("border", c_r)}`;
+      return `${th.fg("border", box.l)} ${body} ${th.fg("border", box.r)}`;
     };
 
     let hrTop = "";
@@ -111,9 +101,9 @@ export class ConversationViewer implements Component {
       hrBot = "-".repeat(width);
       hrMid = "-".repeat(innerW + 4);
     } else {
-      hrTop = th.fg("border", `${c_tl}${c_h.repeat(width - 2)}${c_tr}`);
-      hrBot = th.fg("border", `${c_bl}${c_h.repeat(width - 2)}${c_br}`);
-      hrMid = row(th.fg("dim", c_h.repeat(innerW)));
+      hrTop = th.fg("border", `${box.tl}${box.h.repeat(width - 2)}${box.tr}`);
+      hrBot = th.fg("border", `${box.bl}${box.h.repeat(width - 2)}${box.br}`);
+      hrMid = row(th.fg("dim", box.h.repeat(innerW)));
     }
 
     // Header
@@ -201,11 +191,7 @@ export class ConversationViewer implements Component {
 
   private invocationLine(): string | undefined {
     const activeUiStyle = getUiStyle();
-    const plainTheme: Theme = {
-      fg: (_color, text) => text,
-      bold: (text) => text,
-    };
-    const th = activeUiStyle === "plain" ? plainTheme : this.theme;
+    const th = activeTheme(this.theme);
     const { modelName, tags } = buildInvocationTags(this.record.invocation);
     const parts = modelName ? [modelName, ...tags] : tags;
     if (parts.length === 0) return undefined;
@@ -217,11 +203,7 @@ export class ConversationViewer implements Component {
     if (width <= 0) return [];
 
     const activeUiStyle = getUiStyle();
-    const plainTheme: Theme = {
-      fg: (_color, text) => text,
-      bold: (text) => text,
-    };
-    const th = activeUiStyle === "plain" ? plainTheme : this.theme;
+    const th = activeTheme(this.theme);
     const messages = this.session.messages;
     const lines: string[] = [];
 
@@ -300,19 +282,20 @@ export class ConversationViewer implements Component {
           const headerText = ` 🔧 Tool Result `;
           const dashCount = Math.max(2, innerW - headerText.length - 2);
 
-          let topBorder = `\x1b[38;2;220;120;0m╭──${headerText}${"─".repeat(dashCount)}╮\x1b[0m`;
-          let bottomBorder = `\x1b[38;2;220;120;0m╰${"─".repeat(innerW + 2)}╯\x1b[0m`;
+          const box = getBoxChars();
+          let topBorder = `\x1b[38;2;220;120;0m${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}\x1b[0m`;
+          let bottomBorder = `\x1b[38;2;220;120;0m${box.bl}${box.h.repeat(innerW + 2)}${box.br}\x1b[0m`;
           let leftBorder = "\x1b[38;2;220;120;0m│\x1b[0m";
           let rightBorder = "\x1b[38;2;220;120;0m│\x1b[0m";
 
           if (activeUiStyle === "retro") {
-            topBorder = `\x1b[33m+--${headerText}${"-".repeat(dashCount)}+\x1b[0m`;
-            bottomBorder = `\x1b[33m+${"-".repeat(innerW + 2)}+\x1b[0m`;
+            topBorder = `\x1b[33m${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}\x1b[0m`;
+            bottomBorder = `\x1b[33m${box.bl}${box.h.repeat(innerW + 2)}${box.br}\x1b[0m`;
             leftBorder = "\x1b[33m|\x1b[0m";
             rightBorder = "\x1b[33m|\x1b[0m";
           } else if (activeUiStyle === "plain") {
-            topBorder = `+--${headerText}${"-".repeat(dashCount)}+`;
-            bottomBorder = `+${"-".repeat(innerW + 2)}+`;
+            topBorder = `${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}`;
+            bottomBorder = `${box.bl}${box.h.repeat(innerW + 2)}${box.br}`;
             leftBorder = "|";
             rightBorder = "|";
           }
@@ -395,7 +378,7 @@ export class ConversationViewer implements Component {
     }
 
     if (this.record.status === "running" && this.activity) {
-      const spinnerFrame = SPINNER[Math.floor(Date.now() / 80) % SPINNER.length];
+      const spinnerFrame = getTimeSpinnerFrame();
       const act = describeActivity(this.activity.activeTools, this.activity.responseText);
       lines.push("");
       
