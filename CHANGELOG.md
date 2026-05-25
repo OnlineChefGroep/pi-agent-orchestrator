@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.9.2 (2026-05-25)
+
+### 🚀 New Features
+
+#### Rich Interactive AgentDashboard
+- **Vim-style hotkeys**: `j/k` navigate, `Enter` steer, `K` kill, `?` help overlay
+- **Live activity indicators**: Animated spinners with 5 styles (`dots`, `pulse`, `wave`, `bar`, `clock`)
+- **Multi-select + bulk operations**: `v` visual mode, bulk kill support
+- **Permissions view**: `p` hotkey shows tool permissions per agent
+- **Auto-refresh timer**: Configurable dashboard refresh interval
+
+#### Swarm Mode
+- **SwarmCoordinator**: Live join/leave for collaborative multi-agent swarms
+- **Swarm visibility**: Real-time swarm status in dashboard with `w` hotkey
+- **Dynamic coordination**: Agents can join/leave swarms at runtime
+
+#### Settings & Configuration
+- **Orchestration mode**: New setting for spawn/parallel/sequential orchestration
+- **Dashboard refresh interval**: Configurable via registry settings
+- **pi-subagents-helper skill**: Development helper skill for quick agent testing
+
+### 🔧 Fixes
+- **Swarm delivery logic**: Improved coordinator handoff reliability
+- **Flaky Windows timing tests**: Fixed schedule test timing issues
+- **CodeRabbit review comments**: Addressed code quality feedback
+
+### 🔧 CI
+- **Dependabot updates**: actions/checkout@6, setup-node@6, upload-artifact@7, super-linter@7, codeql-action@4
+- **Super-linter compatibility**: Disabled conflicting prettier/standard checkers
+- **CodeQL**: Disabled auto-triggers (requires GitHub Code Security)
+
+### 📊 Metrics
+- 650 tests, 36 test files (+39 tests, +2 files since v0.9.1)
+
+---
+
 ## v0.9.1 (2026-05-24)
 
 ### 🧹 Cleanup

@@ -2,12 +2,12 @@
 
 > Autonomous sub-agents for the pi coding agent. Forked from [tintinweb/pi-subagents](https://github.com/tintinweb/pi-subagents).
 
-Bring Claude Code-style autonomous sub-agents to pi. Spawn specialized agents, enforce budgets, chain them with structured handoffs, and watch a cinematic TUI dashboard render their progress in real time.
+Bring Claude Code-style autonomous sub-agents to pi. Spawn specialized agents, enforce budgets, chain them with structured handoffs, swarm agents together, and watch a rich interactive TUI dashboard render their progress in real time.
 
-[![Tests](https://img.shields.io/badge/tests-593%2F602-blue)](https://github.com/OnlineChefGroep/pi-subagents-fork)
+[![Tests](https://img.shields.io/badge/tests-650%2F650-green)](https://github.com/OnlineChefGroep/pi-subagents-fork)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)](https://www.typescriptlang.org/)
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.9.2-blue)](https://github.com/OnlineChefGroep/pi-subagents-fork/releases)
 
 ---
 
@@ -26,6 +26,8 @@ Requires Node.js >= 18 and pi >= 0.70.5.
 | Feature | Description |
 |---------|-------------|
 | **Autonomous sub-agents** | Spawn specialized agents (Explore, Plan, Analysis) that run independently and return structured results |
+| **Rich interactive dashboard** | Vim-style hotkeys (`j/k/Enter/K/?`), multi-select, bulk kill, permissions view, spinners |
+| **Swarm mode** | Live SwarmCoordinator with dynamic join/leave, collaborative multi-agent swarms, `w` hotkey |
 | **Task budget & depth limiting** | Prevent runaway agent trees with configurable `levelLimit` (default 5) and `taskBudget` |
 | **Adversarial validators** | Post-completion `Promise.all` validation with pass/fail indicators |
 | **Structured handoff protocol** | JSON machine-parseable chain-of-agents with graceful degrade on malformed data |
@@ -34,8 +36,9 @@ Requires Node.js >= 18 and pi >= 0.70.5.
 | **Partitioned agent state** | Isolated tool/skill subsets per partition — no cross-contamination |
 | **Deferred context engine** | Build context at session boundary, saving 15-48% tokens on queued agents |
 | **Dual-phase compaction** | Prune old tool outputs + per-agent memory limits (default keep 5 turns) |
+| **Scheduling** | Cron/interval/one-shot recurring agent jobs with file-backed persistence |
 | **Context-mode sandbox** | Optional `ctx_*` sandbox tool injection via `@onlinechef/context-mode` peer dependency |
-| **Cinematic TUI dashboard** | Go Bubble Tea sidecar renders real-time agent status, animation, and color themes |
+| **Cinematic TUI dashboard** | Optional rich visual sidecar via `@onlinechefgroep/pi-subagents-tui` |
 
 ---
 
@@ -133,9 +136,12 @@ Settings are managed via pi's settings UI or `pi settings` CLI:
 |---------|---------|-------------|
 | `subagents.levelLimit` | `5` | Maximum depth of agent tree |
 | `subagents.taskBudget` | `unlimited` | Max concurrent tasks |
+| `subagents.orchestrationMode` | `spawn` | Default orchestration: `spawn`, `parallel`, or `sequential` |
+| `subagents.dashboardRefreshInterval` | `5000` | Dashboard refresh interval in ms |
 | `subagents.compaction.keepTurns` | `5` | Memory turns to retain per agent |
 | `subagents.deferredContext` | `true` | Build context at session boundary |
 | `subagents.validators.enabled` | `true` | Run adversarial validators |
+| `subagents.swarm.enabled` | `true` | Enable swarm mode |
 | `subagents.cinematic.animation` | `"smooth"` | TUI animation style |
 | `subagents.cinematic.uiStyle` | `"dark"` | TUI color theme |
 
@@ -147,7 +153,9 @@ Settings are managed via pi's settings UI or `pi settings` CLI:
 pi host
   └── pi-subagents extension
         ├── AgentRegistry (defaults + custom .md agents)
+        ├── AgentDashboard (live TUI with vim hotkeys, swarm view)
         ├── AgentRunner (spawn → execute → handoff → validate)
+        ├── SwarmCoordinator (live join/leave, collaborative swarms)
         ├── ScheduleStore (file-backed persistence, PID-locked)
         ├── Hooks (lifecycle events)
         └── PartitionedState (isolated tool/skill subsets)
@@ -173,6 +181,22 @@ npm test
 # Lint
 npm run lint
 ```
+
+---
+
+## Hotkeys (AgentDashboard)
+
+| Key | Action |
+|-----|--------|
+| `j` / `↓` | Move selection down |
+| `k` / `↑` | Move selection up |
+| `Enter` | Steer selected agent |
+| `K` | Kill selected agent |
+| `v` | Visual mode (multi-select) |
+| `p` | Toggle permissions view |
+| `w` | Toggle swarm view |
+| `?` | Show help overlay |
+| `q` | Close dashboard / quit view |
 
 ---
 

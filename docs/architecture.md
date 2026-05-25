@@ -126,9 +126,32 @@ spawn → build context → create session → run loop
 - `ScheduleStore` persists schedules to `.pi/subagent-schedules/<sessionId>.json`
 - Disabled jobs do not fire; jobs are cleaned up on completion
 
-### `src/ui/agent-widget.ts` — Widget & Sidecar
+### `src/ui/agent-dashboard.ts` — Interactive Agent Dashboard (v0.9.2)
+
+Rich interactive TUI dashboard replacing the old agent widget:
+- **Vim-style hotkeys**: `j/k` navigate, `Enter` steer, `K` kill, `?` help overlay
+- **Visual mode**: `v` multi-select + bulk operations
+- **Permissions view**: `p` toggles tool permissions per agent
+- **Swarm visibility**: `w` toggles swarm status, live join/leave
+- **Live spinners**: 5 animation styles for running agents (`dots`, `pulse`, `wave`, `bar`, `clock`)
+- **Auto-refresh**: Configurable dashboard refresh interval
+
+### `src/swarm-join.ts` — Swarm Coordinator (v0.9.2)
+
+Manages collaborative multi-agent swarms:
+- Agents dynamically join/leave swarms at runtime
+- Real-time status visible in dashboard via `w` hotkey
+- Coordination logic for parallel swarm tasks
+- Swarm state persisted alongside agent records
 
 When `getUiStyle() === "cinematic"` and `isCinematicEnabled()`:
+1. Uses the optional `@onlinechefgroep/pi-subagents-tui` package (installed separately)
+2. Sends JSON payload with agent tree, activity, token usage every tick
+3. Sidecar renders rich TUI; main process returns empty widget (to avoid double rendering)
+
+### `src/ui/agent-widget.ts` — Widget (Legacy, superseded by agent-dashboard)
+
+When `getUiStyle()` === "cinematic"` and `isCinematicEnabled()`:
 1. Uses the optional `@onlinechefgroep/pi-subagents-tui` package (installed separately)
 2. Sends JSON payload with agent tree, activity, token usage every tick
 3. Sidecar renders rich TUI; main process returns empty widget (to avoid double rendering)
@@ -183,11 +206,20 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/schedule.ts` | Scheduler for recurring agent jobs |
 | `src/schedule-store.ts` | File-backed persistence for schedules |
 | `src/settings.ts` | Typed settings with defaults and change emission |
+| `src/swarm-join.ts` | SwarmCoordinator: live join/leave collaborative swarms |
 | `src/types.ts` | Shared interfaces: AgentConfig, AgentRecord, JoinMode |
 | `src/usage.ts` | Token and turn tracking, session context percentage |
 | `src/validators.ts` | Post-completion adversarial validation |
 | `src/worktree.ts` | Git worktree creation and cleanup |
 | `src/cross-extension-rpc.ts` | RPC between pi extensions |
-| `src/ui/agent-widget.ts` | Persistent widget + cinematic sidecar |
+| `src/env.ts` | Environment detection and feature gating |
+| `src/group-join.ts` | Batch/group manager for background agent coordination |
+| `src/invocation-config.ts` | Per-invocation configuration resolution |
+| `src/output-file.ts` | Output file generation for completed agents |
+| `src/prompts.ts` | Prompt template system with placeholders |
+| `src/skill-loader.ts` | Skill loading for agent contexts |
+| `src/telemetry.ts` | Telemetry and metrics collection |
+| `src/ui/agent-dashboard.ts` | Rich interactive dashboard with vim hotkeys & swarm view |
+| `src/ui/agent-widget.ts` | Legacy persistent widget |
 | `src/ui/conversation-viewer.ts` | Live conversation overlay |
 | `src/ui/schedule-menu.ts` | Schedule management menu |
