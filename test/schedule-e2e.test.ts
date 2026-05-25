@@ -151,7 +151,7 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
     // (parseInterval doesn't accept "ms"; we patch the persisted job and re-arm.)
     await scheduler.updateJob(job.id, { intervalMs: 150, schedule: "150ms" });
 
-    await waitFor(() => manager.spawn.mock.calls.length >= 3, 5000);  // Increased timeout for Windows
+    await waitFor(() => scheduler.list().find(j => j.id === job.id)?.runCount >= 3, 5000);
 
     const final = scheduler.list().find(j => j.id === job.id)!;
     expect(final.runCount).toBeGreaterThanOrEqual(3);

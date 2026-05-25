@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  getOrchestrationMode,
-  setOrchestrationMode,
   getDashboardRefreshInterval,
+  getOrchestrationMode,
   setDashboardRefreshInterval,
+  setOrchestrationMode,
 } from "../src/agent-registry.js";
 
 describe("agent-registry orchestration mode", () => {

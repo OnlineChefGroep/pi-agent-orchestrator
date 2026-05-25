@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SwarmCoordinator, setActiveSwarmCoordinator, getSwarmCoordinator, uiCreateOrJoinSwarm } from "../src/swarm-join.js";
+import { getSwarmCoordinator, SwarmCoordinator, setActiveSwarmCoordinator, uiCreateOrJoinSwarm } from "../src/swarm-join.js";
 import type { AgentRecord } from "../src/types.js";
 
 describe("SwarmCoordinator", () => {
@@ -14,11 +14,12 @@ describe("SwarmCoordinator", () => {
   afterEach(() => {
     coordinator.dispose();
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   describe("registerSwarm", () => {
     it("creates a new swarm with given ID", () => {
-      const swarmId = coordinator.registerSwarm("test-swarm", ["agent1", "agent2"], "Test Swarm");
+      coordinator.registerSwarm("test-swarm", ["agent1", "agent2"], "Test Swarm");
       
       expect(coordinator.listSwarms()).toContain("test-swarm");
       expect(coordinator.getSwarmMembers("test-swarm")).toEqual(["agent1", "agent2"]);
@@ -162,6 +163,47 @@ describe("SwarmCoordinator", () => {
       // Second completion should return 'pass' since agent is no longer in swarm
       const result = coordinator.onAgentComplete(record);
       expect(result).toBe("pass");
+    });
+
+    it("does not re-deliver the same completion on timeout", async () => {
+      vi.useFakeTimers();
+      coordinator = new SwarmCoordinator(deliveryCallback, 10);
+      coordinator.registerSwarm("test-swarm", ["agent1"]);
+      const record: AgentRecord = {
+        id: "agent1",
+        type: "general-purpose",
+        status: "completed",
+        startedAt: Date.now(),
+        completedAt: Date.now(),
+        swarmId: "test-swarm",
+      };
+
+      coordinator.onAgentComplete(record);
+      expect(deliveryCallback).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(20);
+      expect(deliveryCallback).toHaveBeenCalledTimes(1);
+    });
+
+    it("removes completed members from reverse mapping after timeout", async () => {
+      vi.useFakeTimers();
+      coordinator = new SwarmCoordinator(deliveryCallback, 10);
+      coordinator.registerSwarm("test-swarm", ["agent1", "agent2"]);
+      const record: AgentRecord = {
+        id: "agent1",
+        type: "general-purpose",
+        status: "completed",
+        startedAt: Date.now(),
+        completedAt: Date.now(),
+        swarmId: "test-swarm",
+      };
+
+      coordinator.onAgentComplete(record);
+      await vi.advanceTimersByTimeAsync(20);
+
+      expect(coordinator.getSwarmMembers("test-swarm")).toEqual(["agent2"]);
+      expect(coordinator.getSwarmIdForAgent("agent1")).toBeUndefined();
+      expect(coordinator.getSwarmIdForAgent("agent2")).toBe("test-swarm");
     });
   });
 

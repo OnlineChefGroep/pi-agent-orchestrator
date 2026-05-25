@@ -286,7 +286,8 @@ export class SubagentScheduler {
     const job = store.get(id);
     if (!job?.enabled) return;
 
-    await store.update(id, { lastStatus: "running" });
+    try {
+      await store.update(id, { lastStatus: "running" });
 
     // Resolve model at fire time — registry contents may have changed since the
     // job was created (auth added/removed). Fall back silently to spawn-default
@@ -357,6 +358,9 @@ export class SubagentScheduler {
     } else {
       // Spawn returned without a promise (defensive — bypassQueue path always sets one).
       await finalize("success").catch(() => {});
+    }
+    } catch (err) {
+      this.emit({ type: "error", jobId: id, error: err instanceof Error ? err.message : String(err) });
     }
   }
 

@@ -13,18 +13,18 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import type { AgentManager } from "./agent-manager.js";
-import { getAnimationStyle, getModelLabelFromConfig, getUiStyle, reloadCustomAgents, setAnimationStyle, setUiStyle, getOrchestrationMode, setOrchestrationMode, getDashboardRefreshInterval, setDashboardRefreshInterval } from "./agent-registry.js";
+import { getAnimationStyle, getDashboardRefreshInterval, getModelLabelFromConfig, getOrchestrationMode, getUiStyle, reloadCustomAgents, setAnimationStyle, setDashboardRefreshInterval, setOrchestrationMode, setUiStyle } from "./agent-registry.js";
 import { BUILTIN_TOOL_NAMES, getAgentConfig, getAllTypes } from "./agent-types.js";
 import type { ModelRegistry } from "./model-resolver.js";
 import { resolveModel } from "./model-resolver.js";
 import type { SubagentScheduler } from "./schedule.js";
 import { type SubagentsSettings, saveAndEmitChanged } from "./settings.js";
+import { uiCreateOrJoinSwarm } from "./swarm-join.js";
 import type { AgentConfig, AgentRecord, JoinMode } from "./types.js";
+import { showAgentDashboard } from "./ui/agent-dashboard.js";
 import type { AgentActivity } from "./ui/agent-widget.js";
 import { formatDuration, getDisplayName } from "./ui/agent-widget.js";
 import { showSchedulesMenu } from "./ui/schedule-menu.js";
-import { showAgentDashboard } from "./ui/agent-dashboard.js";
-import { getSwarmCoordinator, uiCreateOrJoinSwarm } from "./swarm-join.js";
 
 /** @internal Re-export for use from index.ts */
 export type { AgentManager, ModelRegistry, SubagentScheduler };
@@ -215,12 +215,12 @@ export async function showAgentsMenu(
         return;
       }
 
-      const message = await ctx.ui.editor("Steering message (injected into agent conversation)", {
-        placeholder: "Continue working on X, but also do Y first. Be careful with Z.",
-        language: "markdown",
-      });
+      const message = await ctx.ui.editor(
+        "Steering message (injected into agent conversation)",
+        "Continue working on X, but also do Y first. Be careful with Z.",
+      );
 
-      if (!message || !message.trim()) return;
+      if (!message?.trim()) return;
 
       // Mirror the exact logic from the steer_subagent tool for correctness
       if (!record.session) {
@@ -252,7 +252,7 @@ export async function showAgentsMenu(
       if (action === "menu" || action === "create") {
         const swarmId = uiCreateOrJoinSwarm(ids, `Dashboard Swarm`);
         if (swarmId) {
-          ctx.ui.notify(`Swarm created: ${swarmId} — ${ids.length} agents joined.`, "success");
+          ctx.ui.notify(`Swarm created: ${swarmId} — ${ids.length} agents joined.`, "info");
         }
       } else {
         ctx.ui.notify(`Swarm action: ${action} on ${ids.length} agents`, "info");
@@ -383,11 +383,12 @@ export async function showAgentPermissions(ctx: ExtensionCommandContext, record:
     "Press any key to close.",
   ].filter(Boolean).join("\n");
 
-  await ctx.ui.custom(async (_tui, _theme, _kb, done) => {
+  await ctx.ui.custom((_tui, _theme, _kb, done) => {
     // Simple text renderer
     return {
       render() { return content.split("\n"); },
-      handleInput() { done(); }
+      invalidate() {},
+      handleInput() { done(undefined); },
     };
   }, { overlay: true, overlayOptions: { width: "70%" } });
 }

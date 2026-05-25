@@ -15,12 +15,11 @@ import { defineTool, type ExtensionAPI, type ExtensionContext, getAgentDir } fro
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { AgentManager } from "./agent-manager.js";
-import { buildTypeListText, getDefaultJoinMode, isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setCinematicEnabled, setDefaultJoinMode, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setUiStyle, setOrchestrationMode, setDashboardRefreshInterval } from "./agent-registry.js";
+import { buildTypeListText, getDefaultJoinMode, isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setCinematicEnabled, setDashboardRefreshInterval, setDefaultJoinMode, setOrchestrationMode, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setUiStyle } from "./agent-registry.js";
 import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTurns, setDefaultMaxTurns, setGraceTurns, steerAgent } from "./agent-runner.js";
 import { getAgentConfig, getAvailableTypes, resolveType } from "./agent-types.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
 import { GroupJoinManager } from "./group-join.js";
-import { SwarmCoordinator, setActiveSwarmCoordinator } from "./swarm-join.js";
 import { HookRegistry } from "./hooks.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./invocation-config.js";
 import { resolveModel } from "./model-resolver.js";
@@ -29,6 +28,7 @@ import { showAgentsMenu } from "./output-handler.js";
 import { SubagentScheduler } from "./schedule.js";
 import { resolveStorePath, ScheduleStore } from "./schedule-store.js";
 import { applyAndEmitLoaded } from "./settings.js";
+import { SwarmCoordinator, setActiveSwarmCoordinator } from "./swarm-join.js";
 import { type AgentInvocation, type AgentRecord, type JoinMode, type NotificationDetails, type SubagentType } from "./types.js";
 import {
   type AgentActivity,
@@ -582,9 +582,11 @@ export default function (pi: ExtensionAPI) {
 
     // Traditional smart/group batching (unchanged behavior)
     const smartAgents = batchAgents.filter(a => a.joinMode === 'smart' || a.joinMode === 'group');
+    let handledSmartGroupIds: string[] = [];
     if (smartAgents.length >= 2) {
       const groupId = `batch-${++batchCounter}`;
       const ids = smartAgents.map(a => a.id);
+      handledSmartGroupIds = ids;
       groupJoin.registerGroup(groupId, ids);
       for (const id of ids) {
         const record = manager.getRecord(id);
@@ -615,7 +617,7 @@ export default function (pi: ExtensionAPI) {
     // Any agents that were in the debounce batch but did not form (or join) a group/swarm
     // get their deferred individual nudges now.
     const handled = new Set([
-      ...batchAgents.filter(a => a.joinMode === 'smart' || a.joinMode === 'group').map(a => a.id),
+      ...handledSmartGroupIds,
       ...batchAgents.filter(a => a.joinMode === 'swarm').map(a => a.id),
     ]);
 

@@ -5,7 +5,7 @@
  * - Full Component + vim navigation (matchesKey)
  * - Live rich activity (spinners, describeActivity, turns, tokens)
  * - Multi-select (Space) + bulk kill
- * - Real hotkeys: k=kill, s=steer (with editor), Enter=view
+ * - Real hotkeys: Shift+K=kill, s=steer (with editor), Enter=view
  * - Toggleable ? help screen
  * - Rich per-agent metadata (worktree, group/handoff, validation, outputFile)
  * - Themed (premium/retro/plain)
@@ -13,7 +13,16 @@
  * Still fully additive. Matches the spirit of OpenCode + Claude Code agent control.
  */
 
+import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import {
+  type Component,
+  matchesKey,
+  type TUI,
+  truncateToWidth,
+} from "@mariozechner/pi-tui";
 import type { AgentManager } from "../agent-manager.js";
+import { getDashboardRefreshInterval, getUiStyle } from "../agent-registry.js";
+import type { AgentRecord } from "../types.js";
 import type { AgentActivity } from "./agent-widget.js";
 import {
   describeActivity,
@@ -23,16 +32,6 @@ import {
   getDisplayName,
   SPINNER,
 } from "./agent-widget.js";
-import { getUiStyle, getDashboardRefreshInterval } from "../agent-registry.js";
-import { getSwarmCoordinator } from "../swarm-join.js";
-import {
-  type Component,
-  matchesKey,
-  type TUI,
-  truncateToWidth,
-} from "@mariozechner/pi-tui";
-import type { AgentRecord } from "../types.js";
-import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 
 const MIN_VIEWPORT = 5;
 export const DASHBOARD_HEIGHT_PCT = 85;
@@ -103,7 +102,7 @@ export class AgentDashboard implements Component {
   constructor(
     private readonly tui: TUI,
     private readonly options: AgentDashboardOptions,
-    private readonly done: () => void,
+    private readonly done: (result: undefined) => void,
   ) {
     this.refreshAgents();
 
@@ -116,6 +115,16 @@ export class AgentDashboard implements Component {
         this.tui.requestRender?.();
       }
     }, refreshInterval);
+  }
+
+  private close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+    this.done(undefined);
   }
 
   /**
@@ -135,39 +144,15 @@ export class AgentDashboard implements Component {
   }
 
   /**
-   * Get swarm status for visualization in the dashboard.
-   * @param swarmId - The swarm ID to query
-   * @returns Object with active, completed, and total agent counts
-   */
-  private getSwarmStatus(swarmId: string): { active: number; completed: number; total: number } {
-    const coord = getSwarmCoordinator();
-    if (!coord) return { active: 0, completed: 0, total: 0 };
-    
-    const members = coord.getSwarmMembers(swarmId);
-    const swarmAgents = this.agents.filter(a => members.includes(a.id));
-    
-    const active = swarmAgents.filter(a => a.status === "running" || a.status === "queued").length;
-    const completed = swarmAgents.filter(a => a.status === "completed" || a.status === "steered").length;
-    
-    return { active, completed, total: swarmAgents.length };
-  }
-
-  /**
    * Handle keyboard input for dashboard navigation and actions.
    * @param data - The input character or key sequence
    */
   handleInput(data: string): void {
     const maxScroll = Math.max(0, this.agents.length - this.getViewportHeight());
-    const wasClosed = this.closed;
     const rec = this.agents[this.selectedIndex];
 
     if (matchesKey(data, "escape") || matchesKey(data, "q")) {
-      this.closed = true;
-      if (this.refreshTimer) {
-        clearInterval(this.refreshTimer);
-        this.refreshTimer = null;
-      }
-      this.done();
+      this.close();
       return;
     }
 
@@ -198,14 +183,13 @@ export class AgentDashboard implements Component {
     // Actions (Claude Code / OpenCode style hotkeys)
     else if (matchesKey(data, "enter") || matchesKey(data, "return")) {
       if (rec && this.options.onViewConversation) {
-        this.closed = true;
-        this.done();
+        this.close();
         void this.options.onViewConversation(rec);
         return;
       }
     } 
     // Multi-select toggle (Space) - foundation for bulk operations
-    else if (matchesKey(data, " ")) {
+    else if (matchesKey(data, "space")) {
       if (rec) {
         if (this.selectedIds.has(rec.id)) {
           this.selectedIds.delete(rec.id);
@@ -216,7 +200,7 @@ export class AgentDashboard implements Component {
       }
     }
     // Kill / Abort — supports both single and bulk (multi-select)
-    else if (matchesKey(data, "k") || matchesKey(data, "K")) {
+    else if (matchesKey(data, "shift+k")) {
       const idsToKill = this.selectedIds.size > 0 
         ? Array.from(this.selectedIds) 
         : (rec ? [rec.id] : []);
@@ -232,29 +216,27 @@ export class AgentDashboard implements Component {
         this.tui.requestRender();
       }
     } 
-    else if (matchesKey(data, "s") || matchesKey(data, "S")) {
+    else if (matchesKey(data, "s") || matchesKey(data, "shift+s")) {
       // Steer (currently only supports single; multi-steer is advanced)
       if (rec && this.options.onSteer) {
-        this.closed = true;
-        this.done();
+        this.close();
         void this.options.onSteer(rec.id);
         return;
       }
-    } else if (matchesKey(data, "p") || matchesKey(data, "P")) {
+    } else if (matchesKey(data, "p") || matchesKey(data, "shift+p")) {
       // Permissions / tool scope view (very valuable for understanding what the agent can actually do)
       if (rec && this.options.onShowPermissions) {
-        this.closed = true;
-        this.done();
+        this.close();
         void this.options.onShowPermissions(rec);
         return;
       }
-    } else if (matchesKey(data, "r") || matchesKey(data, "R")) {
+    } else if (matchesKey(data, "r") || matchesKey(data, "shift+r")) {
       this.refreshAgents();
       this.tui.requestRender();
     } else if (matchesKey(data, "?")) {
       this.showHelp = !this.showHelp;
       this.tui.requestRender();
-    } else if (matchesKey(data, "w") || matchesKey(data, "W")) {
+    } else if (matchesKey(data, "w") || matchesKey(data, "shift+w")) {
       // Swarm actions (create from selection, join, leave, swarm-steer)
       // This is the core "w" hotkey for the dikke swarm TUI experience
       const targets = this.selectedIds.size > 0 
@@ -262,15 +244,14 @@ export class AgentDashboard implements Component {
         : (rec ? [rec] : []);
 
       if (targets.length > 0 && this.options.onSwarmAction) {
-        this.closed = true;
-        this.done();
+        this.close();
         // Pass "create" action for direct swarm creation from selection
         void this.options.onSwarmAction("create", targets.map(t => t.id));
         return;
       }
-    } else if (matchesKey(data, "g") || matchesKey(data, "G")) {
+    } else if (matchesKey(data, "g") || matchesKey(data, "shift+g")) {
       // Show swarm grouping / details
-      if (rec && rec.swarmId) {
+      if (rec?.swarmId) {
         // Could show swarm details in future enhancement
         this.tui.requestRender();
       }
@@ -336,7 +317,7 @@ export class AgentDashboard implements Component {
         "",
         "Enter          View full conversation",
         "Space          Toggle multi-select",
-        "k / K          Kill selected (or current)",
+        "Shift+K        Kill selected (or current)",
         "s / S          Steer selected agent",
         "p / P          Show permissions & scope for selected agent",
         "w / W          Create swarm from selection",
@@ -353,7 +334,7 @@ export class AgentDashboard implements Component {
     } else if (this.agents.length === 0) {
       lines.push(`${th.dim}No agents in this session. Spawn some with the Agent tool or /agents → Create.${th.reset}`);
     } else {
-      let previousSwarmId: string | undefined = undefined;
+      let previousSwarmId: string | undefined;
 
       for (let i = start; i < end; i++) {
         const rec = this.agents[i];
@@ -394,7 +375,7 @@ export class AgentDashboard implements Component {
           const act = describeActivity(activity.activeTools, activity.responseText);
           const turns = formatTurns(activity.turnCount, activity.maxTurns);
           const toks = activity.lifetimeUsage ? formatTokens(activity.lifetimeUsage.input + activity.lifetimeUsage.output) : "";
-          activityLine = ` ${spinner} ${act} ${th.dim}· ${turns} ${toks ? "· " + toks : ""}${th.reset}`;
+          activityLine = ` ${spinner} ${act} ${th.dim}· ${turns} ${toks ? `· ${toks}` : ""}${th.reset}`;
         } else if (rec.result && (rec.status === "completed" || rec.status === "steered")) {
           const preview = rec.result.slice(0, 80).replace(/\n/g, " ");
           activityLine = ` ${th.dim}${preview}${preview.length >= 80 ? "…" : ""}${th.reset}`;
@@ -412,7 +393,7 @@ export class AgentDashboard implements Component {
         lines.push(truncateToWidth(mainLine, width - 2));
 
         if (activityLine) {
-          lines.push("   " + truncateToWidth(activityLine, width - 6));
+          lines.push(`   ${truncateToWidth(activityLine, width - 6)}`);
         }
 
         // Extra metadata for selected agent (now richer for swarms)
@@ -439,10 +420,20 @@ export class AgentDashboard implements Component {
 
     // Footer with real hotkeys (Claude/OpenCode inspired)
     lines.push(`${th.border}${"─".repeat(Math.min(50, width))}${th.reset}`);
-    const footer = `${th.dim}Space=toggle  ↑↓/kj  Enter=view  s=steer  k=kill  w=swarm  p=perms  r=refresh  ?=help  q/esc=close${th.reset}`;
+    const footer = `${th.dim}Space=toggle  ↑↓/kj  Enter=view  s=steer  Shift+K=kill  w=swarm  p=perms  r=refresh  ?=help  q/esc=close${th.reset}`;
     lines.push(footer);
 
     return lines;
+  }
+
+  invalidate(): void {}
+
+  dispose(): void {
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+    this.closed = true;
   }
 }
 

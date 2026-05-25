@@ -20,6 +20,7 @@ interface Swarm {
   name?: string;
   agentIds: Set<string>;
   completedRecords: Map<string, AgentRecord>;
+  deliveredRecordIds: Set<string>;
   timeoutHandle?: ReturnType<typeof setTimeout>;
   delivered: boolean;
   /** Shorter timeout for stragglers after a partial delivery. */
@@ -51,6 +52,7 @@ export class SwarmCoordinator {
         name,
         agentIds: new Set(initialAgentIds),
         completedRecords: new Map(),
+        deliveredRecordIds: new Set(),
         delivered: false,
         isStraggler: false,
       };
@@ -133,6 +135,7 @@ export class SwarmCoordinator {
 
     const swarm = this.swarms.get(swarmId);
     if (!swarm || swarm.delivered) return 'pass';
+    if (swarm.completedRecords.has(record.id)) return 'pass';
 
     swarm.completedRecords.set(record.id, record);
 
@@ -140,6 +143,7 @@ export class SwarmCoordinator {
     // Deliver this completion right away so the UI gets a steady stream of updates.
     // This makes swarms feel like a living, collaborative team instead of a rigid batch.
     this.deliverSingle(record, swarmId);
+    swarm.deliveredRecordIds.add(record.id);
 
     // Still track for timeout-based "wave complete" summaries
     if (!swarm.timeoutHandle) {
@@ -148,10 +152,6 @@ export class SwarmCoordinator {
         this.onTimeout(swarm);
       }, timeout);
     }
-
-    // Clean up this agent from the "pending" set for future waves
-    // (but keep it in the swarm membership so dashboard still sees it as part of the swarm)
-    // We keep the record in completedRecords for the current wave summary.
 
     return 'delivered';
   }
@@ -168,42 +168,37 @@ export class SwarmCoordinator {
     if (swarm.delivered) return;
     swarm.timeoutHandle = undefined;
 
+    const completedIds = [...swarm.completedRecords.keys()];
     const remaining = new Set<string>();
     for (const id of swarm.agentIds) {
       if (!swarm.completedRecords.has(id)) remaining.add(id);
     }
 
-    // For swarms we do NOT remove from agentToSwarm on partial — they stay swarm members
-    // even if they haven't completed this wave yet. This supports truly dynamic long-lived swarms.
+    const completedThisWave = completedIds
+      .filter((id) => !swarm.deliveredRecordIds.has(id))
+      .map((id) => swarm.completedRecords.get(id))
+      .filter((record): record is AgentRecord => record !== undefined);
+    if (completedThisWave.length > 0) {
+      this.deliverCb(completedThisWave, true, swarm.swarmId);
+    }
 
-    const completedThisWave = [...swarm.completedRecords.values()];
-    this.deliverCb(completedThisWave, true, swarm.swarmId);
-
-    // Clear only the wave, keep membership for the living swarm
+    // Clear current wave bookkeeping.
     swarm.completedRecords.clear();
+    swarm.deliveredRecordIds.clear();
     swarm.isStraggler = true;
 
+    if (remaining.size === 0) {
+      this.cleanupSwarm(swarm.swarmId);
+      return;
+    }
+
+    // Keep reverse lookups consistent with the shrunken active set.
+    for (const id of completedIds) {
+      this.agentToSwarm.delete(id);
+    }
+
     // If there are still members, they can start a new wave on next completion
-    if (remaining.size > 0) {
-      swarm.agentIds = remaining; // shrink to only still-active
-    }
-  }
-
-  /**
-   * Finalize swarm delivery (called when swarm is complete or explicitly terminated).
-   * This method is reserved for future use in swarm finalization logic.
-   * Currently, onTimeout() handles wave delivery directly with custom membership preservation.
-   */
-  private deliver(swarm: Swarm, partial: boolean): void {
-    if (swarm.timeoutHandle) {
-      clearTimeout(swarm.timeoutHandle);
-      swarm.timeoutHandle = undefined;
-    }
-    swarm.delivered = true;
-
-    this.deliverCb([...swarm.completedRecords.values()], partial, swarm.swarmId);
-
-    this.cleanupSwarm(swarm.swarmId);
+    swarm.agentIds = remaining; // shrink to only still-active
   }
 
   private cleanupSwarm(swarmId: string): void {
@@ -248,7 +243,7 @@ export class SwarmCoordinator {
 // The UI layer can get a reference to perform membership operations.
 let activeSwarmCoordinator: SwarmCoordinator | null = null;
 
-export function setActiveSwarmCoordinator(coordinator: SwarmCoordinator) {
+export function setActiveSwarmCoordinator(coordinator: SwarmCoordinator | null) {
   activeSwarmCoordinator = coordinator;
 }
 
