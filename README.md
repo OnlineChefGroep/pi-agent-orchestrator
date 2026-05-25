@@ -1,4 +1,4 @@
-# @onlinechef/pi-subagents
+# @onlinechefgroep/pi-subagents
 
 > Autonomous sub-agents for the pi coding agent. Forked from [tintinweb/pi-subagents](https://github.com/tintinweb/pi-subagents).
 
@@ -14,7 +14,7 @@ Bring Claude Code-style autonomous sub-agents to pi. Spawn specialized agents, e
 ## Install
 
 ```bash
-pi install npm:@onlinechef/pi-subagents
+pi install npm:@onlinechefgroep/pi-subagents
 ```
 
 Requires Node.js >= 18 and pi >= 0.70.5.

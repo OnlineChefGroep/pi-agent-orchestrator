@@ -5,7 +5,7 @@
 
 **Date:** 2025-05-23
 **Auditor:** AI Security Audit Team
-**Codebase:** @onlinechef/pi-subagents v0.8.0
+**Codebase:** @onlinechefgroep/pi-subagents v0.8.0
 **Files Analyzed:** 32 TypeScript source files
 
 ---

@@ -5,7 +5,7 @@
 
 **Date:** 2026-05-23  
 **Auditor:** Pi Security Audit Agent  
-**Codebase:** @onlinechef/pi-subagents v0.8.0  
+**Codebase:** @onlinechefgroep/pi-subagents v0.8.0  
 **Files Analyzed:** 32 TypeScript source files, 33 test files  
 **Tests:** 595 passing tests  
 **Previous Audit:** SECURITY_AUDIT_REPORT.md (2025-05-23)

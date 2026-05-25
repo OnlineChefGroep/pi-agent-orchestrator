@@ -1,6 +1,6 @@
 # Architecture
 
-> High-level overview of `@onlinechef/pi-subagents` components and data flow.
+> High-level overview of `@onlinechefgroep/pi-subagents` components and data flow.
 
 ---
 

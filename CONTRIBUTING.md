@@ -1,4 +1,4 @@
-# Contributing to @onlinechef/pi-subagents
+# Contributing to @onlinechefgroep/pi-subagents
 
 Thank you for contributing. This document covers build, test, lint, and PR workflow.
 

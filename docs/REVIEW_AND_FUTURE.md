@@ -1,14 +1,14 @@
 # pi-subagents Extension — Analysis, Review & Future
 
 **Date:** 2026 (current branch: `chore/adopt-pr-workflow`)  
-**Focus:** Strictly the `@onlinechef/pi-subagents` pi-extension itself. No scope creep into the broader pi host, Grok skills, or unrelated systems.  
+**Focus:** Strictly the `@onlinechefgroep/pi-subagents` pi-extension itself. No scope creep into the broader pi host, Grok skills, or unrelated systems.  
 **Branch context:** All work performed on a dedicated feature branch in PR form per CONTRIBUTING.md (conventional commits, pre-commit checks).
 
 ---
 
 ## 1. What This Extension Is (Condensed "How & What")
 
-`@onlinechef/pi-subagents` is a **pi extension** that brings Claude Code-style autonomous sub-agents to the pi coding agent platform.
+`@onlinechefgroep/pi-subagents` is a **pi extension** that brings Claude Code-style autonomous sub-agents to the pi coding agent platform.
 
 ### Core Value
 - Spawn specialized agents (`Explore`, `Plan`, `Analysis`, `general-purpose`, or custom `.md` agents) that run independently or in the foreground.

@@ -119,7 +119,7 @@
 - Add .npmignore for package-lock.json
 
 ## 0.7.4
-- Publish @onlinechef/pi-subagents to GitHub Packages
+- Publish @onlinechefgroep/pi-subagents to GitHub Packages
 
 ## 0.7.3 (original)
 - Forked from tintinweb/pi-subagents
