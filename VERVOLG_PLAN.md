@@ -19,28 +19,32 @@
 - [x] **fix: correct depth-tracking in safeJsonParse (handoff.ts)** - Renamed MAX_JSON_DEPTH to MAX_JSON_KEYS for clarity, as the implementation counts total keys not nesting depth
 - [x] **docs: complete module table + batch/nudge state notes in architecture.md** - Added missing UI modules and documented batch/nudge state machine with state diagram
 - [x] **chore: restore VERVOLG_PLAN.md as living document** - Created this file and unignored from .gitignore
+- [x] **refactor: extract BatchOrchestrator from index.ts** - Moved smart/group/swarm batch finalization into `src/batch-orchestrator.ts`
+- [x] **fix: harden ScheduleStore temp-file handling on Windows** - Atomic writes now use a same-directory temp file before rename
+- [x] **fix: require host-backed RPC auth when available** - `spawn` and `stop` now use `authProvider(requestId)` and ignore spoofable payload identity
+- [x] **fix: enforce schedule input bounds** - `MIN_INTERVAL`, `MAX_SCHEDULES`, and `MAX_PROMPT_SIZE` are enforced in `SubagentScheduler`
+- [x] **fix: validate custom agent configs** - Unsafe names, wildcard built-in overrides, overlong prompts, and excessive tool lists disable invalid agents
+- [x] **fix: sanitize validator inputs** - Validator prompt inputs are bounded and stripped of control characters
+- [x] **chore: make Windows tests blocking again** - Removed the schedule-flakiness `continue-on-error` exception from CI
+- [x] **docs: expand api-reference.md with cross-extension RPC contract** - Documented authenticated RPC behavior, legacy mode, rate limits, and request/reply shapes
+- [x] **feat: add 5 canonical custom-agent examples** - Added valid `.pi/agents` examples under `examples/agents/`
+- [x] **docs: align custom-agent guide with loader format** - Documented snake_case/CSV frontmatter and body-as-system-prompt behavior
 
 ---
 
 ## Active Priorities (P0-P1)
 
-### P0: Security Hardening
+### P1: Security & Reliability
 
-- [ ] **fix: harden ScheduleStore temp-file handling on Windows (atomic rename)**
-  - **Issue**: Race conditions in temp-directory handling on Windows cause test flakiness
+- [ ] **research: session-wide resource limits**
+  - **Context**: Per-agent limits exist, but no session-wide spawn/turn/memory limits
+  - **Benefit**: Prevent resource exhaustion from recursive or cross-extension orchestration
+  - **Location**: `src/agent-runner.ts`, `src/agent-manager.ts`
+
+- [ ] **fix: replace PID lock with stronger file lock**
+  - **Context**: `ScheduleStore` still uses a PID lock file with stale-lock recovery
+  - **Benefit**: Removes PID-reuse edge cases and makes multi-process schedule writes more robust
   - **Location**: `src/schedule-store.ts`
-  - **Approach**: Add os.tmpdir() fallback with atomic write operations (fs.writeFileSync → tmp file, then fs.renameSync)
-  - **Benefit**: Makes store crash-proof on abrupt process termination, fixes Windows CI flakiness
-  - **Related**: test/schedule.test.ts marked continue-on-error on Windows
-
-### P1: Architecture Improvements
-
-- [ ] **refactor: extract BatchOrchestrator from index.ts**
-  - **Issue**: `src/index.ts` is a god-module (1370 lines) with batch/nudge state machine spread over ~200 lines
-  - **Location**: `src/index.ts` (currentBatchAgents, batchFinalizeTimer, pendingNudges, GroupJoinManager, SwarmCoordinator)
-  - **Approach**: Create `BatchOrchestrator` class that owns batch state and finalizeBatch logic
-  - **Benefit**: Makes state machine testable in isolation, reduces index.ts complexity
-  - **Related**: Currently only tested indirectly via integration tests
 
 ---
 
@@ -48,23 +52,7 @@
 
 ### Documentation
 
-- [ ] **docs: expand api-reference.md with cross-extension RPC contract**
-  - **Issue**: globalThis[Symbol.for("pi-subagents:...")] used for cross-extension discovery is undocumented
-  - **Location**: `src/cross-extension-rpc.ts`, telemetry registry
-  - **Approach**: Document which Symbols exist, which events are emitted, protocol version expectations
-  - **Benefit**: Makes extension a better platform citizen for ecosystem integrations
-
 ### Features
-
-- [ ] **feat: add 4-5 canonical .pi/agents/ examples**
-  - **Issue**: Low discoverability of unique capabilities
-  - **Approach**: Create example agents demonstrating:
-    - Handoff chains
-    - Adversarial validators
-    - Scheduled explorer
-    - Worktree-isolated editor
-  - **Benefit**: Dramatically increases discoverability of extension capabilities
-  - **Location**: `.pi/agents/` directory
 
 - [ ] **feat: handoff protocol v2 — optional typed artifacts**
   - **Approach**: Add optional typed artifacts to AgentHandoff interface (files: string[], artifacts: { type, path }[])
@@ -92,11 +80,6 @@
 
 ### P4: Future Considerations
 
-- [ ] **research: session-wide resource limits**
-  - **Context**: Per-agent limits exist, but no session-wide spawn/turn/memory limits
-  - **Benefit**: Prevent resource exhaustion attacks
-  - **Location**: `src/agent-runner.ts`
-
 - [ ] **research: structured logging**
   - **Context**: Current console.log lacks configurable log levels
   - **Benefit**: Better debugging, sensitive info protection
@@ -108,16 +91,16 @@
 
 > Note: The SECURITY_AUDIT_VERIFICATION_2026-05-23.md document references fabricated CVE numbers. The following items represent real security work based on actual codebase concerns:
 
-- [ ] **validate custom agent configs** - Add validation to prevent override of built-in agents with wildcard tools
-- [ ] **rate limit RPC endpoints** - Add per-extension rate limiting (10 spawns/minute already implemented, verify)
-- [ ] **sanitize validator inputs** - Remove prompt injection patterns from validator criteria
-- [ ] **schedule input bounds** - Add MIN_INTERVAL (60s), MAX_SCHEDULES (100), MAX_PROMPT_SIZE (50KB) - already implemented, verify
-- [ ] **validate tool names** - Check against known tool set to catch typos/malicious names
+- [x] **validate custom agent configs** - Validation disables unsafe configs before they can run
+- [x] **rate limit RPC endpoints** - Mutating RPCs are rate-limited per authenticated extension and operation
+- [x] **sanitize validator inputs** - Validator inputs are bounded and sanitized
+- [x] **schedule input bounds** - `MIN_INTERVAL`, `MAX_SCHEDULES`, and `MAX_PROMPT_SIZE` are enforced
+- [ ] **validate tool names** - Unknown custom-agent tool names currently emit telemetry but are still passed through for compatibility
 
 ---
 
 ## Tracking
 
 - **Last Updated**: 2026-05-26
-- **Version**: v0.9.2
-- **Next Review**: After P0/P1 items completed
+- **Version**: v0.9.5
+- **Next Review**: After P1 items completed

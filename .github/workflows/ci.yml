@@ -53,6 +53,5 @@ jobs:
 
       - name: Run tests
         run: npm test
-        # Windows has pre-existing schedule-store flakiness.
         # Lowest peer deps may have breaking runtime changes; don't fail the build.
-        continue-on-error: ${{ matrix.os == 'windows-latest' || matrix.peer-deps == 'lowest' }}
+        continue-on-error: ${{ matrix.peer-deps == 'lowest' }}

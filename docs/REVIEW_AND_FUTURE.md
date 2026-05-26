@@ -34,7 +34,7 @@ It plugs into the host exclusively via the `ExtensionAPI` (tool registration, ev
 - UI: `ui/agent-widget.ts`, optional cinematic sidecar via peer package
 - Cross-extension discovery via `globalThis` Symbols + `cross-extension-rpc.ts`
 
-**Test investment is high**: 34 dedicated test files covering the hard parts (handoff, validators, partitioned state, deferred context, e2e chains, schedules, worktrees, hooks, etc.). ~593–602 tests, with known pre-existing Windows flakiness only in schedule-related tests.
+**Test investment is high**: 36 dedicated test files covering the hard parts (handoff, validators, partitioned state, deferred context, e2e chains, schedules, worktrees, hooks, etc.). The current suite has 654 tests.
 
 ---
 
@@ -52,12 +52,12 @@ It plugs into the host exclusively via the `ExtensionAPI` (tool registration, ev
 ### Issues & Debt (Categorized)
 
 **🟡 Medium**
-- **Documentation drift**: `docs/architecture.md` file overview table is incomplete. Missing modules that are now first-class: `group-join.ts`, `invocation-config.ts`, `output-file.ts`, `prompts.ts`, `skill-loader.ts`, `telemetry.ts`, `env.ts`. The original diagram is still mostly accurate but not exhaustive.
-- **VERVOLG_PLAN.md is missing** from the tree, yet heavily referenced from the (now deprecated) security audit documents. This creates documentation debt.
-- The 1,500+ line `src/index.ts` is a "god module" for orchestration, widget wiring, batch logic, nudge scheduling, and tool registration. It works, but increases cognitive load for reviewers.
+- **Public typed API still needs formalization**: the authenticated RPC contract is documented, but callers still interact through raw event names and payload objects rather than a small typed client/helper.
+- **Schedule locking can still improve**: `ScheduleStore` now writes via same-directory temp files before rename, but it still uses PID-based lock files. A stronger file-locking strategy would reduce multi-process edge cases.
+- `src/index.ts` has been reduced by extracting `BatchOrchestrator`, but it remains the main integration module for command registration, widget wiring, scheduling, and tool registration.
 
 **🟢 Low / Observations**
-- Windows schedule flakiness is documented and tolerated in CI (`continue-on-error`), but the root cause (temp directory races in `ScheduleStore`) is not mitigated at source. Acceptable for now, but worth a targeted fix.
+- Windows schedule reliability has improved by moving atomic temp files next to the target schedule file before rename. Windows tests are blocking again in CI.
 - Cross-extension discovery via `globalThis[Symbol.for("pi-subagents:...")]` is powerful for the ecosystem but is "magic" and lightly documented.
 - The batch + group + nudge + `resultConsumed` state machine is subtle and spread across a few files. A small state diagram or more comments would help future maintainers.
 
@@ -74,7 +74,7 @@ The legacy `SECURITY_AUDIT_REPORT.md` (2025) and its verification (2026) contain
 - `execFileSync` usage is isolated to `worktree.ts`, always uses the safe array form + explicit timeouts + restricted `cwd`, and the CVE-001 commit message sanitization is present and reasonable.
 - No regex-blacklist "security theater" remains.
 
-**Remaining recommendation**: When the real `VERVOLG_PLAN.md` (P3 security items) is restored/created, the items should be tracked as normal GitHub issues or a living document rather than a one-off report.
+**Remaining recommendation**: Keep `VERVOLG_PLAN.md` as the living source of truth and move stable items into GitHub issues when they become scheduled work.
 
 ---
 
@@ -99,10 +99,10 @@ This is both a **practical tool for future work on the extension** and a living 
 All items below are scoped exclusively to improving the subagent system, its orchestration, permission model, scheduling, handoff/validators, UI, and custom agent experience.
 
 ### High-Value, Relatively Low-Risk
-1. **Ship canonical example agents** — Add 4–6 high-quality `.pi/agents/` examples that demonstrate the extension's unique capabilities (handoff chains, adversarial validators + criteria, scheduled recurring explorer, worktree-isolated editor, context-mode + Analysis agent, steering + resume pattern). This dramatically increases discoverability and "wow" factor.
-2. **Improve architecture documentation** — Update `docs/architecture.md` with the missing modules and a small state diagram for the batch/group/nudge lifecycle. Keep it as the single source of truth.
-3. **Windows schedule reliability** — Targeted improvement to `ScheduleStore` temp directory handling and test isolation so the `continue-on-error` workaround is no longer needed.
-4. **Public typed API surface** — Formalize (and document) the cross-extension contracts currently hidden behind Symbols and events. This makes the extension a better platform citizen.
+1. **Public typed API surface** — Formalize and document the cross-extension contracts currently hidden behind Symbols and events. This makes the extension a better platform citizen.
+2. **Stronger schedule locking** — Replace PID lock files with a more robust lock strategy or host-provided synchronization primitive.
+3. **CI monitoring** — Watch the next Windows CI runs for any remaining scheduler timing failures.
+4. **Example-agent iteration** — Keep expanding `examples/agents/` as new orchestration patterns become stable.
 
 ### Medium-Term / Higher Impact
 5. **Handoff protocol v2** — Add optional typed artifacts / file references to the `AgentHandoff` interface and renderer. Enables richer multi-agent workflows without losing backward compatibility.
@@ -128,12 +128,11 @@ All items below are scoped exclusively to improving the subagent system, its orc
    - This review document (`docs/REVIEW_AND_FUTURE.md`)
 
 2. **Immediate follow-up PRs** (small, focused, conventional commits):
-   - `docs: complete architecture.md module table and add batch/group state notes`
-   - `feat: ship 4–5 canonical example agents under .pi/agents/`
-   - `fix: harden ScheduleStore temp handling on Windows (reduce flakiness)`
-   - `chore: add living VERVOLG_PLAN.md (or link to GitHub project) replacing legacy audit references`
+   - `feat: add a typed helper/client for the authenticated RPC contract`
+   - `fix: replace ScheduleStore PID lock with stronger file locking`
+   - `test: add focused coverage if Windows CI exposes remaining scheduler timing failures`
 
-3. **Process**: Continue all future work on dedicated branches, run full `npm run typecheck && npm run lint && npm test` (Windows schedule tolerance excepted), then open PR referencing items in this document or future VERVOLG_PLAN entries.
+3. **Process**: Continue all future work on dedicated branches, run full `npm run typecheck && npm run lint && npm test`, then open PR referencing items in this document or future VERVOLG_PLAN entries.
 
 4. **Self-review tool**: The newly added `pi-subagents-extension-reviewer` agent should be used (when working inside a pi session with this extension loaded) for all non-trivial changes going forward.
 

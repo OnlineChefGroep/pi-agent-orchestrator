@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { type EventBus, PROTOCOL_VERSION, type RpcDeps, registerRpcHandlers, type SpawnCapable } from "../src/cross-extension-rpc.js";
+import { type EventBus, PROTOCOL_VERSION, type RpcDeps, registerRpcHandlers, resetRpcRateLimitsForTests, type SpawnCapable } from "../src/cross-extension-rpc.js";
 
 /** Simple in-process event bus for testing. */
 function createEventBus(): EventBus {
@@ -23,6 +23,7 @@ describe("cross-extension RPC", () => {
   let deps: RpcDeps;
 
   beforeEach(() => {
+    resetRpcRateLimitsForTests();
     events = createEventBus();
     manager = { spawn: vi.fn().mockReturnValue("agent-42"), abort: vi.fn().mockReturnValue(true) };
     ctx = { session: true };
@@ -156,6 +157,68 @@ describe("cross-extension RPC", () => {
       await new Promise((r) => setTimeout(r, 20));
       expect(reply).not.toHaveBeenCalled();
     });
+
+    it("uses authProvider identity and ignores spoofed payload authContext", async () => {
+      const authProvider = vi.fn().mockReturnValue({ extensionId: "trusted-ext" });
+      deps = { ...deps, authProvider };
+      registerRpcHandlers(deps);
+      const reply = vi.fn();
+      events.on("subagents:rpc:spawn:reply:req-auth", reply);
+      events.emit("subagents:rpc:spawn", {
+        requestId: "req-auth",
+        type: "general-purpose",
+        prompt: "x",
+        authContext: { extensionId: "spoofed-ext" },
+      });
+
+      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
+      expect(reply).toHaveBeenCalledWith({ success: true, data: { id: "agent-42" } });
+      expect(authProvider).toHaveBeenCalledWith("req-auth");
+    });
+
+    it("rejects spawn when authProvider is configured but returns no identity", async () => {
+      deps = { ...deps, authProvider: vi.fn().mockReturnValue(undefined) };
+      registerRpcHandlers(deps);
+      const reply = vi.fn();
+      events.on("subagents:rpc:spawn:reply:req-denied", reply);
+      events.emit("subagents:rpc:spawn", {
+        requestId: "req-denied",
+        type: "general-purpose",
+        prompt: "x",
+        authContext: { extensionId: "payload-only" },
+      });
+
+      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
+      expect(reply).toHaveBeenCalledWith({ success: false, error: "Unauthorized RPC request" });
+      expect(manager.spawn).not.toHaveBeenCalled();
+    });
+
+    it("rate-limits spawn by authenticated extension identity", async () => {
+      deps = { ...deps, authProvider: vi.fn().mockReturnValue({ extensionId: "rate-limited-ext" }) };
+      registerRpcHandlers(deps);
+
+      for (let i = 0; i < 10; i++) {
+        events.emit("subagents:rpc:spawn", {
+          requestId: `req-limit-${i}`,
+          type: "general-purpose",
+          prompt: "x",
+        });
+      }
+
+      const reply = vi.fn();
+      events.on("subagents:rpc:spawn:reply:req-limit-final", reply);
+      events.emit("subagents:rpc:spawn", {
+        requestId: "req-limit-final",
+        type: "general-purpose",
+        prompt: "x",
+      });
+
+      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
+      expect(reply).toHaveBeenCalledWith({
+        success: false,
+        error: "Rate limit exceeded for extension rate-limited-ext",
+      });
+    });
   });
 
   // --- stop ---
@@ -205,6 +268,18 @@ describe("cross-extension RPC", () => {
 
       await new Promise((r) => setTimeout(r, 20));
       expect(reply).not.toHaveBeenCalled();
+    });
+
+    it("rejects stop when authProvider is configured but returns no identity", async () => {
+      deps = { ...deps, authProvider: vi.fn().mockReturnValue(undefined) };
+      registerRpcHandlers(deps);
+      const reply = vi.fn();
+      events.on("subagents:rpc:stop:reply:req-stop-denied", reply);
+      events.emit("subagents:rpc:stop", { requestId: "req-stop-denied", agentId: "agent-42" });
+
+      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
+      expect(reply).toHaveBeenCalledWith({ success: false, error: "Unauthorized RPC request" });
+      expect(manager.abort).not.toHaveBeenCalled();
     });
   });
 

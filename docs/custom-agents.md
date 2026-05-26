@@ -6,242 +6,184 @@
 
 ## Quick Start
 
-Create `.pi/agents/my-agent.md` in your project root:
+Create `.pi/agents/typescript-reviewer.md` in your project root:
 
 ```markdown
 ---
-name: my-agent
-description: A specialized agent for reviewing TypeScript PRs
-systemPrompt: |
-  You are a senior TypeScript code reviewer.
-  Focus on: type safety, error handling, and async patterns.
-  Never suggest changes without explaining the rationale.
-builtinToolNames:
-  - read
-  - bash
-  - grep
-  - find
-disallowedTools:
-  - write
-  - edit
-contextMode: true
+display_name: "TypeScript Reviewer"
+description: "Read-only reviewer for TypeScript changes"
+tools: read, grep, find, ls, bash
+disallowed_tools: write, edit
+extensions: false
+skills: true
+max_turns: 20
+prompt_mode: replace
 ---
+You are a senior TypeScript code reviewer.
 
-# My Agent
-
-This agent helps review TypeScript code. It has read access to the
-entire codebase but cannot modify files (defense-in-depth via
-disallowedTools).
+Focus on type safety, error handling, async control flow, and maintainability.
+Report findings with severity, exact file paths, and actionable fixes.
+Never modify files.
 ```
 
-The extension auto-discovers this file. Run `/agents` → "Agent types" to see it listed.
+The file name is the agent type. In the example above, spawn it as `typescript-reviewer`.
+
+Project agents are loaded from `.pi/agents/*.md`. Global agents are loaded from `$PI_CODING_AGENT_DIR/agents/*.md` or `~/.pi/agent/agents/*.md`. Project agents override global agents with the same file name.
+
+---
+
+## File Format
+
+Custom agents use Markdown files with optional YAML frontmatter. The Markdown body after the closing `---` is the system prompt.
+
+```markdown
+---
+description: "Short description shown in menus"
+tools: read, grep, find
+---
+System prompt starts here.
+```
+
+Only files directly under the agents directory are loaded. Subdirectories are ignored. Symlinks are skipped.
 
 ---
 
 ## Frontmatter Reference
 
-All fields are declared in YAML frontmatter between `---` delimiters.
-
-### Required Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | `string` | Unique identifier. Alphanumeric + hyphens only. Must not conflict with built-in types. |
-| `description` | `string` | Short human-readable summary (shown in agent lists). |
-| `systemPrompt` | `string` | The system prompt sent to the LLM. Can be multi-line using `\|` YAML syntax. |
-| `builtinToolNames` | `string[]` | Tools this agent can use. See tool table below. |
-
-### Optional Fields
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `disallowedTools` | `string[]` | `[]` | Hard floor — these tools are removed even if `builtinToolNames` includes them or parent allows them. |
-| `extensions` | `boolean` | `false` | Whether the agent can use extension-provided tools. |
-| `contextMode` | `boolean` | `false` | Enable `ctx_read`, `ctx_write`, `ctx_bash` sandbox tools. |
-| `allowedTools` | `string[]` | — | If set, restricts to this exact allowlist (advanced). |
-| `model` | `string` | — | Override model (e.g. `"claude-sonnet-4-20250514"`). |
-| `temperature` | `number` | — | LLM temperature override (0–1). |
-| `parentType` | `string` | — | Inherit settings from another agent type. |
+| `display_name` | string | file name | Human-readable label shown in UIs. |
+| `description` | string | file name | Short description shown in agent lists. |
+| `tools` | CSV or `none` | all built-in tools | Built-in tools the agent can use. |
+| `disallowed_tools` | CSV | none | Hard floor; these tools are removed even if otherwise available. |
+| `extensions` | boolean, CSV, or `none` | `true` | Extension tool access. Use `false`/`none` for no extension tools. |
+| `skills` | boolean, CSV, or `none` | `true` | Skill access or preload list. |
+| `model` | string | host default | Model override, resolved by the host model registry. |
+| `thinking` | string | none | Thinking level hint, passed through to the host. |
+| `max_turns` | number | default setting | Maximum conversation turns. `0` means unlimited. |
+| `prompt_mode` | `replace` or `append` | `replace` | Whether the body replaces or appends to the inherited prompt. |
+| `inherit_context` | boolean | caller decides | Default for whether to inherit parent conversation context. |
+| `run_in_background` | boolean | caller decides | Default for background execution. |
+| `isolated` | boolean | caller decides | Default for isolated execution. |
+| `memory` | `user`, `project`, or `local` | none | Persistent memory scope. |
+| `isolation` | `worktree` | none | Run file edits in a temporary git worktree. |
+| `enabled` | boolean | `true` | Set `false` to hide/disable the agent. |
+
+Unsupported fields are ignored. The current loader does not read `name`, `systemPrompt`, `builtinToolNames`, `disallowedTools`, `validators`, or `handoff` frontmatter fields.
 
 ---
 
-## Available Tools
+## Tool Values
 
-### Built-in Tools
+Built-in tool names:
 
-| Tool | Description | Read/Write |
-|------|-------------|------------|
-| `read` | Read file contents | Read |
-| `write` | Write/create files | Write |
-| `edit` | Edit existing files | Write |
-| `bash` | Execute shell commands | Write |
-| `grep` | Search file contents | Read |
-| `find` | Find files by name/pattern | Read |
-| `ls` | List directory contents | Read |
+| Tool | Purpose |
+|------|---------|
+| `read` | Read file contents. |
+| `write` | Create or overwrite files. |
+| `edit` | Edit existing files. |
+| `bash` | Execute shell commands. |
+| `grep` | Search file contents. |
+| `find` | Find files by name or pattern. |
+| `ls` | List directories. |
 
-### Context-Mode Tools (requires `contextMode: true`)
-
-| Tool | Description |
-|------|-------------|
-| `ctx_read` | Read files within sandbox directory |
-| `ctx_write` | Write files within sandbox directory |
-| `ctx_bash` | Execute commands within sandbox directory |
-
-### Memory Tools
-
-| Tool | Description |
-|------|-------------|
-| `remember` | Store a fact in memory |
-| `recall` | Retrieve facts from memory |
-
----
-
-## Security Best Practices
-
-### 1. Prefer `disallowedTools` over `builtinToolNames` narrowing
+Use CSV values:
 
 ```yaml
-# GOOD: explicit defense-in-depth
-disallowedTools:
-  - write
-  - edit
-
-# BAD: relies on not listing tools (can be expanded by parent or hooks)
-# builtinToolNames: [read, bash]  # missing disallowedTools floor
+tools: read, grep, find, ls
+disallowed_tools: write, edit
 ```
 
-### 2. Use `contextMode` for untrusted tasks
-
-When an agent processes user-provided input or external data, enable `contextMode: true` to sandbox file access.
-
-### 3. Avoid `extensions: true` unless necessary
-
-Extension tools bypass some permission checks. Only enable if the agent genuinely needs them.
-
-### 4. Validate system prompts
-
-The loader checks for common prompt-injection patterns (e.g., "ignore previous instructions"). However, this is not foolproof — review your prompts carefully.
+Use `tools: none` for a prompt-only agent.
 
 ---
 
-## Inheritance
+## Security Practices
 
-### Parent Type Inheritance
+### Prefer Explicit Disallows
 
-Set `parentType: Explore` to inherit `builtinToolNames`, `disallowedTools`, and defaults from another agent:
+For read-only agents, set both an allowlist and a disallow floor:
 
 ```yaml
----
-name: deep-explore
-description: Deep codebase exploration with extra search tools
-parentType: Explore
-systemPrompt: |
-  You are an expert at navigating large codebases.
-  Always report file paths with line numbers.
----
+tools: read, grep, find, ls, bash
+disallowed_tools: write, edit
 ```
 
-This agent gets all of Explore's tools plus can override specific fields.
+### Disable Extension Tools Unless Needed
 
-### Permission Inheritance
+```yaml
+extensions: false
+```
 
-When an agent spawns a child agent:
+Extension tools can expand the available surface area. Keep them disabled for narrow reviewer, planner, and explorer agents.
 
-1. Child's `builtinToolNames` is intersected with parent's resolved tools
-2. Child's `disallowedTools` is merged with parent's
-3. Result: child can never have more permissions than parent
+### Use Worktree Isolation For File-Editing Agents
 
-Example:
-- Parent: `builtinToolNames: [read, write, bash]`, `disallowedTools: []`
-- Child: `builtinToolNames: [read, write, grep]`, `disallowedTools: [write]`
-- Child resolved: `[read, grep]` (write removed by disallow + not in child builtins)
+```yaml
+tools: read, write, edit, grep, find, ls, bash
+isolation: worktree
+```
 
----
+Worktree isolation keeps parallel edits out of the main working tree until they are intentionally integrated.
 
-## Template Placeholders
+### Avoid Built-In Wildcard Overrides
 
-In `systemPrompt`, you can reference built-in template sections:
-
-| Placeholder | Replaced With |
-|-------------|---------------|
-| `{{TOOL_INSTRUCTIONS}}` | Detailed tool usage instructions |
-| `{{READ_ONLY_WARNING}}` | CRITICAL: READ-ONLY MODE warning |
-
-These are automatically expanded when the agent runs. You do not need to include them manually unless you want custom placement.
+Custom agents may override built-in names by file name, but validation disables attempts to override a built-in agent with wildcard tools.
 
 ---
 
-## Debugging
+## Prompt Modes
 
-### Agent not appearing in `/agents` list?
+### `replace`
 
-1. Check the file is in `.pi/agents/*.md` (not `.pi/agents/` subdirectories)
-2. Verify frontmatter has `---` at start and end
-3. Check the extension logs for parse errors
-4. Run `/agents` → "Reload custom agents" to force refresh
+The agent receives the custom prompt body as its role instructions. This is the safest default for specialized agents.
 
-### Invalid tool name errors?
+```yaml
+prompt_mode: replace
+```
 
-Only tools from the **Built-in Tools** and **Context-Mode Tools** tables above are valid. Check `src/agent-types.ts` for the authoritative `BUILTIN_TOOL_NAMES` list.
+### `append`
 
-### System prompt not working as expected?
+The custom prompt body is appended to the inherited prompt. Use this only when the agent should remain a variant of the parent behavior.
 
-The loader strips the frontmatter and passes everything after the second `---` as the system prompt. Make sure there is no extra whitespace before `---`.
+```yaml
+prompt_mode: append
+```
 
 ---
 
 ## Examples
 
-### Read-only codebase explorer
+Canonical examples live under `examples/agents/`:
 
-```markdown
----
-name: code-explorer
-description: Explore the codebase without making changes
-systemPrompt: |
-  You are a codebase explorer. Read files, search, and report findings.
-  Never modify files under any circumstances.
-builtinToolNames:
-  - read
-  - grep
-  - find
-  - ls
-disallowedTools:
-  - write
-  - edit
-  - bash
----
-```
+| Example | Purpose |
+|---------|---------|
+| `adversarial-validator.md` | Read-only security review agent. |
+| `handoff-chain-researcher.md` | Research agent that ends with structured handoff JSON. |
+| `handoff-chain-implementer.md` | Worktree-isolated implementation agent for handoff follow-up. |
+| `scheduled-explorer.md` | Read-only scheduled codebase scan agent. |
+| `worktree-isolated-editor.md` | File-editing agent configured for worktree isolation. |
 
-### Sandbox data processor
+Copy an example into `.pi/agents/` to activate it in a project.
 
-```markdown
 ---
-name: data-processor
-description: Process CSV/JSON data in a sandboxed directory
-systemPrompt: |
-  You process data files. Only access files in the provided sandbox.
-builtinToolNames:
-  - read
-  - ctx_read
-  - ctx_write
-  - ctx_bash
-contextMode: true
----
-```
 
-### Child task agent (inherits from parent)
+## Troubleshooting
 
-```markdown
----
-name: reviewer
-description: Code review specialist
-description: |
-  Review code changes and provide structured feedback.
-  Inherits tools from the spawning agent.
-parentType: general-purpose
-disallowedTools:
-  - write
-  - edit
----
-```
+### Agent Does Not Appear
+
+Check that:
+
+- The file extension is `.md`.
+- The file is directly under `.pi/agents/`.
+- Frontmatter starts and ends with `---`.
+- `enabled` is not `false`.
+- The file is not a symlink.
+
+### Agent Has Too Many Tools
+
+Remember that `tools` defaults to all built-in tools. For read-only agents, set `tools` explicitly and add `disallowed_tools`.
+
+### Agent Prompt Looks Wrong
+
+The body of the Markdown file is the system prompt. Do not put the prompt in a `systemPrompt` frontmatter field; that field is ignored by the current loader.

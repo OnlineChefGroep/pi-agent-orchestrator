@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.9.5 (2026-05-26)
+
+### Security
+- Authenticated cross-extension RPC mutations through host-provided `authProvider(requestId)` when available.
+- Ignored spoofable payload-provided RPC identity for `spawn` and `stop`.
+- Added per-extension, per-operation rate limiting for mutating RPC calls.
+
+### Reliability
+- Hardened `ScheduleStore` atomic writes by creating temp files next to the target JSON file before rename.
+- Made Windows CI tests blocking again after removing the old schedule temp-dir workaround.
+- Extracted smart/group/swarm batch finalization into `BatchOrchestrator` to reduce `src/index.ts` complexity.
+
+### Documentation
+- Added the cross-extension RPC contract to `docs/api-reference.md`.
+- Updated roadmap/review docs for completed security and schedule work.
+- Rewrote the custom-agent guide to match the real `.pi/agents` loader format.
+- Added five canonical custom-agent examples under `examples/agents/`.
+- Synchronized README badges and package metadata for the `0.9.5` release.
+
+### Metrics
+- 654 tests, 36 test files.
+
+---
+
 ## v0.9.2 (2026-05-25)
 
 ### 🚀 New Features

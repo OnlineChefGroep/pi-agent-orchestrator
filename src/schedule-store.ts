@@ -11,8 +11,7 @@
  */
 
 import { existsSync, promises as fs, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { ScheduledSubagent, ScheduleStoreData } from "./types.js";
 
 const LOCK_RETRY_MS = 50;
@@ -120,8 +119,11 @@ export class ScheduleStore {
       jobs: [...this.jobs.values()],
     };
     
-    // Use system temp directory for better Windows compatibility
-    const tmpPath = join(tmpdir(), `subagent-schedules-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`);
+    const targetDir = dirname(this.filePath);
+    const tmpPath = join(
+      targetDir,
+      `${basename(this.filePath)}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`,
+    );
     
     try {
       await fs.writeFile(tmpPath, JSON.stringify(data, null, 2));

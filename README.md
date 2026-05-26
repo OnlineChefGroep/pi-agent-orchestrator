@@ -4,10 +4,10 @@
 
 Bring Claude Code-style autonomous sub-agents to pi. Spawn specialized agents, enforce budgets, chain them with structured handoffs, swarm agents together, and watch a rich interactive TUI dashboard render their progress in real time.
 
-[![Tests](https://img.shields.io/badge/tests-650%2F650-green)](https://github.com/OnlineChefGroep/pi-subagents-fork)
+[![Tests](https://img.shields.io/badge/tests-654%2F654-green)](https://github.com/OnlineChefGroep/pi-subagents-fork)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.9.2-blue)](https://github.com/OnlineChefGroep/pi-subagents-fork/releases)
+[![Version](https://img.shields.io/badge/version-0.9.5-blue)](https://github.com/OnlineChefGroep/pi-subagents-fork/releases)
 
 ---
 

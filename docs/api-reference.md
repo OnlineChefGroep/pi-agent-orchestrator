@@ -285,3 +285,246 @@ Returns total tokens consumed across all sessions.
 **File:** `src/usage.ts`
 
 Returns the percentage of the model's context window currently in use (0–100).
+
+---
+
+## Cross-Extension RPC
+
+### Protocol Overview
+
+**File:** `src/cross-extension-rpc.ts`
+
+The subagents extension exposes a request-reply RPC protocol over the pi.events event bus, allowing other extensions to spawn and control agents without direct coupling.
+
+**Protocol version:** `2` (bumped when envelope or method contracts change)
+
+Mutating RPC calls (`spawn`, `stop`) are authenticated by the host integration when `registerRpcHandlers()` is configured with `authProvider(requestId)`. In that mode, request payload identity is ignored; the provider is the only trusted source of `extensionId`. If no auth provider is configured, the handler keeps legacy in-process compatibility and uses the synthetic `legacy` identity for rate limiting.
+
+### RPC Reply Envelope
+
+All RPC responses follow the pi-mono convention:
+
+```ts
+type RpcReply<T = void> =
+  | { success: true; data?: T }
+  | { success: false; error: string };
+```
+
+### RPC Methods
+
+#### `subagents:rpc:ping`
+
+Health check endpoint. Returns the current protocol version.
+
+**Request:** `{ requestId: string }`
+
+**Reply:** `{ success: true; data: { version: number } }`
+
+**Example:**
+```ts
+const requestId = crypto.randomUUID();
+pi.events.emit("subagents:rpc:ping", { requestId });
+
+pi.events.once(`subagents:rpc:ping:reply:${requestId}`, (reply) => {
+  if (reply.success) {
+    console.log(`Protocol version: ${reply.data.version}`);
+  }
+});
+```
+
+#### `subagents:rpc:spawn`
+
+Spawn a new agent from another extension.
+
+**Request:**
+```ts
+{
+  requestId: string;
+  type: string;           // Agent type (e.g., "general-purpose", "Explore")
+  prompt: string;         // Task description
+  options?: {
+    model?: string;       // Model override (provider/modelId or fuzzy name)
+    maxTurns?: number;
+    isolated?: boolean;
+    inheritContext?: boolean;
+    // ... other Agent tool options
+  };
+}
+```
+
+**Reply:** `{ success: true; data: { id: string } }` or `{ success: false; error: string }`
+
+**Authentication:** when `authProvider` is configured, `authProvider(requestId)` must return `{ extensionId }`; otherwise the request fails with `Unauthorized RPC request`.
+
+**Rate limiting:** 10 spawn requests per minute per authenticated extension ID.
+
+**Example:**
+```ts
+const requestId = crypto.randomUUID();
+pi.events.emit("subagents:rpc:spawn", {
+  requestId,
+  type: "Explore",
+  prompt: "Search for TODO comments in src/",
+  options: { maxTurns: 10 },
+});
+
+pi.events.once(`subagents:rpc:spawn:reply:${requestId}`, (reply) => {
+  if (reply.success) {
+    console.log(`Agent spawned with ID: ${reply.data.id}`);
+  } else {
+    console.error(`Spawn failed: ${reply.error}`);
+  }
+});
+```
+
+#### `subagents:rpc:stop`
+
+Abort a running agent.
+
+**Request:** `{ requestId: string; agentId: string }`
+
+**Reply:** `{ success: true }` or `{ success: false; error: string }`
+
+**Authentication:** same as `spawn`. A stop request from an unauthenticated caller is rejected when `authProvider` is configured.
+
+**Rate limiting:** 10 stop requests per minute per authenticated extension ID.
+
+**Example:**
+```ts
+const requestId = crypto.randomUUID();
+pi.events.emit("subagents:rpc:stop", { requestId, agentId: "agent-123" });
+
+pi.events.once(`subagents:rpc:stop:reply:${requestId}`, (reply) => {
+  if (!reply.success) {
+    console.error(`Stop failed: ${reply.error}`);
+  }
+});
+```
+
+### Global Symbol Registry
+
+The extension exposes read-only APIs via `globalThis[Symbol.for(...)]` for cross-package discovery:
+
+#### `Symbol.for("pi-subagents:manager")`
+
+Read-only manager access for querying agent state:
+
+```ts
+const manager = (globalThis as any)[Symbol.for("pi-subagents:manager")];
+
+// Wait for all running agents to complete
+await manager.waitForAll();
+
+// Check if any agents are running
+const hasRunning = manager.hasRunning();
+
+// Get safe record metadata (no sensitive data)
+const record = manager.getRecord("agent-123");
+// Returns: { id, type, status, description } or undefined
+
+// List agent IDs by type
+const ids = manager.listAgentIds("Explore");
+```
+
+**Security note:** Only read-only methods are exposed. No `spawn`, `listAgents`, or mutation methods.
+
+#### `Symbol.for("pi-subagents:hooks")`
+
+Read-only hook registry access for discovering registered handlers:
+
+```ts
+const hooks = (globalThis as any)[Symbol.for("pi-subagents:hooks")];
+
+// Get all registered hook handlers
+const handlers = hooks.getHandlers();
+// Returns: Map<HookEvent, HookHandler[]>
+```
+
+**Security note:** No `register`, `unregister`, or `dispatch` methods are exposed.
+
+### Lifecycle Events
+
+The extension emits the following events on `pi.events` for telemetry and cross-extension coordination:
+
+#### `subagents:ready`
+
+Broadcast when the extension is fully initialized and ready to handle RPC calls.
+
+**Payload:** `{}`
+
+#### `subagents:scheduler_ready`
+
+Emitted when the scheduler is active and has loaded persisted jobs.
+
+**Payload:** `{ sessionId: string; jobCount: number }`
+
+#### `subagents:started`
+
+Emitted when an agent transitions to running state (including from queue).
+
+**Payload:** `{ id: string; type: string; description: string }`
+
+#### `subagents:completed`
+
+Emitted when an agent completes successfully.
+
+**Payload:**
+```ts
+{
+  id: string;
+  type: string;
+  description: string;
+  result?: string;
+  status: "completed";
+  toolUses: number;
+  durationMs: number;
+  tokens?: { input: number; output: number; total: number };
+}
+```
+
+#### `subagents:failed`
+
+Emitted when an agent errors, stops, or is aborted.
+
+**Payload:** Same as `subagents:completed`, plus `error?: string`.
+
+#### `subagents:compacted`
+
+Emitted when an agent's session compacts (preserves conversation count).
+
+**Payload:**
+```ts
+{
+  id: string;
+  type: string;
+  description: string;
+  reason: string;
+  tokensBefore: number;
+  compactionCount: number;
+}
+```
+
+#### `subagents:record`
+
+Emitted on agent completion and persisted to pi's entry log for cross-session history reconstruction.
+
+**Payload:**
+```ts
+{
+  id: string;
+  type: string;
+  description: string;
+  status: string;
+  result?: string;
+  error?: string;
+  startedAt: number;
+  completedAt?: number;
+}
+```
+
+### Security Considerations
+
+- **Rate limiting:** Mutating RPC calls are rate-limited to 10 per minute per authenticated extension ID and operation.
+- **Authentication:** When an `authProvider` is configured, RPC identity comes from `authProvider(requestId)`. Payload-provided identity is ignored.
+- **Read-only globals:** Symbol registry exposes only read-only APIs; mutation methods are intentionally omitted.
+- **Model resolution:** RPC callers can specify models as strings; the extension resolves them to Model instances to avoid auth errors.

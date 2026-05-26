@@ -5,7 +5,7 @@
  * load/save, parse-error self-heal, stale-lock recovery.
  */
 
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -100,7 +100,7 @@ describe("ScheduleStore", () => {
     const store = new ScheduleStore(file);
     await store.add(makeJob());
     expect(existsSync(file)).toBe(true);
-    expect(existsSync(`${file}.tmp`)).toBe(false);
+    expect(readdirSync(tmp).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 
   it("self-heals from a corrupt JSON file — load silently empties, next save rewrites", async () => {

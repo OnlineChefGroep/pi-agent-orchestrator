@@ -126,7 +126,7 @@ spawn → build context → create session → run loop
 - `ScheduleStore` persists schedules to `.pi/subagent-schedules/<sessionId>.json`
 - Disabled jobs do not fire; jobs are cleaned up on completion
 
-### `src/ui/agent-dashboard.ts` — Interactive Agent Dashboard (v0.9.2)
+### `src/ui/agent-dashboard.ts` — Interactive Agent Dashboard
 
 Rich interactive TUI dashboard replacing the old agent widget:
 - **Vim-style hotkeys**: `j/k` navigate, `Enter` steer, `K` kill, `?` help overlay
@@ -136,7 +136,7 @@ Rich interactive TUI dashboard replacing the old agent widget:
 - **Live spinners**: 5 animation styles for running agents (`dots`, `pulse`, `wave`, `bar`, `clock`)
 - **Auto-refresh**: Configurable dashboard refresh interval
 
-### `src/swarm-join.ts` — Swarm Coordinator (v0.9.2)
+### `src/swarm-join.ts` — Swarm Coordinator
 
 Manages collaborative multi-agent swarms:
 - Agents dynamically join/leave swarms at runtime

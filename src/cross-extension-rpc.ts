@@ -30,7 +30,7 @@ export interface SpawnCapable {
   abort(id: string): boolean;
 }
 
-// CVE-003 FIX: Authentication context for RPC calls
+// Host-provided authentication context for RPC calls.
 export interface AuthContext {
   extensionId: string;
   extensionName?: string;
@@ -46,12 +46,13 @@ const RATE_LIMIT_WINDOW = 60000;  // 1 minute
 const RATE_LIMIT_MAX = 10;        // Max 10 spawns per minute per extension
 const rateLimitMap = new Map<string, RateLimitEntry>();
 
-function checkRateLimit(extensionId: string): boolean {
+function checkRateLimit(extensionId: string, operation: string): boolean {
   const now = Date.now();
-  const entry = rateLimitMap.get(extensionId);
+  const key = `${extensionId}:${operation}`;
+  const entry = rateLimitMap.get(key);
   
   if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(extensionId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
     return true;
   }
   
@@ -63,8 +64,8 @@ function checkRateLimit(extensionId: string): boolean {
   return true;
 }
 
-// Clean up old rate limit entries periodically
-setInterval(() => {
+// Clean up old rate limit entries periodically.
+const rateLimitCleanup = setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of rateLimitMap.entries()) {
     if (now > entry.resetAt) {
@@ -72,13 +73,18 @@ setInterval(() => {
     }
   }
 }, 60000);
+rateLimitCleanup.unref?.();
+
+export function resetRpcRateLimitsForTests(): void {
+  rateLimitMap.clear();
+}
 
 export interface RpcDeps {
   events: EventBus;
   pi: unknown;                    // passed through to manager.spawn
   getCtx: () => unknown | undefined;  // returns current ExtensionContext
   manager: SpawnCapable;
-  authProvider?: (requestId: string) => AuthContext | undefined;  // CVE-003 FIX: Optional auth
+  authProvider?: (requestId: string) => AuthContext | undefined;
 }
 
 export interface RpcHandle {
@@ -111,6 +117,26 @@ function handleRpc<P extends { requestId: string }>(
   });
 }
 
+function resolveAuth(deps: RpcDeps, requestId: string): AuthContext {
+  if (!deps.authProvider) {
+    return { extensionId: "legacy" };
+  }
+
+  const auth = deps.authProvider(requestId);
+  if (!auth?.extensionId) {
+    throw new Error("Unauthorized RPC request");
+  }
+  return auth;
+}
+
+function authorizeRpcMutation(deps: RpcDeps, requestId: string, operation: string): AuthContext {
+  const auth = resolveAuth(deps, requestId);
+  if (!checkRateLimit(auth.extensionId, operation)) {
+    throw new Error(`Rate limit exceeded for extension ${auth.extensionId}`);
+  }
+  return auth;
+}
+
 /**
  * Register ping, spawn, and stop RPC handlers on the event bus.
  * Returns unsub functions for cleanup.
@@ -123,19 +149,12 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
   });
 
   const unsubSpawn = handleRpc<{ requestId: string; type: string; prompt: string; options?: any; authContext?: AuthContext }>(
-    events, "subagents:rpc:spawn", ({ type, prompt, options, authContext }) => {
+    events, "subagents:rpc:spawn", ({ requestId, type, prompt, options }) => {
       const ctx = getCtx();
       if (!ctx) throw new Error("No active session");
       
-      // CVE-003 FIX: Authentication and rate limiting
-      const extensionId = authContext?.extensionId ?? 'unknown';
-      
-      if (!checkRateLimit(extensionId)) {
-        throw new Error(`Rate limit exceeded for extension ${extensionId}`);
-      }
-      
-      // CVE-003 FIX: Audit log for RPC spawn
-      console.log(`[pi-subagents] RPC spawn: extension=${extensionId}, type=${type}`);
+      const auth = authorizeRpcMutation(deps, requestId, "spawn");
+      console.log(`[pi-subagents] RPC spawn: extension=${auth.extensionId}, type=${type}`);
 
       // Cross-extension RPC callers (e.g. pi-tasks TaskExecute) naturally
       // forward serializable values, so options.model can be a string like
@@ -166,7 +185,8 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
   );
 
   const unsubStop = handleRpc<{ requestId: string; agentId: string }>(
-    events, "subagents:rpc:stop", ({ agentId }) => {
+    events, "subagents:rpc:stop", ({ requestId, agentId }) => {
+      authorizeRpcMutation(deps, requestId, "stop");
       if (!manager.abort(agentId)) throw new Error("Agent not found");
     },
   );

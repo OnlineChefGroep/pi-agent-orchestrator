@@ -43,8 +43,8 @@ npm install --legacy-peer-deps
 **Symptom:** Agent tries to use a tool and gets permission denied.
 
 **Causes:**
-1. Tool not in `builtinToolNames`
-2. Tool in `disallowedTools`
+1. Tool not listed in the custom agent's `tools` frontmatter
+2. Tool listed in `disallowed_tools`
 3. Parent agent has stricter permissions (inherited restriction)
 4. Partition filter removed the tool based on `contextMode`
 
@@ -88,11 +88,11 @@ npm install --legacy-peer-deps
 
 ### Schedule store errors on Windows
 
-**Symptom:** `ENOENT` errors in `schedule-store.test.ts` or `schedule.ts`.
+**Symptom:** `ENOENT`, stale lock, or rename errors in `schedule-store.test.ts` or `schedule.ts`.
 
-**Cause:** Known pre-existing issue with temp directory races on Windows. The schedule store uses `os.tmpdir()` which can be unstable in test environments.
+**Cause:** Schedule persistence uses a project-local JSON file with a lock file. Writes are atomic via same-directory temp file + rename, but stale lock files can still occur after an abrupt process exit.
 
-**Workaround:** Tests are expected to have some flakiness on Windows. In production, schedules are stored under `.pi/subagent-schedules/` in the project directory, which is stable.
+**Fix:** Retry the command after the stale lock recovery window, or remove the matching `.lock` file under `.pi/subagent-schedules/` if no pi process is using that session.
 
 ---
 
@@ -131,11 +131,11 @@ npm install @onlinechefgroep/pi-subagents-tui
 
 ### `schedule.test.ts` or `schedule-store.test.ts` fails on Windows
 
-**Symptom:** `ENOENT` on temp directory creation.
+**Symptom:** Lock, rename, or timing-related failures in schedule tests.
 
-**Status:** Known pre-existing flakiness. Not caused by your changes. The test suite should still report 600+ passing tests.
+**Status:** Schedule writes now use same-directory temp files before rename. If this still fails on Windows, treat it as a real regression and capture the failing path plus the matching `.lock` file state.
 
-**Fix:** None needed for PRs. If investigating: the issue is a race between `os.tmpdir()` cleanup and test file creation.
+**Fix:** Run the specific failing file first (`npm test -- test/schedule-store.test.ts`) to separate persistence failures from scheduler timing failures.
 
 ---
 

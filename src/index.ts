@@ -18,6 +18,7 @@ import { AgentManager } from "./agent-manager.js";
 import { buildTypeListText, getDefaultJoinMode, isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setCinematicEnabled, setDashboardRefreshInterval, setDefaultJoinMode, setOrchestrationMode, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setUiStyle } from "./agent-registry.js";
 import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTurns, setDefaultMaxTurns, setGraceTurns, steerAgent } from "./agent-runner.js";
 import { getAgentConfig, getAvailableTypes, resolveType } from "./agent-types.js";
+import { BatchOrchestrator } from "./batch-orchestrator.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
 import { GroupJoinManager } from "./group-join.js";
 import { HookRegistry } from "./hooks.js";
@@ -33,7 +34,7 @@ import {
   buildDetails, buildNotificationDetails, createActivityTracker, formatLifetimeTokens,
   formatTaskNotification, getStatusNote, textResult,
 } from "./tool-result-helpers.js";
-import { type AgentInvocation, type AgentRecord, type JoinMode, type NotificationDetails, type SubagentType } from "./types.js";
+import { type AgentInvocation, type AgentRecord, type NotificationDetails, type SubagentType } from "./types.js";
 import { buildInvocationTags, describeActivity, formatDuration, formatMs, formatTurns, getDisplayName, getPromptModeLabel } from "./ui/agent-format.js";
 import type { AgentActivity, AgentDetails, UICtx } from "./ui/agent-ui-types.js";
 import { AgentWidget } from "./ui/agent-widget.js";
@@ -224,8 +225,8 @@ export default function (pi: ExtensionAPI) {
     }
 
     // If this agent is pending batch finalization (debounce window still open),
-    // don't send an individual nudge — finalizeBatch will pick it up retroactively.
-    if (currentBatchAgents.some(a => a.id === record.id)) {
+    // don't send an individual nudge — batch orchestrator will pick it up retroactively.
+    if (batchOrchestrator.isPendingBatchFinalization(record.id)) {
       widget.update();
       return;
     }
@@ -344,78 +345,21 @@ export default function (pi: ExtensionAPI) {
     manager.abortAll();
     for (const timer of pendingNudges.values()) clearTimeout(timer);
     pendingNudges.clear();
+    batchOrchestrator.dispose();
     manager.dispose();
   });
 
   // Live widget: show running agents above editor
   const widget = new AgentWidget(manager, agentActivity);
 
-  // ---- Batch tracking for smart join mode ----
-  // Collects background agent IDs spawned in the current turn for smart grouping.
-  // Uses a debounced timer: each new agent resets the 100ms window so that all
-  // parallel tool calls (which may be dispatched across multiple microtasks by the
-  // framework) are captured in the same batch.
-  let currentBatchAgents: { id: string; joinMode: JoinMode }[] = [];
-  let batchFinalizeTimer: ReturnType<typeof setTimeout> | undefined;
-  let batchCounter = 0;
-
-  /** Finalize the current batch: smart/group get traditional fixed groups,
-   *  swarm gets a dynamic SwarmCoordinator entry (can grow later via dashboard hotkeys).
-   */
-  function finalizeBatch() {
-    batchFinalizeTimer = undefined;
-    const batchAgents = [...currentBatchAgents];
-    currentBatchAgents = [];
-
-    // Traditional smart/group batching (unchanged behavior)
-    const smartAgents = batchAgents.filter(a => a.joinMode === 'smart' || a.joinMode === 'group');
-    let handledSmartGroupIds: string[] = [];
-    if (smartAgents.length >= 2) {
-      const groupId = `batch-${++batchCounter}`;
-      const ids = smartAgents.map(a => a.id);
-      handledSmartGroupIds = ids;
-      groupJoin.registerGroup(groupId, ids);
-      for (const id of ids) {
-        const record = manager.getRecord(id);
-        if (!record) continue;
-        record.groupId = groupId;
-        if (record.completedAt != null && !record.resultConsumed) {
-          groupJoin.onAgentComplete(record);
-        }
-      }
-    }
-
-    // Swarm mode — dynamic collaborative groups
-    const swarmAgents = batchAgents.filter(a => a.joinMode === 'swarm');
-    if (swarmAgents.length >= 1) {
-      const swarmId = `swarm-${++batchCounter}`;
-      const ids = swarmAgents.map(a => a.id);
-      swarmJoin.registerSwarm(swarmId, ids);
-      for (const id of ids) {
-        const record = manager.getRecord(id);
-        if (!record) continue;
-        record.swarmId = swarmId;
-        if (record.completedAt != null && !record.resultConsumed) {
-          swarmJoin.onAgentComplete(record);
-        }
-      }
-    }
-
-    // Any agents that were in the debounce batch but did not form (or join) a group/swarm
-    // get their deferred individual nudges now.
-    const handled = new Set([
-      ...handledSmartGroupIds,
-      ...batchAgents.filter(a => a.joinMode === 'swarm').map(a => a.id),
-    ]);
-
-    for (const { id } of batchAgents) {
-      if (handled.has(id)) continue;
-      const record = manager.getRecord(id);
-      if (record?.completedAt != null && !record.resultConsumed) {
-        sendIndividualNudge(record);
-      }
-    }
-  }
+  // ---- Batch orchestrator for smart/group/swarm join modes ----
+  const batchOrchestrator = new BatchOrchestrator({
+    manager,
+    groupJoin,
+    swarmJoin,
+    onAgentHandled: sendIndividualNudge,
+    onWidgetUpdate: () => widget.update(),
+  });
 
   // Track tool calls per turn so we only age the widget once per turn boundary,
   // avoiding premature agent aging during validator retries within a turn.
@@ -845,12 +789,8 @@ Guidelines:
         if (joinMode == null || joinMode === 'async') {
           // Foreground/no join mode or explicit async — not part of any batch
         } else {
-          // smart / group / swarm — add to current batch (finalizeBatch routes by joinMode)
-          currentBatchAgents.push({ id, joinMode });
-          // Debounce: reset timer on each new agent so parallel tool calls
-          // dispatched across multiple event loop ticks are captured together
-          if (batchFinalizeTimer) clearTimeout(batchFinalizeTimer);
-          batchFinalizeTimer = setTimeout(finalizeBatch, 100);
+          // smart / group / swarm — add to current batch (orchestrator routes by joinMode)
+          batchOrchestrator.addToBatch(id, joinMode);
         }
 
         agentActivity.set(id, bgState);
