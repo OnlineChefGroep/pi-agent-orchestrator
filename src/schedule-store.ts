@@ -11,6 +11,7 @@
  */
 
 import { existsSync, promises as fs, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { ScheduledSubagent, ScheduleStoreData } from "./types.js";
 
@@ -112,15 +113,28 @@ export class ScheduleStore {
     }
   }
 
-  /** Atomic write via temp file + rename (POSIX-atomic). */
+  /** Atomic write via temp file + rename (POSIX-atomic, Windows-safe). */
   private async save(): Promise<void> {
     const data: ScheduleStoreData = {
       version: 1,
       jobs: [...this.jobs.values()],
     };
-    const tmp = `${this.filePath}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(data, null, 2));
-    await fs.rename(tmp, this.filePath);
+    
+    // Use system temp directory for better Windows compatibility
+    const tmpPath = join(tmpdir(), `subagent-schedules-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`);
+    
+    try {
+      await fs.writeFile(tmpPath, JSON.stringify(data, null, 2));
+      await fs.rename(tmpPath, this.filePath);
+    } catch (error) {
+      // Clean up temp file if write/rename fails
+      try {
+        await fs.unlink(tmpPath);
+      } catch {
+        /* ignore */
+      }
+      throw error;
+    }
   }
 
   /** Acquire lock → reload → mutate → save → release. */

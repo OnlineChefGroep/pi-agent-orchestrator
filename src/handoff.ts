@@ -20,25 +20,33 @@ const VALID_STATUSES = new Set(["success", "partial", "failed"]);
 
 // CVE-008 FIX: JSON parsing limits
 const MAX_JSON_SIZE = 1024 * 1024;  // 1MB max JSON
-const MAX_JSON_DEPTH = 20;
+const MAX_JSON_KEYS = 1000;  // Total key count limit (renamed from MAX_JSON_DEPTH for clarity)
 const MAX_FINDINGS_COUNT = 100;
 const MAX_SUMMARY_LENGTH = 10000;
 const MAX_STRING_LENGTH = 50000;
 
 /**
- * CVE-008 FIX: Safe JSON parser with size and depth limits.
+ * CVE-008 FIX: Safe JSON parser with size and key count limits.
+ *
+ * Tracks total number of keys in the JSON structure to prevent
+ * excessively large payloads. The reviver counts each key encountered
+ * during parsing.
  */
-function safeJsonParse(input: string, maxDepth: number = MAX_JSON_DEPTH): unknown {
+function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS): unknown {
   if (input.length > MAX_JSON_SIZE) {
     throw new Error(`JSON size ${input.length} exceeds maximum ${MAX_JSON_SIZE} bytes`);
   }
   
-  // Track depth during parsing
-  let depth = 0;
+  // Track total key count during parsing
+  let keyCount = 0;
+  
   const reviver = (key: string, value: unknown) => {
-    if (typeof key === 'string') depth++;  // Increment for each key
-    if (depth > maxDepth) {
-      throw new Error(`JSON depth exceeds maximum of ${maxDepth}`);
+    // Count each key (excluding the empty string for the root object)
+    if (typeof key === 'string' && key !== '') {
+      keyCount++;
+      if (keyCount > maxKeys) {
+        throw new Error(`JSON key count exceeds maximum of ${maxKeys}`);
+      }
     }
     
     // Limit string lengths

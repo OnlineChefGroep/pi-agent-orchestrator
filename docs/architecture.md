@@ -223,3 +223,57 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/ui/agent-widget.ts` | Legacy persistent widget |
 | `src/ui/conversation-viewer.ts` | Live conversation overlay |
 | `src/ui/schedule-menu.ts` | Schedule management menu |
+| `src/ui/animation.ts` | Shared animation utilities (spinners, timing) |
+| `src/ui/theme.ts` | Theme system for dashboard/widget rendering |
+| `src/ui/agent-format.ts` | Formatting utilities for tokens, turns, durations |
+| `src/ui/agent-ui-types.ts` | Shared UI type definitions |
+| `src/ui/agent-widget-renderer.ts` | Widget rendering logic (delegated from agent-widget.ts) |
+| `src/ui/agent-dashboard-renderer.ts` | Dashboard rendering logic (delegated from agent-dashboard.ts) |
+| `src/ui/notification-renderer.ts` | Custom notification renderer for agent completions |
+
+---
+
+## Batch/Nudge State Machine
+
+The extension uses a debounced notification system to avoid spamming the main agent with individual completion messages when multiple agents finish in quick succession.
+
+### Components
+
+- **pendingNudges** (in `src/index.ts`): Map of agent IDs to setTimeout handles, holds notifications for 200ms to allow cancellation
+- **GroupJoinManager** (`src/group-join.ts`): Batches agents registered as a group, delivers single consolidated notification
+- **SwarmCoordinator** (`src/swarm-join.ts`): Similar to GroupJoinManager but for dynamic collaborative swarms
+- **currentBatchAgents** (in `src/index.ts`): Tracks agents spawned in the current tool call for debounced finalization
+
+### State Diagram
+
+```
+Agent completes
+  │
+  ├─→ Is result already consumed?
+  │    └─ Yes → Skip notification, mark finished
+  │
+  ├─→ Is in pending batch (currentBatchAgents)?
+  │    └─ Yes → Wait for finalizeBatch (debounce window)
+  │
+  ├─→ Is in a registered group?
+  │    └─ Yes → GroupJoinManager.onAgentComplete()
+  │              ├─ All complete? → Deliver immediately
+  │              └─ Partial? → Start 30s timeout (or 15s straggler timeout)
+  │
+  ├─→ Is in a swarm?
+  │    └─ Yes → SwarmCoordinator.onAgentComplete()
+  │              (similar logic to GroupJoinManager)
+  │
+  └─→ Otherwise → scheduleNudge(200ms) → emitIndividualNudge()
+```
+
+### Debounce Flow
+
+1. **Parallel tool calls**: When the main agent calls `Agent` multiple times in parallel, all spawned agents are added to `currentBatchAgents`
+2. **Batch finalization**: After the tool call returns, a 100ms `batchFinalizeTimer` fires, calling `finalizeBatch()`
+3. **Retroactive delivery**: `finalizeBatch()` checks which agents in the batch are already complete and sends a consolidated notification
+4. **Straggler handling**: If an agent completes after the batch window, it falls through to individual or group notification paths
+
+### Notification Cancellation
+
+The `get_subagent_result` tool can cancel pending notifications by calling `cancelNudge(agentId)` before the 200ms hold expires. This prevents duplicate notifications when the main agent explicitly polls for results.

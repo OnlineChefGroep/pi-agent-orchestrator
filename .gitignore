@@ -41,7 +41,7 @@ autoresearch.jsonl
 .factory/
 
 # Personal planning
-VERVOLG_PLAN.md
+# VERVOLG_PLAN.md - tracked as living roadmap document
 
 
 .npmrc
