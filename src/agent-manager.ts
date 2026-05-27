@@ -140,7 +140,9 @@ export class AgentManager {
   }
 
   setSessionMaxSpawns(n: number): void {
-    this.sessionMaxSpawns = Math.max(0, n);
+    const normalized = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+    this.sessionMaxSpawns = normalized;
+    this.sessionLimits.maxAgentsPerSession = normalized > 0 ? normalized : undefined;
   }
 
   getSessionMaxSpawns(): number {
@@ -148,7 +150,9 @@ export class AgentManager {
   }
 
   setSessionMaxTurns(n: number): void {
-    this.sessionMaxTurns = Math.max(0, n);
+    const normalized = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+    this.sessionMaxTurns = normalized;
+    this.sessionLimits.maxTotalTurnsPerSession = normalized > 0 ? normalized : undefined;
   }
 
   getSessionMaxTurns(): number {

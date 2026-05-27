@@ -123,6 +123,12 @@ function validateHandoffShape(obj: Record<string, unknown>): string[] {
       issues.push("files");
     } else if (obj.files.length > MAX_FILES_COUNT) {
       issues.push(`files (too many: ${obj.files.length})`);
+    } else if (
+      obj.files.some(
+        (file) => typeof file !== "string" || file.trim().length === 0,
+      )
+    ) {
+      issues.push("files (invalid item)");
     }
   }
   if (obj.artifacts !== undefined) {
@@ -149,7 +155,10 @@ function isArtifact(value: unknown): value is HandoffArtifact {
   return (
     typeof obj.type === "string" &&
     obj.type.trim().length > 0 &&
-    (typeof obj.path === "string" || typeof obj.title === "string") &&
+    typeof obj.path === "string" &&
+    obj.path.trim().length > 0 &&
+    (obj.title === undefined || typeof obj.title === "string") &&
+    (obj.value === undefined || typeof obj.value === "string") &&
     (obj.mimeType === undefined || typeof obj.mimeType === "string")
   );
 }
