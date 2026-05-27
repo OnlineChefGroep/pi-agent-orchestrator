@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.10.0 (2026-05-27)
+
+### Release
+- Renamed the package to `@onlinechefgroep/pi-agent-orchestrator`.
+- Updated repository metadata and documentation links for `OnlineChefGroep/pi-agent-orchestrator`.
+- Added an explicit package `files` whitelist so private GitHub Packages releases contain runtime source and docs only.
+
+### Features
+- Added session-wide spawn and cumulative-turn limits with settings persistence and settings-menu controls.
+- Added `estimate_only` mode to the Agent tool for dry-run launch estimates.
+- Added typed handoff artifacts for files, branches, URLs, and notes.
+- Added a typed cross-extension RPC client helper.
+- Added structured logger plumbing for RPC logging.
+
+### Reliability
+- Replaced the schedule PID lock with atomic lock-directory acquisition and stale-lock recovery.
+- Added Graphify project hook/skill configuration while keeping generated graph output out of the package.
+
+### Metrics
+- 659 tests, 36 test files.
+
+---
+
 ## v0.9.5 (2026-05-26)
 
 ### Security
@@ -143,7 +166,7 @@
 - Add .npmignore for package-lock.json
 
 ## 0.7.4
-- Publish @onlinechefgroep/pi-subagents to GitHub Packages
+- Publish @onlinechefgroep/pi-agent-orchestrator to GitHub Packages
 
 ## 0.7.3 (original)
 - Forked from tintinweb/pi-subagents

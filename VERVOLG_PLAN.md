@@ -1,6 +1,6 @@
 # VERVOLG_PLAN - Living Roadmap
 
-> This document tracks ongoing priorities and improvement items for `@onlinechefgroep/pi-subagents`. Items are linked to GitHub Issues where possible for traceability.
+> This document tracks ongoing priorities and improvement items for `@onlinechefgroep/pi-agent-orchestrator`. Items are linked to GitHub Issues where possible for traceability.
 
 ---
 
@@ -29,6 +29,12 @@
 - [x] **docs: expand api-reference.md with cross-extension RPC contract** - Documented authenticated RPC behavior, legacy mode, rate limits, and request/reply shapes
 - [x] **feat: add 5 canonical custom-agent examples** - Added valid `.pi/agents` examples under `examples/agents/`
 - [x] **docs: align custom-agent guide with loader format** - Documented snake_case/CSV frontmatter and body-as-system-prompt behavior
+- [x] **feat: add session-wide resource limits** - Added per-session spawn and cumulative-turn caps with settings UI and persisted settings
+- [x] **fix: replace PID lock with atomic lock directory** - ScheduleStore now uses atomic lock-directory acquisition with stale-lock recovery
+- [x] **feat: handoff protocol v2 typed artifacts** - Handoffs now accept typed file, branch, URL, and note artifacts while staying backward-compatible
+- [x] **feat: add Agent estimate-only mode** - The Agent tool can return launch estimates without spawning work
+- [x] **chore: install Graphify project support** - Added project Graphify skill/hook configuration and kept generated graph output local
+- [x] **chore: rebrand for private 0.10.0 release** - Renamed the package surface to `@onlinechefgroep/pi-agent-orchestrator`
 
 ---
 
@@ -36,15 +42,15 @@
 
 ### P1: Security & Reliability
 
-- [ ] **research: session-wide resource limits**
-  - **Context**: Per-agent limits exist, but no session-wide spawn/turn/memory limits
-  - **Benefit**: Prevent resource exhaustion from recursive or cross-extension orchestration
-  - **Location**: `src/agent-runner.ts`, `src/agent-manager.ts`
+- [ ] **release: add GitHub Packages provenance workflow**
+  - **Context**: 0.10.0 can be released manually, but repeatable releases need a workflow
+  - **Benefit**: Consistent private package publishing, tags, release notes, and provenance
+  - **Location**: `.github/workflows/`
 
-- [ ] **fix: replace PID lock with stronger file lock**
-  - **Context**: `ScheduleStore` still uses a PID lock file with stale-lock recovery
-  - **Benefit**: Removes PID-reuse edge cases and makes multi-process schedule writes more robust
-  - **Location**: `src/schedule-store.ts`
+- [ ] **test: add concurrency stress coverage for ScheduleStore locks**
+  - **Context**: Lock-directory acquisition is covered at unit level; concurrent writer stress should be exercised separately
+  - **Benefit**: Better confidence on Windows and networked workspaces
+  - **Location**: `test/schedule-store.test.ts`
 
 ---
 
@@ -54,15 +60,15 @@
 
 ### Features
 
-- [ ] **feat: handoff protocol v2 — optional typed artifacts**
-  - **Approach**: Add optional typed artifacts to AgentHandoff interface (files: string[], artifacts: { type, path }[])
-  - **Benefit**: Enables richer multi-agent workflows, backward-compatible via extra field
-  - **Location**: `src/handoff.ts`
-
 - [ ] **feat: /agents tree command**
-  - **Approach**: Render full parent→child execution graph with token/turn counts (exportable as Mermaid/JSON)
+  - **Approach**: Wire `src/agent-tree.ts` into `/agents` command/menu output with Mermaid/JSON export
   - **Benefit**: Enormous value for complex orchestrations
-  - **Location**: `src/output-handler.ts`
+  - **Location**: `src/output-handler.ts`, `src/agent-tree.ts`
+
+- [ ] **docs: document 0.10.0 migration from pi-subagents**
+  - **Approach**: Add a short migration note covering package rename, repo rename, and compatibility namespace stability
+  - **Benefit**: Existing private users can upgrade without guessing what changed
+  - **Location**: `README.md`, `docs/`
 
 ---
 
@@ -70,19 +76,15 @@
 
 ### P3: Quality of Life
 
-- [ ] **feat: dry-run mode**
-  - **Approach**: Add `estimate_only: true` flag on Agent tool to estimate token usage before launch
-  - **Benefit**: Useful for budget-conscious orchestrating
-
 - [ ] **feat: typed public API surface**
   - **Approach**: Formalize cross-extension contracts behind Symbols and events in documented interface
   - **Benefit**: Makes extension a better platform for ecosystem integration
 
 ### P4: Future Considerations
 
-- [ ] **research: structured logging**
-  - **Context**: Current console.log lacks configurable log levels
-  - **Benefit**: Better debugging, sensitive info protection
+- [ ] **research: structured logging adoption**
+  - **Context**: A small logger exists, but most legacy warning paths still use console warnings
+  - **Benefit**: Better debugging, sensitive info protection, and quieter host output
   - **Location**: Multiple files
 
 ---
@@ -101,6 +103,6 @@
 
 ## Tracking
 
-- **Last Updated**: 2026-05-26
-- **Version**: v0.9.5
-- **Next Review**: After P1 items completed
+- **Last Updated**: 2026-05-27
+- **Version**: v0.10.0
+- **Next Review**: After private 0.10.0 release validation

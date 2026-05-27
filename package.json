@@ -1,16 +1,16 @@
 {
-  "name": "@onlinechefgroep/pi-subagents",
-  "version": "0.9.5",
-  "description": "A pi extension that brings smart Claude Code-style autonomous sub-agents to pi.",
+  "name": "@onlinechefgroep/pi-agent-orchestrator",
+  "version": "0.10.0",
+  "description": "A pi extension for orchestrating autonomous coding agents, swarms, schedules, and handoffs.",
   "author": "OnlineChef",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/OnlineChefGroep/pi-subagents-fork"
+    "url": "https://github.com/OnlineChefGroep/pi-agent-orchestrator"
   },
-  "homepage": "https://github.com/OnlineChefGroep/pi-subagents-fork#readme",
+  "homepage": "https://github.com/OnlineChefGroep/pi-agent-orchestrator#readme",
   "bugs": {
-    "url": "https://github.com/OnlineChefGroep/pi-subagents-fork/issues"
+    "url": "https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues"
   },
   "keywords": [
     "pi-package",
@@ -19,6 +19,14 @@
     "subagent",
     "agent",
     "autonomous"
+  ],
+  "files": [
+    "src/",
+    "docs/",
+    "examples/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "peerDependencies": {
     "@mariozechner/pi-ai": ">=0.72.0",

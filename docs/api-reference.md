@@ -1,6 +1,6 @@
 # API Reference
 
-> Publieke API surface van `@onlinechefgroep/pi-subagents`. Private internals (`AgentFieldParser`, `PermissionUtils`, etc.) zijn bewust buiten scope — gebruik de publieke functies.
+> Publieke API surface van `@onlinechefgroep/pi-agent-orchestrator`. Private internals (`AgentFieldParser`, `PermissionUtils`, etc.) zijn bewust buiten scope — gebruik de publieke functies.
 
 ---
 
@@ -130,7 +130,7 @@ scheduler.cancel(jobId);
 Registers a lifecycle hook handler. Returns an unsubscribe function.
 
 ```ts
-import { registerHook } from "@onlinechefgroep/pi-subagents";
+import { registerHook } from "@onlinechefgroep/pi-agent-orchestrator";
 
 const unsubscribe = registerHook("subagent:start", async (payload) => {
   console.log(`Agent ${payload.agentId} started`);

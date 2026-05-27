@@ -3,7 +3,7 @@ name: "CodeQL"
 # in repository settings. Without it, the analyze step fails with:
 #   "Code Security must be enabled for this repository to use code scanning."
 # Re-enable push/pull_request triggers once enabled at:
-#   https://github.com/OnlineChefGroep/pi-subagents-fork/settings/security_analysis
+#   https://github.com/OnlineChefGroep/pi-agent-orchestrator/settings/security_analysis
 on:
   workflow_dispatch:
 jobs:

@@ -5,9 +5,9 @@
  * `<cwd>/.pi/subagent-schedules/<sessionId>.json`. `/new` starts a fresh
  * empty store; `/resume` reloads.
  *
- * Concurrency model lifted from pi-chonky-tasks/src/task-store.ts: every
- * mutation acquires a PID-based exclusion lock, re-reads the latest state
- * from disk, applies the change, atomic-writes via temp+rename, releases.
+ * Concurrency model: every mutation acquires an atomic lock directory,
+ * re-reads the latest state from disk, applies the change, atomic-writes via
+ * temp+rename, releases.
  */
 
 import { existsSync, promises as fs, readFileSync } from "node:fs";
@@ -16,37 +16,47 @@ import type { ScheduledSubagent, ScheduleStoreData } from "./types.js";
 
 const LOCK_RETRY_MS = 50;
 const LOCK_MAX_RETRIES = 100;
-
-function isProcessRunning(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
+const LOCK_STALE_MS = 30_000;
 
 async function sleep(ms: number): Promise<void> {
   await new Promise((r) => setTimeout(r, ms));
 }
 
-/** Acquire a PID-based lock file — async retry with exponential backoff. */
+async function writeLockOwner(lockPath: string): Promise<void> {
+  await fs.writeFile(
+    join(lockPath, "owner.json"),
+    JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }, null, 2),
+    "utf-8",
+  );
+}
+
+async function recoverExistingLock(lockPath: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(lockPath);
+    if (!stat.isDirectory()) {
+      await fs.unlink(lockPath);
+      return true;
+    }
+    if (Date.now() - stat.mtimeMs > LOCK_STALE_MS) {
+      await fs.rm(lockPath, { recursive: true, force: true });
+      return true;
+    }
+  } catch {
+    return true;
+  }
+  return false;
+}
+
+/** Acquire an atomic lock directory — async retry with stale-lock recovery. */
 async function acquireLock(lockPath: string): Promise<void> {
   for (let i = 0; i < LOCK_MAX_RETRIES; i++) {
     try {
-      await fs.writeFile(lockPath, `${process.pid}`, { flag: "wx" });
+      await fs.mkdir(lockPath);
+      await writeLockOwner(lockPath);
       return;
     } catch (e: any) {
       if (e.code === "EEXIST") {
-        try {
-          const pid = parseInt(await fs.readFile(lockPath, "utf-8"), 10);
-          if (pid && !isProcessRunning(pid)) {
-            await fs.unlink(lockPath);
-            continue;
-          }
-        } catch {
-          /* ignore — try again */
-        }
+        if (await recoverExistingLock(lockPath)) continue;
         await sleep(LOCK_RETRY_MS);
         continue;
       }
@@ -58,7 +68,7 @@ async function acquireLock(lockPath: string): Promise<void> {
 
 async function releaseLock(lockPath: string): Promise<void> {
   try {
-    await fs.unlink(lockPath);
+    await fs.rm(lockPath, { recursive: true, force: true });
   } catch {
     /* ignore */
   }

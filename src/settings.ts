@@ -10,6 +10,10 @@ import type { JoinMode } from "./types.js";
 
 export interface SubagentsSettings {
   maxConcurrent?: number;
+  /** Optional hard cap for all agents spawned during one pi session. Omit for unlimited. */
+  maxAgentsPerSession?: number;
+  /** Optional hard cap for cumulative agentic turns across one pi session. Omit for unlimited. */
+  maxTotalTurnsPerSession?: number;
   /**
    * 0 = unlimited — the extension's single source of truth for that convention:
    * `normalizeMaxTurns()` in agent-runner.ts treats 0 → `undefined`, and the
@@ -71,6 +75,7 @@ export interface SubagentsSettings {
 /** Setter hooks used by applySettings to wire persisted values into in-memory state. */
 export interface SettingsAppliers {
   setMaxConcurrent: (n: number) => void;
+  setSessionLimits: (limits: { maxAgentsPerSession?: number; maxTotalTurnsPerSession?: number }) => void;
   setDefaultMaxTurns: (n: number) => void;
   setGraceTurns: (n: number) => void;
   setDefaultJoinMode: (mode: JoinMode) => void;
@@ -97,7 +102,9 @@ const VALID_UI_STYLES: ReadonlySet<string> = new Set(["premium", "retro", "plain
 // make no operational sense (e.g. 1e6 concurrent subagents). Permissive enough
 // that any realistic power-user setting passes through.
 const MAX_CONCURRENT_CEILING = 1024;
+const MAX_AGENTS_PER_SESSION_CEILING = 10_000;
 const MAX_TURNS_CEILING = 10_000;
+const MAX_TOTAL_TURNS_PER_SESSION_CEILING = 100_000;
 const GRACE_TURNS_CEILING = 1_000;
 
 /** Drop fields that don't match the expected shape. Silent — garbage becomes absent. */
@@ -111,6 +118,20 @@ function sanitize(raw: unknown): SubagentsSettings {
     (r.maxConcurrent as number) <= MAX_CONCURRENT_CEILING
   ) {
     out.maxConcurrent = r.maxConcurrent as number;
+  }
+  if (
+    Number.isInteger(r.maxAgentsPerSession) &&
+    (r.maxAgentsPerSession as number) >= 1 &&
+    (r.maxAgentsPerSession as number) <= MAX_AGENTS_PER_SESSION_CEILING
+  ) {
+    out.maxAgentsPerSession = r.maxAgentsPerSession as number;
+  }
+  if (
+    Number.isInteger(r.maxTotalTurnsPerSession) &&
+    (r.maxTotalTurnsPerSession as number) >= 1 &&
+    (r.maxTotalTurnsPerSession as number) <= MAX_TOTAL_TURNS_PER_SESSION_CEILING
+  ) {
+    out.maxTotalTurnsPerSession = r.maxTotalTurnsPerSession as number;
   }
   if (
     Number.isInteger(r.defaultMaxTurns) &&
@@ -211,6 +232,12 @@ export function saveSettings(s: SubagentsSettings, cwd: string = process.cwd()):
 /** Apply persisted settings to the in-memory state via caller-supplied setters. */
 export function applySettings(s: SubagentsSettings, appliers: SettingsAppliers): void {
   if (typeof s.maxConcurrent === "number") appliers.setMaxConcurrent(s.maxConcurrent);
+  if (typeof s.maxAgentsPerSession === "number" || typeof s.maxTotalTurnsPerSession === "number") {
+    appliers.setSessionLimits({
+      maxAgentsPerSession: s.maxAgentsPerSession,
+      maxTotalTurnsPerSession: s.maxTotalTurnsPerSession,
+    });
+  }
   if (typeof s.defaultMaxTurns === "number") appliers.setDefaultMaxTurns(s.defaultMaxTurns);
   if (typeof s.graceTurns === "number") appliers.setGraceTurns(s.graceTurns);
   if (s.defaultJoinMode) appliers.setDefaultJoinMode(s.defaultJoinMode);
