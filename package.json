@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/OnlineChefGroep/pi-agent-orchestrator"
+    "url": "git+https://github.com/OnlineChefGroep/pi-agent-orchestrator.git"
   },
   "homepage": "https://github.com/OnlineChefGroep/pi-agent-orchestrator#readme",
   "bugs": {
