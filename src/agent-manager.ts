@@ -128,10 +128,10 @@ export class AgentManager {
     const agents = limits.maxAgentsPerSession;
     const turns = limits.maxTotalTurnsPerSession;
     this.setSessionMaxSpawns(
-      Number.isInteger(agents) && agents > 0 ? agents : 0,
+      agents !== undefined && Number.isInteger(agents) && agents > 0 ? agents : 0,
     );
     this.setSessionMaxTurns(
-      Number.isInteger(turns) && turns > 0 ? turns : 0,
+      turns !== undefined && Number.isInteger(turns) && turns > 0 ? turns : 0,
     );
   }
 
