@@ -152,9 +152,9 @@ describe('Handoff - Error Chaos & Resilience', () => {
     // Deep nesting with many keys is caught by the key count reviver or parsing limits.
     // Let's create a deeply nested structure: { a: { b: { c: ... } } } with 1005 levels.
     // This will have 1005 keys in total, triggering key count limits.
-    let nestedObj: any = 'value';
+    let nestedJson = '"value"';
     for (let i = 0; i < 1005; i++) {
-      nestedObj = { [`level${i}`]: nestedObj };
+      nestedJson = `{"level${i}":${nestedJson}}`;
     }
     const payload = `
 \`\`\`json
@@ -163,7 +163,7 @@ describe('Handoff - Error Chaos & Resilience', () => {
   "status": "success",
   "summary": "Good summary",
   "findings": ["Finding 1"],
-  "nested": ${JSON.stringify(nestedObj)}
+  "nested": ${nestedJson}
 }
 \`\`\``;
     const result = parseHandoff(payload);
