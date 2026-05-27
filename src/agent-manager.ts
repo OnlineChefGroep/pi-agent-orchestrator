@@ -91,6 +91,8 @@ export class AgentManager {
   private sessionLimits: SessionLimits = {};
   private sessionUsage = { spawnedAgents: 0, totalTurns: 0 };
   private lastTurnCounts = new Map<string, number>();
+  private sessionMaxSpawns = 0;
+  private sessionMaxTurns = 0;
   hooks?: HookRegistry;
 
   /** Queue of background agents waiting to start. */
@@ -135,6 +137,22 @@ export class AgentManager {
 
   getSessionLimits(): SessionLimits {
     return { ...this.sessionLimits };
+  }
+
+  setSessionMaxSpawns(n: number): void {
+    this.sessionMaxSpawns = Math.max(0, n);
+  }
+
+  getSessionMaxSpawns(): number {
+    return this.sessionMaxSpawns;
+  }
+
+  setSessionMaxTurns(n: number): void {
+    this.sessionMaxTurns = Math.max(0, n);
+  }
+
+  getSessionMaxTurns(): number {
+    return this.sessionMaxTurns;
   }
 
   getSessionUsage(): { spawnedAgents: number; totalTurns: number } {

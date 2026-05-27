@@ -120,10 +120,18 @@ async function launchAgentDashboard(
   await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer, onPerms, onSwarm);
 }
 
+interface TreeNode {
+  id: string;
+  type: string;
+  status: string;
+  description: string;
+  children: TreeNode[];
+}
+
 function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" | "json"): string {
   if (format === "json") {
-    const roots = [];
-    const map = new Map<string, any>();
+    const roots: TreeNode[] = [];
+    const map = new Map<string, TreeNode>();
     for (const r of records) {
       map.set(r.id, { id: r.id, type: r.type, status: r.status, description: r.description, children: [] });
     }
@@ -141,7 +149,6 @@ function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" |
   if (format === "mermaid") {
     let out = "graph TD\n";
     for (const r of records) {
-      // Escape quotes in Mermaid labels
       const cleanType = r.type.replace(/"/g, "'");
       out += `  ${r.id.replace(/-/g, "_")}["[${cleanType}] ${r.id}"]\n`;
       if (r.parentId) {
@@ -165,11 +172,11 @@ function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" |
       }
     };
     for (let i = 0; i < roots.length; i++) {
-      render(roots[i].id, "", true);
+      render(roots[i].id, "", i === roots.length - 1);
     }
     return out || "No execution tree available.";
   }
-  
+
   return "";
 }
 

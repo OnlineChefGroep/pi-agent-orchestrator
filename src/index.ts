@@ -407,6 +407,8 @@ export default function (pi: ExtensionAPI) {
       setShowTurnProgress,
       setOrchestrationMode,
       setDashboardRefreshInterval,
+      setSessionMaxSpawns: (n) => manager.setSessionMaxSpawns(n),
+      setSessionMaxTurns: (n) => manager.setSessionMaxTurns(n),
     },
     (event, payload) => pi.events.emit(event, payload),
   );
