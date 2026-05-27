@@ -20,7 +20,7 @@ export interface AgentHandoff {
 
 export interface HandoffArtifact {
   type: string;
-  path: string;
+  path?: string;
   title?: string;
   value?: string;
   mimeType?: string;
@@ -123,11 +123,7 @@ function validateHandoffShape(obj: Record<string, unknown>): string[] {
       issues.push("files");
     } else if (obj.files.length > MAX_FILES_COUNT) {
       issues.push(`files (too many: ${obj.files.length})`);
-    } else if (
-      obj.files.some(
-        (file) => typeof file !== "string" || file.trim().length === 0,
-      )
-    ) {
+    } else if (obj.files.some((file) => typeof file !== "string" || file.trim().length === 0)) {
       issues.push("files (invalid item)");
     }
   }
@@ -152,13 +148,18 @@ function validateHandoffShape(obj: Record<string, unknown>): string[] {
 function isArtifact(value: unknown): value is HandoffArtifact {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const obj = value as Record<string, unknown>;
+  if (typeof obj.type !== "string" || obj.type.trim().length === 0) return false;
+  const hasPath = typeof obj.path === "string" && obj.path.trim().length > 0;
+  const hasTitleValue =
+    typeof obj.title === "string" &&
+    obj.title.trim().length > 0 &&
+    typeof obj.value === "string" &&
+    obj.value.trim().length > 0;
   return (
-    typeof obj.type === "string" &&
-    obj.type.trim().length > 0 &&
-    typeof obj.path === "string" &&
-    obj.path.trim().length > 0 &&
+    (hasPath || hasTitleValue) &&
     (obj.title === undefined || typeof obj.title === "string") &&
     (obj.value === undefined || typeof obj.value === "string") &&
+    (obj.path === undefined || typeof obj.path === "string") &&
     (obj.mimeType === undefined || typeof obj.mimeType === "string")
   );
 }
@@ -244,8 +245,8 @@ The handoff must be enclosed in a \`\`\`json code block and must be the LAST thi
   "nextSteps": ["Step 1", "Step 2"],
   "confidence": 0.9,
   "evidence": ["/path/to/file1.ts", "/path/to/file2.ts"],
-  "files": ["/path/to/created-file.ts"],
-  "artifacts": [{"type": "file", "path": "/path/to/file1.ts", "mimeType": "text/typescript"}]
+  "files": ["/path/to/new-file.ts"],
+  "artifacts": [{"type": "file", "title": "Patch", "value": "/path/to/file1.ts", "mimeType": "text/typescript"}]
 }
 \`\`\`
 
@@ -257,8 +258,8 @@ Field descriptions:
 - **nextSteps** (optional): What should happen next, if applicable
 - **confidence** (optional): Number 0-1 indicating your confidence in the result quality
 - **evidence** (optional): Absolute file paths that support your findings
-- **files** (optional): Paths to files created or modified during the task
-- **artifacts** (optional): Typed deliverables with type and path
+- **files** (optional): Changed/created file paths
+- **artifacts** (optional): Typed deliverables: file, branch, url, or note with title and value
 
 Example:
 
@@ -272,7 +273,7 @@ Example:
   "confidence": 0.95,
   "evidence": ["/home/user/project/src/rate-limiter.ts", "/home/user/project/src/api-handler.ts"],
   "files": ["/home/user/project/src/rate-limiter.ts"],
-  "artifacts": [{"type": "file", "path": "/home/user/project/src/rate-limiter.ts"}]
+  "artifacts": [{"type": "file", "title": "Fixed rate limiter", "value": "/home/user/project/src/rate-limiter.ts"}]
 }
 \`\`\``;
 }
@@ -321,16 +322,19 @@ export function renderHandoffForParent(handoff: AgentHandoff): string {
 
   if (handoff.files?.length) {
     parts.push("Files:");
-    for (const file of handoff.files) {
-      parts.push(`  - ${file}`);
+    for (const path of handoff.files) {
+      parts.push(`  - ${path}`);
     }
   }
-
   if (handoff.artifacts?.length) {
     parts.push("Artifacts:");
     for (const artifact of handoff.artifacts) {
+      if (typeof artifact.path === "string" && artifact.path.trim().length > 0) {
+        parts.push(`  - [${artifact.type}] ${artifact.path}`);
+        continue;
+      }
       const mime = artifact.mimeType ? ` (${artifact.mimeType})` : "";
-      parts.push(`  - [${artifact.type}] ${artifact.path}${mime}`);
+      parts.push(`  - [${artifact.type}] ${artifact.title}: ${artifact.value}${mime}`);
     }
   }
 

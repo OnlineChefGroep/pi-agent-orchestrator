@@ -158,7 +158,6 @@ export class AgentManager {
   getSessionMaxTurns(): number {
     return this.sessionMaxTurns;
   }
-
   getSessionUsage(): { spawnedAgents: number; totalTurns: number } {
     return { ...this.sessionUsage };
   }
