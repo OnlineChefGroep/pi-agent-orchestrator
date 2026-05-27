@@ -28,10 +28,6 @@ export type CompactionInfo = { reason: "manual" | "threshold" | "overflow"; toke
 /** Default max concurrent background agents. */
 const DEFAULT_MAX_CONCURRENT = 4;
 
-function normalizeOptionalPositiveInt(value: number | undefined): number | undefined {
-  return Number.isInteger(value) && value !== undefined && value > 0 ? value : undefined;
-}
-
 export interface SessionLimits {
   maxAgentsPerSession?: number;
   maxTotalTurnsPerSession?: number;
@@ -129,10 +125,14 @@ export class AgentManager {
   }
 
   setSessionLimits(limits: SessionLimits): void {
-    this.sessionLimits = {
-      maxAgentsPerSession: normalizeOptionalPositiveInt(limits.maxAgentsPerSession),
-      maxTotalTurnsPerSession: normalizeOptionalPositiveInt(limits.maxTotalTurnsPerSession),
-    };
+    const agents = limits.maxAgentsPerSession;
+    const turns = limits.maxTotalTurnsPerSession;
+    this.setSessionMaxSpawns(
+      Number.isInteger(agents) && agents !== undefined && agents > 0 ? agents : 0,
+    );
+    this.setSessionMaxTurns(
+      Number.isInteger(turns) && turns !== undefined && turns > 0 ? turns : 0,
+    );
   }
 
   getSessionLimits(): SessionLimits {
