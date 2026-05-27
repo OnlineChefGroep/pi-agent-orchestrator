@@ -15,6 +15,7 @@ export function buildSettingsSnapshot(
 ): SubagentsSettings {
   return {
     maxConcurrent: manager.getMaxConcurrent(),
+    ...manager.getSessionLimits(),
     // 0 = unlimited — per SubagentsSettings.defaultMaxTurns docstring and
     // normalizeMaxTurns() in agent-runner.ts (which maps 0 → undefined).
     defaultMaxTurns: getDefaultMaxTurns() ?? 0,

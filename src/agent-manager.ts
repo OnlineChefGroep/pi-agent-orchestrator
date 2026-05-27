@@ -28,6 +28,15 @@ export type CompactionInfo = { reason: "manual" | "threshold" | "overflow"; toke
 /** Default max concurrent background agents. */
 const DEFAULT_MAX_CONCURRENT = 4;
 
+function normalizeOptionalPositiveInt(value: number | undefined): number | undefined {
+  return Number.isInteger(value) && value !== undefined && value > 0 ? value : undefined;
+}
+
+export interface SessionLimits {
+  maxAgentsPerSession?: number;
+  maxTotalTurnsPerSession?: number;
+}
+
 interface SpawnArgs {
   pi: ExtensionAPI;
   ctx: ExtensionContext;
@@ -79,6 +88,9 @@ export class AgentManager {
   private onStart?: OnAgentStart;
   private onCompact?: OnAgentCompact;
   private maxConcurrent: number;
+  private sessionLimits: SessionLimits = {};
+  private sessionUsage = { spawnedAgents: 0, totalTurns: 0 };
+  private lastTurnCounts = new Map<string, number>();
   hooks?: HookRegistry;
 
   /** Queue of background agents waiting to start. */
@@ -114,6 +126,26 @@ export class AgentManager {
     return this.maxConcurrent;
   }
 
+  setSessionLimits(limits: SessionLimits): void {
+    this.sessionLimits = {
+      maxAgentsPerSession: normalizeOptionalPositiveInt(limits.maxAgentsPerSession),
+      maxTotalTurnsPerSession: normalizeOptionalPositiveInt(limits.maxTotalTurnsPerSession),
+    };
+  }
+
+  getSessionLimits(): SessionLimits {
+    return { ...this.sessionLimits };
+  }
+
+  getSessionUsage(): { spawnedAgents: number; totalTurns: number } {
+    return { ...this.sessionUsage };
+  }
+
+  resetSessionUsage(): void {
+    this.sessionUsage = { spawnedAgents: 0, totalTurns: 0 };
+    this.lastTurnCounts.clear();
+  }
+
   /** Get the ID of the currently executing agent (top of active stack). */
   getActiveAgentId(): string | undefined {
     return this.activeAgentIdStack[this.activeAgentIdStack.length - 1];
@@ -130,6 +162,11 @@ export class AgentManager {
     prompt: string,
     options: SpawnOptions,
   ): string {
+    const maxAgents = this.sessionLimits.maxAgentsPerSession;
+    if (maxAgents !== undefined && this.sessionUsage.spawnedAgents >= maxAgents) {
+      throw new Error(`Session agent limit reached (${this.sessionUsage.spawnedAgents}/${maxAgents})`);
+    }
+
     // --- Budget / depth enforcement & inheritance ---
     const parentId = this.getActiveAgentId();
     const parentRecord = parentId ? this.agents.get(parentId) : undefined;
@@ -186,6 +223,7 @@ export class AgentManager {
       contextInputs: { inheritContext: options.inheritContext ?? false },
     };
     this.agents.set(id, record);
+    this.sessionUsage.spawnedAgents++;
 
     // Dispatch subagent:spawn hook (non-blocking, fire-and-forget)
     this.hooks
@@ -287,7 +325,20 @@ export class AgentManager {
           if (activity.type === "end") record.toolUses++;
           options.onToolActivity?.(activity);
         },
-        onTurnEnd: options.onTurnEnd,
+        onTurnEnd: (turnCount) => {
+          const previous = this.lastTurnCounts.get(id) ?? 0;
+          const delta = Math.max(0, turnCount - previous);
+          this.lastTurnCounts.set(id, turnCount);
+          if (delta > 0) {
+            this.sessionUsage.totalTurns += delta;
+          }
+          const maxTurns = this.sessionLimits.maxTotalTurnsPerSession;
+          if (maxTurns !== undefined && this.sessionUsage.totalTurns >= maxTurns) {
+            record.abortController?.abort();
+            record.error = `Session turn limit reached (${this.sessionUsage.totalTurns}/${maxTurns})`;
+          }
+          options.onTurnEnd?.(turnCount);
+        },
         onTextDelta: options.onTextDelta,
         onAssistantUsage: (usage) => {
           addUsage(record.lifetimeUsage, usage);
@@ -516,6 +567,7 @@ export class AgentManager {
     record.session?.dispose?.();
     record.session = undefined;
     this.agents.delete(id);
+    this.lastTurnCounts.delete(id);
   }
 
   private cleanup() {

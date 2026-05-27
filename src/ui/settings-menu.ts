@@ -31,6 +31,7 @@ export async function showSettings(
 ): Promise<void> {
   const choice = await ctx.ui.select("Settings", [
     `Max concurrency (current: ${manager.getMaxConcurrent()})`,
+    `Session limits (agents: ${manager.getSessionLimits().maxAgentsPerSession ?? "unlimited"}, turns: ${manager.getSessionLimits().maxTotalTurnsPerSession ?? "unlimited"})`,
     `Default max turns (current: ${getDefaultMaxTurns() ?? "unlimited"})`,
     `Grace turns (current: ${getGraceTurns()})`,
     `Join mode (current: ${getDefaultJoinMode()})`,
@@ -52,6 +53,23 @@ export async function showSettings(
       } else {
         ctx.ui.notify("Must be a positive integer.", "warning");
       }
+    }
+  } else if (choice.startsWith("Session limits")) {
+    const current = manager.getSessionLimits();
+    const agentVal = await ctx.ui.input("Max agents per session (0 = unlimited)", String(current.maxAgentsPerSession ?? 0));
+    if (agentVal === undefined) return;
+    const turnVal = await ctx.ui.input("Max total turns per session (0 = unlimited)", String(current.maxTotalTurnsPerSession ?? 0));
+    if (turnVal === undefined) return;
+    const maxAgents = parseInt(agentVal, 10);
+    const maxTurns = parseInt(turnVal, 10);
+    if (Number.isNaN(maxAgents) || maxAgents < 0 || Number.isNaN(maxTurns) || maxTurns < 0) {
+      ctx.ui.notify("Use 0 (unlimited) or a positive integer.", "warning");
+    } else {
+      manager.setSessionLimits({
+        maxAgentsPerSession: maxAgents === 0 ? undefined : maxAgents,
+        maxTotalTurnsPerSession: maxTurns === 0 ? undefined : maxTurns,
+      });
+      notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, "Session limits updated");
     }
   } else if (choice.startsWith("Default max turns")) {
     const val = await ctx.ui.input("Default max turns before wrap-up (0 = unlimited)", String(getDefaultMaxTurns() ?? 0));

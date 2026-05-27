@@ -145,6 +145,109 @@ describe("AgentManager — cleanup timer", () => {
   });
 });
 
+describe("AgentManager — session limits and usage accounting", () => {
+  let manager: AgentManager;
+
+  afterEach(() => {
+    manager?.dispose();
+    vi.clearAllMocks();
+  });
+
+  it("setSessionLimits normalizes invalid values and getSessionUsage returns snapshots", async () => {
+    manager = new AgentManager();
+    manager.setSessionLimits({
+      maxAgentsPerSession: 2,
+      maxTotalTurnsPerSession: 2.5,
+    });
+
+    expect(manager.getSessionLimits()).toEqual({
+      maxAgentsPerSession: 2,
+      maxTotalTurnsPerSession: undefined,
+    });
+
+    const limitsSnapshot = manager.getSessionLimits();
+    limitsSnapshot.maxAgentsPerSession = 999;
+    expect(manager.getSessionLimits()).toEqual({
+      maxAgentsPerSession: 2,
+      maxTotalTurnsPerSession: undefined,
+    });
+
+    vi.mocked(runAgent).mockImplementation(async (_ctx, _type, _prompt, opts: any) => {
+      opts.onTurnEnd?.(1);
+      opts.onTurnEnd?.(3);
+      return { responseText: "done", session: mockSession(), aborted: false, steered: false };
+    });
+
+    const id = manager.spawn(mockPi, mockCtx, "general-purpose", "test", {
+      description: "test",
+      isBackground: true,
+    });
+    await manager.getRecord(id)!.promise;
+
+    expect(manager.getSessionUsage()).toEqual({ spawnedAgents: 1, totalTurns: 3 });
+
+    const usageSnapshot = manager.getSessionUsage();
+    usageSnapshot.spawnedAgents = 999;
+    usageSnapshot.totalTurns = 999;
+    expect(manager.getSessionUsage()).toEqual({ spawnedAgents: 1, totalTurns: 3 });
+  });
+
+  it("enforces maxAgentsPerSession and resetSessionUsage re-allows spawns", async () => {
+    manager = new AgentManager();
+    manager.setSessionLimits({ maxAgentsPerSession: 1 });
+    resolvedRun();
+
+    const firstId = manager.spawn(mockPi, mockCtx, "general-purpose", "first", {
+      description: "first",
+      isBackground: true,
+    });
+    await manager.getRecord(firstId)!.promise;
+
+    expect(() =>
+      manager.spawn(mockPi, mockCtx, "general-purpose", "second", {
+        description: "second",
+        isBackground: true,
+      }),
+    ).toThrow("Session agent limit reached (1/1)");
+
+    expect(manager.getSessionUsage()).toEqual({ spawnedAgents: 1, totalTurns: 0 });
+
+    manager.resetSessionUsage();
+    expect(manager.getSessionUsage()).toEqual({ spawnedAgents: 0, totalTurns: 0 });
+
+    resolvedRun();
+    const nextId = manager.spawn(mockPi, mockCtx, "general-purpose", "after reset", {
+      description: "after reset",
+      isBackground: true,
+    });
+    await manager.getRecord(nextId)!.promise;
+    expect(manager.getSessionUsage()).toEqual({ spawnedAgents: 1, totalTurns: 0 });
+  });
+
+  it("aborts the run when maxTotalTurnsPerSession is reached and tracks totalTurns", async () => {
+    manager = new AgentManager();
+    manager.setSessionLimits({ maxTotalTurnsPerSession: 2 });
+
+    let seenSignal: AbortSignal | undefined;
+    vi.mocked(runAgent).mockImplementation(async (_ctx, _type, _prompt, opts: any) => {
+      seenSignal = opts.signal;
+      opts.onTurnEnd?.(1);
+      opts.onTurnEnd?.(2);
+      return { responseText: "done", session: mockSession(), aborted: false, steered: false };
+    });
+
+    const id = manager.spawn(mockPi, mockCtx, "general-purpose", "limit test", {
+      description: "limit test",
+      isBackground: true,
+    });
+    await manager.getRecord(id)!.promise;
+
+    expect(seenSignal?.aborted).toBe(true);
+    expect(manager.getSessionUsage()).toEqual({ spawnedAgents: 1, totalTurns: 2 });
+    expect(manager.getRecord(id)!.error).toBe("Session turn limit reached (2/2)");
+  });
+});
+
 describe("AgentManager — Bug 3 clearCompleted", () => {
   let manager: AgentManager;
 

@@ -1,20 +1,20 @@
-# @onlinechefgroep/pi-subagents
+# @onlinechefgroep/pi-agent-orchestrator
 
 > Autonomous sub-agents for the pi coding agent. Forked from [tintinweb/pi-subagents](https://github.com/tintinweb/pi-subagents).
 
 Bring Claude Code-style autonomous sub-agents to pi. Spawn specialized agents, enforce budgets, chain them with structured handoffs, swarm agents together, and watch a rich interactive TUI dashboard render their progress in real time.
 
-[![Tests](https://img.shields.io/badge/tests-654%2F654-green)](https://github.com/OnlineChefGroep/pi-subagents-fork)
+[![Tests](https://img.shields.io/badge/tests-659%2F659-green)](https://github.com/OnlineChefGroep/pi-agent-orchestrator)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.9.5-blue)](https://github.com/OnlineChefGroep/pi-subagents-fork/releases)
+[![Version](https://img.shields.io/badge/version-0.10.0-blue)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/releases)
 
 ---
 
 ## Install
 
 ```bash
-pi install npm:@onlinechefgroep/pi-subagents
+pi install npm:@onlinechefgroep/pi-agent-orchestrator
 ```
 
 Requires Node.js >= 18 and pi >= 0.70.5.
@@ -151,7 +151,7 @@ Settings are managed via pi's settings UI or `pi settings` CLI:
 
 ```
 pi host
-  └── pi-subagents extension
+  └── pi-agent-orchestrator extension
         ├── AgentRegistry (defaults + custom .md agents)
         ├── AgentDashboard (live TUI with vim hotkeys, swarm view)
         ├── AgentRunner (spawn → execute → handoff → validate)

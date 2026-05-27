@@ -9,6 +9,7 @@
  *   error   → { success: false, error: string }
  */
 
+import { logger } from "./logger.js";
 import { type ModelRegistry, resolveModel } from "./model-resolver.js";
 
 /** Minimal event bus interface needed by the RPC handlers. */
@@ -34,6 +35,26 @@ export interface SpawnCapable {
 export interface AuthContext {
   extensionId: string;
   extensionName?: string;
+}
+
+export interface SpawnRpcRequest {
+  type: string;
+  prompt: string;
+  options?: Record<string, unknown>;
+}
+
+export interface StopRpcRequest {
+  agentId: string;
+}
+
+export interface PingRpcReply {
+  version: number;
+}
+
+export interface SubagentsRpcClient {
+  ping(): Promise<PingRpcReply>;
+  spawn(request: SpawnRpcRequest): Promise<{ id: string }>;
+  stop(request: StopRpcRequest): Promise<void>;
 }
 
 // CVE-003 FIX: Simple rate limiter for RPC calls
@@ -117,6 +138,48 @@ function handleRpc<P extends { requestId: string }>(
   });
 }
 
+function createRequestId(): string {
+  return `rpc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function requestRpc<T>(
+  events: EventBus,
+  channel: string,
+  payload: object,
+  timeoutMs: number,
+): Promise<T> {
+  const requestId = createRequestId();
+  const replyChannel = `${channel}:reply:${requestId}`;
+  return new Promise((resolve, reject) => {
+    const unsub = events.on(replyChannel, (raw) => {
+      clearTimeout(timer);
+      unsub();
+      const reply = raw as RpcReply<T>;
+      if (reply.success) resolve(reply.data as T);
+      else reject(new Error(reply.error));
+    });
+    const timer = setTimeout(() => {
+      unsub();
+      reject(new Error(`RPC timeout waiting for ${channel}`));
+    }, timeoutMs);
+    events.emit(channel, { ...payload, requestId });
+  });
+}
+
+export function createSubagentsRpcClient(
+  events: EventBus,
+  options: { timeoutMs?: number } = {},
+): SubagentsRpcClient {
+  const timeoutMs = options.timeoutMs ?? 30_000;
+  return {
+    ping: () => requestRpc<PingRpcReply>(events, "subagents:rpc:ping", {}, timeoutMs),
+    spawn: (request) => requestRpc<{ id: string }>(events, "subagents:rpc:spawn", request, timeoutMs),
+    stop: async (request) => {
+      await requestRpc<void>(events, "subagents:rpc:stop", request, timeoutMs);
+    },
+  };
+}
+
 function resolveAuth(deps: RpcDeps, requestId: string): AuthContext {
   if (!deps.authProvider) {
     return { extensionId: "legacy" };
@@ -154,7 +217,7 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
       if (!ctx) throw new Error("No active session");
       
       const auth = authorizeRpcMutation(deps, requestId, "spawn");
-      console.log(`[pi-subagents] RPC spawn: extension=${auth.extensionId}, type=${type}`);
+      logger.info("rpc spawn", { extensionId: auth.extensionId, type });
 
       // Cross-extension RPC callers (e.g. pi-tasks TaskExecute) naturally
       // forward serializable values, so options.model can be a string like
