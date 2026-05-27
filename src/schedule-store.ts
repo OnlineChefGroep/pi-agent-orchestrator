@@ -39,6 +39,11 @@ async function acquireLock(lockPath: string): Promise<void> {
     } catch (e: any) {
       if (e.code === "EEXIST") {
         try {
+          const stat = await fs.stat(lockPath);
+          if (Date.now() - stat.mtimeMs > 10_000) {
+            await fs.unlink(lockPath);
+            continue;
+          }
           const pid = parseInt(await fs.readFile(lockPath, "utf-8"), 10);
           if (pid && !isProcessRunning(pid)) {
             await fs.unlink(lockPath);

@@ -79,6 +79,10 @@ export class AgentManager {
   private onStart?: OnAgentStart;
   private onCompact?: OnAgentCompact;
   private maxConcurrent: number;
+  private sessionTotalSpawns = 0;
+  private sessionTotalTurns = 0;
+  private sessionMaxSpawns = 50;
+  private sessionMaxTurns = 250;
   hooks?: HookRegistry;
 
   /** Queue of background agents waiting to start. */
@@ -114,6 +118,16 @@ export class AgentManager {
     return this.maxConcurrent;
   }
 
+  setSessionMaxSpawns(n: number) { this.sessionMaxSpawns = n; }
+  setSessionMaxTurns(n: number) { this.sessionMaxTurns = n; }
+  getSessionMaxSpawns(): number { return this.sessionMaxSpawns; }
+  getSessionMaxTurns(): number { return this.sessionMaxTurns; }
+  
+  resetSessionTotals(): void {
+    this.sessionTotalSpawns = 0;
+    this.sessionTotalTurns = 0;
+  }
+
   /** Get the ID of the currently executing agent (top of active stack). */
   getActiveAgentId(): string | undefined {
     return this.activeAgentIdStack[this.activeAgentIdStack.length - 1];
@@ -130,6 +144,14 @@ export class AgentManager {
     prompt: string,
     options: SpawnOptions,
   ): string {
+    if (this.sessionTotalSpawns >= this.sessionMaxSpawns) {
+      throw new Error(`Session spawn limit reached (${this.sessionTotalSpawns}/${this.sessionMaxSpawns})`);
+    }
+    if (this.sessionTotalTurns >= this.sessionMaxTurns) {
+      throw new Error(`Session turn limit reached (${this.sessionTotalTurns}/${this.sessionMaxTurns})`);
+    }
+    this.sessionTotalSpawns++;
+
     // --- Budget / depth enforcement & inheritance ---
     const parentId = this.getActiveAgentId();
     const parentRecord = parentId ? this.agents.get(parentId) : undefined;
@@ -170,6 +192,7 @@ export class AgentManager {
     const abortController = new AbortController();
     const record: AgentRecord = {
       id,
+      parentId,
       type,
       description: options.description,
       status: options.isBackground ? "queued" : "running",
@@ -287,7 +310,14 @@ export class AgentManager {
           if (activity.type === "end") record.toolUses++;
           options.onToolActivity?.(activity);
         },
-        onTurnEnd: options.onTurnEnd,
+        onTurnEnd: (turnCount) => {
+          this.sessionTotalTurns++;
+          if (this.sessionTotalTurns >= this.sessionMaxTurns) {
+            console.warn(`[pi-subagents] Session turn limit reached (${this.sessionTotalTurns}/${this.sessionMaxTurns}). Stopping subagent ${id}.`);
+            record.abortController?.abort();
+          }
+          options.onTurnEnd?.(turnCount);
+        },
         onTextDelta: options.onTextDelta,
         onAssistantUsage: (usage) => {
           addUsage(record.lifetimeUsage, usage);

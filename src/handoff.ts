@@ -14,6 +14,8 @@ export interface AgentHandoff {
   nextSteps?: string[];
   confidence?: number;
   evidence?: string[];
+  files?: string[];
+  artifacts?: { type: string; path: string }[];
 }
 
 const VALID_STATUSES = new Set(["success", "partial", "failed"]);
@@ -107,6 +109,18 @@ function validateHandoffShape(obj: Record<string, unknown>): string[] {
     issues.push(`findings (too many: ${obj.findings.length})`);
   }
 
+  if (obj.files !== undefined) {
+    if (!Array.isArray(obj.files)) issues.push("files");
+    else if (obj.files.length > 100) issues.push(`files (too many: ${obj.files.length})`);
+    else if (!obj.files.every(f => typeof f === "string")) issues.push("files (invalid content)");
+  }
+
+  if (obj.artifacts !== undefined) {
+    if (!Array.isArray(obj.artifacts)) issues.push("artifacts");
+    else if (obj.artifacts.length > 100) issues.push(`artifacts (too many: ${obj.artifacts.length})`);
+    else if (!obj.artifacts.every(a => typeof a === "object" && a !== null && typeof (a as any).type === "string" && typeof (a as any).path === "string")) issues.push("artifacts (invalid content)");
+  }
+
   return issues;
 }
 
@@ -164,6 +178,8 @@ export function parseHandoff(text: string): AgentHandoff | null {
     nextSteps: Array.isArray(obj.nextSteps) ? obj.nextSteps as string[] : undefined,
     confidence: typeof obj.confidence === "number" ? obj.confidence : undefined,
     evidence: Array.isArray(obj.evidence) ? obj.evidence as string[] : undefined,
+    files: Array.isArray(obj.files) ? obj.files as string[] : undefined,
+    artifacts: Array.isArray(obj.artifacts) ? obj.artifacts as { type: string; path: string }[] : undefined,
   };
 }
 
@@ -188,7 +204,9 @@ The handoff must be enclosed in a \`\`\`json code block and must be the LAST thi
   "findings": ["Finding 1", "Finding 2"],
   "nextSteps": ["Step 1", "Step 2"],
   "confidence": 0.9,
-  "evidence": ["/path/to/file1.ts", "/path/to/file2.ts"]
+  "evidence": ["/path/to/file1.ts", "/path/to/file2.ts"],
+  "files": ["/path/to/new_file.ts"],
+  "artifacts": [{"type": "design", "path": "/path/to/design.md"}]
 }
 \`\`\`
 
@@ -200,6 +218,8 @@ Field descriptions:
 - **nextSteps** (optional): What should happen next, if applicable
 - **confidence** (optional): Number 0-1 indicating your confidence in the result quality
 - **evidence** (optional): Absolute file paths that support your findings
+- **files** (optional): Absolute file paths to files you created or modified
+- **artifacts** (optional): Objects with 'type' and 'path' for generated artifacts
 
 Example:
 
@@ -255,6 +275,20 @@ export function renderHandoffForParent(handoff: AgentHandoff): string {
     parts.push("Evidence:");
     for (const path of handoff.evidence) {
       parts.push(`  - ${path}`);
+    }
+  }
+
+  if (handoff.files?.length) {
+    parts.push("Files:");
+    for (const file of handoff.files) {
+      parts.push(`  - ${file}`);
+    }
+  }
+
+  if (handoff.artifacts?.length) {
+    parts.push("Artifacts:");
+    for (const art of handoff.artifacts) {
+      parts.push(`  - [${art.type}] ${art.path}`);
     }
   }
 

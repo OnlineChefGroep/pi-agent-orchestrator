@@ -81,6 +81,7 @@ export type JoinMode = 'async' | 'group' | 'smart' | 'swarm';
 
 export interface AgentRecord {
   id: string;
+  parentId?: string;
   type: SubagentType;
   description: string;
   status: "queued" | "running" | "completed" | "steered" | "aborted" | "stopped" | "error";
@@ -164,6 +165,8 @@ export interface ValidationCriterion {
 export interface AgentInvocation {
   /** Short display name, e.g. "haiku" — only set when different from parent. */
   modelName?: string;
+  sessionMaxSpawns?: number;
+  sessionMaxTurns?: number;
   thinking?: ThinkingLevel;
   maxTurns?: number;
   isolated?: boolean;

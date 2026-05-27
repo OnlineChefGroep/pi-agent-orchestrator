@@ -314,6 +314,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     currentCtx = ctx;
     manager.clearCompleted();
+    manager.resetSessionTotals();
     if (isSchedulingEnabled() && !scheduler.isActive()) await startScheduler(ctx);
   });
 
@@ -403,6 +404,8 @@ export default function (pi: ExtensionAPI) {
       setShowTurnProgress,
       setOrchestrationMode,
       setDashboardRefreshInterval,
+      setSessionMaxSpawns: (n) => manager.setSessionMaxSpawns(n),
+      setSessionMaxTurns: (n) => manager.setSessionMaxTurns(n),
     },
     (event, payload) => pi.events.emit(event, payload),
   );

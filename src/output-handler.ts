@@ -19,7 +19,7 @@ import { reloadCustomAgents } from "./agent-registry.js";
 import { getAllTypes } from "./agent-types.js";
 import type { SubagentScheduler } from "./schedule.js";
 import { uiCreateOrJoinSwarm } from "./swarm-join.js";
-import type { JoinMode } from "./types.js";
+import type { AgentRecord, JoinMode } from "./types.js";
 import { showAgentDashboard } from "./ui/agent-dashboard.js";
 import { showAgentPermissions } from "./ui/agent-detail.js";
 import { showAllAgentsList, showRunningAgents } from "./ui/agent-list-views.js";
@@ -120,6 +120,59 @@ async function launchAgentDashboard(
   await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer, onPerms, onSwarm);
 }
 
+function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" | "json"): string {
+  if (format === "json") {
+    const roots = [];
+    const map = new Map<string, any>();
+    for (const r of records) {
+      map.set(r.id, { id: r.id, type: r.type, status: r.status, description: r.description, children: [] });
+    }
+    for (const r of records) {
+      const node = map.get(r.id)!;
+      if (r.parentId && map.has(r.parentId)) {
+        map.get(r.parentId)!.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+    return JSON.stringify(roots, null, 2);
+  }
+
+  if (format === "mermaid") {
+    let out = "graph TD\n";
+    for (const r of records) {
+      // Escape quotes in Mermaid labels
+      const cleanType = r.type.replace(/"/g, "'");
+      out += `  ${r.id.replace(/-/g, "_")}["[${cleanType}] ${r.id}"]\n`;
+      if (r.parentId) {
+        out += `  ${r.parentId.replace(/-/g, "_")} --> ${r.id.replace(/-/g, "_")}\n`;
+      }
+    }
+    return out;
+  }
+
+  if (format === "text") {
+    const roots = records.filter(r => !r.parentId);
+    let out = "";
+    const render = (nodeId: string, indent: string, isLast: boolean) => {
+      const r = records.find(x => x.id === nodeId);
+      if (!r) return;
+      const branch = indent ? (isLast ? "└─ " : "├─ ") : "";
+      out += `${indent}${branch}${r.id} (${r.type}) [${r.status}]\n`;
+      const children = records.filter(x => x.parentId === nodeId);
+      for (let i = 0; i < children.length; i++) {
+        render(children[i].id, indent + (indent ? (isLast ? "   " : "│  ") : ""), i === children.length - 1);
+      }
+    };
+    for (let i = 0; i < roots.length; i++) {
+      render(roots[i].id, "", true);
+    }
+    return out || "No execution tree available.";
+  }
+  
+  return "";
+}
+
 /**
  * Display the main agents menu with options for dashboard, agent types, scheduling, and settings.
  */
@@ -141,6 +194,7 @@ export async function showAgentsMenu(
 
   if (agents.length > 0) {
     options.push("Interactive dashboard (hotkeys • live tree • steering)");
+    options.push("View execution tree");
   }
 
   if (allNames.length > 0) {
@@ -173,6 +227,21 @@ export async function showAgentsMenu(
     await reopenMenu(ctx, deps);
   } else if (choice === "Interactive dashboard (hotkeys • live tree • steering)") {
     await launchAgentDashboard(ctx, deps);
+    await reopenMenu(ctx, deps);
+  } else if (choice === "View execution tree") {
+    const treeFormat = await ctx.ui.select("Execution Tree Format", [
+      "Formatted Text Tree",
+      "Mermaid Diagram Graph",
+      "Raw JSON Tree"
+    ]);
+    if (treeFormat) {
+      let format: "text" | "mermaid" | "json" = "text";
+      if (treeFormat.includes("Mermaid")) format = "mermaid";
+      if (treeFormat.includes("JSON")) format = "json";
+      
+      const treeData = buildExecutionTree(agents, format);
+      await ctx.ui.editor(`Execution Tree (${format})`, treeData);
+    }
     await reopenMenu(ctx, deps);
   } else if (choice.startsWith("Agent types (")) {
     await showAllAgentsList(ctx, ctx.modelRegistry);

@@ -66,6 +66,10 @@ export interface SubagentsSettings {
    * Minimum 100ms, maximum 60000ms (60 seconds).
    */
   dashboardRefreshInterval?: number;
+  /** Guardrail limit for total spawns in a session */
+  sessionMaxSpawns?: number;
+  /** Guardrail limit for cumulative turns in a session */
+  sessionMaxTurns?: number;
 }
 
 /** Setter hooks used by applySettings to wire persisted values into in-memory state. */
@@ -83,6 +87,8 @@ export interface SettingsAppliers {
   setShowTurnProgress: (b: boolean) => void;
   setOrchestrationMode: (mode: OrchestrationMode) => void;
   setDashboardRefreshInterval: (interval: number) => void;
+  setSessionMaxSpawns: (n: number) => void;
+  setSessionMaxTurns: (n: number) => void;
 }
 
 /** Emit callback — a subset of `pi.events.emit` to keep helpers testable. */
@@ -99,6 +105,8 @@ const VALID_UI_STYLES: ReadonlySet<string> = new Set(["premium", "retro", "plain
 const MAX_CONCURRENT_CEILING = 1024;
 const MAX_TURNS_CEILING = 10_000;
 const GRACE_TURNS_CEILING = 1_000;
+const SESSION_MAX_SPAWNS_CEILING = 10_000;
+const SESSION_MAX_TURNS_CEILING = 100_000;
 
 /** Drop fields that don't match the expected shape. Silent — garbage becomes absent. */
 function sanitize(raw: unknown): SubagentsSettings {
@@ -159,6 +167,20 @@ function sanitize(raw: unknown): SubagentsSettings {
     (r.dashboardRefreshInterval as number) <= 60000
   ) {
     out.dashboardRefreshInterval = r.dashboardRefreshInterval as number;
+  }
+  if (
+    Number.isInteger(r.sessionMaxSpawns) &&
+    (r.sessionMaxSpawns as number) >= 1 &&
+    (r.sessionMaxSpawns as number) <= SESSION_MAX_SPAWNS_CEILING
+  ) {
+    out.sessionMaxSpawns = r.sessionMaxSpawns as number;
+  }
+  if (
+    Number.isInteger(r.sessionMaxTurns) &&
+    (r.sessionMaxTurns as number) >= 1 &&
+    (r.sessionMaxTurns as number) <= SESSION_MAX_TURNS_CEILING
+  ) {
+    out.sessionMaxTurns = r.sessionMaxTurns as number;
   }
   return out;
 }
@@ -223,6 +245,8 @@ export function applySettings(s: SubagentsSettings, appliers: SettingsAppliers):
   if (typeof s.showTurnProgress === "boolean") appliers.setShowTurnProgress(s.showTurnProgress);
   if (s.orchestrationMode) appliers.setOrchestrationMode(s.orchestrationMode);
   if (typeof s.dashboardRefreshInterval === "number") appliers.setDashboardRefreshInterval(s.dashboardRefreshInterval);
+  if (typeof s.sessionMaxSpawns === "number") appliers.setSessionMaxSpawns(s.sessionMaxSpawns);
+  if (typeof s.sessionMaxTurns === "number") appliers.setSessionMaxTurns(s.sessionMaxTurns);
 }
 
 /**

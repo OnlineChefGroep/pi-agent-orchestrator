@@ -121,6 +121,24 @@ describe("parseHandoff", () => {
     expect(result!.evidence).toEqual(["/tmp/error.log", "/etc/config.yaml"]);
   });
 
+  it("parses v2 optional fields (files, artifacts)", () => {
+    const text = `\`\`\`json
+{
+  "type": "handoff",
+  "status": "success",
+  "summary": "Completed",
+  "findings": ["Something"],
+  "files": ["/path/a.ts"],
+  "artifacts": [{"type": "design", "path": "/path/b.md"}]
+}
+\`\`\``;
+
+    const result = parseHandoff(text);
+    expect(result).not.toBeNull();
+    expect(result!.files).toEqual(["/path/a.ts"]);
+    expect(result!.artifacts).toEqual([{"type": "design", "path": "/path/b.md"}]);
+  });
+
   it("returns null when type is not 'handoff'", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -164,6 +182,8 @@ describe("buildHandoffPrompt", () => {
     expect(prompt).toContain("nextSteps");
     expect(prompt).toContain("confidence");
     expect(prompt).toContain("evidence");
+    expect(prompt).toContain("files");
+    expect(prompt).toContain("artifacts");
   });
 
   it("includes a JSON example", () => {
@@ -182,6 +202,8 @@ describe("renderHandoffForParent", () => {
       nextSteps: ["Write a test", "Deploy"],
       confidence: 0.85,
       evidence: ["/path/to/file.ts"],
+      files: ["/path/to/new_file.ts"],
+      artifacts: [{ type: "design", path: "/path/to/design.md" }],
     };
 
     const rendered = renderHandoffForParent(handoff);
@@ -197,6 +219,10 @@ describe("renderHandoffForParent", () => {
     expect(rendered).toContain("Confidence: 85%");
     expect(rendered).toContain("Evidence:");
     expect(rendered).toContain("  - /path/to/file.ts");
+    expect(rendered).toContain("Files:");
+    expect(rendered).toContain("  - /path/to/new_file.ts");
+    expect(rendered).toContain("Artifacts:");
+    expect(rendered).toContain("  - [design] /path/to/design.md");
   });
 
   it("handles 'partial' and 'failed' statuses", () => {
@@ -227,5 +253,7 @@ describe("renderHandoffForParent", () => {
     expect(rendered).not.toContain("Next Steps:");
     expect(rendered).not.toContain("Confidence:");
     expect(rendered).not.toContain("Evidence:");
+    expect(rendered).not.toContain("Files:");
+    expect(rendered).not.toContain("Artifacts:");
   });
 });

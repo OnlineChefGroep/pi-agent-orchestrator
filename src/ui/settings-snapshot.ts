@@ -25,5 +25,7 @@ export function buildSettingsSnapshot(
     uiStyle: getUiStyle(),
     orchestrationMode: getOrchestrationMode(),
     dashboardRefreshInterval: getDashboardRefreshInterval(),
+    sessionMaxSpawns: manager.getSessionMaxSpawns(),
+    sessionMaxTurns: manager.getSessionMaxTurns(),
   };
 }

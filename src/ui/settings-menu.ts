@@ -39,6 +39,8 @@ export async function showSettings(
     `UI/UX Style (current: ${getUiStyle()})`,
     `Orchestration mode (current: ${getOrchestrationMode()})`,
     `Dashboard refresh interval (current: ${getDashboardRefreshInterval()}ms)`,
+    `Session spawn limit (current: ${manager.getSessionMaxSpawns()})`,
+    `Session turn limit (current: ${manager.getSessionMaxTurns()})`,
   ]);
   if (!choice) return;
 
@@ -165,6 +167,28 @@ export async function showSettings(
         notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Dashboard refresh interval set to ${n}ms`);
       } else {
         ctx.ui.notify("Must be between 100 and 60000 milliseconds.", "warning");
+      }
+    }
+  } else if (choice.startsWith("Session spawn limit")) {
+    const val = await ctx.ui.input("Session max spawns", String(manager.getSessionMaxSpawns()));
+    if (val) {
+      const n = parseInt(val, 10);
+      if (n >= 1) {
+        manager.setSessionMaxSpawns(n);
+        notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Session spawn limit set to ${n}`);
+      } else {
+        ctx.ui.notify("Must be a positive integer.", "warning");
+      }
+    }
+  } else if (choice.startsWith("Session turn limit")) {
+    const val = await ctx.ui.input("Session max turns", String(manager.getSessionMaxTurns()));
+    if (val) {
+      const n = parseInt(val, 10);
+      if (n >= 1) {
+        manager.setSessionMaxTurns(n);
+        notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Session turn limit set to ${n}`);
+      } else {
+        ctx.ui.notify("Must be a positive integer.", "warning");
       }
     }
   }
