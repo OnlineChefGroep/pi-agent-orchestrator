@@ -28,10 +28,6 @@ export type CompactionInfo = { reason: "manual" | "threshold" | "overflow"; toke
 /** Default max concurrent background agents. */
 const DEFAULT_MAX_CONCURRENT = 4;
 
-function normalizeOptionalPositiveInt(value: number | undefined): number | undefined {
-  return Number.isInteger(value) && value !== undefined && value > 0 ? value : undefined;
-}
-
 export interface SessionLimits {
   maxAgentsPerSession?: number;
   maxTotalTurnsPerSession?: number;
@@ -91,6 +87,8 @@ export class AgentManager {
   private sessionLimits: SessionLimits = {};
   private sessionUsage = { spawnedAgents: 0, totalTurns: 0 };
   private lastTurnCounts = new Map<string, number>();
+  private sessionMaxSpawns = 0;
+  private sessionMaxTurns = 0;
   hooks?: HookRegistry;
 
   /** Queue of background agents waiting to start. */
@@ -127,14 +125,38 @@ export class AgentManager {
   }
 
   setSessionLimits(limits: SessionLimits): void {
-    this.sessionLimits = {
-      maxAgentsPerSession: normalizeOptionalPositiveInt(limits.maxAgentsPerSession),
-      maxTotalTurnsPerSession: normalizeOptionalPositiveInt(limits.maxTotalTurnsPerSession),
-    };
+    const agents = limits.maxAgentsPerSession;
+    const turns = limits.maxTotalTurnsPerSession;
+    this.setSessionMaxSpawns(
+      agents !== undefined && Number.isInteger(agents) && agents > 0 ? agents : 0,
+    );
+    this.setSessionMaxTurns(
+      turns !== undefined && Number.isInteger(turns) && turns > 0 ? turns : 0,
+    );
   }
 
   getSessionLimits(): SessionLimits {
     return { ...this.sessionLimits };
+  }
+
+  setSessionMaxSpawns(n: number): void {
+    const normalized = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+    this.sessionMaxSpawns = normalized;
+    this.sessionLimits.maxAgentsPerSession = normalized > 0 ? normalized : undefined;
+  }
+
+  getSessionMaxSpawns(): number {
+    return this.sessionMaxSpawns;
+  }
+
+  setSessionMaxTurns(n: number): void {
+    const normalized = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+    this.sessionMaxTurns = normalized;
+    this.sessionLimits.maxTotalTurnsPerSession = normalized > 0 ? normalized : undefined;
+  }
+
+  getSessionMaxTurns(): number {
+    return this.sessionMaxTurns;
   }
 
   getSessionUsage(): { spawnedAgents: number; totalTurns: number } {
