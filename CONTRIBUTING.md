@@ -1,4 +1,4 @@
-# Contributing to @onlinechefgroep/pi-subagents
+# Contributing to @onlinechefgroep/pi-agent-orchestrator
 
 Thank you for contributing. This document covers build, test, lint, and PR workflow.
 

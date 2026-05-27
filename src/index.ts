@@ -20,6 +20,7 @@ import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, normalizeMaxTu
 import { getAgentConfig, getAvailableTypes, resolveType } from "./agent-types.js";
 import { BatchOrchestrator } from "./batch-orchestrator.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
+import { buildAgentEstimate } from "./estimate.js";
 import { GroupJoinManager } from "./group-join.js";
 import { HookRegistry } from "./hooks.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./invocation-config.js";
@@ -314,12 +315,13 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     currentCtx = ctx;
     manager.clearCompleted();
-    manager.resetSessionTotals();
+    manager.resetSessionUsage();
     if (isSchedulingEnabled() && !scheduler.isActive()) await startScheduler(ctx);
   });
 
   pi.on("session_before_switch", () => {
     manager.clearCompleted();
+    manager.resetSessionUsage();
     scheduler.stop();
   });
 
@@ -389,6 +391,7 @@ export default function (pi: ExtensionAPI) {
   applyAndEmitLoaded(
     {
       setMaxConcurrent: (n) => manager.setMaxConcurrent(n),
+      setSessionLimits: (limits) => manager.setSessionLimits(limits),
       setDefaultMaxTurns,
       setGraceTurns,
       setDefaultJoinMode,
@@ -404,8 +407,6 @@ export default function (pi: ExtensionAPI) {
       setShowTurnProgress,
       setOrchestrationMode,
       setDashboardRefreshInterval,
-      setSessionMaxSpawns: (n) => manager.setSessionMaxSpawns(n),
-      setSessionMaxTurns: (n) => manager.setSessionMaxTurns(n),
     },
     (event, payload) => pi.events.emit(event, payload),
   );
@@ -503,6 +504,11 @@ Guidelines:
       inherit_context: Type.Optional(
         Type.Boolean({
           description: "If true, fork parent conversation into the agent. Default: false (fresh context).",
+        }),
+      ),
+      estimate_only: Type.Optional(
+        Type.Boolean({
+          description: "If true, return a rough token/turn estimate without spawning or resuming an agent.",
         }),
       ),
       isolation: Type.Optional(
@@ -678,6 +684,19 @@ Guidelines:
         modelName,
         tags: agentTags.length > 0 ? agentTags : undefined,
       };
+
+      if (params.estimate_only) {
+        if (params.resume) return textResult("Cannot combine `estimate_only` with `resume`.");
+        if (params.schedule) return textResult("Cannot combine `estimate_only` with `schedule`.");
+        return textResult(buildAgentEstimate({
+          prompt: params.prompt as string,
+          description: params.description as string,
+          type: subagentType,
+          config: customConfig,
+          inheritContext,
+          maxTurns: effectiveMaxTurns,
+        }));
+      }
 
       // ---- Schedule: register a job, don't spawn now ----
       if (params.schedule) {

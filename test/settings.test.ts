@@ -325,6 +325,7 @@ describe("settings persistence", () => {
     beforeEach(() => {
       appliers = {
         setMaxConcurrent: vi.fn(),
+        setSessionLimits: vi.fn(),
         setDefaultMaxTurns: vi.fn(),
         setGraceTurns: vi.fn(),
         setDefaultJoinMode: vi.fn(),
@@ -354,6 +355,7 @@ describe("settings persistence", () => {
     it("applies only the fields that are present", () => {
       applySettings({ maxConcurrent: 4, graceTurns: 3 }, appliers);
       expect(appliers.setMaxConcurrent).toHaveBeenCalledWith(4);
+      expect(appliers.setSessionLimits).not.toHaveBeenCalled();
       expect(appliers.setGraceTurns).toHaveBeenCalledWith(3);
       expect(appliers.setDefaultMaxTurns).not.toHaveBeenCalled();
       expect(appliers.setDefaultJoinMode).not.toHaveBeenCalled();
@@ -365,6 +367,8 @@ describe("settings persistence", () => {
       applySettings(
         {
           maxConcurrent: 8,
+          maxAgentsPerSession: 12,
+          maxTotalTurnsPerSession: 80,
           defaultMaxTurns: 50,
           graceTurns: 7,
           defaultJoinMode: "group",
@@ -378,6 +382,10 @@ describe("settings persistence", () => {
         appliers,
       );
       expect(appliers.setMaxConcurrent).toHaveBeenCalledWith(8);
+      expect(appliers.setSessionLimits).toHaveBeenCalledWith({
+        maxAgentsPerSession: 12,
+        maxTotalTurnsPerSession: 80,
+      });
       expect(appliers.setDefaultMaxTurns).toHaveBeenCalledWith(50);
       expect(appliers.setGraceTurns).toHaveBeenCalledWith(7);
       expect(appliers.setDefaultJoinMode).toHaveBeenCalledWith("group");
@@ -392,6 +400,14 @@ describe("settings persistence", () => {
     it("applies defaultMaxTurns: 0 as the explicit unlimited marker", () => {
       applySettings({ defaultMaxTurns: 0 }, appliers);
       expect(appliers.setDefaultMaxTurns).toHaveBeenCalledWith(0);
+    });
+
+    it("applies partial session limits when one session limit field is present", () => {
+      applySettings({ maxAgentsPerSession: 3 }, appliers);
+      expect(appliers.setSessionLimits).toHaveBeenCalledWith({
+        maxAgentsPerSession: 3,
+        maxTotalTurnsPerSession: undefined,
+      });
     });
 
     // Wiring tests for the master switch — ensures the schedulingEnabled
@@ -454,6 +470,7 @@ describe("settings persistence", () => {
     beforeEach(() => {
       appliers = {
         setMaxConcurrent: vi.fn(),
+        setSessionLimits: vi.fn(),
         setDefaultMaxTurns: vi.fn(),
         setGraceTurns: vi.fn(),
         setDefaultJoinMode: vi.fn(),

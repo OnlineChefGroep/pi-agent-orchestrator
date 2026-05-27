@@ -14,8 +14,14 @@ export interface AgentHandoff {
   nextSteps?: string[];
   confidence?: number;
   evidence?: string[];
-  files?: string[];
-  artifacts?: { type: string; path: string }[];
+  artifacts?: HandoffArtifact[];
+}
+
+export interface HandoffArtifact {
+  type: "file" | "branch" | "url" | "note";
+  title: string;
+  value: string;
+  mimeType?: string;
 }
 
 const VALID_STATUSES = new Set(["success", "partial", "failed"]);
@@ -26,6 +32,7 @@ const MAX_JSON_KEYS = 1000;  // Total key count limit (renamed from MAX_JSON_DEP
 const MAX_FINDINGS_COUNT = 100;
 const MAX_SUMMARY_LENGTH = 10000;
 const MAX_STRING_LENGTH = 50000;
+const MAX_ARTIFACTS_COUNT = 50;
 
 /**
  * CVE-008 FIX: Safe JSON parser with size and key count limits.
@@ -108,20 +115,35 @@ function validateHandoffShape(obj: Record<string, unknown>): string[] {
   } else if (obj.findings.length > MAX_FINDINGS_COUNT) {
     issues.push(`findings (too many: ${obj.findings.length})`);
   }
-
-  if (obj.files !== undefined) {
-    if (!Array.isArray(obj.files)) issues.push("files");
-    else if (obj.files.length > 100) issues.push(`files (too many: ${obj.files.length})`);
-    else if (!obj.files.every(f => typeof f === "string")) issues.push("files (invalid content)");
-  }
-
   if (obj.artifacts !== undefined) {
-    if (!Array.isArray(obj.artifacts)) issues.push("artifacts");
-    else if (obj.artifacts.length > 100) issues.push(`artifacts (too many: ${obj.artifacts.length})`);
-    else if (!obj.artifacts.every(a => typeof a === "object" && a !== null && typeof (a as any).type === "string" && typeof (a as any).path === "string")) issues.push("artifacts (invalid content)");
+    if (!Array.isArray(obj.artifacts)) {
+      issues.push("artifacts");
+    } else if (obj.artifacts.length > MAX_ARTIFACTS_COUNT) {
+      issues.push(`artifacts (too many: ${obj.artifacts.length})`);
+    } else {
+      for (const artifact of obj.artifacts) {
+        if (!isArtifact(artifact)) {
+          issues.push("artifacts (invalid item)");
+          break;
+        }
+      }
+    }
   }
 
   return issues;
+}
+
+function isArtifact(value: unknown): value is HandoffArtifact {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const obj = value as Record<string, unknown>;
+  return (
+    (obj.type === "file" || obj.type === "branch" || obj.type === "url" || obj.type === "note") &&
+    typeof obj.title === "string" &&
+    obj.title.trim().length > 0 &&
+    typeof obj.value === "string" &&
+    obj.value.trim().length > 0 &&
+    (obj.mimeType === undefined || typeof obj.mimeType === "string")
+  );
 }
 
 /**
@@ -178,8 +200,7 @@ export function parseHandoff(text: string): AgentHandoff | null {
     nextSteps: Array.isArray(obj.nextSteps) ? obj.nextSteps as string[] : undefined,
     confidence: typeof obj.confidence === "number" ? obj.confidence : undefined,
     evidence: Array.isArray(obj.evidence) ? obj.evidence as string[] : undefined,
-    files: Array.isArray(obj.files) ? obj.files as string[] : undefined,
-    artifacts: Array.isArray(obj.artifacts) ? obj.artifacts as { type: string; path: string }[] : undefined,
+    artifacts: Array.isArray(obj.artifacts) ? obj.artifacts as HandoffArtifact[] : undefined,
   };
 }
 
@@ -205,8 +226,7 @@ The handoff must be enclosed in a \`\`\`json code block and must be the LAST thi
   "nextSteps": ["Step 1", "Step 2"],
   "confidence": 0.9,
   "evidence": ["/path/to/file1.ts", "/path/to/file2.ts"],
-  "files": ["/path/to/new_file.ts"],
-  "artifacts": [{"type": "design", "path": "/path/to/design.md"}]
+  "artifacts": [{"type": "file", "title": "Patch", "value": "/path/to/file1.ts", "mimeType": "text/typescript"}]
 }
 \`\`\`
 
@@ -218,8 +238,7 @@ Field descriptions:
 - **nextSteps** (optional): What should happen next, if applicable
 - **confidence** (optional): Number 0-1 indicating your confidence in the result quality
 - **evidence** (optional): Absolute file paths that support your findings
-- **files** (optional): Absolute file paths to files you created or modified
-- **artifacts** (optional): Objects with 'type' and 'path' for generated artifacts
+- **artifacts** (optional): Typed deliverables: file, branch, url, or note with title and value
 
 Example:
 
@@ -231,7 +250,8 @@ Example:
   "findings": ["The refill interval was set to 0ms instead of 1000ms", "The token bucket never refilled after the first burst", "Fixed by setting interval to 1000ms in the RateLimiter constructor"],
   "nextSteps": ["Write a unit test for the refill behavior", "Check if other instances of RateLimiter have the same bug"],
   "confidence": 0.95,
-  "evidence": ["/home/user/project/src/rate-limiter.ts", "/home/user/project/src/api-handler.ts"]
+  "evidence": ["/home/user/project/src/rate-limiter.ts", "/home/user/project/src/api-handler.ts"],
+  "artifacts": [{"type": "file", "title": "Fixed rate limiter", "value": "/home/user/project/src/rate-limiter.ts"}]
 }
 \`\`\``;
 }
@@ -278,17 +298,11 @@ export function renderHandoffForParent(handoff: AgentHandoff): string {
     }
   }
 
-  if (handoff.files?.length) {
-    parts.push("Files:");
-    for (const file of handoff.files) {
-      parts.push(`  - ${file}`);
-    }
-  }
-
   if (handoff.artifacts?.length) {
     parts.push("Artifacts:");
-    for (const art of handoff.artifacts) {
-      parts.push(`  - [${art.type}] ${art.path}`);
+    for (const artifact of handoff.artifacts) {
+      const mime = artifact.mimeType ? ` (${artifact.mimeType})` : "";
+      parts.push(`  - [${artifact.type}] ${artifact.title}: ${artifact.value}${mime}`);
     }
   }
 

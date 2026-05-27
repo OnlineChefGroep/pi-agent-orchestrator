@@ -36,6 +36,12 @@ Thumbs.db
 
 # Autoresearch generated data
 autoresearch.jsonl
+autoresearch.md
+autoresearch.ps1
+autoresearch.sh
+
+# Graphify generated graph/cache
+graphify-out/
 
 # Factory dev tooling
 .factory/
