@@ -111,7 +111,7 @@ describe("SubagentScheduler — lifecycle", () => {
 
   afterEach(() => {
     scheduler.stop();
-    rmSync(tmp, { recursive: true, force: true });
+    rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
 
   it("isActive() reports start/stop state", async () => {
