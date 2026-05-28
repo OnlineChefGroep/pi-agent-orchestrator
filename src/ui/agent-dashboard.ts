@@ -13,12 +13,12 @@
  * Still fully additive. Matches the spirit of OpenCode + Claude Code agent control.
  */
 
-import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
   matchesKey,
   type TUI,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import type { AgentManager } from "../agent-manager.js";
 import { getDashboardRefreshInterval } from "../agent-registry.js";
 import type { AgentRecord } from "../types.js";

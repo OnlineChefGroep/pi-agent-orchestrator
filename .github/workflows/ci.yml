@@ -39,9 +39,9 @@ jobs:
         run: |
           npm ci
           npm install --no-save --legacy-peer-deps \
-            @mariozechner/pi-ai@0.72.0 \
-            @mariozechner/pi-coding-agent@0.72.0 \
-            @mariozechner/pi-tui@0.72.0
+            @earendil-works/pi-ai@0.72.0 \
+            @earendil-works/pi-coding-agent@0.72.0 \
+            @earendil-works/pi-tui@0.72.0
 
       - name: TypeScript typecheck
         if: matrix.peer-deps == 'latest'

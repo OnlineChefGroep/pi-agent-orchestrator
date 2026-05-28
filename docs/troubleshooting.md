@@ -8,7 +8,7 @@
 
 ### `npm install` fails with peer dependency errors
 
-**Cause:** This package has peer dependencies on `@mariozechner/pi-ai`, `@mariozechner/pi-coding-agent`, and `@mariozechner/pi-tui`.
+**Cause:** This package has peer dependencies on `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui`.
 
 **Fix:** Install from within the pi-coding-agent extension environment, or use:
 
@@ -141,7 +141,7 @@ npm install @onlinechefgroep/pi-subagents-tui
 
 ### `npm test` fails with import errors
 
-**Symptom:** `Cannot find module '@mariozechner/pi-coding-agent'`
+**Symptom:** `Cannot find module '@earendil-works/pi-coding-agent'`
 
 **Fix:** This package is a peer dependency. Tests use Vitest with `deps.inline` configured. Make sure you installed from within the pi extension environment, or mock the peer deps in your test setup.
 

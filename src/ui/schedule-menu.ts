@@ -7,8 +7,8 @@
  * formatted card borders for job inspection and cancellation.
  */
 
-import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
-import { visibleWidth } from "@mariozechner/pi-tui";
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import { getUiStyle } from "../agent-registry.js";
 import type { SubagentScheduler } from "../schedule.js";
 import type { ScheduledSubagent } from "../types.js";

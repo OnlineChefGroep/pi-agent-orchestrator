@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { AgentManager } from "../agent-manager.js";
 import { reloadCustomAgents } from "../agent-registry.js";
 import { BUILTIN_TOOL_NAMES } from "../agent-types.js";

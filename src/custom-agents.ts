@@ -4,7 +4,7 @@
 
 import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { getAgentDir, parseFrontmatter } from "@mariozechner/pi-coding-agent";
+import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { BUILTIN_TOOL_NAMES, getDefaultAgentNames } from "./agent-types.js";
 import { emitTelemetry, hashContentSync } from "./telemetry.js";
 import type { AgentConfig, MemoryScope, ThinkingLevel } from "./types.js";

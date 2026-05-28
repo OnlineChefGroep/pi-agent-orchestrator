@@ -13,7 +13,7 @@
  *   settings-menu.ts       — showSettings, notifyApplied
  */
 
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { AgentManager } from "./agent-manager.js";
 import { reloadCustomAgents } from "./agent-registry.js";
 import { getAllTypes } from "./agent-types.js";
