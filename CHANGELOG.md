@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.10.1 (2026-05-29)
+
+### Fixes
+- Fixed validation color in permissions TUI panel: "n/a" now renders dim instead of green (#18).
+- Fixed terminal overflow: removed 40-char minimum width, clamps to 20 instead (#18).
+- Fixed falsy input bug in `estimateTokens`: `c.input` check now uses `!= null` (#17).
+- Fixed journal metadata: year 2025→2026, heading format (#17).
+
+### Documentation
+- Updated README badges: 670 tests, version 0.10.1, Node >=22 badge.
+
+### Metrics
+- 670 tests, 37 test files.
+
+---
+
 ## v0.10.0 (2026-05-27)
 
 ### Release
