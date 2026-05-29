@@ -21,7 +21,8 @@ export async function showAgentPermissions(ctx: ExtensionCommandContext, record:
         const box = getBoxChars();
 
         // Use a default width if terminal is not accessible or too small
-        const safeWidth = tui?.terminal?.columns ? Math.max(20, Math.floor(tui.terminal.columns * 0.7)) : 60;
+        const terminalWidth = tui?.terminal?.columns;
+        const safeWidth = terminalWidth ? Math.min(terminalWidth, Math.max(20, Math.floor(terminalWidth * 0.7))) : 60;
         const innerW = Math.max(1, safeWidth - 4);
 
         const lines: string[] = [];
