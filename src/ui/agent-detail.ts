@@ -1,9 +1,11 @@
 import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { matchesKey } from "@earendil-works/pi-tui";
 import { reloadCustomAgents } from "../agent-registry.js";
 import { getAgentConfig } from "../agent-types.js";
 import { disableAgent, ejectAgent, enableAgent } from "./agent-actions.js";
 import { findAgentFile } from "./agent-file-helpers.js";
+import { borderLine, framedRow, getBoxChars, getThemeColors } from "./theme.js";
 
 export async function showAgentPermissions(ctx: ExtensionCommandContext, record: import("../types.js").AgentRecord): Promise<void> {
   const cfg = getAgentConfig(record.type);
@@ -12,23 +14,43 @@ export async function showAgentPermissions(ctx: ExtensionCommandContext, record:
   const isolation = record.worktree ? `worktree (${record.worktree.branch})` : "shared";
   const validation = record.validated === false ? "FAILED" : record.validated === true ? "passed" : "n/a";
 
-  const content = [
-    `Agent: ${record.description || record.type} (${record.id})`,
-    `Status: ${record.status}`,
-    `Isolation: ${isolation}`,
-    `Tools: ${tools}`,
-    `Validation: ${validation}`,
-    record.outputFile ? `Output file: ${record.outputFile}` : "",
-    "",
-    "Press any key to close.",
-  ].filter(Boolean).join("\n");
-
-  await ctx.ui.custom((_tui, _theme, _kb, done) => {
-    // Simple text renderer
+  await ctx.ui.custom((tui, _theme, _kb, done) => {
     return {
-      render() { return content.split("\n"); },
+      render() {
+        const th = getThemeColors();
+        const box = getBoxChars();
+
+        // Use a default width if terminal is not accessible or too small
+        const safeWidth = Math.max(40, tui?.terminal?.columns ? Math.floor(tui.terminal.columns * 0.7) : 60);
+        const innerW = Math.max(1, safeWidth - 4);
+
+        const lines: string[] = [];
+        lines.push(borderLine(safeWidth, th, box, "top"));
+        lines.push(framedRow(`${th.title}PERMISSIONS & SCOPE${th.reset}`, innerW, th, box));
+        lines.push(borderLine(safeWidth, th, box, "mid"));
+
+        lines.push(framedRow(`${th.dim}Agent:${th.reset} ${record.description || record.type} (${record.id})`, innerW, th, box));
+        lines.push(framedRow(`${th.dim}Status:${th.reset} ${record.status}`, innerW, th, box));
+        lines.push(framedRow(`${th.dim}Isolation:${th.reset} ${isolation}`, innerW, th, box));
+        lines.push(framedRow(`${th.dim}Tools:${th.reset} ${tools}`, innerW, th, box));
+        lines.push(framedRow(`${th.dim}Validation:${th.reset} ${record.validated === false ? th.error : th.success}${validation}${th.reset}`, innerW, th, box));
+
+        if (record.outputFile) {
+          lines.push(framedRow(`${th.dim}Output file:${th.reset} ${record.outputFile}`, innerW, th, box));
+        }
+
+        lines.push(framedRow("", innerW, th, box));
+        lines.push(framedRow(`${th.dim}Press [Esc] or [q] or [Enter] to close.${th.reset}`, innerW, th, box));
+        lines.push(borderLine(safeWidth, th, box, "bottom"));
+
+        return lines;
+      },
       invalidate() {},
-      handleInput() { done(undefined); },
+      handleInput(data: string) {
+        if (matchesKey(data, "escape") || matchesKey(data, "q") || matchesKey(data, "enter") || matchesKey(data, "return")) {
+          done(undefined);
+        }
+      },
     };
   }, { overlay: true, overlayOptions: { width: "70%" } });
 }
