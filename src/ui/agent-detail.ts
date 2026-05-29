@@ -21,7 +21,7 @@ export async function showAgentPermissions(ctx: ExtensionCommandContext, record:
         const box = getBoxChars();
 
         // Use a default width if terminal is not accessible or too small
-        const safeWidth = Math.max(40, tui?.terminal?.columns ? Math.floor(tui.terminal.columns * 0.7) : 60);
+        const safeWidth = tui?.terminal?.columns ? Math.max(20, Math.floor(tui.terminal.columns * 0.7)) : 60;
         const innerW = Math.max(1, safeWidth - 4);
 
         const lines: string[] = [];
@@ -33,7 +33,7 @@ export async function showAgentPermissions(ctx: ExtensionCommandContext, record:
         lines.push(framedRow(`${th.dim}Status:${th.reset} ${record.status}`, innerW, th, box));
         lines.push(framedRow(`${th.dim}Isolation:${th.reset} ${isolation}`, innerW, th, box));
         lines.push(framedRow(`${th.dim}Tools:${th.reset} ${tools}`, innerW, th, box));
-        lines.push(framedRow(`${th.dim}Validation:${th.reset} ${record.validated === false ? th.error : th.success}${validation}${th.reset}`, innerW, th, box));
+        lines.push(framedRow(`${th.dim}Validation:${th.reset} ${record.validated === true ? th.success : record.validated === false ? th.error : th.dim}${validation}${th.reset}`, innerW, th, box));
 
         if (record.outputFile) {
           lines.push(framedRow(`${th.dim}Output file:${th.reset} ${record.outputFile}`, innerW, th, box));
