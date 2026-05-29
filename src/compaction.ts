@@ -48,8 +48,14 @@ function estimateTokens(message: CompactableMessage): number {
       } else if (c && c.type === "tool_result" && typeof c.content === "string") {
         len += c.content.length;
       } else if (c && c.type === "tool_result" && Array.isArray(c.content)) {
-        // Simple recursion for nested content arrays
-        len += estimateTokens({ ...message, content: c.content }) * 4;
+        for (let j = 0; j < c.content.length; j++) {
+          const nested = c.content[j] as any;
+          if (nested && nested.type === "text" && typeof nested.text === "string") {
+            len += nested.text.length;
+          } else {
+            len += 50;
+          }
+        }
       } else if (c && c.type === "tool_use" && c.input != null) {
         len += JSON.stringify(c.input).length;
       } else {
