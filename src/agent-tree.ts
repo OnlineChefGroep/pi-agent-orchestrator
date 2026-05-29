@@ -12,15 +12,31 @@ export function buildAgentTreeMermaid(records: AgentRecord[]): string {
     lines.push('  empty["No agents in this session"]');
     return lines.join("\n");
   }
+
+  // Pre-calculate node declarations
   for (const record of sorted) {
     lines.push(`  ${record.id.replace(/-/g, "_")}["${label(record)}"]`);
   }
+
+  // Group by groupId to avoid O(N^2) complexity
+  const childrenMap = new Map<string, AgentRecord[]>();
   for (const record of sorted) {
-    const children = sorted.filter((candidate) => candidate.groupId === record.id);
+    if (record.groupId) {
+      if (!childrenMap.has(record.groupId)) {
+        childrenMap.set(record.groupId, []);
+      }
+      childrenMap.get(record.groupId)!.push(record);
+    }
+  }
+
+  // Add edges
+  for (const record of sorted) {
+    const children = childrenMap.get(record.id) || [];
     for (const child of children) {
       lines.push(`  ${record.id.replace(/-/g, "_")} --> ${child.id.replace(/-/g, "_")}`);
     }
   }
+
   return lines.join("\n");
 }
 
