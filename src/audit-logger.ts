@@ -83,10 +83,10 @@ export function recordAudit(entry: AuditEntry): void {
   if (!silent) {
     const level = entry.outcome === "success" ? "info" : "warn";
     logger[level](`rpc:${entry.operation} ${entry.outcome}`, {
+      ...(entry.metadata ?? {}),
       extensionId: entry.extensionId,
       ...(entry.extensionName ? { extensionName: entry.extensionName } : {}),
       durationMs: entry.durationMs,
-      ...(entry.metadata ?? {}),
     });
   }
 
