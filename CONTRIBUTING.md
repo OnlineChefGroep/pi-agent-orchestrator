@@ -6,7 +6,7 @@ Thank you for contributing. This document covers build, test, lint, and PR workf
 
 ## Development Environment
 
-- **Node.js:** 20+ (LTS)
+- **Node.js:** 22+ (LTS)
 - **OS:** Linux, macOS, Windows (CI tests run on ubuntu-latest)
 
 ---

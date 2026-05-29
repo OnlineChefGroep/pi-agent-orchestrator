@@ -17,7 +17,7 @@ Bring Claude Code-style autonomous sub-agents to pi. Spawn specialized agents, e
 pi install npm:@onlinechefgroep/pi-agent-orchestrator
 ```
 
-Requires Node.js >= 18 and pi >= 0.70.5.
+Requires Node.js >= 22 and pi >= 0.70.5.
 
 ---
 
