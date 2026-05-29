@@ -1,8 +1,16 @@
-# @onlinechefgroep/pi-agent-orchestrator
+<div align="center">
 
-> Autonomous sub-agents for the pi coding agent. Forked from [tintinweb/pi-subagents](https://github.com/tintinweb/pi-subagents).
+![Pi Agent Orchestrator Banner](docs/images/orchestrator_banner.png)
 
-Bring Claude Code-style autonomous sub-agents to pi. Spawn specialized agents, enforce budgets, chain them with structured handoffs, swarm agents together, and watch a rich interactive TUI dashboard render their progress in real time.
+# 🤖 @onlinechefgroep/pi-agent-orchestrator
+
+**Autonomous sub-agents + cinematic TUI dashboard + swarm coordination for the Pi coding agent**
+
+---
+
+</div>
+
+Bring Claude Code-style autonomous sub-agents to Pi. Spawn specialized agents, enforce budgets, chain them with structured handoffs, swarm agents together, and watch a rich interactive TUI dashboard render their progress in real time.
 
 [![Tests](https://img.shields.io/badge/tests-659%2F659-green)](https://github.com/OnlineChefGroep/pi-agent-orchestrator)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)](https://www.typescriptlang.org/)
@@ -105,6 +113,8 @@ Output findings as a markdown list with severity (Critical / High / Medium / Low
 
 The cinematic dashboard is an **optional** Go Bubble Tea application that renders agent status in real time with animated backgrounds.
 
+![Cinematic Dashboard Preview](docs/images/dashboard_preview.png)
+
 ### Installation
 
 The TUI sidecar is now a separate package: **[@onlinechefgroep/pi-subagents-tui](https://github.com/OnlineChefGroep/pi-subagents-tui)**
@@ -148,6 +158,8 @@ Settings are managed via pi's settings UI or `pi settings` CLI:
 ---
 
 ## Architecture
+
+![Pi Agent Orchestrator Architecture](docs/images/orchestrator_architecture.png)
 
 ```
 pi host
