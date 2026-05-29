@@ -82,14 +82,14 @@ export function pruneOldToolOutputs(
 
     // Never remove user messages
     if (msg.role === "user") {
-      result.unshift(msg);
+      result.push(msg);
       continue;
     }
 
     if (msg.role === "assistant") {
       assistantSeen++;
       // Assistant messages are always kept (even from old turns)
-      result.unshift(msg);
+      result.push(msg);
       continue;
     }
 
@@ -101,12 +101,12 @@ export function pruneOldToolOutputs(
     // The tool result belongs to turn (assistantSeen + 1) from the end,
     // which should be kept when (assistantSeen + 1) ≤ keepTurns → assistantSeen < keepTurns.
     if (assistantSeen < keepTurns) {
-      result.unshift(msg);
+      result.push(msg);
     }
     // else: skip — this tool output is from an old turn
   }
 
-  return result;
+  return result.reverse();
 }
 
 /**
