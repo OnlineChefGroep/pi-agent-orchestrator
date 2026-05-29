@@ -37,10 +37,29 @@ export interface CompactableMessage {
  * Rough heuristic: 1 token ≈ 4 characters for English text.
  */
 function estimateTokens(message: CompactableMessage): number {
-  const content = typeof message.content === "string"
-    ? message.content
-    : JSON.stringify(message.content);
-  return Math.ceil(content.length / 4);
+  let len = 0;
+  if (typeof message.content === "string") {
+    len = message.content.length;
+  } else if (Array.isArray(message.content)) {
+    for (let i = 0; i < message.content.length; i++) {
+      const c = message.content[i] as any;
+      if (c && c.type === "text" && typeof c.text === "string") {
+        len += c.text.length;
+      } else if (c && c.type === "tool_result" && typeof c.content === "string") {
+        len += c.content.length;
+      } else if (c && c.type === "tool_result" && Array.isArray(c.content)) {
+        // Simple recursion for nested content arrays
+        len += estimateTokens({ ...message, content: c.content }) * 4;
+      } else if (c && c.type === "tool_use" && c.input) {
+        len += JSON.stringify(c.input).length;
+      } else {
+        len += 50; // fast heuristic for other non-text blocks to avoid slow JSON stringify
+      }
+    }
+  } else {
+    len = JSON.stringify(message.content).length;
+  }
+  return Math.ceil(len / 4);
 }
 
 /**
