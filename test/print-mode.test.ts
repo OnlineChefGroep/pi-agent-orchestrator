@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/agent-runner.js", async () => {
-  const actual = await vi.importActual<typeof import("../src/agent-runner.js")>("../src/agent-runner.js");
-  return {
-    ...actual,
-    runAgent: vi.fn(),
-  };
-});
+vi.mock("../src/agent-runner.js", () => ({
+  runAgent: vi.fn(),
+  resumeAgent: vi.fn(),
+  steerAgent: vi.fn(),
+  getAgentConversation: vi.fn(),
+  getDefaultMaxTurns: vi.fn(),
+  getGraceTurns: vi.fn(),
+  normalizeMaxTurns: vi.fn((n: number | undefined) => n),
+  setDefaultMaxTurns: vi.fn(),
+  setGraceTurns: vi.fn(),
+}));
 
 import { runAgent } from "../src/agent-runner.js";
 import subagentsExtension from "../src/index.js";
