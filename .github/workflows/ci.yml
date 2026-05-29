@@ -45,7 +45,7 @@ jobs:
 
       - name: TypeScript typecheck
         if: matrix.peer-deps == 'latest'
-        run: npm run typecheck
+        run: npx tsc --noEmit
 
       - name: Lint
         if: matrix.peer-deps == 'latest'
