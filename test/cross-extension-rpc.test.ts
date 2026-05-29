@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { type EventBus, PROTOCOL_VERSION, type RpcDeps, registerRpcHandlers, resetRpcRateLimitsForTests, type SpawnCapable } from "../src/cross-extension-rpc.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getAuditLog, resetAuditLogger } from "../src/audit-logger.js";
+import { configureRateLimit, type EventBus, getRateLimitConfig, PROTOCOL_VERSION, type RpcDeps, registerRpcHandlers, resetRpcRateLimitsForTests, type SpawnCapable } from "../src/cross-extension-rpc.js";
 
 /** Simple in-process event bus for testing. */
 function createEventBus(): EventBus {
@@ -24,10 +25,15 @@ describe("cross-extension RPC", () => {
 
   beforeEach(() => {
     resetRpcRateLimitsForTests();
+    resetAuditLogger();
     events = createEventBus();
     manager = { spawn: vi.fn().mockReturnValue("agent-42"), abort: vi.fn().mockReturnValue(true) };
     ctx = { session: true };
     deps = { events, pi: { events }, getCtx: () => ctx, manager };
+  });
+
+  afterEach(() => {
+    resetAuditLogger();
   });
 
   // --- ping ---
@@ -390,6 +396,209 @@ describe("cross-extension RPC", () => {
       expect(call.success).toBe(false);
       expect(call.error).toMatch(/modelRegistry is unavailable/);
       expect(manager.spawn).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- configurable rate limiting ---
+
+  describe("configurable rate limiting", () => {
+    it("respects custom maxPerWindow via configureRateLimit", async () => {
+      configureRateLimit({ maxPerWindow: 2 });
+      deps = { ...deps, authProvider: vi.fn().mockReturnValue({ extensionId: "cfg-ext" }) };
+      registerRpcHandlers(deps);
+
+      // First 2 should succeed.
+      for (let i = 0; i < 2; i++) {
+        events.emit("subagents:rpc:spawn", {
+          requestId: `cfg-${i}`, type: "general-purpose", prompt: "x",
+        });
+      }
+
+      // Third should be rate limited.
+      const reply = vi.fn();
+      events.on("subagents:rpc:spawn:reply:cfg-blocked", reply);
+      events.emit("subagents:rpc:spawn", {
+        requestId: "cfg-blocked", type: "general-purpose", prompt: "x",
+      });
+
+      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
+      expect(reply).toHaveBeenCalledWith({
+        success: false, error: "Rate limit exceeded for extension cfg-ext",
+      });
+    });
+
+    it("applies rateLimit config from RpcDeps at registration", async () => {
+      deps = {
+        ...deps,
+        authProvider: vi.fn().mockReturnValue({ extensionId: "dep-ext" }),
+        rateLimit: { maxPerWindow: 1 },
+      };
+      registerRpcHandlers(deps);
+
+      // First spawn succeeds.
+      const reply1 = vi.fn();
+      events.on("subagents:rpc:spawn:reply:dep-1", reply1);
+      events.emit("subagents:rpc:spawn", {
+        requestId: "dep-1", type: "general-purpose", prompt: "x",
+      });
+      await vi.waitFor(() => expect(reply1).toHaveBeenCalled());
+      expect(reply1).toHaveBeenCalledWith({ success: true, data: { id: "agent-42" } });
+
+      // Second spawn is rate limited.
+      const reply2 = vi.fn();
+      events.on("subagents:rpc:spawn:reply:dep-2", reply2);
+      events.emit("subagents:rpc:spawn", {
+        requestId: "dep-2", type: "general-purpose", prompt: "x",
+      });
+      await vi.waitFor(() => expect(reply2).toHaveBeenCalled());
+      expect(reply2).toHaveBeenCalledWith({
+        success: false, error: "Rate limit exceeded for extension dep-ext",
+      });
+    });
+
+    it("getRateLimitConfig returns current effective values", () => {
+      expect(getRateLimitConfig()).toEqual({ windowMs: 60_000, maxPerWindow: 10 });
+      configureRateLimit({ windowMs: 5000, maxPerWindow: 3 });
+      expect(getRateLimitConfig()).toEqual({ windowMs: 5000, maxPerWindow: 3 });
+    });
+
+    it("resetRpcRateLimitsForTests restores defaults", () => {
+      configureRateLimit({ windowMs: 1000, maxPerWindow: 1 });
+      resetRpcRateLimitsForTests();
+      expect(getRateLimitConfig()).toEqual({ windowMs: 60_000, maxPerWindow: 10 });
+    });
+  });
+
+  // --- audit trail integration ---
+
+  describe("audit trail", () => {
+    it("records an audit entry for successful ping", async () => {
+      registerRpcHandlers(deps);
+      const reply = vi.fn();
+      events.on("subagents:rpc:ping:reply:aud-p1", reply);
+      events.emit("subagents:rpc:ping", { requestId: "aud-p1" });
+
+      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
+      const log = getAuditLog();
+      expect(log).toHaveLength(1);
+      expect(log[0].operation).toBe("ping");
+      expect(log[0].outcome).toBe("success");
+      expect(log[0].extensionId).toBe("legacy");
+      expect(log[0].durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it("records an audit entry for successful spawn", async () => {
+      deps = { ...deps, authProvider: vi.fn().mockReturnValue({ extensionId: "aud-ext", extensionName: "AuditTest" }) };
+      registerRpcHandlers(deps);
+      const reply = vi.fn();
+      events.on("subagents:rpc:spawn:reply:aud-s1", reply);
+      events.emit("subagents:rpc:spawn", {
+        requestId: "aud-s1", type: "Explore", prompt: "audit test",
+      });
+
+      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
+      const log = getAuditLog();
+      expect(log).toHaveLength(1);
+      expect(log[0].operation).toBe("spawn");
+      expect(log[0].outcome).toBe("success");
+      expect(log[0].extensionId).toBe("aud-ext");
+      expect(log[0].extensionName).toBe("AuditTest");
+    });
+
+    it("records an audit entry for successful stop", async () => {
+      registerRpcHandlers(deps);
+      const reply = vi.fn();
+      events.on("subagents:rpc:stop:reply:aud-st1", reply);
+      events.emit("subagents:rpc:stop", { requestId: "aud-st1", agentId: "agent-42" });
+
+      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
+      const log = getAuditLog();
+      expect(log).toHaveLength(1);
+      expect(log[0].operation).toBe("stop");
+      expect(log[0].outcome).toBe("success");
+    });
+
+    it("records error outcome when spawn fails", async () => {
+      ctx = undefined;
+      registerRpcHandlers(deps);
+      const reply = vi.fn();
+      events.on("subagents:rpc:spawn:reply:aud-err", reply);
+      events.emit("subagents:rpc:spawn", {
+        requestId: "aud-err", type: "general-purpose", prompt: "x",
+      });
+
+      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
+      const log = getAuditLog();
+      expect(log).toHaveLength(1);
+      expect(log[0].outcome).toBe("error");
+      expect(log[0].metadata?.error).toBe("No active session");
+    });
+
+    it("records rate_limited outcome", async () => {
+      configureRateLimit({ maxPerWindow: 1 });
+      deps = { ...deps, authProvider: vi.fn().mockReturnValue({ extensionId: "rl-ext" }) };
+      registerRpcHandlers(deps);
+
+      // First request consumes the single allowed slot.
+      events.emit("subagents:rpc:spawn", {
+        requestId: "aud-rl0", type: "general-purpose", prompt: "x",
+      });
+      // Second hits the limit.
+      const reply = vi.fn();
+      events.on("subagents:rpc:spawn:reply:aud-rl1", reply);
+      events.emit("subagents:rpc:spawn", {
+        requestId: "aud-rl1", type: "general-purpose", prompt: "x",
+      });
+
+      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
+      const log = getAuditLog();
+      const rateLimited = log.filter((e) => e.outcome === "rate_limited");
+      expect(rateLimited).toHaveLength(1);
+      expect(rateLimited[0].extensionId).toBe("rl-ext");
+    });
+
+    it("records unauthorized outcome", async () => {
+      deps = { ...deps, authProvider: vi.fn().mockReturnValue(undefined) };
+      registerRpcHandlers(deps);
+      const reply = vi.fn();
+      events.on("subagents:rpc:spawn:reply:aud-unauth", reply);
+      events.emit("subagents:rpc:spawn", {
+        requestId: "aud-unauth", type: "general-purpose", prompt: "x",
+      });
+
+      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
+      const log = getAuditLog();
+      expect(log).toHaveLength(1);
+      expect(log[0].outcome).toBe("unauthorized");
+    });
+
+    it("accumulates entries across multiple RPC calls", async () => {
+      registerRpcHandlers(deps);
+
+      // Ping
+      const pingReply = vi.fn();
+      events.on("subagents:rpc:ping:reply:multi-1", pingReply);
+      events.emit("subagents:rpc:ping", { requestId: "multi-1" });
+      await vi.waitFor(() => expect(pingReply).toHaveBeenCalled());
+
+      // Spawn
+      const spawnReply = vi.fn();
+      events.on("subagents:rpc:spawn:reply:multi-2", spawnReply);
+      events.emit("subagents:rpc:spawn", {
+        requestId: "multi-2", type: "general-purpose", prompt: "x",
+      });
+      await vi.waitFor(() => expect(spawnReply).toHaveBeenCalled());
+
+      // Stop
+      const stopReply = vi.fn();
+      events.on("subagents:rpc:stop:reply:multi-3", stopReply);
+      events.emit("subagents:rpc:stop", { requestId: "multi-3", agentId: "agent-42" });
+      await vi.waitFor(() => expect(stopReply).toHaveBeenCalled());
+
+      const log = getAuditLog();
+      expect(log).toHaveLength(3);
+      expect(log.map((e) => e.operation)).toEqual(["ping", "spawn", "stop"]);
+      expect(log.every((e) => e.outcome === "success")).toBe(true);
     });
   });
 });

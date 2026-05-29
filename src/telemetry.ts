@@ -12,6 +12,15 @@ export interface TelemetryEvents {
   "agent:unknown-tools": { name: string; tools: string[] };
   "agent:spawned": { type: string; parentType?: string; depth: number; budget?: number };
   "agent:completed": { type: string; duration: number; validatorResults?: { passed: boolean; summary: string }[] };
+  "rpc:audit": {
+    timestamp: string;
+    extensionId: string;
+    extensionName?: string;
+    operation: string;
+    outcome: string;
+    durationMs: number;
+    metadata?: Record<string, unknown>;
+  };
 }
 
 /** Event names as a union type */

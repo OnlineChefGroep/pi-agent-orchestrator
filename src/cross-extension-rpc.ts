@@ -9,7 +9,7 @@
  *   error   → { success: false, error: string }
  */
 
-import { logger } from "./logger.js";
+import { type AuditOutcome, recordAudit } from "./audit-logger.js";
 import { type ModelRegistry, resolveModel } from "./model-resolver.js";
 
 /** Minimal event bus interface needed by the RPC handlers. */
@@ -57,30 +57,54 @@ export interface SubagentsRpcClient {
   stop(request: StopRpcRequest): Promise<void>;
 }
 
-// CVE-003 FIX: Simple rate limiter for RPC calls
+// ---------------------------------------------------------------------------
+// Rate limiter — configurable window and max via RateLimitConfig
+// ---------------------------------------------------------------------------
+
 interface RateLimitEntry {
   count: number;
   resetAt: number;
 }
 
-const RATE_LIMIT_WINDOW = 60000;  // 1 minute
-const RATE_LIMIT_MAX = 10;        // Max 10 spawns per minute per extension
+/** Tunables for the per-extension rate limiter. */
+export interface RateLimitConfig {
+  /** Sliding window size in milliseconds (default 60 000 — one minute). */
+  windowMs?: number;
+  /** Maximum calls per window per extension+operation (default 10). */
+  maxPerWindow?: number;
+}
+
+const DEFAULT_RATE_LIMIT_WINDOW = 60_000;
+const DEFAULT_RATE_LIMIT_MAX = 10;
+
+let rateLimitWindow = DEFAULT_RATE_LIMIT_WINDOW;
+let rateLimitMax = DEFAULT_RATE_LIMIT_MAX;
 const rateLimitMap = new Map<string, RateLimitEntry>();
+
+/** Apply rate-limit configuration. Safe to call multiple times. */
+export function configureRateLimit(config: RateLimitConfig): void {
+  if (config.windowMs !== undefined && config.windowMs > 0) {
+    rateLimitWindow = config.windowMs;
+  }
+  if (config.maxPerWindow !== undefined && config.maxPerWindow > 0) {
+    rateLimitMax = config.maxPerWindow;
+  }
+}
 
 function checkRateLimit(extensionId: string, operation: string): boolean {
   const now = Date.now();
   const key = `${extensionId}:${operation}`;
   const entry = rateLimitMap.get(key);
-  
+
   if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    rateLimitMap.set(key, { count: 1, resetAt: now + rateLimitWindow });
     return true;
   }
-  
-  if (entry.count >= RATE_LIMIT_MAX) {
+
+  if (entry.count >= rateLimitMax) {
     return false;
   }
-  
+
   entry.count++;
   return true;
 }
@@ -93,11 +117,18 @@ const rateLimitCleanup = setInterval(() => {
       rateLimitMap.delete(key);
     }
   }
-}, 60000);
+}, 60_000);
 rateLimitCleanup.unref?.();
 
 export function resetRpcRateLimitsForTests(): void {
   rateLimitMap.clear();
+  rateLimitWindow = DEFAULT_RATE_LIMIT_WINDOW;
+  rateLimitMax = DEFAULT_RATE_LIMIT_MAX;
+}
+
+/** Return current effective rate-limit settings (useful in tests & diagnostics). */
+export function getRateLimitConfig(): Required<RateLimitConfig> {
+  return { windowMs: rateLimitWindow, maxPerWindow: rateLimitMax };
 }
 
 export interface RpcDeps {
@@ -106,6 +137,8 @@ export interface RpcDeps {
   getCtx: () => unknown | undefined;  // returns current ExtensionContext
   manager: SpawnCapable;
   authProvider?: (requestId: string) => AuthContext | undefined;
+  /** Optional rate-limit tunables applied at registration time. */
+  rateLimit?: RateLimitConfig;
 }
 
 export interface RpcHandle {
@@ -200,6 +233,55 @@ function authorizeRpcMutation(deps: RpcDeps, requestId: string, operation: strin
   return auth;
 }
 
+// ---------------------------------------------------------------------------
+// Audit-trail helper — wraps an RPC handler to capture outcome and duration.
+// ---------------------------------------------------------------------------
+
+type AuditableOperation = "ping" | "spawn" | "stop";
+
+function auditedRpc<P extends { requestId: string }>(
+  deps: RpcDeps,
+  operation: AuditableOperation,
+  fn: (params: P) => { auth: AuthContext; result: unknown | Promise<unknown> },
+): (params: P) => unknown | Promise<unknown> {
+  return async (params: P) => {
+    const start = Date.now();
+    let outcome: AuditOutcome = "success";
+    // Eagerly resolve caller identity so the audit entry is attributed
+    // even when the handler throws (rate-limit, unauthorized, etc.).
+    let auth: AuthContext;
+    try {
+      auth = resolveAuth(deps, params.requestId);
+    } catch {
+      auth = { extensionId: "unknown" };
+    }
+    let metadata: Record<string, unknown> | undefined;
+    try {
+      const out = fn(params);
+      auth = out.auth;
+      const result = await out.result;
+      return result;
+    } catch (err: any) {
+      const msg: string = err?.message ?? String(err);
+      if (msg.includes("Rate limit exceeded")) outcome = "rate_limited";
+      else if (msg.includes("Unauthorized")) outcome = "unauthorized";
+      else outcome = "error";
+      metadata = { error: msg };
+      throw err;
+    } finally {
+      recordAudit({
+        timestamp: new Date().toISOString(),
+        extensionId: auth.extensionId,
+        extensionName: auth.extensionName,
+        operation,
+        outcome,
+        durationMs: Date.now() - start,
+        metadata,
+      });
+    }
+  };
+}
+
 /**
  * Register ping, spawn, and stop RPC handlers on the event bus.
  * Returns unsub functions for cleanup.
@@ -207,51 +289,65 @@ function authorizeRpcMutation(deps: RpcDeps, requestId: string, operation: strin
 export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
   const { events, pi, getCtx, manager } = deps;
 
-  const unsubPing = handleRpc(events, "subagents:rpc:ping", () => {
-    return { version: PROTOCOL_VERSION };
-  });
+  // Apply caller-provided rate-limit tunables (if any).
+  if (deps.rateLimit) configureRateLimit(deps.rateLimit);
+
+  const unsubPing = handleRpc(
+    events,
+    "subagents:rpc:ping",
+    auditedRpc<{ requestId: string }>(deps, "ping", ({ requestId }) => {
+      const auth = resolveAuth(deps, requestId);
+      return { auth, result: { version: PROTOCOL_VERSION } };
+    }),
+  );
 
   const unsubSpawn = handleRpc<{ requestId: string; type: string; prompt: string; options?: any; authContext?: AuthContext }>(
-    events, "subagents:rpc:spawn", ({ requestId, type, prompt, options }) => {
-      const ctx = getCtx();
-      if (!ctx) throw new Error("No active session");
-      
-      const auth = authorizeRpcMutation(deps, requestId, "spawn");
-      logger.info("rpc spawn", { extensionId: auth.extensionId, type });
+    events,
+    "subagents:rpc:spawn",
+    auditedRpc<{ requestId: string; type: string; prompt: string; options?: any; authContext?: AuthContext }>(
+      deps,
+      "spawn",
+      ({ requestId, type, prompt, options }) => {
+        const ctx = getCtx();
+        if (!ctx) throw new Error("No active session");
 
-      // Cross-extension RPC callers (e.g. pi-tasks TaskExecute) naturally
-      // forward serializable values, so options.model can be a string like
-      // "openai-codex/gpt-5.5". Resolve it to a real Model instance here
-      // — same pattern the scheduler path already uses — so the spawned
-      // agent's auth lookup doesn't crash with "No API key found for
-      // undefined".
-      let normalizedOptions = options ?? {};
-      if (typeof normalizedOptions.model === "string") {
-        const registry = (ctx as { modelRegistry?: ModelRegistry }).modelRegistry;
-        if (!registry) {
-          throw new Error(
-            `Model override "${normalizedOptions.model}" provided but ctx.modelRegistry is unavailable`,
-          );
-        }
-        const resolved = resolveModel(normalizedOptions.model, registry);
-        if (typeof resolved === "string") {
-          // resolveModel returns a human-readable error string when the
-          // input doesn't match any available model. Surface it instead of
-          // silently falling back so the caller sees the auth/typo issue.
-          throw new Error(resolved);
-        }
-        normalizedOptions = { ...normalizedOptions, model: resolved };
-      }
+        const auth = authorizeRpcMutation(deps, requestId, "spawn");
 
-      return { id: manager.spawn(pi, ctx, type, prompt, normalizedOptions) };
-    },
+        // Cross-extension RPC callers (e.g. pi-tasks TaskExecute) naturally
+        // forward serializable values, so options.model can be a string like
+        // "openai-codex/gpt-5.5". Resolve it to a real Model instance here
+        // — same pattern the scheduler path already uses — so the spawned
+        // agent's auth lookup doesn't crash with "No API key found for
+        // undefined".
+        let normalizedOptions = options ?? {};
+        if (typeof normalizedOptions.model === "string") {
+          const registry = (ctx as { modelRegistry?: ModelRegistry }).modelRegistry;
+          if (!registry) {
+            throw new Error(
+              `Model override "${normalizedOptions.model}" provided but ctx.modelRegistry is unavailable`,
+            );
+          }
+          const resolved = resolveModel(normalizedOptions.model, registry);
+          if (typeof resolved === "string") {
+            throw new Error(resolved);
+          }
+          normalizedOptions = { ...normalizedOptions, model: resolved };
+        }
+
+        const id = manager.spawn(pi, ctx, type, prompt, normalizedOptions);
+        return { auth, result: { id } };
+      },
+    ),
   );
 
   const unsubStop = handleRpc<{ requestId: string; agentId: string }>(
-    events, "subagents:rpc:stop", ({ requestId, agentId }) => {
-      authorizeRpcMutation(deps, requestId, "stop");
+    events,
+    "subagents:rpc:stop",
+    auditedRpc<{ requestId: string; agentId: string }>(deps, "stop", ({ requestId, agentId }) => {
+      const auth = authorizeRpcMutation(deps, requestId, "stop");
       if (!manager.abort(agentId)) throw new Error("Agent not found");
-    },
+      return { auth, result: undefined };
+    }),
   );
 
   return { unsubPing, unsubSpawn, unsubStop };
