@@ -50,7 +50,7 @@ function estimateTokens(message: CompactableMessage): number {
       } else if (c && c.type === "tool_result" && Array.isArray(c.content)) {
         // Simple recursion for nested content arrays
         len += estimateTokens({ ...message, content: c.content }) * 4;
-      } else if (c && c.type === "tool_use" && c.input) {
+      } else if (c && c.type === "tool_use" && c.input != null) {
         len += JSON.stringify(c.input).length;
       } else {
         len += 50; // fast heuristic for other non-text blocks to avoid slow JSON stringify
