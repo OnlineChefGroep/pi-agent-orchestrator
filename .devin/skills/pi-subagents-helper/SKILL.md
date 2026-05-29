@@ -1,3 +1,8 @@
+---
+name: pi-subagents-helper
+description: "Use when working on the pi-subagents extension codebase: swarm coordination, agent dashboard TUI, debugging test failures, PR review, or navigating the agent management system."
+---
+
 # Pi-Subagents Helper
 
 ## Purpose
