@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { reloadCustomAgents } from "../agent-registry.js";
 import type { AgentConfig } from "../types.js";
 import { findAgentFile, personalAgentsDir, projectAgentsDir } from "./agent-file-helpers.js";

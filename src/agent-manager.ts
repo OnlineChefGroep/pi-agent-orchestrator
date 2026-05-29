@@ -11,8 +11,8 @@ import { randomUUID } from "node:crypto";
 
 export const activeAgentStorage = new AsyncLocalStorage<string>();
 
-import type { Model } from "@mariozechner/pi-ai";
-import type { AgentSession, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { Model } from "@earendil-works/pi-ai";
+import type { AgentSession, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { resumeAgent, runAgent, type ToolActivity } from "./agent-runner.js";
 import { getConfig } from "./agent-types.js";
 import { type HookRegistry } from "./hooks.js";

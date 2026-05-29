@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { getAgentDir } from "@mariozechner/pi-coding-agent";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getModelLabelFromConfig } from "../agent-registry.js";
 import { getAgentConfig } from "../agent-types.js";
 import type { ModelRegistry } from "../model-resolver.js";

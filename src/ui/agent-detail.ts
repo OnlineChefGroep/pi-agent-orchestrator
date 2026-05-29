@@ -1,5 +1,5 @@
 import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { reloadCustomAgents } from "../agent-registry.js";
 import { getAgentConfig } from "../agent-types.js";
 import { disableAgent, ejectAgent, enableAgent } from "./agent-actions.js";

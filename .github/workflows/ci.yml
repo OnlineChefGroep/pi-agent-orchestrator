@@ -14,14 +14,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        node: [20, 22]
+        node: [22, 24]
         peer-deps: [lowest, latest]
         exclude:
           # Reduce CI minutes: only test lowest peer deps on ubuntu + node 20
           - peer-deps: lowest
             os: windows-latest
           - peer-deps: lowest
-            node: 22
+            node: 24
     steps:
       - uses: actions/checkout@v6
 
@@ -39,9 +39,9 @@ jobs:
         run: |
           npm ci
           npm install --no-save --legacy-peer-deps \
-            @mariozechner/pi-ai@0.72.0 \
-            @mariozechner/pi-coding-agent@0.72.0 \
-            @mariozechner/pi-tui@0.72.0
+            @earendil-works/pi-ai@0.72.0 \
+            @earendil-works/pi-coding-agent@0.72.0 \
+            @earendil-works/pi-tui@0.72.0
 
       - name: TypeScript typecheck
         if: matrix.peer-deps == 'latest'

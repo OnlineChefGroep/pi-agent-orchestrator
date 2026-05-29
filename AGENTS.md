@@ -11,7 +11,7 @@ npm test -- --watch                             # watch mode
 
 ## Project nature
 
-This is a **pi extension** — it runs inside a pi coding agent host, not standalone. The three peer dependencies (`@mariozechner/pi-ai`, `@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`) are the host platform and are never direct dependencies. The entry point is declared in `package.json` → `pi.extensions` as `./src/index.ts`.
+This is a **pi extension** — it runs inside a pi coding agent host, not standalone. The three peer dependencies (`@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`) are the host platform and are never direct dependencies. The entry point is declared in `package.json` → `pi.extensions` as `./src/index.ts`.
 
 Published to **GitHub Packages** (`npm.pkg.github.com`), not npmjs.
 
