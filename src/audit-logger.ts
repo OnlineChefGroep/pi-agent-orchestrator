@@ -59,7 +59,7 @@ let silent = false;
 
 /** (Re)configure the audit logger.  Safe to call multiple times. */
 export function configureAuditLogger(config: AuditLoggerConfig): void {
-  if (config.maxEntries !== undefined && config.maxEntries > 0) {
+  if (config.maxEntries !== undefined && Number.isFinite(config.maxEntries) && config.maxEntries > 0) {
     maxEntries = config.maxEntries;
   }
   if (config.silent !== undefined) {
@@ -73,8 +73,15 @@ export function configureAuditLogger(config: AuditLoggerConfig): void {
 
 /** Record a completed RPC call. */
 export function recordAudit(entry: AuditEntry): void {
+  // Shallow-copy entry + deep-copy metadata so external mutation cannot
+  // alter the buffered record or vice-versa.
+  const stored: AuditEntry = {
+    ...entry,
+    ...(entry.metadata ? { metadata: { ...entry.metadata } } : {}),
+  };
+
   // Append to ring buffer.
-  entries.push(entry);
+  entries.push(stored);
   if (entries.length > maxEntries) {
     entries.shift();
   }
@@ -83,6 +90,7 @@ export function recordAudit(entry: AuditEntry): void {
   if (!silent) {
     const level = entry.outcome === "success" ? "info" : "warn";
     logger[level](`rpc:${entry.operation} ${entry.outcome}`, {
+      // Spread metadata first so trusted fields cannot be spoofed.
       ...(entry.metadata ?? {}),
       extensionId: entry.extensionId,
       ...(entry.extensionName ? { extensionName: entry.extensionName } : {}),
@@ -90,8 +98,11 @@ export function recordAudit(entry: AuditEntry): void {
     });
   }
 
-  // Emit as telemetry so external consumers can subscribe.
-  emitTelemetry("rpc:audit", entry);
+  // Emit a separate copy so telemetry subscribers cannot mutate the buffer.
+  emitTelemetry("rpc:audit", {
+    ...stored,
+    ...(stored.metadata ? { metadata: { ...stored.metadata } } : {}),
+  });
 }
 
 /** Return a shallow copy of the current audit log (oldest → newest). */

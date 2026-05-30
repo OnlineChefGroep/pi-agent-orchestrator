@@ -12,6 +12,22 @@
 import { type AuditOutcome, recordAudit } from "./audit-logger.js";
 import { type ModelRegistry, resolveModel } from "./model-resolver.js";
 
+// ---------------------------------------------------------------------------
+// Typed RPC errors — used by auditedRpc to classify outcomes without
+// fragile string matching.
+// ---------------------------------------------------------------------------
+
+export type RpcErrorCode = "RATE_LIMITED" | "UNAUTHORIZED" | "ERROR";
+
+export class RpcError extends Error {
+  readonly code: RpcErrorCode;
+  constructor(code: RpcErrorCode, message: string) {
+    super(message);
+    this.name = "RpcError";
+    this.code = code;
+  }
+}
+
 /** Minimal event bus interface needed by the RPC handlers. */
 export interface EventBus {
   on(event: string, handler: (data: unknown) => void): () => void;
@@ -83,11 +99,26 @@ const rateLimitMap = new Map<string, RateLimitEntry>();
 
 /** Apply rate-limit configuration. Safe to call multiple times. */
 export function configureRateLimit(config: RateLimitConfig): void {
+  let windowChanged = false;
   if (config.windowMs !== undefined && config.windowMs > 0) {
     rateLimitWindow = config.windowMs;
+    windowChanged = true;
   }
   if (config.maxPerWindow !== undefined && config.maxPerWindow > 0) {
     rateLimitMax = config.maxPerWindow;
+  }
+  // Restart cleanup timer when the window changes so the interval stays aligned.
+  if (windowChanged) {
+    clearInterval(rateLimitCleanup);
+    rateLimitCleanup = setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of rateLimitMap.entries()) {
+        if (now > entry.resetAt) {
+          rateLimitMap.delete(key);
+        }
+      }
+    }, Math.max(1_000, Math.floor(rateLimitWindow / 2)));
+    rateLimitCleanup.unref?.();
   }
 }
 
@@ -110,14 +141,16 @@ function checkRateLimit(extensionId: string, operation: string): boolean {
 }
 
 // Clean up old rate limit entries periodically.
-const rateLimitCleanup = setInterval(() => {
+// Derive interval from the configured window so expired entries don't linger
+// when the window is shorter than the old hardcoded 60 s.
+let rateLimitCleanup = setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of rateLimitMap.entries()) {
     if (now > entry.resetAt) {
       rateLimitMap.delete(key);
     }
   }
-}, 60_000);
+}, Math.max(1_000, Math.floor(rateLimitWindow / 2)));
 rateLimitCleanup.unref?.();
 
 export function resetRpcRateLimitsForTests(): void {
@@ -220,7 +253,7 @@ function resolveAuth(deps: RpcDeps, requestId: string): AuthContext {
 
   const auth = deps.authProvider(requestId);
   if (!auth?.extensionId) {
-    throw new Error("Unauthorized RPC request");
+    throw new RpcError("UNAUTHORIZED", "Unauthorized RPC request");
   }
   return auth;
 }
@@ -228,7 +261,7 @@ function resolveAuth(deps: RpcDeps, requestId: string): AuthContext {
 function authorizeRpcMutation(deps: RpcDeps, requestId: string, operation: string): AuthContext {
   const auth = resolveAuth(deps, requestId);
   if (!checkRateLimit(auth.extensionId, operation)) {
-    throw new Error(`Rate limit exceeded for extension ${auth.extensionId}`);
+    throw new RpcError("RATE_LIMITED", `Rate limit exceeded for extension ${auth.extensionId}`);
   }
   return auth;
 }
@@ -261,12 +294,13 @@ function auditedRpc<P extends { requestId: string }>(
       auth = out.auth;
       const result = await out.result;
       return result;
-    } catch (err: any) {
-      const msg: string = err?.message ?? String(err);
-      if (msg.includes("Rate limit exceeded")) outcome = "rate_limited";
-      else if (msg.includes("Unauthorized")) outcome = "unauthorized";
-      else outcome = "error";
-      metadata = { error: msg };
+    } catch (err: unknown) {
+      if (err instanceof RpcError) {
+        outcome = err.code === "RATE_LIMITED" ? "rate_limited" : "unauthorized";
+      } else {
+        outcome = "error";
+      }
+      metadata = { error: err instanceof Error ? err.message : String(err) };
       throw err;
     } finally {
       recordAudit({
@@ -285,6 +319,13 @@ function auditedRpc<P extends { requestId: string }>(
 /**
  * Register ping, spawn, and stop RPC handlers on the event bus.
  * Returns unsub functions for cleanup.
+ *
+ * **Global rate-limit state:** Calling this function with `deps.rateLimit` will
+ * mutate module-level globals (`rateLimitWindow`, `rateLimitMax`) via
+ * {@link configureRateLimit}. Multiple registrations in the same process share
+ * and override these settings — the last registration wins. This is intentional
+ * for the expected single-registration pattern; callers registering multiple
+ * times should be aware of the side effect.
  */
 export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
   const { events, pi, getCtx, manager } = deps;
