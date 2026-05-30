@@ -61,6 +61,7 @@ When a function claims to store a copy (shallow or deep), write an adversarial t
 4. This test should FAIL if the copy is removed — that's what makes it adversarial
 
 Example for `recordAudit()`:
+
 ```typescript
 const entry = { extensionId: "original", outcome: "success", ... };
 recordAudit(entry);
