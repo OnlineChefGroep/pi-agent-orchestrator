@@ -37,18 +37,24 @@ Stop/no-op and comment with the blocking reason when the fix requires human judg
 
 ## Repair categories
 
-| Category                                                                                                | Posture                                                                                            |
-| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Formatting, lint, typecheck, snapshots, generated fixtures, and lockfile drift                          | Fix and push.                                                                                      |
-| Failing unit/integration tests where PR intent or documented behavior makes the expected behavior clear | Fix implementation or update tests, then push.                                                     |
-| E2E failures with clear evidence from traces, logs, repo behavior, or changed stable selectors          | Fix app code or tests, then push.                                                                  |
-| CI/workflow syntax errors introduced by the PR                                                          | Fix and push.                                                                                      |
-| Simple generated/schema migrations needed by a clear schema/model change                                | Generate or add them and push when the devbox has the required tooling and permissions.            |
-| Flaky checks with strong flake evidence                                                                 | Rerun once when no repo change is needed, or push the narrowest stabilizing fix when one is clear. |
-| Ambiguous product intent, conflicting requirements, or unclear PR direction                             | Stop/no-op; comment if human action is needed.                                                     |
-| Secrets, provider config, CI project settings, or external service failures outside the repo            | Stop/no-op; comment if human action is needed.                                                     |
-| Dependency replacement or vulnerability/security choices                                                | Stop/no-op; comment if human action is needed.                                                     |
-| Production data migrations, backfills, or data-shape decisions                                          | Stop/no-op; comment if human action is needed.                                                     |
+| Category                                                                                                    | Posture                                                                                               |
+| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| TypeScript matrix job failures                                                                              | Fix type errors, config mismatches, or generated typing drift, then push.                             |
+| Biome lint failures                                                                                         | Apply the narrowest lint/format fix and push.                                                         |
+| Vitest failures                                                                                             | Fix clear regressions and push. For known flakes (`schedule.test.ts`, `schedule-store.test.ts`), rerun first or apply the narrowest stabilizing fix. |
+| Super-Linter failures                                                                                       | Fix failing lint/doc/style checks scoped to reported files, then push.                                |
+| CI/workflow syntax errors introduced by the PR                                                              | Fix and push.                                                                                          |
+| Flaky checks with strong flake evidence outside known flaky tests                                           | Rerun once when no repo change is needed, or push the narrowest stabilizing fix when one is clear.    |
+| Ambiguous product intent, conflicting requirements, or unclear PR direction                                 | Stop/no-op; comment if human action is needed.                                                        |
+| Secrets, provider config, CI project settings, or external service failures outside the repo               | Stop/no-op; comment if human action is needed.                                                        |
+| Dependency replacement or vulnerability/security choices                                                    | Stop/no-op; comment if human action is needed.                                                        |
+| Production data migrations, backfills, or data-shape decisions                                              | Stop/no-op; comment if human action is needed.                                                        |
+
+## Known flaky tests
+
+- `schedule.test.ts` and `schedule-store.test.ts` are known flaky candidates.
+- Prefer a rerun first when these are the only failing tests.
+- If stabilization is required, keep the change minimal and directly tied to the observed flake.
 
 ## Branch and concurrency safety
 

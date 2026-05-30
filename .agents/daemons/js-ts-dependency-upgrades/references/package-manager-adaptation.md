@@ -13,6 +13,17 @@ Use repository evidence to replace the `DAEMON.md` configuration placeholders be
 
 If multiple lockfiles exist, inspect recent commits and package scripts before choosing the configuration. If still ambiguous, stop and ask a human.
 
+## Current repository mapping (`pi-agent-orchestrator`)
+
+- package manager: `npm`
+- manifests: `package.json`
+- lockfile: `package-lock.json`
+- outdated scan: `npm outdated`
+- runtime update: `npm update <runtime-package>`
+- development update: `npm update <dev-package> --save-dev`
+- install/lockfile refresh: `npm install --package-lock-only` (fallback `npm install` if needed)
+- verification: `npm run typecheck && npm run lint && npm test`
+
 ## Configuration examples
 
 These examples are starting points. Replace them with repository-specific commands and only use commands that preserve the daemon's patch/minor policy. Do not use `@latest` or major-version update flags unless the daemon policy is explicitly expanded.
@@ -33,8 +44,8 @@ npm:
 <outdated-command> = npm outdated
 <runtime-update-command> = npm update <runtime-package>
 <development-update-command> = npm update <dev-package> --save-dev
-<install-command> = npm install --package-lock-only
-<verification-command> = npm test
+<install-command> = npm install --package-lock-only  # fallback: npm install
+<verification-command> = npm run typecheck && npm run lint && npm test
 ```
 
 Yarn:

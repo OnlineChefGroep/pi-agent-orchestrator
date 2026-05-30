@@ -7,7 +7,7 @@ routines:
   - Add unambiguous missing labels or post one compact repair proposal when labels conflict.
 deny:
   - Do not apply deprecated labels.
-  - Do not remove or replace existing labels unless the taxonomy explicitly allows that exact repair.
+  - Do not auto-remove reserved/system labels or labels applied by humans.
   - Do not change issue status, priority, assignee, project, cycle, estimate, due date, or body.
   - Do not guess between two plausible labels in the same required label family.
   - Do not repeat the same repair proposal for an unchanged conflict.
@@ -32,18 +32,29 @@ Default scope:
 
 Do not scan the entire workspace unless the daemon file is intentionally updated to do so.
 
+## Auto-add and removal policy
+
+- Auto-add families: `type`, `area`, `language`
+- Human-owned family: `effort` (never auto-apply)
+- Removal policy: add-only by default
+- Replacement exception: replace bot-managed labels only within mutually-exclusive families when confidence is high
+- Never auto-remove reserved/system labels or human-applied labels
+
 ## Decision policy
 
 Add a missing label when:
 
-- the label family is required by the taxonomy
+- the label family is required by the taxonomy and included in the auto-add families
 - exactly one label in that family is supported by issue evidence
 - the label is current, not deprecated
 - applying it does not conflict with existing labels
 
+When a mutually-exclusive family already has a bot-managed label, replacement is allowed only when evidence strongly supports a different label in that same family.
+
 Post a repair proposal instead of mutating when:
 
 - multiple labels in one family could apply
+- replacement would require removing a human-applied or reserved/system label
 - an issue has deprecated labels
 - existing labels conflict with the taxonomy
 - the issue body or title does not provide enough context

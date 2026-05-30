@@ -21,19 +21,20 @@ schedule: '0 8 * * 1'
 
 Use these repository-specific values:
 
-- Package manager: `<package-manager>`
-- Dependency manifests: `<manifest-globs>`
-- Lockfile: `<lockfile-path>`
-- Outdated scan: `<outdated-command>`
-- Runtime dependency update: `<runtime-update-command>`
-- Development dependency update: `<development-update-command>`
-- Install or lockfile refresh: `<install-command>`
+- Package manager: `npm`
+- Dependency manifests: `package.json`
+- Lockfile: `package-lock.json`
+- Outdated scan: `npm outdated`
+- Runtime dependency update: `npm update <runtime-package>`
+- Development dependency update: `npm update <dev-package> --save-dev`
+- Install or lockfile refresh: `npm install --package-lock-only` (fallback to `npm install` if lockfile-only refresh is insufficient)
 - Verification:
-  - `<verification-command>`
-- Runtime dependency branch: `daemon/deps-runtime-minor-patch`
-- Development dependency branch: `daemon/deps-dev-minor-patch`
-- Runtime dependency title: `deps: update runtime dependencies`
-- Development dependency title: `deps(dev): update development dependencies`
+  - `npm run typecheck && npm run lint && npm test`
+- Runtime dependency branch: `chore/deps-runtime-minor-patch`
+- Development dependency branch: `chore/deps-dev-minor-patch`
+- Runtime dependency title: `chore(deps): update runtime dependencies`
+- Development dependency title: `chore(deps): update development dependencies`
+- Default labels: `dependencies` (add `github_actions` only when workflow/action dependencies are changed)
 
 ## Update policy
 
@@ -56,6 +57,11 @@ Create or update at most two pull requests per run:
 2. development dependency patch/minor updates
 
 Use the configured branch and title for each dependency bucket.
+
+Apply labels per bucket pull request:
+
+- always add `dependencies`
+- add `github_actions` only when workflow/action dependencies are changed
 
 Each PR body must include:
 

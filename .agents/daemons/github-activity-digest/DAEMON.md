@@ -20,7 +20,19 @@ schedule: "0 15 * * 1-5"
 
 Use this repository-specific value:
 
-- Slack channel: `<slack_channel_name>`
+- Slack channel: `#engineering`
+
+## Duplicate-post detection
+
+Use a stable UTC-date digest key for idempotency:
+
+- `gh-digest:OnlineChefGroep/pi-agent-orchestrator:YYYY-MM-DD`
+
+Before posting, search recent `#engineering` channel history for that exact key.
+
+If the key already exists, skip posting.
+
+When posting a digest, include the key in the message so future runs can detect duplicates reliably.
 
 ## Scope
 

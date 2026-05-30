@@ -1,41 +1,51 @@
-# Label taxonomy template
+# Linear Label Taxonomy (CHEF)
 
-Replace this file with the team's actual Linear label taxonomy.
+Source: live labels from Linear workspace (team CHEF / ChefSheesh).
 
-## Required label families
+## Family: type (single-select)
+- Bug
+- Feature
+- Improvement
+- tech-debt
 
-Example required families:
+## Family: area (multi-select)
+- infrastructure
+- devops
+- automation
+- security
+- api
+- backend
+- frontend
+- database
+- docs
+- architecture
+- rag
+- agent
+- agent-skill
+- llm-prompt
+- skill-grinder
+- tui
+- web
 
-- `type/*`: what kind of work this is
-- `area/*`: product or system area
-- `source/*`: where the work originated
+## Family: language (multi-select)
+- typescript
+- python
+- go
+- powershell
 
-## Example labels
+## Family: effort (single-select, human-owned)
+- Effort: S
+- Effort: M
+- Effort: L
+- Effort: XL
 
-Types:
+## Reserved / system labels (do not auto-apply)
+- Devin Playbooks
+- !plan
+- !implement
+- !review
+- !triage
+- Migrated
 
-- `type/bug`
-- `type/feature`
-- `type/improvement`
-- `type/research`
-
-Areas:
-
-- `area/frontend`
-- `area/backend`
-- `area/platform`
-- `area/docs`
-
-Sources:
-
-- `source/customer`
-- `source/team-request`
-- `source/monitoring`
-
-## Deprecated labels
-
-List labels the daemon must never apply.
-
-```text
-deprecated/example
-```
+## Notes
+- For this repository, default area seed can be infrastructure; add others only with evidence from changed files or issue text.
