@@ -285,6 +285,13 @@ function auditedRpc<P extends { requestId: string }>(
 /**
  * Register ping, spawn, and stop RPC handlers on the event bus.
  * Returns unsub functions for cleanup.
+ *
+ * **Rate-limit side-effect:** When `deps.rateLimit` is provided, this function
+ * calls `configureRateLimit()` which mutates the module-level rate-limit state
+ * (`rateLimitWindow` / `rateLimitMax`).  These values are global — if
+ * `registerRpcHandlers` is called more than once in the same process with
+ * different configs, the last call wins.  This is intentional for the expected
+ * single-registration-per-extension lifecycle.
  */
 export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
   const { events, pi, getCtx, manager } = deps;

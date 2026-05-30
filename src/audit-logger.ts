@@ -73,8 +73,11 @@ export function configureAuditLogger(config: AuditLoggerConfig): void {
 
 /** Record a completed RPC call. */
 export function recordAudit(entry: AuditEntry): void {
+  // Shallow-copy so external mutation cannot alter buffered records.
+  const stored: AuditEntry = { ...entry };
+
   // Append to ring buffer.
-  entries.push(entry);
+  entries.push(stored);
   if (entries.length > maxEntries) {
     entries.shift();
   }
@@ -91,7 +94,7 @@ export function recordAudit(entry: AuditEntry): void {
   }
 
   // Emit as telemetry so external consumers can subscribe.
-  emitTelemetry("rpc:audit", entry);
+  emitTelemetry("rpc:audit", stored);
 }
 
 /** Return a shallow copy of the current audit log (oldest → newest). */
