@@ -475,7 +475,6 @@ import {
   configureRateLimit,
   createSubagentsRpcClient,
   type EventBus,
-  getRateLimitConfig,
   registerRpcHandlers,
   resetRpcRateLimitsForTests,
   type SpawnCapable,
@@ -546,15 +545,11 @@ describe("Performance: RPC audit & rate limiter", () => {
   );
 
   it(
-    "audit log filtering is fast with 500 entries",
+    "audit log filtering is fast with full 200-entry buffer",
     { timeout: 5000 },
     () => {
-      // Pre-fill the buffer with 500 entries
-      for (let i = 0; i < 500; i++) {
-        getAuditLog(); // ensure buffer exists
-      }
-      // Directly push entries via recordAudit (fast path)
-      for (let i = 0; i < 500; i++) {
+      // Fill the ring buffer to its default max (200 entries)
+      for (let i = 0; i < 200; i++) {
         recordAudit({
           timestamp: new Date().toISOString(),
           extensionId: i % 3 === 0 ? "ext-A" : i % 3 === 1 ? "ext-B" : "ext-C",
@@ -564,6 +559,8 @@ describe("Performance: RPC audit & rate limiter", () => {
         });
       }
 
+      expect(getAuditLog()).toHaveLength(200);
+
       const start = performance.now();
       const byOp = getAuditLogByOperation("spawn");
       const byExt = getAuditLogByExtension("ext-A");
@@ -571,24 +568,40 @@ describe("Performance: RPC audit & rate limiter", () => {
 
       expect(byOp.length).toBeGreaterThan(0);
       expect(byExt.length).toBeGreaterThan(0);
-      // Filtering 500 entries should be near-instant
+      // Filtering 200 entries should be near-instant
       expect(elapsed).toBeLessThan(10);
     },
   );
 
-  it("rate limiter check throughput — 10k checks under 50ms", () => {
-    configureRateLimit({ windowMs: 60_000, maxPerWindow: 1000 });
+  it(
+    "rate limiter check throughput — 100 RPC calls with high limit under 2s",
+    { timeout: 5000 },
+    async () => {
+      configureRateLimit({ windowMs: 60_000, maxPerWindow: 10_000 });
+      registerRpcHandlers({
+        events,
+        pi: {},
+        getCtx: () => ({ session: true }),
+        manager,
+        authProvider: () => ({ extensionId: "bench-rate" }),
+      });
 
-    // Access checkRateLimit indirectly through registerRpcHandlers + emit
-    // Instead, benchmark the getRateLimitConfig + configureRateLimit overhead
-    const start = performance.now();
-    for (let i = 0; i < 10_000; i++) {
-      getRateLimitConfig();
-    }
-    const elapsed = performance.now() - start;
+      const client = createSubagentsRpcClient(events);
 
-    expect(elapsed).toBeLessThan(50);
-  });
+      const start = performance.now();
+      for (let i = 0; i < 100; i++) {
+        await client.spawn({ type: "Explore", prompt: `rate-${i}` });
+      }
+      const elapsed = performance.now() - start;
+
+      // All should succeed (well under the 10k limit)
+      const log = getAuditLog();
+      const rateLimited = log.filter(e => e.outcome === "rate_limited");
+      expect(rateLimited).toHaveLength(0);
+      expect(log).toHaveLength(100);
+      expect(elapsed).toBeLessThan(2000);
+    },
+  );
 
   it("clearAuditLog on full buffer (200 entries) is instant", () => {
     for (let i = 0; i < 200; i++) {

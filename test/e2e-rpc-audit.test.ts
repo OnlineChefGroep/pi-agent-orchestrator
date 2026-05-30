@@ -110,7 +110,7 @@ describe("E2E: RPC audit logging & rate limiting", () => {
       }
     });
 
-    it("audit entry stored with deep-copied metadata", async () => {
+    it("consecutive calls produce independent audit entry objects", async () => {
       registerRpcHandlers({
         events,
         pi: {},
@@ -120,16 +120,13 @@ describe("E2E: RPC audit logging & rate limiting", () => {
 
       const client = createSubagentsRpcClient(events);
       await client.spawn({ type: "Explore", prompt: "test" });
+      await client.ping();
 
       const log = getAuditLog();
-      expect(log).toHaveLength(1);
+      expect(log).toHaveLength(2);
+      // Each entry is a distinct object (not the same reference)
+      expect(log[0]).not.toBe(log[1]);
       expect(log[0].extensionId).toBe("legacy");
-
-      // Two calls produce independent entry objects (not the same reference)
-      await client.ping();
-      const log2 = getAuditLog();
-      expect(log2).toHaveLength(2);
-      expect(log2[0]).not.toBe(log2[1]);
     });
   });
 

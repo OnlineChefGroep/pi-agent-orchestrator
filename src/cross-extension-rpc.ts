@@ -100,11 +100,11 @@ const rateLimitMap = new Map<string, RateLimitEntry>();
 /** Apply rate-limit configuration. Safe to call multiple times. */
 export function configureRateLimit(config: RateLimitConfig): void {
   let windowChanged = false;
-  if (config.windowMs !== undefined && config.windowMs > 0) {
+  if (config.windowMs !== undefined && Number.isFinite(config.windowMs) && config.windowMs > 0) {
     rateLimitWindow = config.windowMs;
     windowChanged = true;
   }
-  if (config.maxPerWindow !== undefined && config.maxPerWindow > 0) {
+  if (config.maxPerWindow !== undefined && Number.isFinite(config.maxPerWindow) && config.maxPerWindow > 0) {
     rateLimitMax = config.maxPerWindow;
   }
   // Restart cleanup timer when the window changes so the interval stays aligned.
@@ -296,7 +296,11 @@ function auditedRpc<P extends { requestId: string }>(
       return result;
     } catch (err: unknown) {
       if (err instanceof RpcError) {
-        outcome = err.code === "RATE_LIMITED" ? "rate_limited" : "unauthorized";
+        outcome = err.code === "RATE_LIMITED"
+          ? "rate_limited"
+          : err.code === "UNAUTHORIZED"
+            ? "unauthorized"
+            : "error";
       } else {
         outcome = "error";
       }
