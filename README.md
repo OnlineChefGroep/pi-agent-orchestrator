@@ -17,7 +17,6 @@ Bring Claude Code-style autonomous sub-agents to Pi. Spawn specialized agents, e
 [![Node](https://img.shields.io/badge/node-%3E%3D22-green)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.10.0-blue)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/releases)
 
 ---
 

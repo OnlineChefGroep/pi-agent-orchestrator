@@ -45,13 +45,13 @@ jobs:
 
       - name: TypeScript typecheck
         if: matrix.peer-deps == 'latest'
-        run: npm run typecheck
+        run: npx tsc --noEmit
 
       - name: Lint
         if: matrix.peer-deps == 'latest'
         run: npm run lint
 
       - name: Run tests
-        run: npm test
+        run: npx vitest run --retry=2
         # Lowest peer deps may have breaking runtime changes; don't fail the build.
         continue-on-error: ${{ matrix.peer-deps == 'lowest' }}

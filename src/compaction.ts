@@ -37,10 +37,35 @@ export interface CompactableMessage {
  * Rough heuristic: 1 token ≈ 4 characters for English text.
  */
 function estimateTokens(message: CompactableMessage): number {
-  const content = typeof message.content === "string"
-    ? message.content
-    : JSON.stringify(message.content);
-  return Math.ceil(content.length / 4);
+  let len = 0;
+  if (typeof message.content === "string") {
+    len = message.content.length;
+  } else if (Array.isArray(message.content)) {
+    for (let i = 0; i < message.content.length; i++) {
+      const c = message.content[i] as any;
+      if (c && c.type === "text" && typeof c.text === "string") {
+        len += c.text.length;
+      } else if (c && c.type === "tool_result" && typeof c.content === "string") {
+        len += c.content.length;
+      } else if (c && c.type === "tool_result" && Array.isArray(c.content)) {
+        for (let j = 0; j < c.content.length; j++) {
+          const nested = c.content[j] as any;
+          if (nested && nested.type === "text" && typeof nested.text === "string") {
+            len += nested.text.length;
+          } else {
+            len += 50;
+          }
+        }
+      } else if (c && c.type === "tool_use" && c.input != null) {
+        len += JSON.stringify(c.input).length;
+      } else {
+        len += 50; // fast heuristic for other non-text blocks to avoid slow JSON stringify
+      }
+    }
+  } else {
+    len = JSON.stringify(message.content).length;
+  }
+  return Math.ceil(len / 4);
 }
 
 /**
@@ -82,14 +107,14 @@ export function pruneOldToolOutputs(
 
     // Never remove user messages
     if (msg.role === "user") {
-      result.unshift(msg);
+      result.push(msg);
       continue;
     }
 
     if (msg.role === "assistant") {
       assistantSeen++;
       // Assistant messages are always kept (even from old turns)
-      result.unshift(msg);
+      result.push(msg);
       continue;
     }
 
@@ -101,12 +126,12 @@ export function pruneOldToolOutputs(
     // The tool result belongs to turn (assistantSeen + 1) from the end,
     // which should be kept when (assistantSeen + 1) ≤ keepTurns → assistantSeen < keepTurns.
     if (assistantSeen < keepTurns) {
-      result.unshift(msg);
+      result.push(msg);
     }
     // else: skip — this tool output is from an old turn
   }
 
-  return result;
+  return result.reverse();
 }
 
 /**
