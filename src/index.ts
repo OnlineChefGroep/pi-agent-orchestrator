@@ -1,3 +1,4 @@
+import { logger } from "./logger.js";
 /**
  * pi-agents — A pi extension providing Claude Code-style autonomous sub-agents.
  *
@@ -307,7 +308,7 @@ export default function (pi: ExtensionAPI) {
     } catch (err) {
       // Scheduling is non-essential — log and move on so the rest of the
       // extension keeps working if e.g. .pi/ is unwritable.
-      console.warn("[pi-subagents] Failed to start scheduler:", err);
+      logger.warn("[pi-subagents] Failed to start scheduler:", { error: err instanceof Error ? err.message : String(err) });
     }
   }
 
