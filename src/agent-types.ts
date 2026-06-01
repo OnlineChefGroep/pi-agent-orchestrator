@@ -49,21 +49,78 @@ function resolvePartitionTools(
  * - Empty partitionMembership ({}) → empty set = isolated
  */
 export function filterByPartitions(config: AgentConfig, partitions?: string[]): string[] {
+  // Expand `*` in the agent's own tool list (audit A1). Partition membership
+  // is already a concrete allowlist, so it is never re-expanded.
+  const baseTools = normalizeBuiltinToolNames(config.builtinToolNames) ?? [...BUILTIN_TOOL_NAMES];
+
   // Early exit: no partitions → all tools (no filtering)
   if (!partitions || partitions.length === 0) {
-    return config.builtinToolNames ?? [...BUILTIN_TOOL_NAMES];
+    return baseTools;
   }
 
   // Early exit: no partition membership configured → feature disabled
   if (!config.partitionMembership) {
-    return config.builtinToolNames ?? [...BUILTIN_TOOL_NAMES];
+    return baseTools;
   }
 
   return resolvePartitionTools(config.partitionMembership, partitions);
 }
 
-/** All known built-in tool names. */
-export const BUILTIN_TOOL_NAMES: string[] = ["read", "bash", "edit", "write", "grep", "find", "ls"];
+/**
+ * All known built-in tool names.
+ *
+ * Subset of the official opencode/pi tool list. `find` and `ls` were
+ * removed in audit B8 — they are Claude Code carry-over, not real pi
+ * tools, and would never be invoked successfully by this extension.
+ */
+export const BUILTIN_TOOL_NAMES: string[] = ["read", "bash", "edit", "write", "grep"];
+
+/**
+ * Minimal-safe tool allowlist for the general-purpose / unknown-type
+ * fallback path (audit A2).
+ *
+ * Read-only — no file modifications, no extension or skills exposure.
+ * A caller that triggers the fallback with a malicious or unknown agent
+ * type name is intentionally restricted to a non-destructive subset
+ * rather than being granted the full BUILTIN_TOOL_NAMES plus all
+ * extensions and skills. This constant lives at module scope so the
+ * fallback in {@link getConfig} reads it as trusted data, with no
+ * branching inside the hot path.
+ */
+const SAFE_FALLBACK_TOOL_NAMES: readonly string[] = ["read", "bash", "grep"];
+
+/**
+ * Normalize a custom agent's `builtinToolNames` array.
+ *
+ * Agents may declare `"*"` to mean "all built-in tools" (audit A1). This helper
+ * expands the wildcard to a copy of {@link BUILTIN_TOOL_NAMES}, preserving any
+ * non-wildcard entries alongside it (deduplicated via Set). The caller's input
+ * array is never mutated — a fresh array is always returned.
+ *
+ * Choice: normalization is applied at read-time in this module rather than at
+ * load-time in {@link custom-agents.ts}. Reasons:
+ *   1. The source AgentConfig keeps the user's literal request intact, which
+ *      keeps frontmatter round-tripping honest and makes the wildcard a pure
+ *      resolution-layer concern.
+ *   2. There is one canonical expansion site, so adding a new built-in tool
+ *      or changing wildcard semantics only requires editing this file.
+ *   3. Default agents and absolute fallbacks use the bare `BUILTIN_TOOL_NAMES`
+ *      constant directly, bypassing this function — no risk of double expansion.
+ *
+ * @param names - The raw `builtinToolNames` array from an AgentConfig
+ * @returns A fresh, normalized array; `undefined` if the input was undefined
+ */
+export function normalizeBuiltinToolNames(names: string[] | undefined): string[] | undefined {
+  if (!names) return names;
+  if (names.includes("*")) {
+    // Wildcard expands to the full built-in list, unioned with any concrete
+    // names so users can keep custom tools alongside `*` without losing them.
+    const concrete = names.filter((n) => n !== "*");
+    return [...new Set([...BUILTIN_TOOL_NAMES, ...concrete])];
+  }
+  // No wildcard — shallow clone so callers cannot mutate the source array.
+  return [...names];
+}
 
 /** Context-mode sandbox tool names from @onlinechef/context-mode (optional dependency). */
 export const CTX_TOOL_NAMES: string[] = [
@@ -180,7 +237,11 @@ export function getToolNamesForType(type: string): string[] {
   const key = resolveKey(type);
   const raw = key ? agents.get(key) : undefined;
   const config = raw?.enabled === false ? undefined : raw;
-  const names = config?.builtinToolNames?.length ? config.builtinToolNames : [...BUILTIN_TOOL_NAMES];
+  // Expand `*` to the full built-in list (audit A1). Falls back to a fresh
+  // copy of BUILTIN_TOOL_NAMES when the agent omits the field entirely.
+  const names = config?.builtinToolNames?.length
+    ? normalizeBuiltinToolNames(config.builtinToolNames) ?? [...BUILTIN_TOOL_NAMES]
+    : [...BUILTIN_TOOL_NAMES];
   return names;
 }
 
@@ -287,7 +348,10 @@ export function getConfig(
 
   if (config && config.enabled !== false) {
     const restricted = applyParentRestrictions({
-      builtinToolNames: config.builtinToolNames ?? BUILTIN_TOOL_NAMES,
+      // Expand `*` to the full built-in list (audit A1) BEFORE parent
+      // restrictions are applied, so a wildcard child is intersected with
+      // the parent's concrete list rather than yielding an empty set.
+      builtinToolNames: normalizeBuiltinToolNames(config.builtinToolNames) ?? BUILTIN_TOOL_NAMES,
       extensions: config.extensions,
       skills: config.skills,
     }, parentConfig);
@@ -307,33 +371,23 @@ export function getConfig(
     };
   }
 
-  // Fallback for unknown/disabled types — general-purpose config
-  const gp = agents.get("general-purpose");
-  if (gp && gp.enabled !== false) {
-    const restricted = applyParentRestrictions({
-      builtinToolNames: gp.builtinToolNames ?? BUILTIN_TOOL_NAMES,
-      extensions: gp.extensions,
-      skills: gp.skills,
-    }, parentConfig);
-    return {
-      displayName: gp.displayName ?? gp.name,
-      description: gp.description,
-      builtinToolNames: applyPartitionFilter(gp.partitionMembership, partitions, restricted.builtinToolNames),
-      extensions: restricted.extensions,
-      skills: restricted.skills,
-      promptMode: gp.promptMode,
-    };
-  }
-
-  // Absolute fallback (should never happen)
+  // Fallback for unknown/disabled types — minimal-safe config (audit A2).
+  //
+  // The previous implementation inherited general-purpose's full permissions
+  // (BUILTIN_TOOL_NAMES plus extensions: true and skills: true). That granted
+  // unrestricted tool access to any caller that triggered the fallback with a
+  // malicious or unknown agent type name — a security regression. The new
+  // fallback is a hard-coded read-only allowlist with extensions and skills
+  // explicitly disabled, then intersected with the caller's parentConfig so
+  // permission inheritance still works on this path.
   const restricted = applyParentRestrictions({
-    builtinToolNames: BUILTIN_TOOL_NAMES,
-    extensions: true,
-    skills: true,
+    builtinToolNames: [...SAFE_FALLBACK_TOOL_NAMES],
+    extensions: false,
+    skills: false,
   }, parentConfig);
   return {
     displayName: "Agent",
-    description: "General-purpose agent for complex, multi-step tasks",
+    description: "Safe fallback agent with minimal read-only permissions",
     builtinToolNames: applyPartitionFilter(undefined, partitions, restricted.builtinToolNames),
     extensions: restricted.extensions,
     skills: restricted.skills,

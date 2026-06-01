@@ -1,8 +1,9 @@
+import { logger } from "./logger.js";
 /**
  * telemetry.ts — Structured event emitter for security and validation events.
  *
  * Provides a lightweight pub/sub system for agent lifecycle events.
- * Fail-open: if no listeners are registered, falls back to console.warn.
+ * Fail-open: if no listeners are registered, falls back to logger.warn.
  */
 
 /** Telemetry event types and their payloads */
@@ -12,6 +13,15 @@ export interface TelemetryEvents {
   "agent:unknown-tools": { name: string; tools: string[] };
   "agent:spawned": { type: string; parentType?: string; depth: number; budget?: number };
   "agent:completed": { type: string; duration: number; validatorResults?: { passed: boolean; summary: string }[] };
+  "rpc:audit": {
+    timestamp: string;
+    extensionId: string;
+    extensionName?: string;
+    operation: string;
+    outcome: string;
+    durationMs: number;
+    metadata?: Record<string, unknown>;
+  };
 }
 
 /** Event names as a union type */
@@ -57,7 +67,7 @@ export function onTelemetry<E extends TelemetryEventName>(
 
 /**
  * Emit a telemetry event.
- * If no listeners are registered, falls back to console.warn for security events.
+ * If no listeners are registered, falls back to logger.warn for security events.
  */
 export function emitTelemetry<E extends TelemetryEventName>(
   event: E,
@@ -72,18 +82,18 @@ export function emitTelemetry<E extends TelemetryEventName>(
         handler(payload);
       } catch (err) {
         // Handler errors are logged but don't break the emitter
-        console.warn(`[pi-subagents] Telemetry handler error for ${event}:`, err);
+        logger.warn(`[pi-subagents] Telemetry handler error for ${event}:`, { error: err instanceof Error ? err.message : String(err) });
       }
     }
   } else {
-    // Fail-open: log to console.warn for security-relevant events
+    // Fail-open: log to logger.warn for security-relevant events
     const securityEvents: TelemetryEventName[] = [
       "agent:loaded",
       "agent:validation-failed",
       "agent:unknown-tools",
     ];
     if (securityEvents.includes(event)) {
-      console.warn(`[pi-subagents] ${event}:`, JSON.stringify(payload));
+      logger.warn(`[pi-subagents] ${event}:`, { payload: JSON.stringify(payload) });
     }
   }
 }

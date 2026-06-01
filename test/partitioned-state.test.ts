@@ -199,7 +199,7 @@ describe("getConfig with partitions", () => {
 
   it("partition + permission inheritance: intersection applied", () => {
     // Parent is RO (Explore tools)
-    const READ_ONLY_TOOLS = ["read", "bash", "grep", "find", "ls"];
+    const READ_ONLY_TOOLS = ["read", "bash", "grep"];
     const parentConfig = {
       builtinToolNames: READ_ONLY_TOOLS,
       extensions: true as const,
@@ -219,14 +219,14 @@ describe("getConfig with partitions", () => {
     registerAgents(agents);
 
     // Partition allows [read, write, edit]
-    // Parent allows [read, bash, grep, find, ls]
+    // Parent allows [read, bash, grep]
     // Intersection = [read] only
     const config = getConfig("worker", parentConfig, ["frontend"]);
     expect(config.builtinToolNames).toEqual(["read"]);
   });
 
   it("partition + parent fully restricted → empty tools", () => {
-    const READ_ONLY_TOOLS = ["read", "bash", "grep", "find", "ls"];
+    const READ_ONLY_TOOLS = ["read", "bash", "grep"];
     const parentConfig = {
       builtinToolNames: READ_ONLY_TOOLS,
       extensions: true as const,
@@ -246,7 +246,7 @@ describe("getConfig with partitions", () => {
     registerAgents(agents);
 
     // Partition allows [write, edit]
-    // Parent allows [read, bash, grep, find, ls]
+    // Parent allows [read, bash, grep]
     // Intersection = [] — no overlap
     const config = getConfig("worker", parentConfig, ["frontend"]);
     expect(config.builtinToolNames).toEqual([]);

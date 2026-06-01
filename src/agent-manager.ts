@@ -1,3 +1,4 @@
+import { logger } from "./logger.js";
 /**
  * agent-manager.ts — Tracks agents, background execution, resume support.
  *
@@ -254,7 +255,7 @@ export class AgentManager {
         isBackground: options.isBackground ?? false,
       })
       .catch((err) => {
-        console.warn(`[pi-subagents] Hook dispatch failed:`, err);
+        logger.warn(`[pi-subagents] Hook dispatch failed:`, { error: err instanceof Error ? err.message : String(err) });
       });
 
     const args: SpawnArgs = { pi, ctx, type, prompt, options };

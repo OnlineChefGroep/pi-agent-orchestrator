@@ -161,23 +161,23 @@ function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" |
   if (format === "text") {
     const roots: AgentRecord[] = [];
     const childrenMap = new Map<string, AgentRecord[]>();
-    const nodeMap = new Map<string, AgentRecord>();
+    const recordMap = new Map<string, AgentRecord>();
 
-    for (const r of records) {
-      nodeMap.set(r.id, r);
-      if (!r.parentId) {
-        roots.push(r);
+    for (const record of records) {
+      recordMap.set(record.id, record);
+      if (!record.parentId) {
+        roots.push(record);
       } else {
-        if (!childrenMap.has(r.parentId)) {
-          childrenMap.set(r.parentId, []);
+        if (!childrenMap.has(record.parentId)) {
+          childrenMap.set(record.parentId, []);
         }
-        childrenMap.get(r.parentId)!.push(r);
+        childrenMap.get(record.parentId)!.push(record);
       }
     }
 
     let out = "";
     const render = (nodeId: string, indent: string, isLast: boolean) => {
-      const r = nodeMap.get(nodeId);
+      const r = recordMap.get(nodeId);
       if (!r) return;
       const branch = indent ? (isLast ? "└─ " : "├─ ") : "";
       out += `${indent}${branch}${r.id} (${r.type}) [${r.status}]\n`;

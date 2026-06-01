@@ -197,7 +197,7 @@ describe("E2E: permission inheritance", () => {
   });
 
   it("RO parent forces RO child regardless of child config", () => {
-    const READ_ONLY_TOOLS = ["read", "bash", "grep", "find", "ls"];
+    const READ_ONLY_TOOLS = ["read", "bash", "grep"];
 
     // Explore (RO) parent config
     const parentConfig = {
@@ -217,7 +217,7 @@ describe("E2E: permission inheritance", () => {
   });
 
   it("RW parent allows RO child to keep its own RO tools", () => {
-    const ALL_TOOLS = ["read", "bash", "edit", "write", "grep", "find", "ls"];
+    const ALL_TOOLS = ["read", "bash", "edit", "write", "grep"];
 
     const parentConfig = {
       builtinToolNames: ALL_TOOLS,
@@ -230,11 +230,11 @@ describe("E2E: permission inheritance", () => {
 
     expect(child.builtinToolNames).not.toContain("write");
     expect(child.builtinToolNames).not.toContain("edit");
-    expect(child.builtinToolNames).toEqual(["read", "bash", "grep", "find", "ls"]);
+    expect(child.builtinToolNames).toEqual(["read", "bash", "grep"]);
   });
 
   it("Plan child inherits RO restriction from Explore parent", () => {
-    const READ_ONLY_TOOLS = ["read", "bash", "grep", "find", "ls"];
+    const READ_ONLY_TOOLS = ["read", "bash", "grep"];
 
     const parentConfig = {
       builtinToolNames: READ_ONLY_TOOLS,
@@ -437,7 +437,7 @@ describe("E2E: partition filtering", () => {
     const config: AgentConfig = {
       name: "frontend-agent",
       description: "Frontend specialist",
-      builtinToolNames: ["read", "write", "edit", "bash", "grep", "find", "ls"],
+      builtinToolNames: ["read", "write", "edit", "bash", "grep"],
       extensions: false,
       skills: false,
       systemPrompt: "frontend",
@@ -457,26 +457,26 @@ describe("E2E: partition filtering", () => {
     const config: AgentConfig = {
       name: "fullstack-agent",
       description: "Fullstack specialist",
-      builtinToolNames: ["read", "write", "edit", "bash", "grep", "find", "ls"],
+      builtinToolNames: ["read", "write", "edit", "bash", "grep"],
       extensions: false,
       skills: false,
       systemPrompt: "fullstack",
       promptMode: "replace",
       partitionMembership: {
         frontend: ["read", "write"],
-        backend: ["bash", "grep", "find"],
+        backend: ["bash", "grep"],
       },
     };
 
     const tools = filterByPartitions(config, ["frontend", "backend"]);
-    expect(new Set(tools)).toEqual(new Set(["read", "write", "bash", "grep", "find"]));
+    expect(new Set(tools)).toEqual(new Set(["read", "write", "bash", "grep"]));
   });
 
   it("agent with no partitionMembership gets all tools even when partition requested", () => {
     const config: AgentConfig = {
       name: "generic-agent",
       description: "Generic",
-      builtinToolNames: ["read", "write", "edit", "bash", "grep", "find", "ls"],
+      builtinToolNames: ["read", "write", "edit", "bash", "grep"],
       extensions: false,
       skills: false,
       systemPrompt: "generic",
