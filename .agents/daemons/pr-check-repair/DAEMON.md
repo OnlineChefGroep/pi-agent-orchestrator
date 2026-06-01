@@ -23,6 +23,10 @@ deny:
 
 # PR Check Repair
 
+## Repository CI context
+
+This repository uses Node.js 25.9.0 and TypeScript 6.0. CI runs Biome lint (`npm run lint`), vitest tests (`npm test`), and TypeScript compilation (`npm run build`). Workflow files: `ci.yml`, `linter.yml`, `codeql.yml`, `qa.yml` in `.github/workflows/`. The org also has a reusable `workflow_call` CI in the `.github` repository.
+
 ## Triggering-check scope policy
 
 Handle only the triggering failing check. If another failing check shares the same root cause, fix that root cause only when necessary for the triggering check. If another human or `pr-check-repair` activation already fixed the same root cause, stop/no-op without commenting unless human action is still needed.
@@ -39,11 +43,11 @@ Stop/no-op and comment with the blocking reason when the fix requires human judg
 
 | Category                                                                                                    | Posture                                                                                               |
 | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| TypeScript matrix job failures                                                                              | Fix type errors, config mismatches, or generated typing drift, then push.                             |
-| Biome lint failures                                                                                         | Apply the narrowest lint/format fix and push.                                                         |
-| Vitest failures                                                                                             | Fix clear regressions and push. For known flakes (`schedule.test.ts`, `schedule-store.test.ts`), rerun first or apply the narrowest stabilizing fix. |
-| Super-Linter failures                                                                                       | Fix failing lint/doc/style checks scoped to reported files, then push.                                |
-| CI/workflow syntax errors introduced by the PR                                                              | Fix and push.                                                                                          |
+| TypeScript type errors (tsc / `npm run build`)                                                              | Fix type errors, config mismatches, or generated typing drift, then push.                             |
+| Biome lint failures (`npm run lint`)                                                                        | Apply the narrowest lint/format fix and push.                                                         |
+| Vitest failures (`npm test`)                                                                                | Fix clear regressions and push. For known flakes (`schedule.test.ts`, `schedule-store.test.ts`), rerun first or apply the narrowest stabilizing fix. |
+| Super-Linter / linter.yml failures                                                                          | Fix failing lint/doc/style checks scoped to reported files, then push.                                |
+| CI/workflow syntax errors introduced by the PR                                                              | Fix and push.                                                                                         |
 | Flaky checks with strong flake evidence outside known flaky tests                                           | Rerun once when no repo change is needed, or push the narrowest stabilizing fix when one is clear.    |
 | Ambiguous product intent, conflicting requirements, or unclear PR direction                                 | Stop/no-op; comment if human action is needed.                                                        |
 | Secrets, provider config, CI project settings, or external service failures outside the repo               | Stop/no-op; comment if human action is needed.                                                        |
