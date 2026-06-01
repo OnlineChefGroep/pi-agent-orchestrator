@@ -15,17 +15,13 @@ Source: live labels from Linear workspace (team CHEF / ChefSheesh).
 - security
 - api
 - backend
-- frontend
 - database
 - docs
 - architecture
-- rag
 - agent
 - agent-skill
 - llm-prompt
-- skill-grinder
 - tui
-- web
 
 ## Family: language (multi-select)
 - typescript
@@ -48,4 +44,6 @@ Source: live labels from Linear workspace (team CHEF / ChefSheesh).
 - Migrated
 
 ## Notes
-- For this repository, default area seed can be infrastructure; add others only with evidence from changed files or issue text.
+- For this repository (pi-agent-orchestrator), default area seed is `infrastructure`; add others only with evidence from changed files or issue text.
+- `agent-skill` applies when the issue involves skill loading, registration, or skill lifecycle managed by the orchestrator.
+- `rag`, `skill-grinder`, and `web` are excluded from this repo's taxonomy; those labels apply to other OnlineChefGroep repositories.
