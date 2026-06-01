@@ -36,6 +36,10 @@ Use these repository-specific values:
 - Development dependency title: `chore(deps): update development dependencies`
 - Default labels: `dependencies` (add `github_actions` only when workflow/action dependencies are changed)
 
+## Runtime environment
+
+This repository targets Node.js 25.9.0 and TypeScript 6.0. All source files are ES modules (`"type": "module"`). Do not introduce CommonJS dependencies or downgrade ESM-only packages.
+
 ## Update policy
 
 Default scope:
