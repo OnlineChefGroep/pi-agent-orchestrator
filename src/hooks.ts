@@ -1,3 +1,4 @@
+import { logger } from "./logger.js";
 /**
  * hooks.ts — Extensible hook system for subagent lifecycle events.
  *
@@ -57,17 +58,14 @@ async function executeHandler(
     try {
       return await handler(payload);
     } catch (err) {
-      console.warn(
-        `[pi-subagents:hooks] Handler for "${payload.event}" threw:`,
-        err instanceof Error ? err.message : String(err),
-      );
+      logger.warn(`[pi-subagents:hooks] Handler for "${payload.event}" threw:`, { error: err instanceof Error ? err.message : String(err) });
       return undefined;
     }
   })();
 
   const timeoutPromise = new Promise<undefined>((resolve) => {
     timeoutId = setTimeout(() => {
-      console.warn(
+      logger.warn(
         `[pi-subagents:hooks] Handler for "${payload.event}" timed out after ${timeoutMs}ms`,
       );
       resolve(undefined);
