@@ -52,7 +52,7 @@ Examples:
 - pull request merged
 - pull request opened and ready for review
 - pull request unblocked
-- recurring CI failure affecting active work
+- recurring CI failure (e.g. vitest, Biome lint, or tsc type-check failures in the reusable workflow)
 
 Exclude:
 
