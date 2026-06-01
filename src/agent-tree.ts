@@ -30,6 +30,7 @@ export function buildAgentTreeMermaid(records: AgentRecord[]): string {
       lines.push(`  ${record.id.replace(/-/g, "_")} --> ${child.id.replace(/-/g, "_")}`);
     }
   }
+
   return lines.join("\n");
 }
 
