@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   BUILTIN_TOOL_NAMES,
   type EffectiveConfig,
+  filterByPartitions,
   getAgentConfig,
   getAvailableTypes,
   getConfig,
@@ -11,6 +12,7 @@ import {
   getToolNamesForType,
   getUserAgentNames,
   isValidType,
+  normalizeBuiltinToolNames,
   registerAgents,
   resolveType,
 } from "../src/agent-types.js";
@@ -84,7 +86,7 @@ describe("agent type registry", () => {
 
     it("Explore has read-only tools", () => {
       const config = getConfig("Explore");
-      expect(config.builtinToolNames).toEqual(["read", "bash", "grep", "find", "ls"]);
+      expect(config.builtinToolNames).toEqual(["read", "bash", "grep"]);
       expect(config.builtinToolNames).not.toContain("edit");
       expect(config.builtinToolNames).not.toContain("write");
     });
@@ -124,9 +126,20 @@ describe("agent type registry", () => {
       expect(BUILTIN_TOOL_NAMES).toContain("edit");
       expect(BUILTIN_TOOL_NAMES).toContain("write");
       expect(BUILTIN_TOOL_NAMES).toContain("grep");
-      expect(BUILTIN_TOOL_NAMES).toContain("find");
-      expect(BUILTIN_TOOL_NAMES).toContain("ls");
-      expect(BUILTIN_TOOL_NAMES.length).toBeGreaterThanOrEqual(7);
+      expect(BUILTIN_TOOL_NAMES).not.toContain("find");
+      expect(BUILTIN_TOOL_NAMES).not.toContain("ls");
+      expect(BUILTIN_TOOL_NAMES).toEqual(["read", "bash", "edit", "write", "grep"]);
+    });
+
+    // Audit B8: `find` and `ls` were never real pi tools — they were Claude
+    // Code carry-over. This test pins the post-fix BUILTIN_TOOL_NAMES list
+    // explicitly so a future regression that re-adds them is caught.
+    it("BUILTIN_TOOL_NAMES excludes non-pi tools (audit B8)", () => {
+      expect(BUILTIN_TOOL_NAMES).not.toContain("find");
+      expect(BUILTIN_TOOL_NAMES).not.toContain("ls");
+      expect(new Set(BUILTIN_TOOL_NAMES)).toEqual(
+        new Set(["read", "bash", "edit", "write", "grep"]),
+      );
     });
   });
 
@@ -195,18 +208,23 @@ describe("agent type registry", () => {
     it("getToolNamesForType works for user agents", () => {
       const agents = new Map([["auditor", makeAgentConfig({
         name: "auditor",
-        builtinToolNames: ["read", "grep", "find"],
+        builtinToolNames: ["read", "grep"],
       })]]);
       registerAgents(agents);
 
       const names = getToolNamesForType("auditor");
-      expect(names).toEqual(["read", "grep", "find"]);
+      expect(names).toEqual(["read", "grep"]);
     });
 
-    it("getConfig falls back to general-purpose for unknown types", () => {
+    it("getConfig falls back to safe-minimal config for unknown types (audit A2)", () => {
       const config = getConfig("nonexistent");
       expect(config.displayName).toBe("Agent");
-      expect(config.description).toBe("General-purpose agent for complex, multi-step tasks");
+      expect(config.description).toBe("Safe fallback agent with minimal read-only permissions");
+      // Safe-minimal allowlist: read-only, no file modifications.
+      expect(config.builtinToolNames).toEqual(["read", "bash", "grep"]);
+      // No extension or skills exposure (audit A2).
+      expect(config.extensions).toBe(false);
+      expect(config.skills).toBe(false);
     });
 
     it("clearing user agents works (defaults remain)", () => {
@@ -290,7 +308,7 @@ describe("agent type registry", () => {
   });
 
   describe("permission inheritance", () => {
-    const READ_ONLY_TOOLS = ["read", "bash", "grep", "find", "ls"];
+    const READ_ONLY_TOOLS = ["read", "bash", "grep"];
     const ALL_TOOLS = BUILTIN_TOOL_NAMES;
 
     it("RO parent spawns child → child tools are subset of parent RO tools", () => {
@@ -311,8 +329,6 @@ describe("agent type registry", () => {
       expect(child.builtinToolNames).toContain("read");
       expect(child.builtinToolNames).toContain("bash");
       expect(child.builtinToolNames).toContain("grep");
-      expect(child.builtinToolNames).toContain("find");
-      expect(child.builtinToolNames).toContain("ls");
       // Child's tool count should equal parent's (intersection = parent's smaller set)
       expect(child.builtinToolNames).toEqual(READ_ONLY_TOOLS);
     });
@@ -385,8 +401,6 @@ describe("agent type registry", () => {
       expect(child.builtinToolNames).toContain("bash");
       expect(child.builtinToolNames).toContain("edit");
       expect(child.builtinToolNames).toContain("grep");
-      expect(child.builtinToolNames).toContain("find");
-      expect(child.builtinToolNames).toContain("ls");
     });
 
     it("parent with no restrictions → child gets full configured tools (no inheritance when no restrictions)", () => {
@@ -513,6 +527,335 @@ describe("agent type registry", () => {
       expect(child.builtinToolNames).toEqual(READ_ONLY_TOOLS);
       expect(child.extensions).toBe(false);
       expect(child.skills).toBe(false);
+    });
+  });
+
+  // Audit A1: the wildcard `*` in a custom agent's `builtinToolNames` must be
+  // expanded to a copy of BUILTIN_TOOL_NAMES before any inheritance/filtering
+  // step. Without this fix, the literal string `"*"` flows through to the
+  // agent's tool list, leaving it with zero working tools and no error.
+  describe("wildcard (*) expansion in builtinToolNames", () => {
+    describe("normalizeBuiltinToolNames helper", () => {
+      it("expands `[\"*\"]` to a copy of BUILTIN_TOOL_NAMES", () => {
+        const result = normalizeBuiltinToolNames(["*"]);
+        expect(result).toEqual(BUILTIN_TOOL_NAMES);
+      });
+
+      it("expands `[\"*\"]` to a fresh array (not a reference to BUILTIN_TOOL_NAMES)", () => {
+        const result = normalizeBuiltinToolNames(["*"]);
+        expect(result).not.toBe(BUILTIN_TOOL_NAMES);
+      });
+
+      it("returns undefined when input is undefined", () => {
+        expect(normalizeBuiltinToolNames(undefined)).toBeUndefined();
+      });
+
+      it("passes through concrete names without wildcard (cloned, not referenced)", () => {
+        const input = ["read", "bash"];
+        const result = normalizeBuiltinToolNames(input);
+        expect(result).toEqual(["read", "bash"]);
+        expect(result).not.toBe(input);
+      });
+
+      it("does not mutate the caller's input array (wildcard case)", () => {
+        const input = ["*"];
+        const snapshot = [...input];
+        normalizeBuiltinToolNames(input);
+        expect(input).toEqual(snapshot);
+      });
+
+      it("does not mutate the caller's input array (concrete case)", () => {
+        const input = ["read", "bash"];
+        const snapshot = [...input];
+        normalizeBuiltinToolNames(input);
+        expect(input).toEqual(snapshot);
+      });
+
+      it("deduplicates when wildcard is mixed with built-in names", () => {
+        // ["*", "bash"] should yield BUILTIN_TOOL_NAMES — bash is already in
+        // the list, and `*` covers everything, so the result has no duplicate.
+        const result = normalizeBuiltinToolNames(["*", "bash"]);
+        expect(result).toEqual(BUILTIN_TOOL_NAMES);
+        expect(result).toHaveLength(BUILTIN_TOOL_NAMES.length);
+      });
+
+      it("preserves custom tool names mixed with the wildcard", () => {
+        // `*` covers all built-in tools; the custom tool is kept alongside.
+        const result = normalizeBuiltinToolNames(["*", "my_custom_tool"]);
+        expect(result).toEqual([...BUILTIN_TOOL_NAMES, "my_custom_tool"]);
+        expect(result).toContain("my_custom_tool");
+      });
+
+      it("deduplicates multiple wildcard entries", () => {
+        const result = normalizeBuiltinToolNames(["*", "*", "read"]);
+        expect(result).toEqual(BUILTIN_TOOL_NAMES);
+        expect(result).toHaveLength(BUILTIN_TOOL_NAMES.length);
+      });
+    });
+
+    describe("getConfig resolution with wildcard", () => {
+      it("custom agent with `[\"*\"]` resolves to BUILTIN_TOOL_NAMES", () => {
+        const agents = new Map([["wildcard-agent", makeAgentConfig({
+          name: "wildcard-agent",
+          builtinToolNames: ["*"],
+        })]]);
+        registerAgents(agents);
+
+        const config = getConfig("wildcard-agent");
+        expect(config.builtinToolNames).toEqual(BUILTIN_TOOL_NAMES);
+        expect(config.builtinToolNames).not.toContain("*");
+        expect(config.builtinToolNames).toHaveLength(BUILTIN_TOOL_NAMES.length);
+      });
+
+      it("custom agent with `[\"*\", \"bash\"]` resolves to BUILTIN_TOOL_NAMES (no duplicates)", () => {
+        const agents = new Map([["wildcard-mixed", makeAgentConfig({
+          name: "wildcard-mixed",
+          builtinToolNames: ["*", "bash"],
+        })]]);
+        registerAgents(agents);
+
+        const config = getConfig("wildcard-mixed");
+        expect(config.builtinToolNames).toEqual(BUILTIN_TOOL_NAMES);
+        expect(config.builtinToolNames).toHaveLength(BUILTIN_TOOL_NAMES.length);
+      });
+
+      it("getConfig does not mutate the agent's stored builtinToolNames array", () => {
+        const inputNames: string[] = ["*"];
+        const agents = new Map([["immutable-wildcard", makeAgentConfig({
+          name: "immutable-wildcard",
+          builtinToolNames: inputNames,
+        })]]);
+        registerAgents(agents);
+
+        // Call getConfig a few times — the stored array must remain untouched.
+        getConfig("immutable-wildcard");
+        getConfig("immutable-wildcard");
+        expect(inputNames).toEqual(["*"]);
+
+        // The registered config's array is also untouched.
+        const stored = getAgentConfig("immutable-wildcard");
+        expect(stored?.builtinToolNames).toEqual(["*"]);
+      });
+
+      it("wildcard child is intersected with parent's concrete tools (not yielding empty set)", () => {
+        const READ_ONLY_TOOLS = ["read", "bash", "grep"];
+        // Without the fix: intersectToolNames(["*"], READ_ONLY_TOOLS) = []
+        // With the fix: normalize(["*"]) = BUILTIN_TOOL_NAMES, then
+        // intersected with READ_ONLY_TOOLS = READ_ONLY_TOOLS.
+        const parentConfig: EffectiveConfig = {
+          builtinToolNames: READ_ONLY_TOOLS,
+          extensions: true,
+          skills: true,
+        };
+
+        const agents = new Map([["wildcard-child", makeAgentConfig({
+          name: "wildcard-child",
+          builtinToolNames: ["*"],
+        })]]);
+        registerAgents(agents);
+
+        const child = getConfig("wildcard-child", parentConfig);
+        expect(child.builtinToolNames).toEqual(READ_ONLY_TOOLS);
+        expect(child.builtinToolNames).not.toContain("*");
+        expect(child.builtinToolNames).not.toContain("write");
+        expect(child.builtinToolNames).not.toContain("edit");
+      });
+
+      it("wildcard child with RW parent gets all built-in tools", () => {
+        const parentConfig: EffectiveConfig = {
+          builtinToolNames: BUILTIN_TOOL_NAMES,
+          extensions: true,
+          skills: true,
+        };
+
+        const agents = new Map([["wildcard-rw", makeAgentConfig({
+          name: "wildcard-rw",
+          builtinToolNames: ["*"],
+        })]]);
+        registerAgents(agents);
+
+        const child = getConfig("wildcard-rw", parentConfig);
+        expect(child.builtinToolNames).toEqual(BUILTIN_TOOL_NAMES);
+      });
+
+      it("general-purpose override with wildcard does NOT escalate fallback (audit A2)", () => {
+        // After audit A2, the unknown-type fallback returns a hard-coded
+        // safe-minimal allowlist regardless of what general-purpose is
+        // configured with. This is the security guarantee: a caller that
+        // triggers the fallback (e.g. with a malicious or unregistered
+        // type name) cannot escalate permissions by mutating the
+        // general-purpose config in the registry.
+        const agents = new Map([["general-purpose", makeAgentConfig({
+          name: "general-purpose",
+          builtinToolNames: ["*"],
+          extensions: true,
+          skills: true,
+        })]]);
+        registerAgents(agents);
+
+        const config = getConfig("nonexistent-type");
+        // Fallback is the safe-minimal allowlist, not the wildcard expansion.
+        expect(config.builtinToolNames).toEqual(["read", "bash", "grep"]);
+        expect(config.builtinToolNames).not.toContain("*");
+        expect(config.builtinToolNames).not.toContain("write");
+        expect(config.builtinToolNames).not.toContain("edit");
+        // Extensions and skills are explicitly disabled on the fallback path.
+        expect(config.extensions).toBe(false);
+        expect(config.skills).toBe(false);
+      });
+    });
+
+    describe("getToolNamesForType with wildcard", () => {
+      it("returns BUILTIN_TOOL_NAMES for an agent configured with `[\"*\"]`", () => {
+        const agents = new Map([["wildcard-names", makeAgentConfig({
+          name: "wildcard-names",
+          builtinToolNames: ["*"],
+        })]]);
+        registerAgents(agents);
+
+        const names = getToolNamesForType("wildcard-names");
+        expect(names).toEqual(BUILTIN_TOOL_NAMES);
+        expect(names).not.toContain("*");
+      });
+    });
+
+    describe("filterByPartitions with wildcard", () => {
+      it("normalizes `[\"*\"]` on a config before partition filtering", () => {
+        const config: AgentConfig = makeAgentConfig({
+          name: "wildcard-partition",
+          builtinToolNames: ["*"],
+        });
+
+        const tools = filterByPartitions(config);
+        expect(tools).toEqual(BUILTIN_TOOL_NAMES);
+        expect(tools).not.toContain("*");
+      });
+
+      it("normalizes `[\"*\"]` even when partitions are specified", () => {
+        const config: AgentConfig = makeAgentConfig({
+          name: "wildcard-partition-filtered",
+          builtinToolNames: ["*"],
+          partitionMembership: { secure: ["read", "bash", "grep"] },
+        });
+
+        const tools = filterByPartitions(config, ["secure"]);
+        expect(tools).toEqual(["read", "bash", "grep"]);
+        expect(tools).not.toContain("*");
+        expect(tools).not.toContain("write");
+        expect(tools).not.toContain("edit");
+        expect(tools).not.toContain("find");
+        expect(tools).not.toContain("ls");
+      });
+    });
+  });
+
+  // Audit A2: the unknown-type fallback in getConfig used to inherit
+  // general-purpose's full permissions — BUILTIN_TOOL_NAMES plus
+  // extensions: true and skills: true. That granted unrestricted tool
+  // access to any caller that triggered the fallback with a malicious
+  // or unknown type name. The fix replaces that path with a hard-coded
+  // safe-minimal allowlist (read-only tools, no extensions, no skills).
+  describe("audit A2: safe-minimal fallback for unknown types", () => {
+    it("does NOT grant all builtin tools for unknown types", () => {
+      const config = getConfig("definitely-not-registered");
+      // The fallback must not return the full BUILTIN_TOOL_NAMES — that
+      // would be a regression to the pre-fix behavior.
+      expect(config.builtinToolNames).not.toEqual(BUILTIN_TOOL_NAMES);
+      // No file-modification tools (write/edit) on the fallback path.
+      expect(config.builtinToolNames).not.toContain("write");
+      expect(config.builtinToolNames).not.toContain("edit");
+    });
+
+    it("does NOT grant extensions or skills for unknown types", () => {
+      const config = getConfig("malicious-type-name");
+      // Pre-fix this returned `true` (inherited from general-purpose);
+      // post-fix it must be `false` so the caller cannot invoke
+      // arbitrary extensions or skills via the fallback.
+      expect(config.extensions).toBe(false);
+      expect(config.skills).toBe(false);
+    });
+
+    it("fallback allowlist is a strict subset of BUILTIN_TOOL_NAMES", () => {
+      // The fallback cannot grant more tools than the global builtin
+      // set — otherwise it would silently introduce tools that don't
+      // exist in the host platform.
+      const config = getConfig("unknown");
+      const builtinSet = new Set(BUILTIN_TOOL_NAMES);
+      for (const tool of config.builtinToolNames) {
+        expect(builtinSet.has(tool), `fallback grants non-builtin tool: ${tool}`).toBe(true);
+      }
+    });
+
+    it("fallback still respects parent restrictions (defense in depth)", () => {
+      // The safe-minimal fallback must still flow through
+      // applyParentRestrictions, so a parent that has fewer tools
+      // further narrows the fallback allowlist.
+      const parentConfig: EffectiveConfig = {
+        builtinToolNames: ["read"],
+        extensions: true,
+        skills: true,
+      };
+      const config = getConfig("unknown", parentConfig);
+      // Intersection of safe-minimal ["read", "bash", "grep"] with
+      // parent ["read"] = ["read"].
+      expect(config.builtinToolNames).toEqual(["read"]);
+    });
+
+    it("absolute fallback (general-purpose disabled) is also safe-minimal", () => {
+      // Even when general-purpose is disabled in the registry, the
+      // unknown-type path must not regress to a permissive default.
+      const agents = new Map([["general-purpose", makeAgentConfig({
+        name: "general-purpose",
+        enabled: false,
+      })]]);
+      registerAgents(agents);
+
+      const config = getConfig("general-purpose");
+      expect(config.builtinToolNames).not.toEqual(BUILTIN_TOOL_NAMES);
+      expect(config.builtinToolNames).not.toContain("write");
+      expect(config.builtinToolNames).not.toContain("edit");
+      expect(config.extensions).toBe(false);
+      expect(config.skills).toBe(false);
+    });
+  });
+
+  // Audit B8: BUILTIN_TOOL_NAMES previously listed `find` and `ls`, which
+  // are not real pi tools (they are Claude Code carry-over and would
+  // never be invoked successfully by this extension). These tests pin
+  // the post-fix BUILTIN_TOOL_NAMES list explicitly.
+  describe("audit B8: BUILTIN_TOOL_NAMES is the correct pi subset", () => {
+    it("BUILTIN_TOOL_NAMES excludes find and ls", () => {
+      expect(BUILTIN_TOOL_NAMES).not.toContain("find");
+      expect(BUILTIN_TOOL_NAMES).not.toContain("ls");
+    });
+
+    it("BUILTIN_TOOL_NAMES contains exactly the official pi builtin tools", () => {
+      // The full expected list. A future regression that drops a tool
+      // or adds a non-pi tool will fail this test.
+      expect([...BUILTIN_TOOL_NAMES].sort()).toEqual(
+        ["bash", "edit", "grep", "read", "write"].sort(),
+      );
+    });
+
+    it("default read-only agents (Explore, Plan, Analysis) do not list find/ls", () => {
+      // The Explore / Plan / Analysis defaults inherit from
+      // READ_ONLY_TOOLS in default-agents.ts, which after B8 must not
+      // include find/ls.
+      for (const name of ["Explore", "Plan", "Analysis"]) {
+        const config = getConfig(name);
+        expect(config.builtinToolNames, `${name}`).not.toContain("find");
+        expect(config.builtinToolNames, `${name}`).not.toContain("ls");
+      }
+    });
+
+    it("normalizeBuiltinToolNames wildcard expansion no longer carries find/ls", () => {
+      // The wildcard `*` expands to a copy of BUILTIN_TOOL_NAMES. If
+      // BUILTIN_TOOL_NAMES were to regress and re-include find/ls,
+      // wildcard expansion would propagate the regression.
+      const result = normalizeBuiltinToolNames(["*"]);
+      expect(result).not.toContain("find");
+      expect(result).not.toContain("ls");
+      expect(result).toEqual(BUILTIN_TOOL_NAMES);
     });
   });
 });
