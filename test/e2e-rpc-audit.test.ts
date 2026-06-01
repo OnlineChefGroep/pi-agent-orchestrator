@@ -140,7 +140,7 @@ describe("E2E: RPC audit logging & rate limiting", () => {
         pi: {},
         getCtx: () => ({ session: true }),
         manager,
-        authProvider: (reqId) => ({ extensionId: "ext-test", extensionName: "Test" }),
+        authProvider: (_reqId) => ({ extensionId: "ext-test", extensionName: "Test" }),
       });
 
       const client = createSubagentsRpcClient(events);

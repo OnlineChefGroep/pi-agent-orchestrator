@@ -35,7 +35,7 @@ describe("loadCustomAgents", () => {
   it("loads a basic agent with all frontmatter fields", () => {
     writeAgent("auditor", `---
 description: Security Auditor
-tools: read, grep, find
+tools: read, grep
 model: anthropic/claude-opus-4-6
 thinking: high
 max_turns: 30
@@ -53,7 +53,7 @@ You are a security auditor.`);
     const agent = result.get("auditor")!;
     expect(agent.name).toBe("auditor");
     expect(agent.description).toBe("Security Auditor");
-    expect(agent.builtinToolNames).toEqual(["read", "grep", "find"]);
+    expect(agent.builtinToolNames).toEqual(["read", "grep"]);
     expect(agent.model).toBe("anthropic/claude-opus-4-6");
     expect(agent.thinking).toBe("high");
     expect(agent.maxTurns).toBe(30);
