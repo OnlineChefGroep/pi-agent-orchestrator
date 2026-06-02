@@ -1,4 +1,7 @@
+import { createHash } from "node:crypto";
+
 import { logger } from "./logger.js";
+
 /**
  * telemetry.ts — Structured event emitter for security and validation events.
  *
@@ -29,6 +32,13 @@ export type TelemetryEventName = keyof TelemetryEvents;
 
 /** Handler function type */
 export type TelemetryHandler<E extends TelemetryEventName> = (payload: TelemetryEvents[E]) => void;
+
+/** Security-relevant events that always log when no listeners are registered. */
+const SECURITY_EVENTS: ReadonlySet<TelemetryEventName> = new Set<TelemetryEventName>([
+  "agent:loaded",
+  "agent:validation-failed",
+  "agent:unknown-tools",
+]);
 
 /** Global registry of telemetry handlers (Symbol-based to avoid collisions) */
 const TELEMETRY_REGISTRY_KEY = Symbol.for("pi-subagents:telemetry-handlers");
@@ -87,13 +97,8 @@ export function emitTelemetry<E extends TelemetryEventName>(
     }
   } else {
     // Fail-open: log to logger.warn for security-relevant events
-    const securityEvents: TelemetryEventName[] = [
-      "agent:loaded",
-      "agent:validation-failed",
-      "agent:unknown-tools",
-    ];
-    if (securityEvents.includes(event)) {
-      logger.warn(`[pi-subagents] ${event}:`, { payload: JSON.stringify(payload) });
+    if (SECURITY_EVENTS.has(event as TelemetryEventName)) {
+      logger.warn(`[telemetry] security event: ${event}`, { payload });
     }
   }
 }
@@ -114,8 +119,6 @@ export async function hashContent(content: string): Promise<string> {
  * Synchronous hash using Node.js crypto (fallback for non-browser environments).
  * Used when async hash is not convenient.
  */
-import { createHash } from "node:crypto";
-
 export function hashContentSync(content: string): string {
   return createHash("sha256").update(content).digest("hex");
 }

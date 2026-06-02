@@ -67,7 +67,7 @@ export default function (pi: ExtensionAPI) {
     cancelNudge(key);
     pendingNudges.set(key, setTimeout(() => {
       pendingNudges.delete(key);
-      try { send(); } catch { /* ignore stale completion side-effect errors */ }
+      try { send(); } catch (err) { logger.debug(`Swallowed error: ${err instanceof Error ? err.message : String(err)}`); }
     }, delay));
   }
 
@@ -1060,7 +1060,7 @@ Guidelines:
         await steerAgent(record.session, params.message);
         hookRegistry
           .dispatch("subagent:steer", record.id, { message: params.message })
-          .catch(() => {});
+          .catch((err) => { logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`); });
         pi.events.emit("subagents:steered", { id: record.id, message: params.message });
         const tokens = formatLifetimeTokens(record);
         const contextPercent = getSessionContextPercent(record.session);

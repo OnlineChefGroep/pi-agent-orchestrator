@@ -21,6 +21,7 @@ import { DEFAULT_AGENTS } from "./default-agents.js";
 import { detectEnv } from "./env.js";
 import { type AgentHandoff, parseHandoff, renderHandoffForParent } from "./handoff.js";
 import { type HookRegistry } from "./hooks.js";
+import { logger } from "./logger.js";
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "./memory.js";
 import { buildAgentPrompt, type PromptExtras } from "./prompts.js";
 import { preloadSkills } from "./skill-loader.js";
@@ -479,7 +480,7 @@ export async function runAgent(
     if (event.type === "turn_end") {
       options.hooks
         ?.dispatch("turn:end", options.agentId ?? "unknown")
-        .catch(() => {});
+        .catch((err) => { logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`); });
       turnCount++;
       options.onTurnEnd?.(turnCount);
       if (maxTurns != null) {
@@ -495,7 +496,7 @@ export async function runAgent(
     if (event.type === "turn_start") {
       options.hooks
         ?.dispatch("turn:start", options.agentId ?? "unknown")
-        .catch(() => {});
+        .catch((err) => { logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`); });
     }
     if (event.type === "message_start") {
       currentMessageText = "";
@@ -525,7 +526,7 @@ export async function runAgent(
           reason: event.reason,
           tokensBefore: event.result.tokensBefore,
         })
-        .catch(() => {});
+        .catch((err) => { logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`); });
       options.onCompaction?.({ reason: event.reason, tokensBefore: event.result.tokensBefore });
     }
     if (event.type === "compaction_start") {
@@ -533,7 +534,7 @@ export async function runAgent(
         ?.dispatch("compaction:start", options.agentId ?? "unknown", {
           reason: event.reason,
         })
-        .catch(() => {});
+        .catch((err) => { logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`); });
       // --- Compaction hook point ---
       // Callers can use pruneOldToolOutputs(session.messages, keepTurns) here
       // to pre-prune tool outputs before the upstream LLM summary compaction.
@@ -549,13 +550,13 @@ export async function runAgent(
     await session.prompt(effectivePrompt);
     options.hooks
       ?.dispatch("subagent:end", options.agentId ?? "unknown")
-      .catch(() => {});
+      .catch((err) => { logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`); });
   } catch (err) {
     options.hooks
       ?.dispatch("subagent:error", options.agentId ?? "unknown", {
         error: err instanceof Error ? err.message : String(err),
       })
-      .catch(() => {});
+      .catch((err2) => { logger.debug(`Hook dispatch error: ${err2 instanceof Error ? err2.message : String(err2)}`); });
     throw err;
   } finally {
     unsubTurns();
