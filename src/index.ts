@@ -22,6 +22,8 @@ import { getAgentConfig, getAvailableTypes, resolveType } from "./agent-types.js
 import { BatchOrchestrator } from "./batch-orchestrator.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
 import { buildAgentEstimate } from "./estimate.js";
+import { createGetResultTool } from "./tools/get-result.js";
+import { createSteerTool } from "./tools/steer.js";
 import { GroupJoinManager } from "./group-join.js";
 import { HookRegistry } from "./hooks.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "./invocation-config.js";
