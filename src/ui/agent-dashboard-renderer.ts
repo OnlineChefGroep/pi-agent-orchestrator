@@ -1,6 +1,7 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { getUiStyle } from "../agent-registry.js";
 import type { AgentRecord } from "../types.js";
+import { getLifetimeTotal } from "../usage.js";
 import { describeActivity, formatDuration, formatTokens, formatTurns, getDisplayName } from "./agent-format.js";
 import type { AgentActivity } from "./agent-ui-types.js";
 import { getSpinnerFrame } from "./animation.js";
@@ -37,7 +38,7 @@ function statusColor(rec: AgentRecord, th: DashboardTheme): string {
 function agentStats(rec: AgentRecord, activity?: AgentActivity): string {
   const parts: string[] = [];
   if (activity) parts.push(formatTurns(activity.turnCount, activity.maxTurns));
-  if (activity?.lifetimeUsage) parts.push(formatTokens(activity.lifetimeUsage.input + activity.lifetimeUsage.output));
+  if (activity?.lifetimeUsage) parts.push(formatTokens(getLifetimeTotal(activity.lifetimeUsage)));
   if (rec.toolUses > 0) parts.push(`${rec.toolUses} tool${rec.toolUses === 1 ? "" : "s"}`);
   parts.push(formatDuration(rec.startedAt, rec.completedAt));
   return parts.filter(Boolean).join(" · ");
