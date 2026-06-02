@@ -100,10 +100,10 @@ export interface SettingsAppliers {
 /** Emit callback — a subset of `pi.events.emit` to keep helpers testable. */
 export type SettingsEmit = (event: string, payload: unknown) => void;
 
-const VALID_JOIN_MODES: ReadonlySet<string> = new Set<JoinMode>(["async", "group", "smart", "swarm"]);
-const VALID_ORCHESTRATION_MODES: ReadonlySet<string> = new Set<OrchestrationMode>(["auto", "single", "swarm", "crew"]);
-const VALID_ANIMATION_STYLES: ReadonlySet<string> = new Set(["braille", "dots", "lines", "classic", "none"]);
-const VALID_UI_STYLES: ReadonlySet<string> = new Set(["premium", "retro", "plain", "cinematic"]);
+const VALID_JOIN_MODES = ["async", "group", "smart", "swarm"] as const;
+const VALID_ORCHESTRATION_MODES = ["auto", "single", "swarm", "crew"] as const;
+const VALID_ANIMATION_STYLES = ["braille", "dots", "lines", "classic", "none"] as const;
+const VALID_UI_STYLES = ["premium", "retro", "plain", "cinematic"] as const;
 
 // Sanity ceilings — prevent hand-edited configs from asking for values that
 // make no operational sense (e.g. 1e6 concurrent subagents). Permissive enough
@@ -116,94 +116,62 @@ const GRACE_TURNS_CEILING = 1_000;
 const SESSION_MAX_SPAWNS_CEILING = 10_000;
 const SESSION_MAX_TURNS_CEILING = 100_000;
 
+function validateInt(raw: Record<string, unknown>, key: string, min: number, max: number, fallback: number): number {
+  const val = raw[key];
+  if (typeof val === "number" && Number.isInteger(val) && val >= min && val <= max) return val;
+  return fallback;
+}
+
+function validateBool(raw: Record<string, unknown>, key: string, fallback: boolean): boolean {
+  const val = raw[key];
+  if (typeof val === "boolean") return val;
+  return fallback;
+}
+
+function validateEnum<T extends string>(raw: Record<string, unknown>, key: string, valid: readonly T[], fallback: T): T {
+  const val = raw[key];
+  if (typeof val === "string" && (valid as readonly string[]).includes(val)) return val as T;
+  return fallback;
+}
+
 /** Drop fields that don't match the expected shape. Silent — garbage becomes absent. */
 function sanitize(raw: unknown): SubagentsSettings {
   if (!raw || typeof raw !== "object") return {};
   const r = raw as Record<string, unknown>;
   const out: SubagentsSettings = {};
-  if (
-    Number.isInteger(r.maxConcurrent) &&
-    (r.maxConcurrent as number) >= 1 &&
-    (r.maxConcurrent as number) <= MAX_CONCURRENT_CEILING
-  ) {
-    out.maxConcurrent = r.maxConcurrent as number;
+
+  for (const { key, min, max } of [
+    { key: "maxConcurrent", min: 1, max: MAX_CONCURRENT_CEILING },
+    { key: "maxAgentsPerSession", min: 1, max: MAX_AGENTS_PER_SESSION_CEILING },
+    { key: "maxTotalTurnsPerSession", min: 1, max: MAX_TOTAL_TURNS_PER_SESSION_CEILING },
+    { key: "graceTurns", min: 1, max: GRACE_TURNS_CEILING },
+    { key: "dashboardRefreshInterval", min: 100, max: 60000 },
+    { key: "sessionMaxSpawns", min: 1, max: SESSION_MAX_SPAWNS_CEILING },
+    { key: "sessionMaxTurns", min: 1, max: SESSION_MAX_TURNS_CEILING },
+  ]) {
+    const v = validateInt(r, key, min, max, 0);
+    if (v) (out as Record<string, unknown>)[key] = v;
   }
-  if (
-    Number.isInteger(r.maxAgentsPerSession) &&
-    (r.maxAgentsPerSession as number) >= 1 &&
-    (r.maxAgentsPerSession as number) <= MAX_AGENTS_PER_SESSION_CEILING
-  ) {
-    out.maxAgentsPerSession = r.maxAgentsPerSession as number;
+
+  const dmt = validateInt(r, "defaultMaxTurns", 0, MAX_TURNS_CEILING, -1);
+  if (dmt >= 0) out.defaultMaxTurns = dmt;
+
+  for (const { key, valid } of [
+    { key: "defaultJoinMode" as const, valid: VALID_JOIN_MODES as readonly string[] },
+    { key: "animationStyle" as const, valid: VALID_ANIMATION_STYLES as readonly string[] },
+    { key: "uiStyle" as const, valid: VALID_UI_STYLES as readonly string[] },
+    { key: "orchestrationMode" as const, valid: VALID_ORCHESTRATION_MODES as readonly string[] },
+  ]) {
+    const v = validateEnum(r, key, valid, "");
+    if (v) (out as Record<string, unknown>)[key] = v;
   }
-  if (
-    Number.isInteger(r.maxTotalTurnsPerSession) &&
-    (r.maxTotalTurnsPerSession as number) >= 1 &&
-    (r.maxTotalTurnsPerSession as number) <= MAX_TOTAL_TURNS_PER_SESSION_CEILING
-  ) {
-    out.maxTotalTurnsPerSession = r.maxTotalTurnsPerSession as number;
+
+  for (const key of ["schedulingEnabled", "cinematicEnabled", "showActivityStream", "showTokenUsage", "showTurnProgress"] as const) {
+    if (typeof r[key] === "boolean") {
+      out[key] = validateBool(r, key, false);
+    }
   }
-  if (
-    Number.isInteger(r.defaultMaxTurns) &&
-    (r.defaultMaxTurns as number) >= 0 &&
-    (r.defaultMaxTurns as number) <= MAX_TURNS_CEILING
-  ) {
-    out.defaultMaxTurns = r.defaultMaxTurns as number;
-  }
-  if (
-    Number.isInteger(r.graceTurns) &&
-    (r.graceTurns as number) >= 1 &&
-    (r.graceTurns as number) <= GRACE_TURNS_CEILING
-  ) {
-    out.graceTurns = r.graceTurns as number;
-  }
-  if (typeof r.defaultJoinMode === "string" && VALID_JOIN_MODES.has(r.defaultJoinMode)) {
-    out.defaultJoinMode = r.defaultJoinMode as JoinMode;
-  }
-  if (typeof r.schedulingEnabled === "boolean") {
-    out.schedulingEnabled = r.schedulingEnabled;
-  }
-  if (typeof r.animationStyle === "string" && VALID_ANIMATION_STYLES.has(r.animationStyle)) {
-    out.animationStyle = r.animationStyle as "braille" | "dots" | "lines" | "classic" | "none";
-  }
-  if (typeof r.uiStyle === "string" && VALID_UI_STYLES.has(r.uiStyle)) {
-    out.uiStyle = r.uiStyle as "premium" | "retro" | "plain" | "cinematic";
-  }
-  if (typeof r.cinematicEnabled === "boolean") {
-    out.cinematicEnabled = r.cinematicEnabled;
-  }
-  if (typeof r.showActivityStream === "boolean") {
-    out.showActivityStream = r.showActivityStream;
-  }
-  if (typeof r.showTokenUsage === "boolean") {
-    out.showTokenUsage = r.showTokenUsage;
-  }
-  if (typeof r.showTurnProgress === "boolean") {
-    out.showTurnProgress = r.showTurnProgress;
-  }
-  if (typeof r.orchestrationMode === "string" && VALID_ORCHESTRATION_MODES.has(r.orchestrationMode)) {
-    out.orchestrationMode = r.orchestrationMode as OrchestrationMode;
-  }
-  if (
-    Number.isInteger(r.dashboardRefreshInterval) &&
-    (r.dashboardRefreshInterval as number) >= 100 &&
-    (r.dashboardRefreshInterval as number) <= 60000
-  ) {
-    out.dashboardRefreshInterval = r.dashboardRefreshInterval as number;
-  }
-  if (
-    Number.isInteger(r.sessionMaxSpawns) &&
-    (r.sessionMaxSpawns as number) >= 1 &&
-    (r.sessionMaxSpawns as number) <= SESSION_MAX_SPAWNS_CEILING
-  ) {
-    out.sessionMaxSpawns = r.sessionMaxSpawns as number;
-  }
-  if (
-    Number.isInteger(r.sessionMaxTurns) &&
-    (r.sessionMaxTurns as number) >= 1 &&
-    (r.sessionMaxTurns as number) <= SESSION_MAX_TURNS_CEILING
-  ) {
-    out.sessionMaxTurns = r.sessionMaxTurns as number;
-  }
+
   return out;
 }
 
