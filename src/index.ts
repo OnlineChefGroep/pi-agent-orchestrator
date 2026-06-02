@@ -411,25 +411,16 @@ export default function (pi: ExtensionAPI) {
     (event, payload) => pi.events.emit(event, payload),
   );
 
-  // ---- Agent tool ----
-  pi.registerTool(createAgentTool({
+  // ---- Tool context — shared dependency bag for extracted tool modules ----
+  const toolCtx = {
     pi, manager, widget, agentActivity, batchOrchestrator, scheduler, swarmJoin, hookRegistry,
     sendIndividualNudge, cancelNudge, scheduleNudge,
-  }));
+  };
 
-  // ---- get_subagent_result tool ----
-
-  pi.registerTool(createGetResultTool({
-    pi, manager, widget, agentActivity, batchOrchestrator, scheduler, swarmJoin, hookRegistry,
-    sendIndividualNudge, cancelNudge, scheduleNudge,
-  }));
-
-  // ---- steer_subagent tool ----
-
-  pi.registerTool(createSteerTool({
-    pi, manager, widget, agentActivity, batchOrchestrator, scheduler, swarmJoin, hookRegistry,
-    sendIndividualNudge, cancelNudge, scheduleNudge,
-  }));
+  // ---- Tools ----
+  pi.registerTool(createAgentTool(toolCtx));
+  pi.registerTool(createGetResultTool(toolCtx));
+  pi.registerTool(createSteerTool(toolCtx));
 
   registerAgentsCommand(pi, manager, scheduler, agentActivity);
   registerHooksCommand(pi, hookRegistry);
