@@ -584,9 +584,11 @@ Guidelines:
           const resultText = result.content[0]?.type === "text" ? result.content[0].text : "";
           if (resultText) {
             const lines = resultText.split("\n").slice(0, 50);
+            const expandedParts: string[] = [];
             for (const l of lines) {
-              line += `\n${theme.fg("dim", `  ${l}`)}`;
+              expandedParts.push(`\n${theme.fg("dim", `  ${l}`)}`);
             }
+            line += expandedParts.join("");
             if (resultText.split("\n").length > 50) {
               line += `\n${theme.fg("muted", "  ... (use get_subagent_result with verbose for full output)")}`;
             }

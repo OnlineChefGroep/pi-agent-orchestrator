@@ -147,15 +147,15 @@ function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" |
   }
 
   if (format === "mermaid") {
-    let out = "graph TD\n";
+    const mermaidParts: string[] = ["graph TD\n"];
     for (const r of records) {
       const cleanType = r.type.replace(/"/g, "'");
-      out += `  ${r.id.replace(/-/g, "_")}["[${cleanType}] ${r.id}"]\n`;
+      mermaidParts.push(`  ${r.id.replace(/-/g, "_")}["[${cleanType}] ${r.id}"]\n`);
       if (r.parentId) {
-        out += `  ${r.parentId.replace(/-/g, "_")} --> ${r.id.replace(/-/g, "_")}\n`;
+        mermaidParts.push(`  ${r.parentId.replace(/-/g, "_")} --> ${r.id.replace(/-/g, "_")}\n`);
       }
     }
-    return out;
+    return mermaidParts.join("");
   }
 
   if (format === "text") {
@@ -175,12 +175,12 @@ function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" |
       }
     }
 
-    let out = "";
+    const treeParts: string[] = [];
     const render = (nodeId: string, indent: string, isLast: boolean) => {
       const r = recordMap.get(nodeId);
       if (!r) return;
       const branch = indent ? (isLast ? "└─ " : "├─ ") : "";
-      out += `${indent}${branch}${r.id} (${r.type}) [${r.status}]\n`;
+      treeParts.push(`${indent}${branch}${r.id} (${r.type}) [${r.status}]\n`);
       const children = childrenMap.get(nodeId) || [];
       for (let i = 0; i < children.length; i++) {
         render(children[i].id, indent + (indent ? (isLast ? "   " : "│  ") : ""), i === children.length - 1);
@@ -189,7 +189,7 @@ function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" |
     for (let i = 0; i < roots.length; i++) {
       render(roots[i].id, "", i === roots.length - 1);
     }
-    return out || "No execution tree available.";
+    return treeParts.join("") || "No execution tree available.";
   }
 
   return "";
