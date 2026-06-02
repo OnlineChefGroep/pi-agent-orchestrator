@@ -197,7 +197,7 @@ describe("E2E: permission inheritance", () => {
   });
 
   it("RO parent forces RO child regardless of child config", () => {
-    const READ_ONLY_TOOLS = ["read", "bash", "grep"];
+    const READ_ONLY_TOOLS = ["read", "grep"];
 
     // Explore (RO) parent config
     const parentConfig = {
@@ -230,11 +230,11 @@ describe("E2E: permission inheritance", () => {
 
     expect(child.builtinToolNames).not.toContain("write");
     expect(child.builtinToolNames).not.toContain("edit");
-    expect(child.builtinToolNames).toEqual(["read", "bash", "grep"]);
+    expect(child.builtinToolNames).toEqual(["read", "grep"]);
   });
 
   it("Plan child inherits RO restriction from Explore parent", () => {
-    const READ_ONLY_TOOLS = ["read", "bash", "grep"];
+    const READ_ONLY_TOOLS = ["read", "grep"];
 
     const parentConfig = {
       builtinToolNames: READ_ONLY_TOOLS,
