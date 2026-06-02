@@ -109,8 +109,10 @@ export class AgentManager {
     this.onStart = onStart;
     this.onCompact = onCompact;
     this.maxConcurrent = maxConcurrent;
-    // Cleanup completed agents after 10 minutes (but keep sessions for resume)
-    this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);
+    const CLEANUP_INTERVAL_MS = 60_000;
+    const CLEANUP_CUTOFF_MS = 10 * 60_000;
+    // Cleanup completed agents after cutoff (but keep sessions for resume)
+    this.cleanupInterval = setInterval(() => this.cleanup(), CLEANUP_INTERVAL_MS);
     this.cleanupInterval.unref();
   }
 

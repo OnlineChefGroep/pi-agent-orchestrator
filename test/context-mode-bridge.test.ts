@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildCtxInjection,
   buildCtxRoutingBlock,
@@ -10,8 +10,6 @@ describe("isContextModeAvailable", () => {
   it("returns boolean", () => {
     const result = isContextModeAvailable();
     expect(typeof result).toBe("boolean");
-    // Context-mode may or may not be installed depending on the environment.
-    // The function must not throw — graceful handling is the key invariant.
   });
 
   it("is idempotent — returns same value on repeated calls", () => {

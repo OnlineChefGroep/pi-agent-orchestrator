@@ -58,6 +58,21 @@ export function getGraceTurns(): number { return graceTurns; }
 /** Set the grace turns value (minimum 1). */
 export function setGraceTurns(n: number): void { graceTurns = Math.max(1, n); }
 
+/** Cached available model keys per registry to avoid rebuilding Set on every spawn. */
+let _cachedRegistry: unknown = null;
+let _cachedKeys: Set<string> | null = null;
+
+function getAvailableKeys(
+  registry: { getAvailable?(): Model<any>[] },
+): Set<string> | undefined {
+  if (registry === _cachedRegistry && _cachedKeys) return _cachedKeys;
+  const available = registry.getAvailable?.();
+  if (!available) return undefined;
+  _cachedKeys = new Set(available.map((m: any) => `${m.provider}/${m.id}`));
+  _cachedRegistry = registry;
+  return _cachedKeys;
+}
+
 /**
  * Try to find the right model for an agent type.
  * Priority: explicit option > config.model > parent model.
@@ -73,11 +88,7 @@ function resolveDefaultModel(
       const provider = configModel.slice(0, slashIdx);
       const modelId = configModel.slice(slashIdx + 1);
 
-      // Build a set of available model keys for fast lookup
-      const available = registry.getAvailable?.();
-      const availableKeys = available
-        ? new Set(available.map((m: any) => `${m.provider}/${m.id}`))
-        : undefined;
+      const availableKeys = getAvailableKeys(registry);
       const isAvailable = (p: string, id: string) =>
         !availableKeys || availableKeys.has(`${p}/${id}`);
 
@@ -586,10 +597,10 @@ export async function runAgent(
   if (!options.skipValidators && hasValidators(agentConfig)) {
     const validators = agentConfig!.validators!;
     const agentDescription = getAgentDescription(agentConfig);
-    const maxRetries = 2; // Hard limit to prevent infinite loops
+    const VALIDATION_MAX_RETRIES = 2;
     let retries = 0;
 
-    while (retries <= maxRetries) {
+    while (retries <= VALIDATION_MAX_RETRIES) {
       const validatorPromises = validators.map((v) =>
         runAgent(ctx, v.agentId, buildValidatorPrompt(responseText, v.criteria, agentDescription), {
           pi: options.pi,
@@ -610,7 +621,7 @@ export async function runAgent(
       validationResults = await Promise.all(validatorPromises);
       validated = validationResults.every((r) => r.passed);
       
-      if (validated || retries >= maxRetries) {
+      if (validated || retries >= VALIDATION_MAX_RETRIES) {
         options.onValidationComplete?.(validationResults);
         break;
       }

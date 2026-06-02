@@ -62,13 +62,11 @@ describe("SwarmCoordinator", () => {
 
     it("returns false if swarm is already delivered", () => {
       coordinator.registerSwarm("test-swarm", ["agent1"]);
-      // Manually mark as delivered (simulating completion)
-      // This would normally happen through the lifecycle
-      
-      // Since we can't easily simulate delivered state without private access,
-      // we'll test the basic case
+      // Mark swarm as delivered via internal state
+      (coordinator as any).swarms.get("test-swarm").delivered = true;
+
       const result = coordinator.addAgentToSwarm("test-swarm", "agent2");
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
   });
 
