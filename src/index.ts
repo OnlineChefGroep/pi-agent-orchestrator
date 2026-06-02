@@ -281,8 +281,9 @@ export default function (pi: ExtensionAPI) {
     getRecord: (id: string) => {
       const r = manager.getRecord(id);
       if (!r) return undefined;
-      // Only return safe, non-sensitive fields
-      return { id: r.id, type: r.type, status: r.status, description: r.description };
+      // Only return safe, non-sensitive fields. Truncate description to
+      // avoid leaking sensitive context to other extensions in the process.
+      return { id: r.id, type: r.type, status: r.status, description: r.description?.slice(0, 200) };
     },
     // NO spawn, NO listAgents (that goes through the Agent tool or API)
     listAgentIds: (type: string) => manager.listAgents().filter(a => a.type === type).map(a => a.id),
@@ -326,6 +327,8 @@ export default function (pi: ExtensionAPI) {
     scheduler.stop();
   });
 
+  // TODO: Implement proper authProvider to verify extension identity.
+  // Currently all calls authenticate as "legacy" with a shared rate limit bucket.
   const { unsubPing: unsubPingRpc, unsubSpawn: unsubSpawnRpc, unsubStop: unsubStopRpc } = registerRpcHandlers({
     events: pi.events,
     pi,
