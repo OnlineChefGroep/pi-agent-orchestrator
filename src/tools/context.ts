@@ -19,5 +19,4 @@ export interface ToolContext {
   sendIndividualNudge: (record: any) => void;
   cancelNudge: (key: string) => void;
   scheduleNudge: (key: string, fn: () => void) => void;
-  buildEventRecord: (record: any) => any;
 }
