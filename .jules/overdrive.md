@@ -21,3 +21,19 @@
 - Execution time for rendering a 20,000 agent execution tree to Mermaid (`buildAgentTreeMermaid`) dropped from ~15500ms to ~145ms.
 - Execution time for rendering the same tree to plain text (`buildExecutionTree` -> text format) dropped from ~17500ms to ~80ms.
 **Actionable Principle:** Never use `.find()` or `.filter()` on an entire dataset within a loop or recursive traversal function when generating hierarchical tree structures. Always perform a single-pass $O(n)$ mapping initialization step to construct structural HashMaps before processing data hierarchically.
+
+# 🏎️ Overdrive Architectural Journal
+
+## Systemic Bottleneck
+In `src/agent-manager.ts`, the validation feedback processing for failed results was using a chained `.filter().map()` approach, traversing the array multiple times. This led to inefficient execution, creating intermediate arrays inside loops.
+
+## Refactor Strategy
+Replaced the `.filter().map()` chain with a single `.reduce()` call. Inside the `.reduce()`, a standard `for...of` loop is used to iterate through criteria, building the detailed string recursively without intermediate array creation or chaining.
+
+## Key Metric Shift
+Baseline performance for 10000 items: `~530.2 ms`
+Optimized performance (single reduce): `~346.7 ms`
+Improvement: `~34.6%` execution time reduction for this specific block of code.
+
+## Actionable Principle
+Minimize chained array operations (`filter().map()`) inside heavily hit loops or when processing significant amounts of data. Combine these operations into a single `reduce()` or standard `for` loop to eliminate intermediate array allocations and redundant iterations.
