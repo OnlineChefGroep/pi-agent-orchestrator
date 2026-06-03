@@ -29,6 +29,7 @@ describe('GroupJoinManager', () => {
   afterEach(() => {
     manager.dispose();
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   describe('registration', () => {
