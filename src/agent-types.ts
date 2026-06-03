@@ -134,6 +134,7 @@ export const CTX_TOOL_NAMES: string[] = [
 
 /** Unified runtime registry of all agents (defaults + user-defined). */
 const agents = new Map<string, AgentConfig>();
+const lowerCaseKeys = new Map<string, string>();
 
 /**
  * Register default + user agents in the unified registry.
@@ -146,15 +147,18 @@ const agents = new Map<string, AgentConfig>();
  */
 export function registerAgents(userAgents: Map<string, AgentConfig>): void {
   agents.clear();
+  lowerCaseKeys.clear();
 
   // Start with defaults
   for (const [name, config] of DEFAULT_AGENTS) {
     agents.set(name, config);
+    lowerCaseKeys.set(name.toLowerCase(), name);
   }
 
   // Overlay user agents (overrides defaults with same name)
   for (const [name, config] of userAgents) {
     agents.set(name, config);
+    lowerCaseKeys.set(name.toLowerCase(), name);
   }
 }
 
@@ -162,10 +166,7 @@ export function registerAgents(userAgents: Map<string, AgentConfig>): void {
 function resolveKey(name: string): string | undefined {
   if (agents.has(name)) return name;
   const lower = name.toLowerCase();
-  for (const key of agents.keys()) {
-    if (key.toLowerCase() === lower) return key;
-  }
-  return undefined;
+  return lowerCaseKeys.get(lower);
 }
 
 /** Resolve a type name case-insensitively. Returns the canonical key or undefined. */

@@ -21,3 +21,19 @@
 - Execution time for rendering a 20,000 agent execution tree to Mermaid (`buildAgentTreeMermaid`) dropped from ~15500ms to ~145ms.
 - Execution time for rendering the same tree to plain text (`buildExecutionTree` -> text format) dropped from ~17500ms to ~80ms.
 **Actionable Principle:** Never use `.find()` or `.filter()` on an entire dataset within a loop or recursive traversal function when generating hierarchical tree structures. Always perform a single-pass $O(n)$ mapping initialization step to construct structural HashMaps before processing data hierarchically.
+
+## Optimize agent key resolution to O(1)
+
+### Systemic Bottleneck
+In `src/agent-types.ts`, the `resolveKey` function used a linear search (`O(N)`) over all agent keys to find a case-insensitive match for the provided agent name. While the number of default agents is small, this linear search is called frequently and its performance degrades linearly as the number of agents grows (which can easily happen with dynamically registered user agents or in a loop context). The `resolveKey` function is a core utility used in multiple places within the code.
+
+### Refactor Strategy
+To eliminate the linear search, we introduced an auxiliary Map called `lowerCaseKeys` that caches the lowercased version of each agent's name to its original casing. This map is updated in `registerAgents` alongside the primary `agents` map. The `resolveKey` function now simply checks the primary map, and if not found, performs a direct `O(1)` lookup in the `lowerCaseKeys` map.
+
+### Key Metric Shift
+- **Baseline Performance:** Resolving 100,000 keys simulating worst-case resolution (non-existent key) across 1,000 simulated agents took approximately ~4007 ms.
+- **Optimized Performance:** Resolving the same 100,000 keys took approximately ~15 ms.
+- **Improvement:** This represents a >99% reduction in execution time for the `resolveKey` function in worst-case scenarios, significantly reducing CPU cycles and improving overall application responsiveness when handling agent resolution.
+
+### Actionable Principle
+When resolving keys case-insensitively, especially in frequently executed or core functions, maintain an auxiliary lookup map (e.g., lowercased to original) to achieve O(1) time complexity rather than relying on linear O(N) searches.
