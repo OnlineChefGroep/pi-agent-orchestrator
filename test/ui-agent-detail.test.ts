@@ -79,4 +79,25 @@ describe("showAgentDetail", () => {
     expect(reloadCustomAgents).toHaveBeenCalledTimes(1);
     expect(ctx.ui.notify).toHaveBeenCalledWith("Deleted /agents/custom-agent.md", "info");
   });
+
+  it("resets default agent overrides with async file I/O", async () => {
+    vi.mocked(getAgentConfig).mockReturnValue({
+      name: "custom-agent",
+      description: "Custom agent",
+      builtinToolNames: ["read"],
+      enabled: true,
+      isDefault: true,
+    });
+    const ctx = mockContext("Reset to default");
+
+    await showAgentDetail(ctx, "custom-agent");
+
+    expect(ctx.ui.confirm).toHaveBeenCalledWith(
+      "Reset to default",
+      "Delete override /agents/custom-agent.md and restore embedded default?",
+    );
+    expect(fsPromises.unlink).toHaveBeenCalledWith("/agents/custom-agent.md");
+    expect(reloadCustomAgents).toHaveBeenCalledTimes(1);
+    expect(ctx.ui.notify).toHaveBeenCalledWith("Restored default custom-agent", "info");
+  });
 });
