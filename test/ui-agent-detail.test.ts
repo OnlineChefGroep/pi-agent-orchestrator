@@ -1,43 +1,82 @@
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { describe, it } from "vitest";
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { reloadCustomAgents } from "../src/agent-registry.js";
+import { getAgentConfig } from "../src/agent-types.js";
+import { showAgentDetail } from "../src/ui/agent-detail.js";
+import { findAgentFile } from "../src/ui/agent-file-helpers.js";
 
-describe("showAgentDetail Benchmark", () => {
-  it("measures the execution time of sync vs async file I/O", async () => {
-    const tempDir = tmpdir();
-    // Use a random identifier to prevent concurrent test collisions
-    const uniqueId = Math.random().toString(36).substring(7);
-    const tempFilePath = join(tempDir, `dummy-agent-${uniqueId}.md`);
-    writeFileSync(tempFilePath, "Dummy Content");
+vi.mock("node:fs/promises", () => ({
+  readFile: vi.fn(async () => "original content"),
+  writeFile: vi.fn(async () => undefined),
+  unlink: vi.fn(async () => undefined),
+}));
 
-    const iterations = 1000;
+vi.mock("../src/agent-registry.js", () => ({
+  reloadCustomAgents: vi.fn(),
+}));
 
-    // Sync baseline
-    const startSync = performance.now();
-    for (let i = 0; i < iterations; i++) {
-       const content = readFileSync(tempFilePath, "utf-8");
-       const edited = `${content} edited`;
-       writeFileSync(tempFilePath, edited, "utf-8");
-    }
-    const endSync = performance.now();
-    const syncTime = endSync - startSync;
+vi.mock("../src/agent-types.js", () => ({
+  getAgentConfig: vi.fn(),
+}));
 
-    // Async baseline
-    const startAsync = performance.now();
-    for (let i = 0; i < iterations; i++) {
-       const content = await readFile(tempFilePath, "utf-8");
-       const edited = `${content} edited`;
-       await writeFile(tempFilePath, edited, "utf-8");
-    }
-    const endAsync = performance.now();
-    const asyncTime = endAsync - startAsync;
+vi.mock("../src/ui/agent-file-helpers.js", () => ({
+  findAgentFile: vi.fn(),
+}));
 
-    console.log(`Sync time: ${syncTime.toFixed(2)} ms`);
-    console.log(`Async time: ${asyncTime.toFixed(2)} ms`);
-    console.log(`Improvement: ${(((syncTime - asyncTime) / syncTime) * 100).toFixed(2)}%`);
+vi.mock("../src/ui/agent-actions.js", () => ({
+  disableAgent: vi.fn(async () => undefined),
+  ejectAgent: vi.fn(async () => undefined),
+  enableAgent: vi.fn(async () => undefined),
+}));
 
-    unlinkSync(tempFilePath);
+const fsPromises = await import("node:fs/promises");
+
+function mockContext(choice: string, editorValue?: string, confirmValue = true): ExtensionCommandContext {
+  return {
+    ui: {
+      select: vi.fn(async () => choice),
+      editor: vi.fn(async () => editorValue),
+      confirm: vi.fn(async () => confirmValue),
+      notify: vi.fn(),
+    },
+  } as unknown as ExtensionCommandContext;
+}
+
+describe("showAgentDetail", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getAgentConfig).mockReturnValue({
+      name: "custom-agent",
+      description: "Custom agent",
+      builtinToolNames: ["read"],
+      enabled: true,
+    });
+    vi.mocked(findAgentFile).mockReturnValue({ path: "/agents/custom-agent.md", location: "project" });
+  });
+
+  it("edits custom agent files with async file I/O", async () => {
+    const ctx = mockContext("Edit", "updated content");
+
+    await showAgentDetail(ctx, "custom-agent");
+
+    expect(fsPromises.readFile).toHaveBeenCalledWith("/agents/custom-agent.md", "utf-8");
+    expect(ctx.ui.editor).toHaveBeenCalledWith("Edit custom-agent", "original content");
+    expect(fsPromises.writeFile).toHaveBeenCalledWith("/agents/custom-agent.md", "updated content", "utf-8");
+    expect(reloadCustomAgents).toHaveBeenCalledTimes(1);
+    expect(ctx.ui.notify).toHaveBeenCalledWith("Updated /agents/custom-agent.md", "info");
+  });
+
+  it("deletes custom agent files with async file I/O", async () => {
+    const ctx = mockContext("Delete");
+
+    await showAgentDetail(ctx, "custom-agent");
+
+    expect(ctx.ui.confirm).toHaveBeenCalledWith(
+      "Delete agent",
+      "Delete custom-agent from project (/agents/custom-agent.md)?",
+    );
+    expect(fsPromises.unlink).toHaveBeenCalledWith("/agents/custom-agent.md");
+    expect(reloadCustomAgents).toHaveBeenCalledTimes(1);
+    expect(ctx.ui.notify).toHaveBeenCalledWith("Deleted /agents/custom-agent.md", "info");
   });
 });
