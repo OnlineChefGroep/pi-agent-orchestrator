@@ -35,12 +35,25 @@ type CommonSpawnOptions = {
   invocation: AgentInvocation;
 };
 
+/**
+ * Extracts the text from the first `text` content item in a tool result.
+ *
+ * @param result - Object containing a `content` array of content entries
+ * @returns The `.text` of the first content item with `type === 'text'`, or an empty string if none is found
+ */
 function getFirstTextContent(result: Pick<AgentResultLike, "content">): string {
   const firstText = result.content.find((item): item is TextContent => item.type === "text");
   return firstText?.text ?? "";
 }
 
-/** Render agent result for the TUI — status badge, stats line, expanded output. */
+/**
+ * Format an agent tool result into a TUI Text block showing status, stats, and optional expanded output.
+ *
+ * @param result - The agent result containing `content` and optional `details` that drive the rendered output.
+ * @param opts - Rendering options: `expanded` shows full (truncated) output lines, `isPartial` treats the result as streaming/partial.
+ * @param theme - Theme used to style status, stats, and message lines.
+ * @returns A `Text` instance containing the composed, styled representation of the agent result for TUI display.
+ */
 export function renderAgentResult(
   result: AgentResultLike,
   opts: { expanded: boolean; isPartial: boolean },
@@ -135,7 +148,12 @@ export function renderAgentResult(
   return new Text(line, 0, 0);
 }
 
-/** Build the common spawn option fields shared by background and foreground paths. */
+/**
+ * Map a CommonSpawnOptions object into the spawn API shape used by agent manager calls.
+ *
+ * @param input - Common spawn configuration (model, limits, isolation and invocation metadata)
+ * @returns An object containing the normalized spawn fields: description, optional model, optional maxTurns, isolation flags, optional thinkingLevel, optional isolation mode, and the invocation metadata
+ */
 export function buildSpawnOptions(input: CommonSpawnOptions): {
   description: string;
   model?: Model<any>;
@@ -158,7 +176,12 @@ export function buildSpawnOptions(input: CommonSpawnOptions): {
   };
 }
 
-/** Wrap a callbacks object's onSessionCreated to run additional logic after the original. */
+/**
+ * Decorates a callbacks object so `afterCreate` is invoked after its existing `onSessionCreated` handler.
+ *
+ * @param target - An object that may have an `onSessionCreated` callback to wrap
+ * @param afterCreate - Callback to run with the session after the original handler (if any) has been called
+ */
 export function setupSessionCallbacks(
   target: { onSessionCreated?: (session: any) => void },
   afterCreate: (session: any) => void,
@@ -170,6 +193,13 @@ export function setupSessionCallbacks(
   };
 }
 
+/**
+ * Register and return the "Agent" tool used to launch and control autonomous subagents.
+ *
+ * The returned tool exposes parameters to configure agent type, prompt, model, thinking level, max turns, background/foreground execution, resuming, isolation, scheduling (when enabled), and estimate-only queries; it renders calls/results with a custom TUI presentation and implements execution paths for estimates, scheduling, resuming, background spawning (with output-file streaming and batching), and foreground streaming with progress updates.
+ *
+ * @returns The tool definition object for the Agent tool, suitable for registration with the tool system.
+ */
 export function createAgentTool(ctx: ToolContext) {
   // Schedule param + its guideline are gated on `schedulingEnabled` (read once
   // at registration; flipping the setting later requires next pi session for

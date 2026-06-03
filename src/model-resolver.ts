@@ -20,6 +20,12 @@ let cachedRegistry: unknown = null;
 let cachedSet: Set<string> | null = null;
 let cachedAll: ModelEntry[] | null = null;
 
+/**
+ * Builds (and caches) a set of lowercase "provider/id" keys and the corresponding model list from the registry.
+ *
+ * @param registry - Registry to query; uses `getAvailable()` if present, otherwise falls back to `getAll()`.
+ * @returns An object with `set` containing lowercase `"provider/id"` entries for available models and `all` containing the list used to build the set.
+ */
 function getAvailableSet<T extends ModelEntry>(registry: ModelRegistry<T>): { set: Set<string>; all: T[] } {
   if (registry !== cachedRegistry || !cachedSet) {
     const all = registry.getAvailable?.() ?? registry.getAll();
@@ -38,9 +44,13 @@ export function invalidateModelCache(): void {
 }
 
 /**
- * Resolve a model string to a Model instance.
- * Tries exact match first ("provider/modelId"), then fuzzy match against all available models.
- * Returns the Model on success, or an error message string on failure.
+ * Resolve a model identifier to a registered model.
+ *
+ * Attempts an exact "provider/modelId" match against available models, then falls back to a fuzzy search over provider, id, and name.
+ *
+ * @param input - The model identifier or search query
+ * @param registry - Registry to resolve the model from
+ * @returns The matched model of type `T` if found, otherwise an error message string that lists available models
  */
 export function resolveModel<T extends ModelEntry>(
   input: string,

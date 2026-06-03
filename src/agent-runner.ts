@@ -62,6 +62,12 @@ export function setGraceTurns(n: number): void { graceTurns = Math.max(1, n); }
 let _cachedRegistry: unknown = null;
 let _cachedKeys: Set<string> | null = null;
 
+/**
+ * Retrieve (and cache) the set of available model keys from a model registry, formatted as `provider/id`.
+ *
+ * @param registry - An object that may expose a `getAvailable()` method returning an array of models.
+ * @returns A `Set` of model keys in the form `provider/id` when `getAvailable()` returns a list, or `undefined` if the registry does not provide availability information.
+ */
 function getAvailableKeys(
   registry: { getAvailable?(): Model<Api>[] },
 ): Set<string> | undefined {
@@ -74,8 +80,12 @@ function getAvailableKeys(
 }
 
 /**
- * Try to find the right model for an agent type.
- * Priority: explicit option > config.model > parent model.
+ * Resolve the effective model for an agent, preferring an explicit `provider/modelId` override when provided.
+ *
+ * @param parentModel - Fallback model from the parent context used when `configModel` is absent or invalid
+ * @param registry - Registry able to locate models and optionally report available models
+ * @param configModel - Optional override in the form `"<provider>/<modelId>"`; only used if it matches an available model
+ * @returns The `Model<Api>` discovered from `configModel` when valid and available, otherwise `parentModel`
  */
 function resolveDefaultModel(
   parentModel: Model<Api> | undefined,
@@ -740,7 +750,14 @@ export async function steerAgent(
 }
 
 /**
- * Get the subagent's conversation messages as formatted text.
+ * Serialize a session's messages into a human-readable conversation transcript.
+ *
+ * Produces ordered blocks for user messages (`[User]: ...`), assistant messages (`[Assistant]: ...`),
+ * assistant-initiated tool calls (`[Tool Calls]:` with indented `Tool: <name>` lines), and tool results
+ * (`[Tool Result (<toolName>)]: ...`). Assistant text parts are joined with newlines; tool result text
+ * is truncated to 200 characters with `...` when longer. Empty user messages are omitted.
+ *
+ * @returns The formatted conversation as a single string with message blocks separated by blank lines.
  */
 export function getAgentConversation(session: AgentSession): string {
   const parts: string[] = [];
