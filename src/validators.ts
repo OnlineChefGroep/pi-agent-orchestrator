@@ -19,9 +19,10 @@ const MAX_DESCRIPTION_LENGTH = 500;
  *      skipValidators=true, so even a compromised validator cannot recurse.
  */
 function sanitizeValidatorInput(input: string, maxLength: number = MAX_OUTPUT_SIZE): string {
-  return input
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')  // Remove control chars
-    .slice(0, maxLength);
+  // Remove control chars (C0 and C1), preserving whitespace like tab/newline
+  const noControl = input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+  // Unicode-safe truncation to prevent lone surrogates
+  return Array.from(noControl).slice(0, maxLength).join('');
 }
 
 /**
