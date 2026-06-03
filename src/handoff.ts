@@ -32,6 +32,7 @@ const VALID_STATUSES = new Set(["success", "partial", "failed"]);
 // CVE-008 FIX: JSON parsing limits
 const MAX_JSON_SIZE = 1024 * 1024;  // 1MB max JSON
 const MAX_JSON_KEYS = 1000;  // Total key count limit (renamed from MAX_JSON_DEPTH for clarity)
+const MAX_JSON_DEPTH = 200;  // Maximum allowed nesting depth
 const MAX_FINDINGS_COUNT = 100;
 const MAX_SUMMARY_LENGTH = 10000;
 const MAX_STRING_LENGTH = 50000;
@@ -41,36 +42,80 @@ const MAX_ARTIFACTS_COUNT = 50;
 /**
  * CVE-008 FIX: Safe JSON parser with size and key count limits.
  *
- * Tracks total number of keys in the JSON structure to prevent
- * excessively large payloads. The reviver counts each key encountered
- * during parsing.
+ * Prevents call stack exhaustion by checking depth before parsing,
+ * and tracks key counts to prevent excessively large payloads.
  */
 function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS): unknown {
   if (input.length > MAX_JSON_SIZE) {
     throw new Error(`JSON size ${input.length} exceeds maximum ${MAX_JSON_SIZE} bytes`);
   }
   
-  // Track total key count during parsing
+  let depth = 0;
   let keyCount = 0;
+  let inString = false;
+  let escapeNext = false;
   
-  const reviver = (key: string, value: unknown) => {
-    // Count each key (excluding the empty string for the root object)
-    if (typeof key === 'string' && key !== '') {
-      keyCount++;
-      if (keyCount > maxKeys) {
-        throw new Error(`JSON key count exceeds maximum of ${maxKeys}`);
+  // Pre-parse validation to avoid JSON.parse throwing call stack errors
+  // on deeply nested malicious payloads.
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+    if (char === '\\' && inString) {
+      escapeNext = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    
+    if (!inString) {
+      if (char === '{' || char === '[') {
+        depth++;
+        if (depth > MAX_JSON_DEPTH) {
+          throw new Error(`JSON depth exceeds maximum of ${MAX_JSON_DEPTH}`);
+        }
+      } else if (char === '}' || char === ']') {
+        depth--;
+      } else if (char === ':') {
+        keyCount++;
+        if (keyCount > maxKeys) {
+          throw new Error(`JSON key count exceeds maximum of ${maxKeys}`);
+        }
       }
     }
-    
-    // Limit string lengths
-    if (typeof value === 'string' && value.length > MAX_STRING_LENGTH) {
-      return value.slice(0, MAX_STRING_LENGTH);
-    }
-    
-    return value;
-  };
+  }
   
-  return JSON.parse(input, reviver);
+  const parsed = JSON.parse(input);
+
+  // Walk the parsed tree to validate string lengths
+  truncateStrings(parsed);
+
+  return parsed;
+}
+
+function truncateStrings(obj: any): any {
+  if (typeof obj === 'string') {
+    if (obj.length > MAX_STRING_LENGTH) {
+      return obj.slice(0, MAX_STRING_LENGTH);
+    }
+    return obj;
+  } else if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i++) {
+      obj[i] = truncateStrings(obj[i]);
+    }
+  } else if (obj !== null && typeof obj === 'object') {
+    for (const key in obj) {
+      if (Object.hasOwn(obj, key)) {
+        obj[key] = truncateStrings(obj[key]);
+      }
+    }
+  }
+  return obj;
 }
 
 /**
