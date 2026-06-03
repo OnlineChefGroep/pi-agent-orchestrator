@@ -23,6 +23,18 @@ const MAX_TOOLS_COUNT = 100;
  * .pi/agents/ are trusted sources. No regex blacklist for prompt injection
  * (trivially bypassed with Unicode, base64, whitespace variations).
  */
+
+/**
+ * Redact sensitive strings to prevent information leakage in logs.
+ * Preserves the first and last characters for debugging context,
+ * replacing everything in between with '***'.
+ */
+function redactSensitive(val: string): string {
+  if (!val) return "";
+  if (val.length <= 2) return "***";
+  return `${val[0]}***${val[val.length - 1]}`;
+}
+
 function validateAgentConfig(name: string, config: Partial<AgentConfig>): string[] {
   const errors: string[] = [];
   
@@ -32,7 +44,7 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
   } else if (name.length > MAX_NAME_LENGTH) {
     errors.push(`Agent name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
   } else if (UNSAFE_NAME_PATTERN.test(name)) {
-    errors.push(`Agent name contains unsafe characters: ${name}`);
+    errors.push(`Agent name contains unsafe characters.`);
   }
   
   // Prevent overriding built-in agents with wildcard tools
@@ -56,7 +68,7 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
     const knownTools = new Set([...BUILTIN_TOOL_NAMES, '*']);
     const unknownTools = config.builtinToolNames.filter(t => !knownTools.has(t));
     if (unknownTools.length > 0) {
-      emitTelemetry("agent:unknown-tools", { name, tools: unknownTools });
+      emitTelemetry("agent:unknown-tools", { name: redactSensitive(name), tools: unknownTools.map(redactSensitive) });
     }
   }
   
@@ -143,7 +155,7 @@ function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source: "pro
     // CVE-002 FIX: Validate agent config before adding
     const validationErrors = validateAgentConfig(name, config);
     if (validationErrors.length > 0) {
-      emitTelemetry("agent:validation-failed", { name, errors: validationErrors });
+      emitTelemetry("agent:validation-failed", { name: redactSensitive(name), errors: validationErrors });
       // Disable agent with validation errors (don't skip entirely - let user see it)
       config.enabled = false;
     }
