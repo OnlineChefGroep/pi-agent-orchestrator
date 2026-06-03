@@ -124,9 +124,11 @@ describe("buildParentContext", () => {
         }
       },
       {
-        type: "toolResult",
-        toolName: "search",
-        result: "Internal tool output"
+        type: "message",
+        message: {
+          role: "toolResult",
+          content: "Internal tool output"
+        }
       }
     ];
 
