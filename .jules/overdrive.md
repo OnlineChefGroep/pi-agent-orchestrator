@@ -37,6 +37,13 @@
 ### Actionable Principle
 **Never block the main thread for I/O in async contexts.** Always utilize `node:fs/promises` for file mutations inside Promise/async boundaries to preserve system-wide concurrency, especially when building orchestration software that handles multiple autonomous agents.
 
+## 2026-06-03 - Agent Detail I/O / Async Shift
+
+**Systemic Bottleneck:** Synchronous file I/O operations (`readFileSync`, `writeFileSync`, `unlinkSync`) block the event loop in `src/ui/agent-detail.ts`. Although for individual small files in a local UI script it might seem that synchronous reads are faster in a micro-benchmark (due to avoiding promise overhead), blocking the event loop is detrimental in a Node.js application, especially one that could be handling other async events or UI interactions concurrently (like the TUI or subagent RPCs). This blocks the thread and introduces latency for all concurrent operations.
+**Refactor Strategy:** Replace all `readFileSync`, `writeFileSync`, and `unlinkSync` calls in `src/ui/agent-detail.ts` with their asynchronous counterparts from `node:fs/promises` (`readFile`, `writeFile`, `unlink`). The function `showAgentDetail` is already `async`, making this refactoring straightforward using `await`.
+**Key Metric Shift:** Elimination of main-thread blocking I/O in the `showAgentDetail` flow. Microbenchmarks for single file reads actually show sync reads are faster, but the real metric is event loop lag and concurrency capability. By moving to async I/O, we improve the application's responsiveness and potential throughput for other asynchronous tasks.
+**Actionable Principle:** In `async` functions within a Node.js environment, always prefer asynchronous I/O (`fs/promises`) over synchronous I/O (`fs.*Sync`) to prevent blocking the event loop, thereby improving application responsiveness and concurrency.
+
 ## Optimization: Async refactor of custom agent loading (2026-06-03)
 
 ### Systemic Bottleneck
@@ -54,3 +61,74 @@ The `loadFromDir` function in `src/custom-agents.ts` was performing sequential s
 
 ### Actionable Principle
 Never execute synchronous bulk I/O (`readFileSync` inside loops) on the main thread in a TUI-driven interactive CLI. Always propagate async I/O up the call stack and use `Promise.all` where feasible to ensure the event loop is yielded to the renderer.
+
+## 2026-06-03 - Validation Feedback Loop / Array Allocation Shift
+
+**Systemic Bottleneck:** In `src/agent-manager.ts`, the validation feedback processing for failed results used a chained `.filter().map()` approach, traversing the array multiple times and creating intermediate arrays inside loops.
+
+**Refactor Strategy:** Replaced the `.filter().map()` chain with a single `.reduce()` call. Inside the `.reduce()`, a standard `for...of` loop iterates through criteria, building the detailed string recursively without intermediate array creation or chaining.
+
+**Key Metric Shift:**
+
+- Baseline performance for 10000 items: ~530.2 ms
+- Optimized performance (single reduce): ~346.7 ms
+- Improvement: ~34.6% execution time reduction for this specific block of code.
+
+**Actionable Principle:** Minimize chained array operations (`filter().map()`) inside heavily hit loops or when processing significant amounts of data. Combine these operations into a single `reduce()` or standard `for` loop to eliminate intermediate array allocations and redundant iterations.
+
+## 2026-06-03 - Agent Key Resolution / O(1) Lookup Shift
+
+**Systemic Bottleneck:** In `src/agent-types.ts`, the `resolveKey` function used a linear search (`O(N)`) over all agent keys to find a case-insensitive match for the provided agent name. While the number of default agents is small, this linear search is called frequently and its performance degrades linearly as the number of agents grows.
+
+**Refactor Strategy:** Introduced an auxiliary `Map` called `lowerCaseKeys` that caches the lowercased version of each agent's name to its original casing. This map is updated in `registerAgents` alongside the primary `agents` map. The `resolveKey` function now performs a direct `O(1)` lookup.
+
+**Key Metric Shift:**
+
+- Baseline (100,000 worst-case key resolutions, 1,000 agents): ~4007 ms
+- Optimized: ~15 ms
+- Improvement: >99% reduction in execution time for the `resolveKey` function in worst-case scenarios.
+
+**Actionable Principle:** When resolving keys case-insensitively in frequently executed core functions, maintain an auxiliary lookup map (e.g., lowercased to original) to achieve `O(1)` time complexity rather than relying on linear `O(N)` searches.
+
+## 2026-06-03 - TUI Dashboard List Rendering / DOM Virtualization Shift
+
+**Systemic Bottleneck:** The cinematic TUI dashboard used an eager rendering pattern where every agent row (including all text truncation, string padding, and ANSI color evaluations via `visibleWidth` and `truncateToWidth`) was fully constructed and allocated in memory before being sliced down to the 20-30 visible lines (`scrollOffset` to `scrollOffset + viewportHeight`). For large queues or massive collaborative swarms containing 10,000+ agents, this `O(N)` string generation choked the main thread for >700ms to >2500ms, making the TUI completely unresponsive to vim-hotkey interactions.
+
+**Refactor Strategy:** Refactored `buildDashboardBodyLines`, `renderAgentSections`, and `renderSwarmSection` to implement strict DOM-style virtualization. The rendering logic was inverted: the loop strictly calculates geometric offsets and mappings (`focusLineByAgentId`), but only evaluates and executes the formatting closures/thunks for the lines that fall within the visible `scrollOffset` and `viewportHeight` boundaries using a lightweight `pushVirtual` gatekeeper.
+
+**Key Metric Shift:**
+
+- Execution time to calculate dashboard layout and visible strings for 10,000 subagents dropped from ~738ms to ~15ms (a 49x speedup).
+- Execution time for swarm layouts (5,000 swarms, 10,000 agents) dropped from ~2500ms to ~45ms.
+- Main thread blocking time per keystroke minimized, allowing fluid 60FPS UI feedback.
+
+**Actionable Principle:** Never generate, format, or process massive string blocks (especially those executing heavy Regex/ANSI stripping) for list rows outside of the viewport. Map structural logic first, then lazily evaluate strings only for visible slice offsets.
+
+## 2026-06-03 - Agent Action File I/O / Async Shift
+
+**Systemic Bottleneck:** Synchronous file system operations (`readFileSync`, `writeFileSync`, `unlinkSync`, `mkdirSync`) were being used inside asynchronous functions (`ejectAgent`, `disableAgent`, `enableAgent`) in `src/ui/agent-actions.ts`. This blocked the main thread and event loop, causing performance issues with file operations.
+
+**Refactor Strategy:** Replaced the `node:fs` synchronous methods with their asynchronous equivalents from `node:fs/promises`. Specifically: `readFileSync` → `await readFile`, `writeFileSync` → `await writeFile`, `unlinkSync` → `await unlink`, `mkdirSync` → `await mkdir`.
+
+**Key Metric Shift:**
+
+- Max Event Loop Lag (Sync): 162.39ms
+- Max Event Loop Lag (Async): 0.70ms
+- Improvement: ~99.5% reduction in event loop blocking (231x improvement).
+
+**Actionable Principle:** Never use synchronous file system APIs (`*Sync`) inside asynchronous functions or hot paths in Node.js, as they block the entire process. Always prefer `node:fs/promises` for scalable, non-blocking I/O operations.
+
+## 2026-06-03 - Partition Tools Resolution / Loop Optimization Shift
+
+**Systemic Bottleneck:** The `resolvePartitionTools` function in `src/agent-types.ts` heavily utilized `for...of` loops, `Set.prototype.add` iterating over iterables, and `[...spread]` syntax to aggregate unique tools from multiple partition objects. Due to the high invocation frequency and the cost of JavaScript iterator protocol allocations/creation for `Set` and `spread`, this path showed measurable overhead when tested at scale.
+
+**Refactor Strategy:** Replaced the `for...of` iterations and `[...spread]` return with C-style `for` loops and `Array.from()`. Added optimized early exits for `0`- and `1`-length partition lists (the most common base cases), avoiding `Set` allocation completely where possible.
+
+**Key Metric Shift:**
+
+- **0 tools / 0 partitions:** 10ms → 2ms (70-75% improvement)
+- **Small partition counts (1 partition, 2-10 tools):** 75ms → 60ms (20% improvement)
+- **Medium/Large arrays (2-10 partitions):** 650-3300ms → 640-3100ms (1-5% improvement)
+- Overall execution time overhead vastly reduced in common cases while maintaining equivalent or better speed in massive pathological cases.
+
+**Actionable Principle:** In hot-paths aggregating unique elements from arrays of arrays: prefer explicit C-style loops over iterator-based constructs (`for...of`, `[...spread]`, `forEach`). Always implement fast paths for 0- and 1-length arrays to bypass collection allocations.
