@@ -248,7 +248,7 @@ function buildEffectivePrompt(
   options.onContextBuilt?.(builtAt);
 
   const spawnedAgo = options.spawnedAt ? builtAt - options.spawnedAt : 0;
-  console.log(
+  logger.debug(
     `[pi-subagents] Context built ${spawnedAgo}ms after spawn for ${options.agentId ?? "unknown"}`,
   );
 
@@ -373,7 +373,7 @@ export async function runAgent(
   if (ctxInjection) {
     systemPrompt = `${systemPrompt}\n\n${ctxInjection.systemPromptAddition}`;
     toolNames = [...toolNames, ...ctxInjection.toolAllowList];
-    console.log(
+    logger.debug(
       `[pi-subagents] context-mode tools injected for agent ${options.agentId ?? "unknown"}`,
     );
   }
