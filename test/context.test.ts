@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { extractText, buildParentContext } from "../src/context";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it } from "vitest";
+import { buildParentContext, extractText } from "../src/context";
 
 describe("extractText", () => {
   it("returns an empty string for an empty array", () => {
