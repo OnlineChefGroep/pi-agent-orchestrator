@@ -1,6 +1,8 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { buildParentContext, extractText } from "../src/context";
+import { buildParentContext, extractText } from "../src/context.js";
+
+type BranchEntries = ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
 
 describe("extractText", () => {
   it("returns an empty string for an empty array", () => {
@@ -36,7 +38,7 @@ describe("extractText", () => {
 });
 
 describe("buildParentContext", () => {
-  function mockContext(entries: any[]): ExtensionContext {
+  function mockContext(entries: BranchEntries | undefined): ExtensionContext {
     return {
       sessionManager: {
         getBranch: () => entries
@@ -47,7 +49,7 @@ describe("buildParentContext", () => {
   it("returns empty string if entries are missing or empty", () => {
     expect(buildParentContext(mockContext([]))).toBe("");
     // getBranch might return undefined in some cases
-    expect(buildParentContext(mockContext(undefined as any))).toBe("");
+    expect(buildParentContext(mockContext(undefined))).toBe("");
   });
 
   it("builds context from user and assistant messages", () => {
@@ -110,6 +112,37 @@ describe("buildParentContext", () => {
     expect(context).toContain("[Summary]: This is a summary");
     expect(context).not.toContain("[User]:");
     expect(context).not.toContain("[Assistant]:");
+  });
+
+  it("ignores tool result messages", () => {
+    const entries = [
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: "Visible user message"
+        }
+      },
+      {
+        type: "toolResult",
+        toolName: "search",
+        result: "Internal tool output"
+      }
+    ];
+
+    const context = buildParentContext(mockContext(entries));
+    expect(context).toContain("[User]: Visible user message");
+    expect(context).not.toContain("Internal tool output");
+  });
+
+  it("ignores compaction entries without summaries", () => {
+    const entries = [
+      {
+        type: "compaction"
+      }
+    ];
+
+    expect(buildParentContext(mockContext(entries))).toBe("");
   });
 
   it("ignores non-message non-compaction entries", () => {
