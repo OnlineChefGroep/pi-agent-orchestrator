@@ -250,6 +250,19 @@ describe("agent type registry", () => {
       expect(config.builtinToolNames).toEqual(BUILTIN_TOOL_NAMES);
     });
 
+    it("keeps first registered casing for case-insensitive collisions", () => {
+      const agents = new Map([["explore", makeAgentConfig({
+        name: "explore",
+        description: "Lowercase Explore",
+        builtinToolNames: BUILTIN_TOOL_NAMES,
+      })]]);
+      registerAgents(agents);
+
+      expect(resolveType("explore")).toBe("explore");
+      expect(getConfig("explore").description).toBe("Lowercase Explore");
+      expect(resolveType("EXPLORE")).toBe("Explore");
+    });
+
     it("disabled agent is excluded from available types", () => {
       const agents = new Map([["Plan", makeAgentConfig({
         name: "Plan",

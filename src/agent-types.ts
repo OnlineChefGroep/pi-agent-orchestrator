@@ -158,7 +158,8 @@ export function registerAgents(userAgents: Map<string, AgentConfig>): void {
   // Overlay user agents (overrides defaults with same name)
   for (const [name, config] of userAgents) {
     agents.set(name, config);
-    lowerCaseKeys.set(name.toLowerCase(), name);
+    const lower = name.toLowerCase();
+    if (!lowerCaseKeys.has(lower)) lowerCaseKeys.set(lower, name);
   }
 }
 
