@@ -1,4 +1,4 @@
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { readFile, unlink, writeFile } from "node:fs/promises";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { matchesKey } from "@earendil-works/pi-tui";
 import { reloadCustomAgents } from "../agent-registry.js";
@@ -88,10 +88,10 @@ export async function showAgentDetail(ctx: ExtensionCommandContext, name: string
   if (!choice || choice === "Back") return;
 
   if (choice === "Edit" && file) {
-    const content = readFileSync(file.path, "utf-8");
+    const content = await readFile(file.path, "utf-8");
     const edited = await ctx.ui.editor(`Edit ${name}`, content);
     if (edited !== undefined && edited !== content) {
-      writeFileSync(file.path, edited, "utf-8");
+      await writeFile(file.path, edited, "utf-8");
       reloadCustomAgents();
       ctx.ui.notify(`Updated ${file.path}`, "info");
     }
@@ -99,7 +99,7 @@ export async function showAgentDetail(ctx: ExtensionCommandContext, name: string
     if (file) {
       const confirmed = await ctx.ui.confirm("Delete agent", `Delete ${name} from ${file.location} (${file.path})?`);
       if (confirmed) {
-        unlinkSync(file.path);
+        await unlink(file.path);
         reloadCustomAgents();
         ctx.ui.notify(`Deleted ${file.path}`, "info");
       }
@@ -107,7 +107,7 @@ export async function showAgentDetail(ctx: ExtensionCommandContext, name: string
   } else if (choice === "Reset to default" && file) {
     const confirmed = await ctx.ui.confirm("Reset to default", `Delete override ${file.path} and restore embedded default?`);
     if (confirmed) {
-      unlinkSync(file.path);
+      await unlink(file.path);
       reloadCustomAgents();
       ctx.ui.notify(`Restored default ${name}`, "info");
     }
