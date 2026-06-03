@@ -291,24 +291,22 @@ export class AgentDashboard implements Component {
       lines.push(...renderDashboardEmpty(innerW, th, box));
     } else {
       const vh = this.getViewportHeight();
-      const body = buildDashboardBodyLines(innerW, th, box, state, this.scrollOffset, vh);
+      const bodyScrollOffset = this.scrollOffset;
+      let body = buildDashboardBodyLines(innerW, th, box, state, bodyScrollOffset, vh);
       this.bodyFocusLineByAgentId = body.focusLineByAgentId;
       this.bodyLineCount = body.totalLines;
       this.keepSelectedBodyLineVisible();
 
       const maxScroll = Math.max(0, body.totalLines - vh);
-      const oldScrollOffset = this.scrollOffset;
       this.scrollOffset = Math.min(this.scrollOffset, maxScroll);
 
-      // If keepSelectedBodyLineVisible changed the scroll offset, or maxScroll constraint was applied,
-      // we need to rebuild the visible lines since they were built for the old offset.
-      let finalBody = body;
-      if (this.scrollOffset !== oldScrollOffset) {
-        finalBody = buildDashboardBodyLines(innerW, th, box, state, this.scrollOffset, vh);
+      if (this.scrollOffset !== bodyScrollOffset) {
+        body = buildDashboardBodyLines(innerW, th, box, state, this.scrollOffset, vh);
+        this.bodyFocusLineByAgentId = body.focusLineByAgentId;
       }
 
-      for (const line of finalBody.visibleLines) lines.push(framedRow(line, innerW, th, box));
-      for (let i = finalBody.visibleLines.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
+      for (const line of body.visibleLines) lines.push(framedRow(line, innerW, th, box));
+      for (let i = body.visibleLines.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
     }
 
     lines.push(...renderDashboardDetailPanel(safeWidth, th, box, state));
