@@ -167,17 +167,18 @@ export class SubagentScheduler {
   async addJob(input: NewJobInput): Promise<ScheduledSubagent> {
     const store = this.requireStore();
     
-    // CVE-005 FIX: Check maximum schedules limit
+    // Fast-fail checks (checked again strictly inside the store lock to prevent TOCTOU races)
     const currentJobs = store.list();
     if (currentJobs.length >= MAX_SCHEDULES) {
       throw new Error(`Maximum number of schedules reached (${MAX_SCHEDULES}). Remove existing schedules before adding new ones.`);
     }
-    
     if (store.hasName(input.name)) {
       throw new Error(`A scheduled job named "${input.name}" already exists.`);
     }
+
     const job = this.buildJob(input);
-    await store.add(job);
+    // CVE-005 FIX: Enforce max schedules limit strictly inside the store lock
+    await store.add(job, MAX_SCHEDULES);
     if (job.enabled) await this.scheduleJob(job);
     this.emit({ type: "added", job });
     return job;

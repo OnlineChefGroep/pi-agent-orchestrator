@@ -180,8 +180,17 @@ export class ScheduleStore {
     return this.jobs.get(id);
   }
 
-  async add(job: ScheduledSubagent): Promise<void> {
+  async add(job: ScheduledSubagent, maxSchedules?: number): Promise<void> {
     await this.withLock(() => {
+      // CVE-005 FIX: Enforce limits strictly inside the store lock to prevent TOCTOU race conditions
+      if (maxSchedules !== undefined && this.jobs.size >= maxSchedules) {
+        throw new Error(`Maximum number of schedules reached (${maxSchedules}). Remove existing schedules before adding new ones.`);
+      }
+      for (const j of this.jobs.values()) {
+        if (j.id !== job.id && j.name === job.name) {
+          throw new Error(`A scheduled job named "${job.name}" already exists.`);
+        }
+      }
       this.jobs.set(job.id, job);
     });
   }

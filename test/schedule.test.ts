@@ -198,6 +198,71 @@ describe("SubagentScheduler — lifecycle", () => {
   // a once-job persisted with a future ISO whose time has now passed (process
   // restart after the trigger window). detectSchedule rejects past timestamps
   // at create time, so this is the only remaining production path.
+
+  describe("SubagentScheduler — bounds (CVE-005)", () => {
+    it("enforces MAX_SCHEDULES concurrently (TOCTOU protection)", { timeout: 15000 }, async () => {
+      // Mock MAX_SCHEDULES to a smaller number just for this test implicitly by
+      // filling the store to just below the real limit (100).
+      // We will add 99 jobs, then concurrently add 10 jobs. Only 1 should succeed.
+
+      const promises = [];
+      for(let i = 0; i < 99; i++) {
+        promises.push(scheduler.addJob({
+          name: `filler-${i}`,
+          description: "x",
+          schedule: "+10m",
+          subagent_type: "general-purpose",
+          prompt: "x"
+        }));
+      }
+      vi.useRealTimers();
+      await Promise.all(promises);
+      vi.useFakeTimers();
+
+      // Now we have 99 jobs. MAX_SCHEDULES is 100.
+      // Fire 10 concurrent requests.
+      const concurrentPromises = [];
+      for(let i = 0; i < 10; i++) {
+        concurrentPromises.push(scheduler.addJob({
+          name: `concurrent-${i}`,
+          description: "x",
+          schedule: "+10m",
+          subagent_type: "general-purpose",
+          prompt: "x"
+        }).then(() => true).catch(_e => false)); // resolve true if success, false if error
+      }
+
+      vi.useRealTimers();
+      const results = await Promise.all(concurrentPromises);
+      vi.useFakeTimers();
+      const successes = results.filter(r => r).length;
+
+      expect(successes).toBe(1); // Only 1 should have succeeded
+      expect(scheduler.list().length).toBe(100);
+    });
+
+    it("enforces unique names concurrently", { timeout: 15000 }, async () => {
+      // Fire 10 concurrent requests with the SAME name
+      const concurrentPromises = [];
+      for(let i = 0; i < 10; i++) {
+        concurrentPromises.push(scheduler.addJob({
+          name: `unique-name-test`,
+          description: "x",
+          schedule: "+10m",
+          subagent_type: "general-purpose",
+          prompt: "x"
+        }).then(() => true).catch(_e => false));
+      }
+
+      vi.useRealTimers();
+      const results = await Promise.all(concurrentPromises);
+      vi.useFakeTimers();
+      const successes = results.filter(r => r).length;
+
+      expect(successes).toBe(1);
+    });
+  });
+
   it("disables a previously-enabled one-shot reloaded from disk past its time", async () => {
     const past = new Date(Date.now() - 60_000).toISOString();
     // Direct store insert bypasses addJob's upfront validation, mimicking a
