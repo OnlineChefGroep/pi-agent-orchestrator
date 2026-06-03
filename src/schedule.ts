@@ -1,4 +1,4 @@
-import { logger } from "./logger.js";
+
 /**
  * schedule.ts — `SubagentScheduler`: timer-driven dispatcher of scheduled subagents.
  *
@@ -230,7 +230,7 @@ export class SubagentScheduler {
       if (job.scheduleType === "interval" && job.intervalMs) {
         // CVE-005 FIX: Cap interval at max 24 days to avoid setTimeout limits
         if (job.intervalMs > MAX_INTERVAL) {
-          logger.warn(`[pi-subagents] Interval ${job.intervalMs}ms exceeds max ${MAX_INTERVAL}ms; capping to ${MAX_INTERVAL}ms`);
+          console.warn(`[pi-subagents] Interval ${job.intervalMs}ms exceeds max ${MAX_INTERVAL}ms; capping to ${MAX_INTERVAL}ms`);
         }
         const interval = Math.min(job.intervalMs, MAX_INTERVAL);
         const t = setInterval(() => this.executeJob(job.id), interval);
