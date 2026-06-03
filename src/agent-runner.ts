@@ -248,9 +248,7 @@ function buildEffectivePrompt(
   options.onContextBuilt?.(builtAt);
 
   const spawnedAgo = options.spawnedAt ? builtAt - options.spawnedAt : 0;
-  console.log(
-    `[pi-subagents] Context built ${spawnedAgo}ms after spawn for ${options.agentId ?? "unknown"}`,
-  );
+  logger.debug(`Context built ${spawnedAgo}ms after spawn for ${options.agentId ?? "unknown"}`);
 
   if (!parentContext) return prompt;
   return parentContext + prompt;
@@ -373,9 +371,7 @@ export async function runAgent(
   if (ctxInjection) {
     systemPrompt = `${systemPrompt}\n\n${ctxInjection.systemPromptAddition}`;
     toolNames = [...toolNames, ...ctxInjection.toolAllowList];
-    console.log(
-      `[pi-subagents] context-mode tools injected for agent ${options.agentId ?? "unknown"}`,
-    );
+    logger.debug(`context-mode tools injected for agent ${options.agentId ?? "unknown"}`);
   }
 
   // When skills is string[], we've already preloaded them into the prompt.
