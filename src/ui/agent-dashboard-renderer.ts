@@ -7,9 +7,35 @@ import { getSpinnerFrame } from "./animation.js";
 import { type BoxChars, borderLine, type DashboardTheme, framedRow, padVisible } from "./theme.js";
 
 export type DashboardBody = {
-  lines: string[];
+  visibleLines: string[];
   focusLineByAgentId: Map<string, number>;
+  totalLines: number;
 };
+
+type RenderContext = {
+  scrollOffset: number;
+  viewportHeight: number;
+  lineIndex: number;
+  visibleLines: string[];
+};
+
+function pushVirtual(ctx: RenderContext, lineCount: number, renderFn: () => string | string[]): void {
+  // Determine if any of the lines to be generated fall within the visible viewport
+  const startVisible = Math.max(ctx.scrollOffset, ctx.lineIndex);
+  const endVisible = Math.min(ctx.scrollOffset + ctx.viewportHeight, ctx.lineIndex + lineCount);
+
+  if (startVisible < endVisible) {
+    const output = renderFn();
+    const lines = Array.isArray(output) ? output : [output];
+    for (let i = 0; i < lines.length; i++) {
+      const currentIdx = ctx.lineIndex + i;
+      if (currentIdx >= ctx.scrollOffset && currentIdx < ctx.scrollOffset + ctx.viewportHeight) {
+        ctx.visibleLines.push(lines[i]);
+      }
+    }
+  }
+  ctx.lineIndex += lineCount;
+}
 
 export type DashboardRenderState = {
   agents: AgentRecord[];
@@ -105,7 +131,7 @@ function renderCompactRow(rec: AgentRecord, innerW: number, th: DashboardTheme, 
   return truncateToWidth(`${pointer}${checked} ${icon} ${th.title}${name}${th.reset}  ${th.muted}${desc}${th.reset} ${th.dim}· ${stats}${th.reset}`, innerW);
 }
 
-function renderSwarmSection(innerW: number, th: DashboardTheme, box: BoxChars, state: DashboardRenderState, focus: Map<string, number>, baseLine = 0): string[] {
+function renderSwarmSection(innerW: number, th: DashboardTheme, box: BoxChars, state: DashboardRenderState, focus: Map<string, number>, ctx: RenderContext): void {
   const grouped = new Map<string, AgentRecord[]>();
   for (const rec of state.agents) {
     if (!rec.swarmId) continue;
@@ -113,68 +139,84 @@ function renderSwarmSection(innerW: number, th: DashboardTheme, box: BoxChars, s
     list.push(rec);
     grouped.set(rec.swarmId, list);
   }
-  if (grouped.size === 0) return [];
+  if (grouped.size === 0) return;
 
   const total = Array.from(grouped.values()).reduce((sum, list) => sum + list.length, 0);
-  const lines = ["", renderSectionTitle("⌬ SWARMS", `${grouped.size} swarms · ${total} agents`, innerW, th, box)];
+
+  pushVirtual(ctx, 1, () => "");
+  pushVirtual(ctx, 1, () => renderSectionTitle("⌬ SWARMS", `${grouped.size} swarms · ${total} agents`, innerW, th, box));
+
   for (const [swarmId, members] of grouped) {
     const cardW = Math.max(28, innerW - 2);
     const contentW = Math.max(1, cardW - 4);
     const mode = members.find(m => m.joinMode)?.joinMode ?? "group";
-    const header = ` ${swarmId} · ${mode} · ${members.length} agents `;
-    const dash = box.h.repeat(Math.max(2, cardW - visibleWidth(header) - 2));
-    lines.push(` ${th.border}${box.tl}${box.h}${th.reset}${th.highlight}${header}${th.reset}${th.border}${dash}${box.tr}${th.reset}`);
+
+    pushVirtual(ctx, 1, () => {
+      const header = ` ${swarmId} · ${mode} · ${members.length} agents `;
+      const dash = box.h.repeat(Math.max(2, cardW - visibleWidth(header) - 2));
+      return ` ${th.border}${box.tl}${box.h}${th.reset}${th.highlight}${header}${th.reset}${th.border}${dash}${box.tr}${th.reset}`;
+    });
+
     for (const member of members) {
-      focus.set(member.id, baseLine + lines.length);
-      const activity = state.agentActivity.get(member.id);
-      const selected = state.agents[state.selectedIndex]?.id === member.id;
-      const prefix = selected ? `${th.highlight}▶${th.reset}` : " ";
-      const checked = state.selectedIds.has(member.id) ? `${th.success}✓${th.reset}` : " ";
-      const icon = `${statusColor(member, th)}${statusIcon(member, state.frame)}${th.reset}`;
-      const name = truncateToWidth(getDisplayName(member.type), 16);
-      const act = truncateToWidth(activityText(member, activity), Math.max(8, contentW - 38));
-      const stats = agentStats(member, activity);
-      lines.push(` ${th.border}${box.l}${th.reset} ${truncateToWidth(padVisible(`${prefix}${checked} ${icon} ${th.title}${name}${th.reset}  ${th.muted}${act}${th.reset} ${th.dim}${stats}${th.reset}`, contentW), contentW)} ${th.border}${box.r}${th.reset}`);
+      focus.set(member.id, ctx.lineIndex);
+      pushVirtual(ctx, 1, () => {
+        const activity = state.agentActivity.get(member.id);
+        const selected = state.agents[state.selectedIndex]?.id === member.id;
+        const prefix = selected ? `${th.highlight}▶${th.reset}` : " ";
+        const checked = state.selectedIds.has(member.id) ? `${th.success}✓${th.reset}` : " ";
+        const icon = `${statusColor(member, th)}${statusIcon(member, state.frame)}${th.reset}`;
+        const name = truncateToWidth(getDisplayName(member.type), 16);
+        const act = truncateToWidth(activityText(member, activity), Math.max(8, contentW - 38));
+        const stats = agentStats(member, activity);
+        return ` ${th.border}${box.l}${th.reset} ${truncateToWidth(padVisible(`${prefix}${checked} ${icon} ${th.title}${name}${th.reset}  ${th.muted}${act}${th.reset} ${th.dim}${stats}${th.reset}`, contentW), contentW)} ${th.border}${box.r}${th.reset}`;
+      });
     }
-    lines.push(` ${th.border}${box.bl}${box.h.repeat(Math.max(0, cardW - 2))}${box.br}${th.reset}`);
+
+    pushVirtual(ctx, 1, () => ` ${th.border}${box.bl}${box.h.repeat(Math.max(0, cardW - 2))}${box.br}${th.reset}`);
   }
-  return lines;
 }
 
-function renderAgentSections(innerW: number, th: DashboardTheme, box: BoxChars, state: DashboardRenderState, focus: Map<string, number>, baseLine = 0): string[] {
+function renderAgentSections(innerW: number, th: DashboardTheme, box: BoxChars, state: DashboardRenderState, focus: Map<string, number>, ctx: RenderContext): void {
   const solo = state.agents.filter(a => !a.swarmId);
   const running = solo.filter(a => a.status === "running");
   const queued = solo.filter(a => a.status === "queued");
   const done = solo.filter(a => a.status !== "running" && a.status !== "queued");
-  const lines: string[] = [];
+
   const appendCompact = (label: string, records: AgentRecord[]) => {
     if (records.length === 0) return;
-    lines.push("");
-    lines.push(renderSectionTitle(label, `${records.length}`, innerW, th, box));
+    pushVirtual(ctx, 1, () => "");
+    pushVirtual(ctx, 1, () => renderSectionTitle(label, `${records.length}`, innerW, th, box));
     for (const rec of records) {
-      focus.set(rec.id, baseLine + lines.length);
-      lines.push(`  ${renderCompactRow(rec, innerW - 2, th, state)}`);
+      focus.set(rec.id, ctx.lineIndex);
+      pushVirtual(ctx, 1, () => `  ${renderCompactRow(rec, innerW - 2, th, state)}`);
     }
   };
 
   if (running.length > 0) {
-    lines.push("");
-    lines.push(renderSectionTitle("▶ RUNNING", `${running.length} active`, innerW, th, box));
+    pushVirtual(ctx, 1, () => "");
+    pushVirtual(ctx, 1, () => renderSectionTitle("▶ RUNNING", `${running.length} active`, innerW, th, box));
     for (const rec of running) {
-      focus.set(rec.id, baseLine + lines.length + 1);
-      lines.push(...renderRunningCard(rec, innerW, th, box, state));
+      focus.set(rec.id, ctx.lineIndex + 1);
+      pushVirtual(ctx, 5, () => renderRunningCard(rec, innerW, th, box, state));
     }
   }
   appendCompact("◔ QUEUED", queued);
   appendCompact("✓ DONE", done);
-  return lines;
 }
 
-export function buildDashboardBodyLines(innerW: number, th: DashboardTheme, box: BoxChars, state: DashboardRenderState): DashboardBody {
+export function buildDashboardBodyLines(innerW: number, th: DashboardTheme, box: BoxChars, state: DashboardRenderState, scrollOffset: number, viewportHeight: number): DashboardBody {
   const focusLineByAgentId = new Map<string, number>();
-  const swarmLines = renderSwarmSection(innerW, th, box, state, focusLineByAgentId);
-  const agentLines = renderAgentSections(innerW, th, box, state, focusLineByAgentId, swarmLines.length);
-  return { lines: [...swarmLines, ...agentLines], focusLineByAgentId };
+  const ctx: RenderContext = {
+    scrollOffset,
+    viewportHeight,
+    lineIndex: 0,
+    visibleLines: []
+  };
+
+  renderSwarmSection(innerW, th, box, state, focusLineByAgentId, ctx);
+  renderAgentSections(innerW, th, box, state, focusLineByAgentId, ctx);
+
+  return { visibleLines: ctx.visibleLines, focusLineByAgentId, totalLines: ctx.lineIndex };
 }
 
 export function renderDashboardDetailPanel(width: number, th: DashboardTheme, box: BoxChars, state: DashboardRenderState): string[] {
