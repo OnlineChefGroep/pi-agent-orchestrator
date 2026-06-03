@@ -140,9 +140,11 @@ Partial access.`);
     expect(agent.skills).toEqual(["planning", "review"]);
   });
 
-  it("passes through unknown tool names (not filtered) and emits telemetry", async () => {
-    const telemetryEvents: unknown[] = [];
-    const unsubscribe = onTelemetry("agent:unknown-tools", (payload) => telemetryEvents.push(payload));
+  it("emits telemetry for unknown tool names without blocking custom tools", async () => {
+    const unknownToolsEvents: { name: string; tools: string[] }[] = [];
+    const unsubscribe = onTelemetry("agent:unknown-tools", payload => {
+      unknownToolsEvents.push(payload as { name: string; tools: string[] });
+    });
 
     writeAgent("custom-tools", `---
 tools: read, my_custom_tool, grep
@@ -152,36 +154,14 @@ Custom tools.`);
 
     try {
       const result = await loadCustomAgents(tmpDir);
-      // Unknown tool names are passed through — filtering happens at tool creation time
-      expect(result.get("custom-tools")!.builtinToolNames).toEqual(["read", "my_custom_tool", "grep"]);
+      const agent = result.get("custom-tools")!;
 
-      // Verify telemetry
-      expect(telemetryEvents).toHaveLength(1);
-      expect(telemetryEvents[0]).toEqual({
-        name: "custom-tools",
-        tools: ["my_custom_tool"]
-      });
+      expect(agent.enabled).toBe(true);
+      expect(agent.builtinToolNames).toEqual(["read", "my_custom_tool", "grep"]);
+      expect(unknownToolsEvents).toEqual([{ name: "custom-tools", tools: ["my_custom_tool"] }]);
     } finally {
       unsubscribe();
     }
-  });
-
-  it("emits agent:unknown-tools telemetry event for unknown tool names", async () => {
-    writeAgent("custom-tools-telemetry", `---
-tools: read, my_custom_tool, grep, another_unknown
----
-
-Custom tools telemetry.`);
-
-    let emittedPayload: unknown = null;
-    const unsubscribe = onTelemetry("agent:unknown-tools", (payload) => {
-      emittedPayload = payload;
-    });
-
-    await loadCustomAgents(tmpDir);
-    unsubscribe();
-
-    expect(emittedPayload).toEqual({ name: "custom-tools-telemetry", tools: ["my_custom_tool", "another_unknown"] });
   });
 
   it("passes through thinking level as-is (no validation)", async () => {

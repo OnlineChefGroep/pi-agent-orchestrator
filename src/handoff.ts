@@ -32,7 +32,7 @@ const VALID_STATUSES = new Set(["success", "partial", "failed"]);
 // CVE-008 FIX: JSON parsing limits
 const MAX_JSON_SIZE = 1024 * 1024;  // 1MB max JSON
 const MAX_JSON_KEYS = 1000;  // Total key count limit (renamed from MAX_JSON_DEPTH for clarity)
-const MAX_JSON_DEPTH = 200;  // Maximum allowed nesting depth
+const MAX_JSON_DEPTH = 20;   // Maximum nesting depth to prevent stack overflow
 const MAX_FINDINGS_COUNT = 100;
 const MAX_SUMMARY_LENGTH = 10000;
 const MAX_STRING_LENGTH = 50000;
@@ -40,47 +40,44 @@ const MAX_FILES_COUNT = 200;
 const MAX_ARTIFACTS_COUNT = 50;
 
 /**
- * CVE-008 FIX: Safe JSON parser with size and key count limits.
+ * CVE-008 FIX: Safe JSON parser with size, depth, and key count limits.
  *
- * Prevents call stack exhaustion by checking depth before parsing,
- * and tracks key counts to prevent excessively large payloads.
+ * Scans the JSON string for maximum nesting depth before passing to JSON.parse
+ * to prevent V8 stack overflows. Also tracks total number of keys in the JSON
+ * structure to prevent excessively large payloads.
  */
-function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS): unknown {
+function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS, maxDepth: number = MAX_JSON_DEPTH): unknown {
   if (input.length > MAX_JSON_SIZE) {
     throw new Error(`JSON size ${input.length} exceeds maximum ${MAX_JSON_SIZE} bytes`);
   }
-  
-  let depth = 0;
+
+  // Calculate depth by counting `{` and `[` without parsing to prevent V8 stack overflow
+  let currentDepth = 0;
   let keyCount = 0;
   let inString = false;
   let escapeNext = false;
-  
-  // Pre-parse validation to avoid JSON.parse throwing call stack errors
-  // on deeply nested malicious payloads.
+
   for (let i = 0; i < input.length; i++) {
     const char = input[i];
-    
-    if (escapeNext) {
-      escapeNext = false;
-      continue;
-    }
-    if (char === '\\' && inString) {
-      escapeNext = true;
-      continue;
-    }
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-    
-    if (!inString) {
-      if (char === '{' || char === '[') {
-        depth++;
-        if (depth > MAX_JSON_DEPTH) {
-          throw new Error(`JSON depth exceeds maximum of ${MAX_JSON_DEPTH}`);
+
+    if (inString) {
+      if (escapeNext) {
+        escapeNext = false;
+      } else if (char === '\\') {
+        escapeNext = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+    } else {
+      if (char === '"') {
+        inString = true;
+      } else if (char === '{' || char === '[') {
+        currentDepth++;
+        if (currentDepth > maxDepth) {
+          throw new Error(`JSON depth exceeds maximum of ${maxDepth}`);
         }
       } else if (char === '}' || char === ']') {
-        depth--;
+        currentDepth--;
       } else if (char === ':') {
         keyCount++;
         if (keyCount > maxKeys) {
@@ -89,7 +86,7 @@ function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS): unknown 
       }
     }
   }
-  
+
   const parsed = JSON.parse(input);
 
   // Walk the parsed tree to validate string lengths
