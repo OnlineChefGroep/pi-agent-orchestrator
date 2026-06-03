@@ -29,7 +29,7 @@ describe("buildValidatorPrompt", () => {
     const output = "clean\x00\x01\x02text";
     const prompt = buildValidatorPrompt(output, ["ok"], "desc");
 
-    expect(prompt).not.toMatch(/[\x00-\x08\x0B\x0C\x0E-\x1F]/);
+    expect(prompt).not.toMatch(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/);
     expect(prompt).toContain("cleantext");
   });
 
