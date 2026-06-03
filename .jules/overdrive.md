@@ -37,4 +37,4 @@ Replaced the `for...of` iterations and `[...spread]` return with C-style `for` l
 - Overall execution time overhead is vastly reduced in common cases while maintaining equivalent or better speed in massive pathological cases.
 
 **Actionable Principle**
-In hot-paths aggregating unique elements from arrays of arrays: prefer explicit C-style loops over iterator-based constructs (`for...of`, `[...spread]`, `forEach`). Always implement fast paths for 0 and 1 length arrays to bypass collection allocations.
+In hot-paths aggregating unique elements from arrays of arrays: prefer explicit C-style loops over iterator-based constructs (`for...of`, `[...spread]`, `forEach`). Always implement fast paths for 0- and 1-length arrays to bypass collection allocations.
