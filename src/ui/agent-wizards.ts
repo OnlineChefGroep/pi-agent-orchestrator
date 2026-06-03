@@ -102,7 +102,7 @@ Write the file using the write tool. Only write the file, nothing else.`;
     return;
   }
 
-  reloadCustomAgents();
+  await reloadCustomAgents();
 
   if (existsSync(targetPath)) {
     ctx.ui.notify(`Created ${targetPath}`, "info");
@@ -194,6 +194,6 @@ ${systemPrompt}
   }
 
   writeFileSync(targetPath, content, "utf-8");
-  reloadCustomAgents();
+  await reloadCustomAgents();
   ctx.ui.notify(`Created ${targetPath}`, "info");
 }
