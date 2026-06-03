@@ -34,6 +34,7 @@ export function createGetResultTool(ctx: ToolContext) {
       }
 
       // Wait for completion if requested.
+      // This pre-mark is critical to avoid a race condition where onComplete sees resultConsumed as falsy
       // Pre-mark resultConsumed BEFORE awaiting: onComplete fires inside .then()
       // (attached earlier at spawn time) and always runs before this await resumes.
       // Setting the flag here prevents a redundant follow-up notification.

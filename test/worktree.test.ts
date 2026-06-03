@@ -164,11 +164,11 @@ describe("worktree", () => {
       const result = cleanupWorktree(repoDir, wt, longDesc);
       expect(result.hasChanges).toBe(true);
 
-      const log = execFileSync("git", ["log", "--oneline", "-1", result.branch!], {
+      const log = execFileSync("git", ["log", "--format=%s", "-1", result.branch!], {
         cwd: repoDir, stdio: "pipe",
       }).toString().trim();
       // "pi-agent: " prefix (10 chars) + 200 chars of x = 210 total max
-      expect(log.length).toBeLessThanOrEqual(220); // some slack for hash prefix
+      expect(log.length).toBeLessThanOrEqual(210);
 
       // Cleanup
       try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }

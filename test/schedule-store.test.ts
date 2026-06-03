@@ -148,8 +148,8 @@ describe("ScheduleStore", () => {
 
   it("releases the lock after a successful mutation so subsequent ones don't deadlock", async () => {
     const store = new ScheduleStore(join(tmp, "s.json"));
-    const a = makeJob({ id: "a" });
-    const b = makeJob({ id: "b" });
+    const a = makeJob({ id: "a", name: "job-a" });
+    const b = makeJob({ id: "b", name: "job-b" });
     await store.add(a);
     await store.add(b);  // would hang if the lock from the first add wasn't released
     expect(store.list().map(j => j.id).sort()).toEqual(["a", "b"]);

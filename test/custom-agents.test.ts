@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BUILTIN_TOOL_NAMES } from "../src/agent-types.js";
 import { loadCustomAgents } from "../src/custom-agents.js";
+import { onTelemetry } from "../src/telemetry.js";
 
 describe("loadCustomAgents", () => {
   let tmpDir: string;
@@ -139,16 +140,48 @@ Partial access.`);
     expect(agent.skills).toEqual(["planning", "review"]);
   });
 
-  it("passes through unknown tool names (not filtered)", async () => {
+  it("passes through unknown tool names (not filtered) and emits telemetry", async () => {
+    const telemetryEvents: unknown[] = [];
+    const unsubscribe = onTelemetry("agent:unknown-tools", (payload) => telemetryEvents.push(payload));
+
     writeAgent("custom-tools", `---
 tools: read, my_custom_tool, grep
 ---
 
 Custom tools.`);
 
-    const result = await loadCustomAgents(tmpDir);
-    // Unknown tool names are passed through — filtering happens at tool creation time
-    expect(result.get("custom-tools")!.builtinToolNames).toEqual(["read", "my_custom_tool", "grep"]);
+    try {
+      const result = await loadCustomAgents(tmpDir);
+      // Unknown tool names are passed through — filtering happens at tool creation time
+      expect(result.get("custom-tools")!.builtinToolNames).toEqual(["read", "my_custom_tool", "grep"]);
+
+      // Verify telemetry
+      expect(telemetryEvents).toHaveLength(1);
+      expect(telemetryEvents[0]).toEqual({
+        name: "custom-tools",
+        tools: ["my_custom_tool"]
+      });
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("emits agent:unknown-tools telemetry event for unknown tool names", async () => {
+    writeAgent("custom-tools-telemetry", `---
+tools: read, my_custom_tool, grep, another_unknown
+---
+
+Custom tools telemetry.`);
+
+    let emittedPayload: unknown = null;
+    const unsubscribe = onTelemetry("agent:unknown-tools", (payload) => {
+      emittedPayload = payload;
+    });
+
+    await loadCustomAgents(tmpDir);
+    unsubscribe();
+
+    expect(emittedPayload).toEqual({ name: "custom-tools-telemetry", tools: ["my_custom_tool", "another_unknown"] });
   });
 
   it("passes through thinking level as-is (no validation)", async () => {
@@ -460,4 +493,16 @@ Bad isolation.`);
       rmSync(altAgentDir, { recursive: true, force: true });
     }
   });
+
+  it("rejects agents with unsafe characters in the middle of the name", async () => {
+    writeAgent("agent..traversal", `---
+description: Unsafe
+---
+
+Unsafe agent.`);
+
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("agent..traversal")!.enabled).toBe(false);
+  });
+
 });

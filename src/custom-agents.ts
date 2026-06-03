@@ -11,7 +11,7 @@ import { emitTelemetry, hashContentSync } from "./telemetry.js";
 import type { AgentConfig, MemoryScope, ThinkingLevel } from "./types.js";
 
 // CVE-002 FIX: Validation patterns for agent configs
-const UNSAFE_NAME_PATTERN = /^(\.\.|\.\.|\/|\\|[\x00-\x1F])|(\.\.|\.\.|\/|\\|[\x00-\x1F])$/;
+const UNSAFE_NAME_PATTERN = /[/\\]|\.\.|[\x00-\x1F]/;
 const MAX_NAME_LENGTH = 100;
 const MAX_PROMPT_LENGTH = 100000;  // 100KB
 const MAX_TOOLS_COUNT = 100;

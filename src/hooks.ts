@@ -58,7 +58,7 @@ async function executeHandler(
     try {
       return await handler(payload);
     } catch (err) {
-      logger.warn(`[pi-subagents:hooks] Handler for "${payload.event}" threw:`, { error: err instanceof Error ? err.message : String(err) });
+      logger.warn(`Handler for "${payload.event}" threw:`, { error: err instanceof Error ? err.message : String(err) });
       return undefined;
     }
   })();
@@ -66,7 +66,7 @@ async function executeHandler(
   const timeoutPromise = new Promise<undefined>((resolve) => {
     timeoutId = setTimeout(() => {
       logger.warn(
-        `[pi-subagents:hooks] Handler for "${payload.event}" timed out after ${timeoutMs}ms`,
+        `Handler for "${payload.event}" timed out after ${timeoutMs}ms`,
       );
       resolve(undefined);
     }, timeoutMs);
