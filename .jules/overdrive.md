@@ -21,7 +21,9 @@
 - Execution time for rendering a 20,000 agent execution tree to Mermaid (`buildAgentTreeMermaid`) dropped from ~15500ms to ~145ms.
 - Execution time for rendering the same tree to plain text (`buildExecutionTree` -> text format) dropped from ~17500ms to ~80ms.
 **Actionable Principle:** Never use `.find()` or `.filter()` on an entire dataset within a loop or recursive traversal function when generating hierarchical tree structures. Always perform a single-pass $O(n)$ mapping initialization step to construct structural HashMaps before processing data hierarchically.
+
 ## 2026-06-03 - TUI Dashboard List Rendering / DOM Virtualization Shift
+
 **Systemic Bottleneck:** The cinematic TUI dashboard used an eager rendering pattern where every agent row (including all text truncation, string padding, and ANSI color evaluations via `visibleWidth` and `truncateToWidth`) was fully constructed and allocated in memory before being sliced down to the 20-30 visible lines (`scrollOffset` to `scrollOffset + viewportHeight`). For large queues or massive collaborative swarms containing 10,000+ agents, this $O(N)$ string generation choked the main thread for >700ms to >2500ms, making the TUI completely unresponsive to vim-hotkey interactions.
 **Refactor Strategy:** Refactored `buildDashboardBodyLines`, `renderAgentSections`, and `renderSwarmSection` to implement strict DOM-style virtualization. The rendering logic was inverted: the loop strictly calculates geometric offsets and mappings (`focusLineByAgentId`), but only evaluates and executes the formatting closures/thunks for the lines that fall within the visible `scrollOffset` and `viewportHeight` boundaries using a lightweight `pushVirtual` gatekeeper.
 **Key Metric Shift:**

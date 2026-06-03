@@ -196,7 +196,7 @@ function renderAgentSections(innerW: number, th: DashboardTheme, box: BoxChars, 
     pushVirtual(ctx, 1, () => "");
     pushVirtual(ctx, 1, () => renderSectionTitle("▶ RUNNING", `${running.length} active`, innerW, th, box));
     for (const rec of running) {
-      focus.set(rec.id, ctx.lineIndex + 1);
+      focus.set(rec.id, ctx.lineIndex);
       pushVirtual(ctx, 5, () => renderRunningCard(rec, innerW, th, box, state));
     }
   }
