@@ -163,7 +163,7 @@ function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source: "pro
     // Emit telemetry for every loaded agent with content hash
     const contentHash = hashContentSync(content);
     emitTelemetry("agent:loaded", { 
-      name, 
+      name: redactSensitive(name), 
       source, 
       hash: contentHash, 
       enabled: config.enabled ?? true 

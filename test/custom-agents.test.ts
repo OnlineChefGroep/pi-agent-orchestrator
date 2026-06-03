@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BUILTIN_TOOL_NAMES } from "../src/agent-types.js";
 import { loadCustomAgents } from "../src/custom-agents.js";
+import { onTelemetry } from "../src/telemetry.js";
 
 describe("loadCustomAgents", () => {
   let tmpDir: string;
@@ -62,6 +63,30 @@ You are a security auditor.`);
     expect(agent.runInBackground).toBe(true);
     expect(agent.isolated).toBe(true);
     expect(agent.systemPrompt).toBe("You are a security auditor.");
+  });
+
+  it("redacts agent names in loaded telemetry", () => {
+    const loadedEvents: { name: string; source: string; hash: string; enabled: boolean }[] = [];
+    const unsubscribe = onTelemetry("agent:loaded", payload => {
+      loadedEvents.push(payload);
+    });
+
+    writeAgent("secret-agent", `---
+description: Secret Agent
+---
+
+Sensitive prompt.`);
+
+    try {
+      const result = loadCustomAgents(tmpDir);
+
+      expect(result.get("secret-agent")!.name).toBe("secret-agent");
+      expect(loadedEvents).toHaveLength(1);
+      expect(loadedEvents[0]).toMatchObject({ name: "s***t", source: "project", enabled: true });
+      expect(loadedEvents[0].hash).toMatch(/^[a-f0-9]{64}$/);
+    } finally {
+      unsubscribe();
+    }
   });
 
   it("uses sensible defaults when frontmatter is empty", () => {
