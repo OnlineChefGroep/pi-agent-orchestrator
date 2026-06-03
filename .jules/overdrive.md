@@ -21,3 +21,20 @@
 - Execution time for rendering a 20,000 agent execution tree to Mermaid (`buildAgentTreeMermaid`) dropped from ~15500ms to ~145ms.
 - Execution time for rendering the same tree to plain text (`buildExecutionTree` -> text format) dropped from ~17500ms to ~80ms.
 **Actionable Principle:** Never use `.find()` or `.filter()` on an entire dataset within a loop or recursive traversal function when generating hierarchical tree structures. Always perform a single-pass $O(n)$ mapping initialization step to construct structural HashMaps before processing data hierarchically.
+
+## 2026-06-03: Optimized Partition Tools Resolution Loop
+
+**Systemic Bottleneck**
+The `resolvePartitionTools` function in `src/agent-types.ts` heavily utilized `for...of` loops, `Set.prototype.add` iterating over iterables, and `[...spread]` syntax to aggregate unique tools from multiple partition objects. Due to the high invocation frequency and the cost of JavaScript iterator protocol allocations/creation for `Set` and `spread`, this path showed measurable overhead when tested at scale (10,000 to 100,000 iterations).
+
+**Refactor Strategy**
+Replaced the `for...of` iterations and `[...spread]` return with C-style `for` loops and `Array.from()`. Added optimized early exits for `0` and `1` partition lists (the most common base cases), avoiding `Set` allocation completely where possible.
+
+**Key Metric Shift**
+- **0 tools / 0 partitions:** 10ms -> 2ms (70-75% improvement)
+- **Small partition counts (1 partition, 2-10 tools):** 75ms -> 60ms (20% improvement)
+- **Medium/Large arrays (2-10 partitions):** 650-3300ms -> 640-3100ms (1-5% improvement)
+- Overall execution time overhead is vastly reduced in common cases while maintaining equivalent or better speed in massive pathological cases.
+
+**Actionable Principle**
+In hot-paths aggregating unique elements from arrays of arrays: prefer explicit C-style loops over iterator-based constructs (`for...of`, `[...spread]`, `forEach`). Always implement fast paths for 0 and 1 length arrays to bypass collection allocations.

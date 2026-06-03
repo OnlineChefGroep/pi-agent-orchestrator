@@ -25,18 +25,26 @@ function resolvePartitionTools(
   if (!membership) return [];
 
   // Union of all tool names from matching partition memberships
+  const len = partitions.length;
+  if (len === 0) return [];
+
+  if (len === 1) {
+    const pTools = membership[partitions[0]];
+    return pTools ? Array.from(new Set(pTools)) : [];
+  }
+
   const tools = new Set<string>();
-  for (const partition of partitions) {
-    const partitionTools = membership[partition];
+  for (let i = 0; i < len; i++) {
+    const partitionTools = membership[partitions[i]];
     if (partitionTools) {
-      for (const tool of partitionTools) {
-        tools.add(tool);
+      for (let j = 0, jLen = partitionTools.length; j < jLen; j++) {
+        tools.add(partitionTools[j]);
       }
     }
     // Else: partition name not in membership → contributes nothing (isolated)
   }
 
-  return [...tools];
+  return Array.from(tools);
 }
 
 /**
