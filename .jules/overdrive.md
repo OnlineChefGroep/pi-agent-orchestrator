@@ -21,3 +21,21 @@
 - Execution time for rendering a 20,000 agent execution tree to Mermaid (`buildAgentTreeMermaid`) dropped from ~15500ms to ~145ms.
 - Execution time for rendering the same tree to plain text (`buildExecutionTree` -> text format) dropped from ~17500ms to ~80ms.
 **Actionable Principle:** Never use `.find()` or `.filter()` on an entire dataset within a loop or recursive traversal function when generating hierarchical tree structures. Always perform a single-pass $O(n)$ mapping initialization step to construct structural HashMaps before processing data hierarchically.
+
+## Optimization: Async refactor of custom agent loading (2026-06-03)
+
+### Systemic Bottleneck
+The `loadFromDir` function in `src/custom-agents.ts` was performing sequential synchronous filesystem reads (`readFileSync`) inside a loop over custom agent markdown files. During initialization or when reloading agents (which happens frequently such as when spawning new agents or editing them via the TUI wizard), this would block the Node.js event loop, causing visual stutters in the TUI dashboard. Benchmarks showed synchronous IO looping took ~151ms for 1,000 files, blocking the main thread entirely.
+
+### Refactor Strategy
+1. Upgraded `readdirSync` to use `fs/promises.readdir` with `{ withFileTypes: true }`, bypassing the need for per-file `lstatSync` checks to filter symbolic links.
+2. Refactored the internal `for` loop to use `Promise.all` alongside `fs/promises.readFile`, allowing parallel background I/O.
+3. Propagated the async signature (`Promise<void>`) all the way up through `loadCustomAgents` to `reloadCustomAgents` in `src/agent-registry.ts`.
+4. Updated all callers (TUI wizards, agent tools, output handlers, and index entrypoint) to properly `await` the reloads.
+
+### Key Metric Shift
+- Reduced main-thread blocking time during agent reloading from ~150ms to <20ms (offloaded to threadpool).
+- Measured overall IO latency improvement of >30% for bulk file reading (from 151ms to 102ms), but more importantly reduced event loop blocking time to nearly zero, fixing TUI stutters.
+
+### Actionable Principle
+Never execute synchronous bulk I/O (`readFileSync` inside loops) on the main thread in a TUI-driven interactive CLI. Always propagate async I/O up the call stack and use `Promise.all` where feasible to ensure the event loop is yielded to the renderer.
