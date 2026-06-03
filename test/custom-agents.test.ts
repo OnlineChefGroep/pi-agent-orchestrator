@@ -140,16 +140,30 @@ Partial access.`);
     expect(agent.skills).toEqual(["planning", "review"]);
   });
 
-  it("passes through unknown tool names (not filtered)", async () => {
+  it("passes through unknown tool names (not filtered) and emits telemetry", async () => {
+    const telemetryEvents: unknown[] = [];
+    const unsubscribe = onTelemetry("agent:unknown-tools", (payload) => telemetryEvents.push(payload));
+
     writeAgent("custom-tools", `---
 tools: read, my_custom_tool, grep
 ---
 
 Custom tools.`);
 
-    const result = await loadCustomAgents(tmpDir);
-    // Unknown tool names are passed through — filtering happens at tool creation time
-    expect(result.get("custom-tools")!.builtinToolNames).toEqual(["read", "my_custom_tool", "grep"]);
+    try {
+      const result = await loadCustomAgents(tmpDir);
+      // Unknown tool names are passed through — filtering happens at tool creation time
+      expect(result.get("custom-tools")!.builtinToolNames).toEqual(["read", "my_custom_tool", "grep"]);
+
+      // Verify telemetry
+      expect(telemetryEvents).toHaveLength(1);
+      expect(telemetryEvents[0]).toEqual({
+        name: "custom-tools",
+        tools: ["my_custom_tool"]
+      });
+    } finally {
+      unsubscribe();
+    }
   });
 
   it("emits agent:unknown-tools telemetry event for unknown tool names", async () => {
