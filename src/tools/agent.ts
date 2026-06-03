@@ -1,4 +1,5 @@
-import { defineTool, getAgentDir } from "@earendil-works/pi-coding-agent";
+import type { Model, TextContent } from "@earendil-works/pi-ai";
+import { type AgentToolResult, defineTool, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { buildTypeListText, getDefaultJoinMode, isSchedulingEnabled, reloadCustomAgents } from "../agent-registry.js";
@@ -12,7 +13,7 @@ import {
   buildDetails, createActivityTracker, formatLifetimeTokens,
   getStatusNote, textResult,
 } from "../tool-result-helpers.js";
-import type { AgentInvocation, AgentRecord, SubagentType } from "../types.js";
+import type { AgentInvocation, AgentRecord, IsolationMode, SubagentType, ThinkingLevel } from "../types.js";
 import { buildInvocationTags, describeActivity, formatMs, formatTurns, getDisplayName, getPromptModeLabel } from "../ui/agent-format.js";
 import type { AgentDetails, UICtx } from "../ui/agent-ui-types.js";
 import { getSpinnerFrame } from "../ui/animation.js";
@@ -21,16 +22,33 @@ import type { ToolContext } from "./context.js";
 
 // ---- Extracted helpers (testable independently) ----
 
+type AgentResultLike = Pick<AgentToolResult<unknown>, "content"> & { details?: unknown };
+
+type CommonSpawnOptions = {
+  description: string;
+  model: Model<any> | undefined;
+  maxTurns: number | undefined;
+  isolated: boolean;
+  inheritContext: boolean;
+  thinking: ThinkingLevel | undefined;
+  isolation: IsolationMode | undefined;
+  invocation: AgentInvocation;
+};
+
+function getFirstTextContent(result: Pick<AgentResultLike, "content">): string {
+  const firstText = result.content.find((item): item is TextContent => item.type === "text");
+  return firstText?.text ?? "";
+}
+
 /** Render agent result for the TUI — status badge, stats line, expanded output. */
 export function renderAgentResult(
-  result: { content: Array<{ type: string; text: string }>; details?: unknown },
+  result: AgentResultLike,
   opts: { expanded: boolean; isPartial: boolean },
   theme: Theme,
 ): Text {
   const details = result.details as AgentDetails | undefined;
   if (!details) {
-    const text = result.content[0]?.type === "text" ? result.content[0].text : "";
-    return new Text(text, 0, 0);
+    return new Text(getFirstTextContent(result), 0, 0);
   }
 
   // Build "haiku · thinking: high · ⟳5≤30 · 3 tool uses · 33.8k tokens" stats string
@@ -77,7 +95,7 @@ export function renderAgentResult(
     }
 
     if (opts.expanded) {
-      const resultText = result.content[0]?.type === "text" ? result.content[0].text : "";
+      const resultText = getFirstTextContent(result);
       if (resultText) {
         const lines = resultText.split("\n").slice(0, 50);
         const expandedParts: string[] = [];
@@ -118,16 +136,16 @@ export function renderAgentResult(
 }
 
 /** Build the common spawn option fields shared by background and foreground paths. */
-export function buildSpawnOptions(input: {
+export function buildSpawnOptions(input: CommonSpawnOptions): {
   description: string;
-  model: unknown;
-  maxTurns: number;
+  model?: Model<any>;
+  maxTurns?: number;
   isolated: boolean;
   inheritContext: boolean;
-  thinking: unknown;
-  isolation: unknown;
+  thinkingLevel?: ThinkingLevel;
+  isolation?: IsolationMode;
   invocation: AgentInvocation;
-}) {
+} {
   return {
     description: input.description,
     model: input.model,
