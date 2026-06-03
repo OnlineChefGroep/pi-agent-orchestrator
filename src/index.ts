@@ -39,7 +39,7 @@ import { setSpinnerStyle } from "./ui/animation.js";
 import { createNotificationRenderer } from "./ui/notification-renderer.js";
 import { getLifetimeTotal } from "./usage.js";
 
-export default function (pi: ExtensionAPI) {
+export default async function (pi: ExtensionAPI) {
   // ---- Register custom notification renderer ----
   pi.registerMessageRenderer<NotificationDetails>(
     "subagent-notification",
@@ -47,7 +47,7 @@ export default function (pi: ExtensionAPI) {
   );
 
   // Initial load
-  reloadCustomAgents();
+  await reloadCustomAgents();
 
   // ---- Agent activity tracking + widget ----
   const agentActivity = new Map<string, AgentActivity>();
