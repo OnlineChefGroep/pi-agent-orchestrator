@@ -494,14 +494,14 @@ Bad isolation.`);
     }
   });
 
-  it("rejects agents with unsafe characters in the middle of the name", () => {
+  it("rejects agents with unsafe characters in the middle of the name", async () => {
     writeAgent("agent..traversal", `---
 description: Unsafe
 ---
 
 Unsafe agent.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("agent..traversal")!.enabled).toBe(false);
   });
 
