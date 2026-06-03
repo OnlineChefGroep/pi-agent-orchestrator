@@ -11,11 +11,11 @@ describe("agent-registry orchestration mode", () => {
     setOrchestrationMode("auto");
   });
 
-  it("has default orchestration mode", () => {
+  it("has default orchestration mode", async () => {
     expect(getOrchestrationMode()).toBe("auto");
   });
 
-  it("can set orchestration mode", () => {
+  it("can set orchestration mode", async () => {
     setOrchestrationMode("swarm");
     expect(getOrchestrationMode()).toBe("swarm");
 
@@ -23,7 +23,7 @@ describe("agent-registry orchestration mode", () => {
     expect(getOrchestrationMode()).toBe("crew");
   });
 
-  it("supports all orchestration modes", () => {
+  it("supports all orchestration modes", async () => {
     const modes = ["auto", "single", "swarm", "crew"] as const;
 
     for (const mode of modes) {
@@ -38,11 +38,11 @@ describe("agent-registry dashboard refresh interval", () => {
     setDashboardRefreshInterval(750);
   });
 
-  it("has default refresh interval", () => {
+  it("has default refresh interval", async () => {
     expect(getDashboardRefreshInterval()).toBe(750);
   });
 
-  it("can set refresh interval", () => {
+  it("can set refresh interval", async () => {
     setDashboardRefreshInterval(500);
     expect(getDashboardRefreshInterval()).toBe(500);
 
@@ -50,7 +50,7 @@ describe("agent-registry dashboard refresh interval", () => {
     expect(getDashboardRefreshInterval()).toBe(1000);
   });
 
-  it("allows setting low refresh intervals", () => {
+  it("allows setting low refresh intervals", async () => {
     setDashboardRefreshInterval(100);
     expect(getDashboardRefreshInterval()).toBe(100);
 
@@ -58,7 +58,7 @@ describe("agent-registry dashboard refresh interval", () => {
     expect(getDashboardRefreshInterval()).toBe(200);
   });
 
-  it("allows high refresh intervals", () => {
+  it("allows high refresh intervals", async () => {
     setDashboardRefreshInterval(5000);
     expect(getDashboardRefreshInterval()).toBe(5000);
 
