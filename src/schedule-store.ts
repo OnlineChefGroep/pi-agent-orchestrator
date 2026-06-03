@@ -22,13 +22,24 @@ export function resolveStorePath(cwd: string, sessionId: string): string {
   return join(cwd, ".pi", "subagent-schedules", `${sessionId}.json`);
 }
 
+async function removeLegacyFileLock(lockPath: string): Promise<void> {
+  try {
+    const stat = await fs.stat(lockPath);
+    if (!stat.isDirectory()) await fs.unlink(lockPath);
+  } catch {
+    /* no legacy lock to migrate */
+  }
+}
+
 export class ScheduleStore {
   private filePath: string;
+  private lockPath: string;
 
   private jobs = new Map<string, ScheduledSubagent>();
 
   constructor(filePath: string) {
     this.filePath = filePath;
+    this.lockPath = `${filePath}.lock`;
 
     this.loadSync();
   }
@@ -95,6 +106,7 @@ export class ScheduleStore {
   /** Acquire lock → reload → mutate → save → release. */
   private async withLock<T>(fn: () => T): Promise<T> {
     await this.ensureDir();
+    await removeLegacyFileLock(this.lockPath);
 
     // Ensure the file exists so proper-lockfile has something to lock onto
     if (!existsSync(this.filePath)) {

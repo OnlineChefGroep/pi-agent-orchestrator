@@ -117,6 +117,17 @@ describe("ScheduleStore", () => {
     expect(data.jobs[0].id).toBe("fresh");
   });
 
+  it("recovers from a legacy plain-file .lock before using proper-lockfile", async () => {
+    const file = join(tmp, "s.json");
+    const lockPath = `${file}.lock`;
+    writeFileSync(lockPath, "999999999");
+
+    const store = new ScheduleStore(file);
+    await expect(store.add(makeJob())).resolves.toBeUndefined();
+    expect(store.list()).toHaveLength(1);
+    expect(existsSync(lockPath)).toBe(false);
+  });
+
   it("releases the lock after a successful mutation so subsequent ones don't deadlock", async () => {
     const store = new ScheduleStore(join(tmp, "s.json"));
     const a = makeJob({ id: "a" });
