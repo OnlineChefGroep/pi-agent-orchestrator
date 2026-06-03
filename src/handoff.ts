@@ -169,7 +169,7 @@ function isArtifact(value: unknown): value is HandoffArtifact {
  * Parse a structured handoff from agent output text.
  *
  * Gracefully handles malformed, missing, or incomplete JSON. Never throws —
- * always returns null with a console warning on parse failures.
+ * always returns null with a warning via logger on parse failures.
  *
  * CVE-008 FIX: Added size and depth limits for JSON parsing.
  *
