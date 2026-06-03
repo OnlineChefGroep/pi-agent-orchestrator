@@ -37,6 +37,13 @@
 ### Actionable Principle
 **Never block the main thread for I/O in async contexts.** Always utilize `node:fs/promises` for file mutations inside Promise/async boundaries to preserve system-wide concurrency, especially when building orchestration software that handles multiple autonomous agents.
 
+## 2026-06-03 - Agent Detail I/O / Async Shift
+
+**Systemic Bottleneck:** Synchronous file I/O operations (`readFileSync`, `writeFileSync`, `unlinkSync`) block the event loop in `src/ui/agent-detail.ts`. Although for individual small files in a local UI script it might seem that synchronous reads are faster in a micro-benchmark (due to avoiding promise overhead), blocking the event loop is detrimental in a Node.js application, especially one that could be handling other async events or UI interactions concurrently (like the TUI or subagent RPCs). This blocks the thread and introduces latency for all concurrent operations.
+**Refactor Strategy:** Replace all `readFileSync`, `writeFileSync`, and `unlinkSync` calls in `src/ui/agent-detail.ts` with their asynchronous counterparts from `node:fs/promises` (`readFile`, `writeFile`, `unlink`). The function `showAgentDetail` is already `async`, making this refactoring straightforward using `await`.
+**Key Metric Shift:** Elimination of main-thread blocking I/O in the `showAgentDetail` flow. Microbenchmarks for single file reads actually show sync reads are faster, but the real metric is event loop lag and concurrency capability. By moving to async I/O, we improve the application's responsiveness and potential throughput for other asynchronous tasks.
+**Actionable Principle:** In `async` functions within a Node.js environment, always prefer asynchronous I/O (`fs/promises`) over synchronous I/O (`fs.*Sync`) to prevent blocking the event loop, thereby improving application responsiveness and concurrency.
+
 ## Optimization: Async refactor of custom agent loading (2026-06-03)
 
 ### Systemic Bottleneck
