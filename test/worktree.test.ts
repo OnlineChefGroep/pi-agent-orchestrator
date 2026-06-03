@@ -157,6 +157,34 @@ describe("worktree", () => {
       expect(result.hasChanges).toBe(false);
     });
 
+
+    it("sanitizes agent description to prevent git hook injection (CVE-001)", () => {
+      const wt = createWorktree(repoDir, "sanitize-1")!;
+      writeFileSync(join(wt.path, "change.txt"), "something");
+
+      const maliciousDesc = 'test\n`malicious`\r\n$(echo foo)\x00"quote"';
+      const result = cleanupWorktree(repoDir, wt, maliciousDesc);
+      expect(result.hasChanges).toBe(true);
+
+      const log = execFileSync("git", ["log", "--oneline", "-1", result.branch!], {
+        cwd: repoDir, stdio: "pipe",
+      }).toString().trim();
+
+      // Ensure no control characters or shell meta characters are present in the commit log
+      expect(log).not.toContain("\n");
+      expect(log).not.toContain("\r");
+      expect(log).not.toContain("`");
+      expect(log).not.toContain("$");
+      expect(log).not.toContain("\\");
+      expect(log).not.toContain('"');
+
+      // The sanitized string should be space-normalized
+      // The exact sanitization is: replace control chars with space, strip quotes/backticks/dollar/backslash, normalize whitespace
+      expect(log).toContain("test malicious (echo foo) quote");
+
+      try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+    });
+
     it("truncates commit message at 200 chars", () => {
       const wt = createWorktree(repoDir, "long-msg")!;
       writeFileSync(join(wt.path, "change.txt"), "something");
