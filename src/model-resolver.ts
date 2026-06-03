@@ -8,10 +8,10 @@ export interface ModelEntry {
   provider: string;
 }
 
-export interface ModelRegistry {
-  find(provider: string, modelId: string): any;
-  getAll(): any[];
-  getAvailable?(): any[];
+export interface ModelRegistry<T extends ModelEntry = ModelEntry> {
+  find(provider: string, modelId: string): T | undefined;
+  getAll(): T[];
+  getAvailable?(): T[];
 }
 
 // Module-level cache for the expensive Set+array build in resolveModel.
@@ -20,14 +20,14 @@ let cachedRegistry: unknown = null;
 let cachedSet: Set<string> | null = null;
 let cachedAll: ModelEntry[] | null = null;
 
-function getAvailableSet(registry: ModelRegistry): { set: Set<string>; all: ModelEntry[] } {
+function getAvailableSet<T extends ModelEntry>(registry: ModelRegistry<T>): { set: Set<string>; all: T[] } {
   if (registry !== cachedRegistry || !cachedSet) {
-    const all = (registry.getAvailable?.() ?? registry.getAll()) as ModelEntry[];
+    const all = registry.getAvailable?.() ?? registry.getAll();
     cachedAll = all;
     cachedSet = new Set(all.map(m => `${m.provider}/${m.id}`.toLowerCase()));
     cachedRegistry = registry;
   }
-  return { set: cachedSet, all: cachedAll! };
+  return { set: cachedSet, all: cachedAll! as T[] };
 }
 
 /** Manually invalidate the model cache (e.g. after registry mutation). */
@@ -42,10 +42,10 @@ export function invalidateModelCache(): void {
  * Tries exact match first ("provider/modelId"), then fuzzy match against all available models.
  * Returns the Model on success, or an error message string on failure.
  */
-export function resolveModel(
+export function resolveModel<T extends ModelEntry>(
   input: string,
-  registry: ModelRegistry,
-): any | string {
+  registry: ModelRegistry<T>,
+): T | string {
   // Available models (those with auth configured) — cached per registry instance
   const { set: availableSet, all } = getAvailableSet(registry);
 

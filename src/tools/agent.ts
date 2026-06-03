@@ -16,7 +16,141 @@ import type { AgentInvocation, AgentRecord, SubagentType } from "../types.js";
 import { buildInvocationTags, describeActivity, formatMs, formatTurns, getDisplayName, getPromptModeLabel } from "../ui/agent-format.js";
 import type { AgentDetails, UICtx } from "../ui/agent-ui-types.js";
 import { getSpinnerFrame } from "../ui/animation.js";
+import type { Theme } from "../ui/theme.js";
 import type { ToolContext } from "./context.js";
+
+// ---- Extracted helpers (testable independently) ----
+
+/** Render agent result for the TUI — status badge, stats line, expanded output. */
+export function renderAgentResult(
+  result: { content: Array<{ type: string; text: string }>; details?: unknown },
+  opts: { expanded: boolean; isPartial: boolean },
+  theme: Theme,
+): Text {
+  const details = result.details as AgentDetails | undefined;
+  if (!details) {
+    const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+    return new Text(text, 0, 0);
+  }
+
+  // Build "haiku · thinking: high · ⟳5≤30 · 3 tool uses · 33.8k tokens" stats string
+  const stats = (d: AgentDetails) => {
+    const parts: string[] = [];
+    if (d.modelName) parts.push(d.modelName);
+    if (d.tags) parts.push(...d.tags);
+    if (d.turnCount != null && d.turnCount > 0) {
+      parts.push(formatTurns(d.turnCount, d.maxTurns));
+    }
+    if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
+    if (d.tokens) parts.push(d.tokens);
+    return parts.map(p => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `);
+  };
+
+  // ---- While running (streaming) ----
+  if (opts.isPartial || details.status === "running") {
+    const frame = getSpinnerFrame(details.spinnerFrame ?? 0);
+    const s = stats(details);
+    let line = theme.fg("accent", frame) + (s ? ` ${s}` : "");
+    line += `\n${theme.fg("dim", `  ⎿  ${details.activity ?? "thinking…"}`)}`;
+    return new Text(line, 0, 0);
+  }
+
+  // ---- Background agent launched ----
+  if (details.status === "background") {
+    return new Text(theme.fg("dim", `  ⎿  Running in background (ID: ${details.agentId})`), 0, 0);
+  }
+
+  // ---- Completed / Steered ----
+  if (details.status === "completed" || details.status === "steered") {
+    const duration = formatMs(details.durationMs);
+    const isSteered = details.status === "steered";
+    const icon = isSteered ? theme.fg("warning", "✓") : theme.fg("success", "✓");
+    const s = stats(details);
+    let line = icon + (s ? ` ${s}` : "");
+    line += ` ${theme.fg("dim", "·")} ${theme.fg("dim", duration)}`;
+
+    // Validation badge
+    if (details.validated !== undefined) {
+      line += details.validated
+        ? ` ${theme.fg("success", "✅")}`
+        : ` ${theme.fg("error", "❌")}`;
+    }
+
+    if (opts.expanded) {
+      const resultText = result.content[0]?.type === "text" ? result.content[0].text : "";
+      if (resultText) {
+        const lines = resultText.split("\n").slice(0, 50);
+        const expandedParts: string[] = [];
+        for (const l of lines) {
+          expandedParts.push(`\n${theme.fg("dim", `  ${l}`)}`);
+        }
+        line += expandedParts.join("");
+        if (resultText.split("\n").length > 50) {
+          line += `\n${theme.fg("muted", "  ... (use get_subagent_result with verbose for full output)")}`;
+        }
+      }
+    } else {
+      const doneText = isSteered ? "Wrapped up (turn limit)" : "Done";
+      line += `\n${theme.fg("dim", `  ⎿  ${doneText}`)}`;
+    }
+    return new Text(line, 0, 0);
+  }
+
+  // ---- Stopped (user-initiated abort) ----
+  if (details.status === "stopped") {
+    const s = stats(details);
+    let line = theme.fg("dim", "■") + (s ? ` ${s}` : "");
+    line += `\n${theme.fg("dim", "  ⎿  Stopped")}`;
+    return new Text(line, 0, 0);
+  }
+
+  // ---- Error / Aborted (hard max_turns) ----
+  const s = stats(details);
+  let line = theme.fg("error", "✗") + (s ? ` ${s}` : "");
+
+  if (details.status === "error") {
+    line += `\n${theme.fg("error", `  ⎿  Error: ${details.error ?? "unknown"}`)}`;
+  } else {
+    line += `\n${theme.fg("warning", "  ⎿  Aborted (max turns exceeded)")}`;
+  }
+
+  return new Text(line, 0, 0);
+}
+
+/** Build the common spawn option fields shared by background and foreground paths. */
+export function buildSpawnOptions(input: {
+  description: string;
+  model: unknown;
+  maxTurns: number;
+  isolated: boolean;
+  inheritContext: boolean;
+  thinking: unknown;
+  isolation: unknown;
+  invocation: AgentInvocation;
+}) {
+  return {
+    description: input.description,
+    model: input.model,
+    maxTurns: input.maxTurns,
+    isolated: input.isolated,
+    inheritContext: input.inheritContext,
+    thinkingLevel: input.thinking,
+    isolation: input.isolation,
+    invocation: input.invocation,
+  };
+}
+
+/** Wrap a callbacks object's onSessionCreated to run additional logic after the original. */
+export function setupSessionCallbacks(
+  target: { onSessionCreated?: (session: any) => void },
+  afterCreate: (session: any) => void,
+): void {
+  const orig = target.onSessionCreated;
+  target.onSessionCreated = (session: any) => {
+    orig?.(session);
+    afterCreate(session);
+  };
+}
 
 export function createAgentTool(ctx: ToolContext) {
   // Schedule param + its guideline are gated on `schedulingEnabled` (read once
@@ -136,94 +270,7 @@ Guidelines:
     },
 
     renderResult(result, { expanded, isPartial }, theme) {
-      const details = result.details as AgentDetails | undefined;
-      if (!details) {
-        const text = result.content[0]?.type === "text" ? result.content[0].text : "";
-        return new Text(text, 0, 0);
-      }
-
-      // Helper: build "haiku · thinking: high · ⟳5≤30 · 3 tool uses · 33.8k tokens" stats string
-      const stats = (d: AgentDetails) => {
-        const parts: string[] = [];
-        if (d.modelName) parts.push(d.modelName);
-        if (d.tags) parts.push(...d.tags);
-        if (d.turnCount != null && d.turnCount > 0) {
-          parts.push(formatTurns(d.turnCount, d.maxTurns));
-        }
-        if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
-        if (d.tokens) parts.push(d.tokens);
-        return parts.map(p => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `);
-      };
-
-      // ---- While running (streaming) ----
-      if (isPartial || details.status === "running") {
-        const frame = getSpinnerFrame(details.spinnerFrame ?? 0);
-        const s = stats(details);
-        let line = theme.fg("accent", frame) + (s ? ` ${s}` : "");
-        line += `\n${theme.fg("dim", `  ⎿  ${details.activity ?? "thinking…"}`)}`;
-        return new Text(line, 0, 0);
-      }
-
-      // ---- Background agent launched ----
-      if (details.status === "background") {
-        return new Text(theme.fg("dim", `  ⎿  Running in background (ID: ${details.agentId})`), 0, 0);
-      }
-
-      // ---- Completed / Steered ----
-      if (details.status === "completed" || details.status === "steered") {
-        const duration = formatMs(details.durationMs);
-        const isSteered = details.status === "steered";
-        const icon = isSteered ? theme.fg("warning", "✓") : theme.fg("success", "✓");
-        const s = stats(details);
-        let line = icon + (s ? ` ${s}` : "");
-        line += ` ${theme.fg("dim", "·")} ${theme.fg("dim", duration)}`;
-
-        // Validation badge
-        if (details.validated !== undefined) {
-          line += details.validated
-            ? ` ${theme.fg("success", "✅")}`
-            : ` ${theme.fg("error", "❌")}`;
-        }
-
-        if (expanded) {
-          const resultText = result.content[0]?.type === "text" ? result.content[0].text : "";
-          if (resultText) {
-            const lines = resultText.split("\n").slice(0, 50);
-            const expandedParts: string[] = [];
-            for (const l of lines) {
-              expandedParts.push(`\n${theme.fg("dim", `  ${l}`)}`);
-            }
-            line += expandedParts.join("");
-            if (resultText.split("\n").length > 50) {
-              line += `\n${theme.fg("muted", "  ... (use get_subagent_result with verbose for full output)")}`;
-            }
-          }
-        } else {
-          const doneText = isSteered ? "Wrapped up (turn limit)" : "Done";
-          line += `\n${theme.fg("dim", `  ⎿  ${doneText}`)}`;
-        }
-        return new Text(line, 0, 0);
-      }
-
-      // ---- Stopped (user-initiated abort) ----
-      if (details.status === "stopped") {
-        const s = stats(details);
-        let line = theme.fg("dim", "■") + (s ? ` ${s}` : "");
-        line += `\n${theme.fg("dim", "  ⎿  Stopped")}`;
-        return new Text(line, 0, 0);
-      }
-
-      // ---- Error / Aborted (hard max_turns) ----
-      const s = stats(details);
-      let line = theme.fg("error", "✗") + (s ? ` ${s}` : "");
-
-      if (details.status === "error") {
-        line += `\n${theme.fg("error", `  ⎿  Error: ${details.error ?? "unknown"}`)}`;
-      } else {
-        line += `\n${theme.fg("warning", "  ⎿  Aborted (max turns exceeded)")}`;
-      }
-
-      return new Text(line, 0, 0);
+      return renderAgentResult(result, { expanded, isPartial }, theme);
     },
 
     // ---- Execute ----
@@ -256,9 +303,8 @@ Guidelines:
         const resolvedModel = resolveModel(resolvedConfig.modelInput, piCtx.modelRegistry);
         if (typeof resolvedModel === "string") {
           if (resolvedConfig.modelFromParams) return textResult(resolvedModel);
-          // config-specified: silent fallback to parent
         } else {
-          model = resolvedModel;
+          model = resolvedModel as any;
         }
       }
 
@@ -377,15 +423,17 @@ Guidelines:
         // Build spawn options upfront so we can mutate the same object after
         // spawn returns — the manager stores this reference internally.
         const spawnOptions = {
-          description: params.description,
-          model,
-          maxTurns: effectiveMaxTurns,
-          isolated,
-          inheritContext,
-          thinkingLevel: thinking,
+          ...buildSpawnOptions({
+            description: params.description as string,
+            model,
+            maxTurns: effectiveMaxTurns,
+            isolated,
+            inheritContext,
+            thinking,
+            isolation,
+            invocation: agentInvocation,
+          }),
           isBackground: true,
-          isolation,
-          invocation: agentInvocation,
           ...bgCallbacks,
         };
 
@@ -400,14 +448,12 @@ Guidelines:
         // Mutating spawnOptions (same object stored in manager) before the
         // async session callback fires ensures the streaming hook runs when
         // the session is created.
-        const origBgOnSession = spawnOptions.onSessionCreated!;
-        spawnOptions.onSessionCreated = (session: any) => {
-          origBgOnSession(session);
+        setupSessionCallbacks(spawnOptions, (session) => {
           const rec = manager.getRecord(id);
           if (rec?.outputFile) {
             rec.outputCleanup = streamToOutputFile(session, rec.outputFile, id, piCtx.cwd);
           }
-        };
+        });
 
         // Set output file + join mode synchronously after spawn, before the
         // event loop yields — onSessionCreated is async so this is safe.
@@ -480,9 +526,7 @@ Guidelines:
       const { state: fgState, callbacks: fgCallbacks } = createActivityTracker(effectiveMaxTurns, streamUpdate);
 
       // Wire session creation to register in widget
-      const origOnSession = fgCallbacks.onSessionCreated;
-      fgCallbacks.onSessionCreated = (session: any) => {
-        origOnSession(session);
+      setupSessionCallbacks(fgCallbacks, (session) => {
         for (const a of manager.listAgents()) {
           if (a.session === session) {
             fgId = a.id;
@@ -491,7 +535,7 @@ Guidelines:
             break;
           }
         }
-      };
+      });
 
       // Animate spinner at ~80ms (smooth rotation through 10 braille frames)
       const spinnerInterval = setInterval(() => {
@@ -504,14 +548,16 @@ Guidelines:
       let record: AgentRecord;
       try {
         record = await manager.spawnAndWait(pi, piCtx, subagentType, params.prompt, {
-          description: params.description,
-          model,
-          maxTurns: effectiveMaxTurns,
-          isolated,
-          inheritContext,
-          thinkingLevel: thinking,
-          isolation,
-          invocation: agentInvocation,
+          ...buildSpawnOptions({
+            description: params.description as string,
+            model,
+            maxTurns: effectiveMaxTurns,
+            isolated,
+            inheritContext,
+            thinking,
+            isolation,
+            invocation: agentInvocation,
+          }),
           signal,
           ...fgCallbacks,
         });
