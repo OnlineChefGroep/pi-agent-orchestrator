@@ -164,6 +164,53 @@ describe("parseHandoff", () => {
     const result = parseHandoff(null as unknown as string);
     expect(result).toBeNull();
   });
+
+  it("returns null when JSON depth exceeds limit and logs warning", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    // Create a JSON string with depth 21 (limit is 20)
+    let deepJson = "{\"type\":\"handoff\",\"status\":\"success\",\"summary\":\"s\",\"findings\":[\"f\"],\"nested\":";
+    for (let i = 0; i < 21; i++) {
+      deepJson += '{"a":';
+    }
+    deepJson += '1';
+    for (let i = 0; i < 21; i++) {
+      deepJson += '}';
+    }
+    deepJson += "}";
+
+    const text = `\`\`\`json\n${deepJson}\n\`\`\``;
+
+    const result = parseHandoff(text);
+    expect(result).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("depth exceeds maximum of 20")
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("returns null when JSON key count exceeds limit and logs warning", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    // Create a JSON string with 1001 keys (limit is 1000)
+    let manyKeysJson = "{\"type\":\"handoff\",\"status\":\"success\",\"summary\":\"s\",\"findings\":[\"f\"],";
+    for (let i = 0; i < 1000; i++) {
+      manyKeysJson += `"k${i}":1`;
+      if (i < 999) manyKeysJson += ",";
+    }
+    manyKeysJson += "}";
+
+    const text = `\`\`\`json\n${manyKeysJson}\n\`\`\``;
+
+    const result = parseHandoff(text);
+    expect(result).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("key count exceeds maximum of 1000")
+    );
+
+    warnSpy.mockRestore();
+  });
 });
 
 describe("buildHandoffPrompt", () => {
