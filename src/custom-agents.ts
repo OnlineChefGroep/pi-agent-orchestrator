@@ -52,12 +52,11 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
       errors.push(`Too many tools specified (max ${MAX_TOOLS_COUNT})`);
     }
     
-    // CVE-011 FIX: Emit telemetry for unknown tool names (don't block, just log)
+    // CVE-011 FIX: Emit telemetry for unknown tool names (don't block custom tools)
     const knownTools = new Set([...BUILTIN_TOOL_NAMES, '*']);
     const unknownTools = config.builtinToolNames.filter(t => !knownTools.has(t));
     if (unknownTools.length > 0) {
       emitTelemetry("agent:unknown-tools", { name, tools: unknownTools });
-      errors.push(`Unknown tools specified: ${unknownTools.join(', ')}`);
     }
   }
   

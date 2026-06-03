@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BUILTIN_TOOL_NAMES } from "../src/agent-types.js";
 import { loadCustomAgents } from "../src/custom-agents.js";
+import { onTelemetry } from "../src/telemetry.js";
 
 describe("loadCustomAgents", () => {
   let tmpDir: string;
@@ -139,15 +140,28 @@ Partial access.`);
     expect(agent.skills).toEqual(["planning", "review"]);
   });
 
-  it("rejects unknown tool names", () => {
+  it("emits telemetry for unknown tool names without blocking custom tools", () => {
+    const unknownToolsEvents: { name: string; tools: string[] }[] = [];
+    const unsubscribe = onTelemetry("agent:unknown-tools", payload => {
+      unknownToolsEvents.push(payload);
+    });
+
     writeAgent("custom-tools", `---
 tools: read, my_custom_tool, grep
 ---
 
 Custom tools.`);
 
-    const result = loadCustomAgents(tmpDir);
-    expect(result.get("custom-tools")!.enabled).toBe(false);
+    try {
+      const result = loadCustomAgents(tmpDir);
+      const agent = result.get("custom-tools")!;
+
+      expect(agent.enabled).toBe(true);
+      expect(agent.builtinToolNames).toEqual(["read", "my_custom_tool", "grep"]);
+      expect(unknownToolsEvents).toEqual([{ name: "custom-tools", tools: ["my_custom_tool"] }]);
+    } finally {
+      unsubscribe();
+    }
   });
 
   it("passes through thinking level as-is (no validation)", () => {
