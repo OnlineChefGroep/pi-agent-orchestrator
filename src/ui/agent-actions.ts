@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { reloadCustomAgents } from "../agent-registry.js";
@@ -14,7 +15,7 @@ export async function ejectAgent(ctx: ExtensionCommandContext, name: string, cfg
   if (!location) return;
 
   const targetDir = location.startsWith("Project") ? projectAgentsDir() : personalAgentsDir();
-  mkdirSync(targetDir, { recursive: true });
+  await mkdir(targetDir, { recursive: true });
 
   const targetPath = join(targetDir, `${name}.md`);
   if (existsSync(targetPath)) {
@@ -44,7 +45,7 @@ export async function ejectAgent(ctx: ExtensionCommandContext, name: string, cfg
 
   const content = `---\n${fmFields.join("\n")}\n---\n\n${cfg.systemPrompt}\n`;
 
-  writeFileSync(targetPath, content, "utf-8");
+  await writeFile(targetPath, content, "utf-8");
   reloadCustomAgents();
   ctx.ui.notify(`Ejected ${name} to ${targetPath}`, "info");
 }
@@ -54,13 +55,13 @@ export async function disableAgent(ctx: ExtensionCommandContext, name: string): 
   const file = findAgentFile(name);
   if (file) {
     // Existing file — set enabled: false in frontmatter (idempotent)
-    const content = readFileSync(file.path, "utf-8");
+    const content = await readFile(file.path, "utf-8");
     if (content.includes("\nenabled: false\n")) {
       ctx.ui.notify(`${name} is already disabled.`, "info");
       return;
     }
     const updated = content.replace(/^---\n/, "---\nenabled: false\n");
-    writeFileSync(file.path, updated, "utf-8");
+    await writeFile(file.path, updated, "utf-8");
     reloadCustomAgents();
     ctx.ui.notify(`Disabled ${name} (${file.path})`, "info");
     return;
@@ -74,10 +75,10 @@ export async function disableAgent(ctx: ExtensionCommandContext, name: string): 
   if (!location) return;
 
   const targetDir = location.startsWith("Project") ? projectAgentsDir() : personalAgentsDir();
-  mkdirSync(targetDir, { recursive: true });
+  await mkdir(targetDir, { recursive: true });
 
   const targetPath = join(targetDir, `${name}.md`);
-  writeFileSync(targetPath, "---\nenabled: false\n---\n", "utf-8");
+  await writeFile(targetPath, "---\nenabled: false\n---\n", "utf-8");
   reloadCustomAgents();
   ctx.ui.notify(`Disabled ${name} (${targetPath})`, "info");
 }
@@ -87,16 +88,16 @@ export async function enableAgent(ctx: ExtensionCommandContext, name: string): P
   const file = findAgentFile(name);
   if (!file) return;
 
-  const content = readFileSync(file.path, "utf-8");
+  const content = await readFile(file.path, "utf-8");
   const updated = content.replace(/^(---\n)enabled: false\n/, "$1");
 
   // If the file was just a stub ("---\n---\n"), delete it to restore the built-in default
   if (updated.trim() === "---\n---" || updated.trim() === "---\n---\n") {
-    unlinkSync(file.path);
+    await unlink(file.path);
     reloadCustomAgents();
     ctx.ui.notify(`Enabled ${name} (removed ${file.path})`, "info");
   } else {
-    writeFileSync(file.path, updated, "utf-8");
+    await writeFile(file.path, updated, "utf-8");
     reloadCustomAgents();
     ctx.ui.notify(`Enabled ${name} (${file.path})`, "info");
   }
