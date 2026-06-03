@@ -248,8 +248,8 @@ function buildEffectivePrompt(
   options.onContextBuilt?.(builtAt);
 
   const spawnedAgo = options.spawnedAt ? builtAt - options.spawnedAt : 0;
-  console.log(
-    `[pi-subagents] Context built ${spawnedAgo}ms after spawn for ${options.agentId ?? "unknown"}`,
+  logger.info(
+    `Context built ${spawnedAgo}ms after spawn for ${options.agentId ?? "unknown"}`,
   );
 
   if (!parentContext) return prompt;
