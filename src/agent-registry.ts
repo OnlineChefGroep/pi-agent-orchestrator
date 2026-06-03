@@ -140,8 +140,8 @@ export function setShowTurnProgress(b: boolean): void {
 // ---- Custom agent reloading ----
 
 /** Reload agents from .pi/agents/*.md and merge with defaults. */
-export function reloadCustomAgents(): void {
-  const userAgents = loadCustomAgents(process.cwd());
+export async function reloadCustomAgents(): Promise<void> {
+  const userAgents = await loadCustomAgents(process.cwd());
   registerAgents(userAgents);
 }
 
