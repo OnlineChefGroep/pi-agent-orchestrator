@@ -2,7 +2,7 @@
  * agent-runner.ts — Core execution engine: creates sessions, runs agents, collects results.
  */
 
-import type { Model } from "@earendil-works/pi-ai";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   type AgentSession,
@@ -62,26 +62,36 @@ export function setGraceTurns(n: number): void { graceTurns = Math.max(1, n); }
 let _cachedRegistry: unknown = null;
 let _cachedKeys: Set<string> | null = null;
 
+/**
+ * Retrieve (and cache) the set of available model keys from a model registry, formatted as `provider/id`.
+ *
+ * @param registry - An object that may expose a `getAvailable()` method returning an array of models.
+ * @returns A `Set` of model keys in the form `provider/id` when `getAvailable()` returns a list, or `undefined` if the registry does not provide availability information.
+ */
 function getAvailableKeys(
-  registry: { getAvailable?(): Model<any>[] },
+  registry: { getAvailable?(): Model<Api>[] },
 ): Set<string> | undefined {
   if (registry === _cachedRegistry && _cachedKeys) return _cachedKeys;
   const available = registry.getAvailable?.();
   if (!available) return undefined;
-  _cachedKeys = new Set(available.map((m: any) => `${m.provider}/${m.id}`));
+  _cachedKeys = new Set(available.map((m) => `${m.provider}/${m.id}`));
   _cachedRegistry = registry;
   return _cachedKeys;
 }
 
 /**
- * Try to find the right model for an agent type.
- * Priority: explicit option > config.model > parent model.
+ * Resolve the effective model for an agent, preferring an explicit `provider/modelId` override when provided.
+ *
+ * @param parentModel - Fallback model from the parent context used when `configModel` is absent or invalid
+ * @param registry - Registry able to locate models and optionally report available models
+ * @param configModel - Optional override in the form `"<provider>/<modelId>"`; only used if it matches an available model
+ * @returns The `Model<Api>` discovered from `configModel` when valid and available, otherwise `parentModel`
  */
 function resolveDefaultModel(
-  parentModel: Model<any> | undefined,
-  registry: { find(provider: string, modelId: string): Model<any> | undefined; getAvailable?(): Model<any>[] },
+  parentModel: Model<Api> | undefined,
+  registry: { find(provider: string, modelId: string): Model<Api> | undefined; getAvailable?(): Model<Api>[] },
   configModel?: string,
-): Model<any> | undefined {
+): Model<Api> | undefined {
   if (configModel) {
     const slashIdx = configModel.indexOf("/");
     if (slashIdx !== -1) {
@@ -111,7 +121,7 @@ export interface RunOptions {
   pi: ExtensionAPI;
   /** Manager-assigned id; suffixes session name to disambiguate parallel spawns (e.g. `Explore#a1b2c3d4`). */
   agentId?: string;
-  model?: Model<any>;
+  model?: Model<Api>;
   maxTurns?: number;
   signal?: AbortSignal;
   isolated?: boolean;
@@ -740,7 +750,14 @@ export async function steerAgent(
 }
 
 /**
- * Get the subagent's conversation messages as formatted text.
+ * Serialize a session's messages into a human-readable conversation transcript.
+ *
+ * Produces ordered blocks for user messages (`[User]: ...`), assistant messages (`[Assistant]: ...`),
+ * assistant-initiated tool calls (`[Tool Calls]:` with indented `Tool: <name>` lines), and tool results
+ * (`[Tool Result (<toolName>)]: ...`). Assistant text parts are joined with newlines; tool result text
+ * is truncated to 200 characters with `...` when longer. Empty user messages are omitted.
+ *
+ * @returns The formatted conversation as a single string with message blocks separated by blank lines.
  */
 export function getAgentConversation(session: AgentSession): string {
   const parts: string[] = [];
@@ -756,7 +773,7 @@ export function getAgentConversation(session: AgentSession): string {
       const toolCalls: string[] = [];
       for (const c of msg.content) {
         if (c.type === "text" && c.text) textParts.push(c.text);
-        else if (c.type === "toolCall") toolCalls.push(`  Tool: ${(c as any).name ?? (c as any).toolName ?? "unknown"}`);
+        else if (c.type === "toolCall") toolCalls.push(`  Tool: ${c.name ?? "unknown"}`);
       }
       if (textParts.length > 0) parts.push(`[Assistant]: ${textParts.join("\n")}`);
       if (toolCalls.length > 0) parts.push(`[Tool Calls]:\n${toolCalls.join("\n")}`);

@@ -1,4 +1,5 @@
-import { defineTool, getAgentDir } from "@earendil-works/pi-coding-agent";
+import type { Model, TextContent } from "@earendil-works/pi-ai";
+import { type AgentToolResult, defineTool, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { buildTypeListText, getDefaultJoinMode, isSchedulingEnabled, reloadCustomAgents } from "../agent-registry.js";
@@ -12,12 +13,193 @@ import {
   buildDetails, createActivityTracker, formatLifetimeTokens,
   getStatusNote, textResult,
 } from "../tool-result-helpers.js";
-import type { AgentInvocation, AgentRecord, SubagentType } from "../types.js";
+import type { AgentInvocation, AgentRecord, IsolationMode, SubagentType, ThinkingLevel } from "../types.js";
 import { buildInvocationTags, describeActivity, formatMs, formatTurns, getDisplayName, getPromptModeLabel } from "../ui/agent-format.js";
 import type { AgentDetails, UICtx } from "../ui/agent-ui-types.js";
 import { getSpinnerFrame } from "../ui/animation.js";
+import type { Theme } from "../ui/theme.js";
 import type { ToolContext } from "./context.js";
 
+// ---- Extracted helpers (testable independently) ----
+
+type AgentResultLike = Pick<AgentToolResult<unknown>, "content"> & { details?: unknown };
+
+type CommonSpawnOptions = {
+  description: string;
+  model: Model<any> | undefined;
+  maxTurns: number | undefined;
+  isolated: boolean;
+  inheritContext: boolean;
+  thinking: ThinkingLevel | undefined;
+  isolation: IsolationMode | undefined;
+  invocation: AgentInvocation;
+};
+
+/**
+ * Extracts the text from the first `text` content item in a tool result.
+ *
+ * @param result - Object containing a `content` array of content entries
+ * @returns The `.text` of the first content item with `type === 'text'`, or an empty string if none is found
+ */
+function getFirstTextContent(result: Pick<AgentResultLike, "content">): string {
+  const firstText = result.content.find((item): item is TextContent => item.type === "text");
+  return firstText?.text ?? "";
+}
+
+/**
+ * Format an agent tool result into a TUI Text block showing status, stats, and optional expanded output.
+ *
+ * @param result - The agent result containing `content` and optional `details` that drive the rendered output.
+ * @param opts - Rendering options: `expanded` shows full (truncated) output lines, `isPartial` treats the result as streaming/partial.
+ * @param theme - Theme used to style status, stats, and message lines.
+ * @returns A `Text` instance containing the composed, styled representation of the agent result for TUI display.
+ */
+export function renderAgentResult(
+  result: AgentResultLike,
+  opts: { expanded: boolean; isPartial: boolean },
+  theme: Theme,
+): Text {
+  const details = result.details as AgentDetails | undefined;
+  if (!details) {
+    return new Text(getFirstTextContent(result), 0, 0);
+  }
+
+  // Build "haiku · thinking: high · ⟳5≤30 · 3 tool uses · 33.8k tokens" stats string
+  const stats = (d: AgentDetails) => {
+    const parts: string[] = [];
+    if (d.modelName) parts.push(d.modelName);
+    if (d.tags) parts.push(...d.tags);
+    if (d.turnCount != null && d.turnCount > 0) {
+      parts.push(formatTurns(d.turnCount, d.maxTurns));
+    }
+    if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
+    if (d.tokens) parts.push(d.tokens);
+    return parts.map(p => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `);
+  };
+
+  // ---- While running (streaming) ----
+  if (opts.isPartial || details.status === "running") {
+    const frame = getSpinnerFrame(details.spinnerFrame ?? 0);
+    const s = stats(details);
+    let line = theme.fg("accent", frame) + (s ? ` ${s}` : "");
+    line += `\n${theme.fg("dim", `  ⎿  ${details.activity ?? "thinking…"}`)}`;
+    return new Text(line, 0, 0);
+  }
+
+  // ---- Background agent launched ----
+  if (details.status === "background") {
+    return new Text(theme.fg("dim", `  ⎿  Running in background (ID: ${details.agentId})`), 0, 0);
+  }
+
+  // ---- Completed / Steered ----
+  if (details.status === "completed" || details.status === "steered") {
+    const duration = formatMs(details.durationMs);
+    const isSteered = details.status === "steered";
+    const icon = isSteered ? theme.fg("warning", "✓") : theme.fg("success", "✓");
+    const s = stats(details);
+    let line = icon + (s ? ` ${s}` : "");
+    line += ` ${theme.fg("dim", "·")} ${theme.fg("dim", duration)}`;
+
+    // Validation badge
+    if (details.validated !== undefined) {
+      line += details.validated
+        ? ` ${theme.fg("success", "✅")}`
+        : ` ${theme.fg("error", "❌")}`;
+    }
+
+    if (opts.expanded) {
+      const resultText = getFirstTextContent(result);
+      if (resultText) {
+        const lines = resultText.split("\n").slice(0, 50);
+        const expandedParts: string[] = [];
+        for (const l of lines) {
+          expandedParts.push(`\n${theme.fg("dim", `  ${l}`)}`);
+        }
+        line += expandedParts.join("");
+        if (resultText.split("\n").length > 50) {
+          line += `\n${theme.fg("muted", "  ... (use get_subagent_result with verbose for full output)")}`;
+        }
+      }
+    } else {
+      const doneText = isSteered ? "Wrapped up (turn limit)" : "Done";
+      line += `\n${theme.fg("dim", `  ⎿  ${doneText}`)}`;
+    }
+    return new Text(line, 0, 0);
+  }
+
+  // ---- Stopped (user-initiated abort) ----
+  if (details.status === "stopped") {
+    const s = stats(details);
+    let line = theme.fg("dim", "■") + (s ? ` ${s}` : "");
+    line += `\n${theme.fg("dim", "  ⎿  Stopped")}`;
+    return new Text(line, 0, 0);
+  }
+
+  // ---- Error / Aborted (hard max_turns) ----
+  const s = stats(details);
+  let line = theme.fg("error", "✗") + (s ? ` ${s}` : "");
+
+  if (details.status === "error") {
+    line += `\n${theme.fg("error", `  ⎿  Error: ${details.error ?? "unknown"}`)}`;
+  } else {
+    line += `\n${theme.fg("warning", "  ⎿  Aborted (max turns exceeded)")}`;
+  }
+
+  return new Text(line, 0, 0);
+}
+
+/**
+ * Map a CommonSpawnOptions object into the spawn API shape used by agent manager calls.
+ *
+ * @param input - Common spawn configuration (model, limits, isolation and invocation metadata)
+ * @returns An object containing the normalized spawn fields: description, optional model, optional maxTurns, isolation flags, optional thinkingLevel, optional isolation mode, and the invocation metadata
+ */
+export function buildSpawnOptions(input: CommonSpawnOptions): {
+  description: string;
+  model?: Model<any>;
+  maxTurns?: number;
+  isolated: boolean;
+  inheritContext: boolean;
+  thinkingLevel?: ThinkingLevel;
+  isolation?: IsolationMode;
+  invocation: AgentInvocation;
+} {
+  return {
+    description: input.description,
+    model: input.model,
+    maxTurns: input.maxTurns,
+    isolated: input.isolated,
+    inheritContext: input.inheritContext,
+    thinkingLevel: input.thinking,
+    isolation: input.isolation,
+    invocation: input.invocation,
+  };
+}
+
+/**
+ * Decorates a callbacks object so `afterCreate` is invoked after its existing `onSessionCreated` handler.
+ *
+ * @param target - An object that may have an `onSessionCreated` callback to wrap
+ * @param afterCreate - Callback to run with the session after the original handler (if any) has been called
+ */
+export function setupSessionCallbacks(
+  target: { onSessionCreated?: (session: any) => void },
+  afterCreate: (session: any) => void,
+): void {
+  const orig = target.onSessionCreated;
+  target.onSessionCreated = (session: any) => {
+    orig?.(session);
+    afterCreate(session);
+  };
+}
+
+/**
+ * Register and return the "Agent" tool used to launch and control autonomous subagents.
+ *
+ * The returned tool exposes parameters to configure agent type, prompt, model, thinking level, max turns, background/foreground execution, resuming, isolation, scheduling (when enabled), and estimate-only queries; it renders calls/results with a custom TUI presentation and implements execution paths for estimates, scheduling, resuming, background spawning (with output-file streaming and batching), and foreground streaming with progress updates.
+ *
+ * @returns The tool definition object for the Agent tool, suitable for registration with the tool system.
+ */
 export function createAgentTool(ctx: ToolContext) {
   // Schedule param + its guideline are gated on `schedulingEnabled` (read once
   // at registration; flipping the setting later requires next pi session for
@@ -136,94 +318,7 @@ Guidelines:
     },
 
     renderResult(result, { expanded, isPartial }, theme) {
-      const details = result.details as AgentDetails | undefined;
-      if (!details) {
-        const text = result.content[0]?.type === "text" ? result.content[0].text : "";
-        return new Text(text, 0, 0);
-      }
-
-      // Helper: build "haiku · thinking: high · ⟳5≤30 · 3 tool uses · 33.8k tokens" stats string
-      const stats = (d: AgentDetails) => {
-        const parts: string[] = [];
-        if (d.modelName) parts.push(d.modelName);
-        if (d.tags) parts.push(...d.tags);
-        if (d.turnCount != null && d.turnCount > 0) {
-          parts.push(formatTurns(d.turnCount, d.maxTurns));
-        }
-        if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
-        if (d.tokens) parts.push(d.tokens);
-        return parts.map(p => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `);
-      };
-
-      // ---- While running (streaming) ----
-      if (isPartial || details.status === "running") {
-        const frame = getSpinnerFrame(details.spinnerFrame ?? 0);
-        const s = stats(details);
-        let line = theme.fg("accent", frame) + (s ? ` ${s}` : "");
-        line += `\n${theme.fg("dim", `  ⎿  ${details.activity ?? "thinking…"}`)}`;
-        return new Text(line, 0, 0);
-      }
-
-      // ---- Background agent launched ----
-      if (details.status === "background") {
-        return new Text(theme.fg("dim", `  ⎿  Running in background (ID: ${details.agentId})`), 0, 0);
-      }
-
-      // ---- Completed / Steered ----
-      if (details.status === "completed" || details.status === "steered") {
-        const duration = formatMs(details.durationMs);
-        const isSteered = details.status === "steered";
-        const icon = isSteered ? theme.fg("warning", "✓") : theme.fg("success", "✓");
-        const s = stats(details);
-        let line = icon + (s ? ` ${s}` : "");
-        line += ` ${theme.fg("dim", "·")} ${theme.fg("dim", duration)}`;
-
-        // Validation badge
-        if (details.validated !== undefined) {
-          line += details.validated
-            ? ` ${theme.fg("success", "✅")}`
-            : ` ${theme.fg("error", "❌")}`;
-        }
-
-        if (expanded) {
-          const resultText = result.content[0]?.type === "text" ? result.content[0].text : "";
-          if (resultText) {
-            const lines = resultText.split("\n").slice(0, 50);
-            const expandedParts: string[] = [];
-            for (const l of lines) {
-              expandedParts.push(`\n${theme.fg("dim", `  ${l}`)}`);
-            }
-            line += expandedParts.join("");
-            if (resultText.split("\n").length > 50) {
-              line += `\n${theme.fg("muted", "  ... (use get_subagent_result with verbose for full output)")}`;
-            }
-          }
-        } else {
-          const doneText = isSteered ? "Wrapped up (turn limit)" : "Done";
-          line += `\n${theme.fg("dim", `  ⎿  ${doneText}`)}`;
-        }
-        return new Text(line, 0, 0);
-      }
-
-      // ---- Stopped (user-initiated abort) ----
-      if (details.status === "stopped") {
-        const s = stats(details);
-        let line = theme.fg("dim", "■") + (s ? ` ${s}` : "");
-        line += `\n${theme.fg("dim", "  ⎿  Stopped")}`;
-        return new Text(line, 0, 0);
-      }
-
-      // ---- Error / Aborted (hard max_turns) ----
-      const s = stats(details);
-      let line = theme.fg("error", "✗") + (s ? ` ${s}` : "");
-
-      if (details.status === "error") {
-        line += `\n${theme.fg("error", `  ⎿  Error: ${details.error ?? "unknown"}`)}`;
-      } else {
-        line += `\n${theme.fg("warning", "  ⎿  Aborted (max turns exceeded)")}`;
-      }
-
-      return new Text(line, 0, 0);
+      return renderAgentResult(result, { expanded, isPartial }, theme);
     },
 
     // ---- Execute ----
@@ -256,9 +351,8 @@ Guidelines:
         const resolvedModel = resolveModel(resolvedConfig.modelInput, piCtx.modelRegistry);
         if (typeof resolvedModel === "string") {
           if (resolvedConfig.modelFromParams) return textResult(resolvedModel);
-          // config-specified: silent fallback to parent
         } else {
-          model = resolvedModel;
+          model = resolvedModel as any;
         }
       }
 
@@ -377,15 +471,17 @@ Guidelines:
         // Build spawn options upfront so we can mutate the same object after
         // spawn returns — the manager stores this reference internally.
         const spawnOptions = {
-          description: params.description,
-          model,
-          maxTurns: effectiveMaxTurns,
-          isolated,
-          inheritContext,
-          thinkingLevel: thinking,
+          ...buildSpawnOptions({
+            description: params.description as string,
+            model,
+            maxTurns: effectiveMaxTurns,
+            isolated,
+            inheritContext,
+            thinking,
+            isolation,
+            invocation: agentInvocation,
+          }),
           isBackground: true,
-          isolation,
-          invocation: agentInvocation,
           ...bgCallbacks,
         };
 
@@ -400,14 +496,12 @@ Guidelines:
         // Mutating spawnOptions (same object stored in manager) before the
         // async session callback fires ensures the streaming hook runs when
         // the session is created.
-        const origBgOnSession = spawnOptions.onSessionCreated!;
-        spawnOptions.onSessionCreated = (session: any) => {
-          origBgOnSession(session);
+        setupSessionCallbacks(spawnOptions, (session) => {
           const rec = manager.getRecord(id);
           if (rec?.outputFile) {
             rec.outputCleanup = streamToOutputFile(session, rec.outputFile, id, piCtx.cwd);
           }
-        };
+        });
 
         // Set output file + join mode synchronously after spawn, before the
         // event loop yields — onSessionCreated is async so this is safe.
@@ -480,9 +574,7 @@ Guidelines:
       const { state: fgState, callbacks: fgCallbacks } = createActivityTracker(effectiveMaxTurns, streamUpdate);
 
       // Wire session creation to register in widget
-      const origOnSession = fgCallbacks.onSessionCreated;
-      fgCallbacks.onSessionCreated = (session: any) => {
-        origOnSession(session);
+      setupSessionCallbacks(fgCallbacks, (session) => {
         for (const a of manager.listAgents()) {
           if (a.session === session) {
             fgId = a.id;
@@ -491,7 +583,7 @@ Guidelines:
             break;
           }
         }
-      };
+      });
 
       // Animate spinner at ~80ms (smooth rotation through 10 braille frames)
       const spinnerInterval = setInterval(() => {
@@ -504,14 +596,16 @@ Guidelines:
       let record: AgentRecord;
       try {
         record = await manager.spawnAndWait(pi, piCtx, subagentType, params.prompt, {
-          description: params.description,
-          model,
-          maxTurns: effectiveMaxTurns,
-          isolated,
-          inheritContext,
-          thinkingLevel: thinking,
-          isolation,
-          invocation: agentInvocation,
+          ...buildSpawnOptions({
+            description: params.description as string,
+            model,
+            maxTurns: effectiveMaxTurns,
+            isolated,
+            inheritContext,
+            thinking,
+            isolation,
+            invocation: agentInvocation,
+          }),
           signal,
           ...fgCallbacks,
         });
