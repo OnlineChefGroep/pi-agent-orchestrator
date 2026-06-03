@@ -460,4 +460,16 @@ Bad isolation.`);
       rmSync(altAgentDir, { recursive: true, force: true });
     }
   });
+
+  it("rejects agents with unsafe characters in the middle of the name", () => {
+    writeAgent("agent..traversal", `---
+description: Unsafe
+---
+
+Unsafe agent.`);
+
+    const result = loadCustomAgents(tmpDir);
+    expect(result.get("agent..traversal")!.enabled).toBe(false);
+  });
+
 });
