@@ -13,15 +13,16 @@ vi.mock("../src/logger.js", () => ({
 
 describe("telemetry", () => {
   const TELEMETRY_REGISTRY_KEY = Symbol.for("pi-subagents:telemetry-handlers");
+  const globalRegistry = globalThis as Record<symbol, unknown>;
 
   beforeEach(() => {
     // Reset the global registry before each test
-    delete (globalThis as any)[TELEMETRY_REGISTRY_KEY];
+    delete globalRegistry[TELEMETRY_REGISTRY_KEY];
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    delete (globalThis as any)[TELEMETRY_REGISTRY_KEY];
+    delete globalRegistry[TELEMETRY_REGISTRY_KEY];
   });
 
   describe("pub/sub", () => {
