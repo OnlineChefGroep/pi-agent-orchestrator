@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BUILTIN_TOOL_NAMES } from "../src/agent-types.js";
 import { loadCustomAgents } from "../src/custom-agents.js";
+import { onTelemetry } from "../src/telemetry.js";
 
 describe("loadCustomAgents", () => {
   let tmpDir: string;
@@ -150,6 +151,25 @@ Custom tools.`);
     // Unknown tool names are passed through — filtering happens at tool creation time
     expect(result.get("custom-tools")!.builtinToolNames).toEqual(["read", "my_custom_tool", "grep"]);
   });
+
+  it("emits agent:unknown-tools telemetry event for unknown tool names", () => {
+    writeAgent("custom-tools-telemetry", `---
+tools: read, my_custom_tool, grep, another_unknown
+---
+
+Custom tools telemetry.`);
+
+    let emittedPayload: any = null;
+    const unsubscribe = onTelemetry("agent:unknown-tools", (payload) => {
+      emittedPayload = payload;
+    });
+
+    loadCustomAgents(tmpDir);
+    unsubscribe();
+
+    expect(emittedPayload).toEqual({ name: "custom-tools-telemetry", tools: ["my_custom_tool", "another_unknown"] });
+  });
+
 
   it("passes through thinking level as-is (no validation)", () => {
     writeAgent("anythink", `---
