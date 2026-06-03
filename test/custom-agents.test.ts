@@ -139,7 +139,7 @@ Partial access.`);
     expect(agent.skills).toEqual(["planning", "review"]);
   });
 
-  it("passes through unknown tool names (not filtered)", () => {
+  it("rejects unknown tool names", () => {
     writeAgent("custom-tools", `---
 tools: read, my_custom_tool, grep
 ---
@@ -147,8 +147,7 @@ tools: read, my_custom_tool, grep
 Custom tools.`);
 
     const result = loadCustomAgents(tmpDir);
-    // Unknown tool names are passed through — filtering happens at tool creation time
-    expect(result.get("custom-tools")!.builtinToolNames).toEqual(["read", "my_custom_tool", "grep"]);
+    expect(result.get("custom-tools")!.enabled).toBe(false);
   });
 
   it("passes through thinking level as-is (no validation)", () => {

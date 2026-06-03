@@ -57,6 +57,7 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
     const unknownTools = config.builtinToolNames.filter(t => !knownTools.has(t));
     if (unknownTools.length > 0) {
       emitTelemetry("agent:unknown-tools", { name, tools: unknownTools });
+      errors.push(`Unknown tools specified: ${unknownTools.join(', ')}`);
     }
   }
   
