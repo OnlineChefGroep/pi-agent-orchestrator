@@ -173,7 +173,7 @@ describe('Handoff - Error Chaos & Resilience', () => {
     );
   });
 
-  it('should handle concurrent parses without side effects', async () => {
+  it('should handle repeated parses without side effects', () => {
     const rawPayload = `
 \`\`\`json
 {
@@ -183,19 +183,14 @@ describe('Handoff - Error Chaos & Resilience', () => {
   "findings": ["Finding 1"]
 }
 \`\`\``;
-    const promises = Array.from({ length: 100 }, () => {
-      return new Promise<any>((resolve) => {
-        const res = parseHandoff(rawPayload);
-        resolve(res);
-      });
-    });
+    const results = Array.from({ length: 100 }, () => parseHandoff(rawPayload));
 
-    const results = await Promise.all(promises);
     expect(results).toHaveLength(100);
     results.forEach((res) => {
       expect(res).not.toBeNull();
       expect(res!.type).toBe('handoff');
       expect(res!.status).toBe('success');
+      expect(res!.summary).toBe('Fast summary');
     });
   });
 });

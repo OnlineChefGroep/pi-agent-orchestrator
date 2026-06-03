@@ -100,6 +100,7 @@ describe("SubagentScheduler — lifecycle", () => {
   let ctx: any;
 
   beforeEach(async () => {
+    vi.useFakeTimers();
     tmp = mkdtempSync(join(tmpdir(), "scheduler-test-"));
     store = new ScheduleStore(join(tmp, "s.json"));
     scheduler = new SubagentScheduler();
@@ -110,6 +111,7 @@ describe("SubagentScheduler — lifecycle", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     scheduler.stop();
     rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
@@ -167,8 +169,8 @@ describe("SubagentScheduler — lifecycle", () => {
     expect(next).toBeDefined();
     const t = new Date(next!).getTime();
     // Should be ~now + 1h, with a small tolerance for the time spent in the call
-    expect(t - before).toBeGreaterThanOrEqual(3_600_000 - 1_000);
-    expect(t - before).toBeLessThanOrEqual(3_600_000 + 1_000);
+    expect(t - before).toBeGreaterThanOrEqual(3_600_000 - 100);
+    expect(t - before).toBeLessThanOrEqual(3_600_000 + 100);
   });
 
   // Once a fire happens and `lastRun` is set, getNextRun should pivot to it.

@@ -87,7 +87,7 @@ export const BUILTIN_TOOL_NAMES: string[] = ["read", "bash", "edit", "write", "g
  * fallback in {@link getConfig} reads it as trusted data, with no
  * branching inside the hot path.
  */
-const SAFE_FALLBACK_TOOL_NAMES: readonly string[] = ["read", "bash", "grep"];
+const SAFE_FALLBACK_TOOL_NAMES: readonly string[] = ["read", "grep"];
 
 /**
  * Normalize a custom agent's `builtinToolNames` array.

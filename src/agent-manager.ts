@@ -109,8 +109,8 @@ export class AgentManager {
     this.onStart = onStart;
     this.onCompact = onCompact;
     this.maxConcurrent = maxConcurrent;
-    // Cleanup completed agents after 10 minutes (but keep sessions for resume)
-    this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);
+    const CLEANUP_INTERVAL_MS = 60_000;
+    this.cleanupInterval = setInterval(() => this.cleanup(), CLEANUP_INTERVAL_MS);
     this.cleanupInterval.unref();
   }
 
@@ -481,7 +481,7 @@ export class AgentManager {
     while (this.queue.length > 0 && this.runningBackground < this.maxConcurrent) {
       const next = this.queue.shift()!;
       const record = this.agents.get(next.id);
-      if (!record || record.status !== "queued") continue;
+      if (record?.status !== "queued") continue;
       try {
         this.startAgent(next.id, record, next.args);
       } catch (err) {

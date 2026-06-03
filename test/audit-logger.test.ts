@@ -143,6 +143,27 @@ describe("audit-logger", () => {
     expect(getAuditLog()).toHaveLength(1);
   });
 
+  // --- metadata isolation ---
+
+  it("metadata keys cannot overwrite trusted fields in logger output", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    recordAudit(entry({
+      extensionId: "real-ext",
+      outcome: "error",
+      metadata: { extensionId: "spoofed", durationMs: 0, custom: "value" },
+    }));
+    // The logger writes JSON to console.warn for "error" outcome
+    expect(warnSpy).toHaveBeenCalled();
+    const logged = JSON.parse(warnSpy.mock.calls[0]?.[0] as string);
+    expect(logged.extensionId).toBe("real-ext");
+    expect(logged.durationMs).toBe(5);
+    // Metadata should be nested under "meta" key — not spread at top level
+    expect(logged.meta).toEqual({ extensionId: "spoofed", durationMs: 0, custom: "value" });
+    // The spoofed fields should NOT be at top level
+    expect(logged.custom).toBeUndefined();
+    warnSpy.mockRestore();
+  });
+
   // --- outcome classification ---
 
   it("records all four outcome types", () => {

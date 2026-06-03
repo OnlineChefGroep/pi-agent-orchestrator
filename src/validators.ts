@@ -29,9 +29,9 @@ function sanitizeValidatorInput(input: string, maxLength: number = MAX_OUTPUT_SI
  */
 function logCriteriaLimit(criteriaCount: number, maxCount: number): void {
   const message = `Too many validation criteria (${criteriaCount}), limiting to ${maxCount}`;
-  emitTelemetry("agent:validation-failed" as any, { 
-    name: "validator", 
-    errors: [message] 
+  emitTelemetry("agent:validation-failed", {
+    name: "validator",
+    errors: [message],
   });
 }
 

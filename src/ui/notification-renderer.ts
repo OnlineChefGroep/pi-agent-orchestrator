@@ -38,7 +38,9 @@ function renderOne(d: NotificationDetails, expanded: boolean, theme: any): strin
   // Line 3: result preview (collapsed) or full (expanded)
   if (expanded) {
     const lines = d.resultPreview.split("\n").slice(0, 30);
-    for (const l of lines) line += `\n${theme.fg("dim", `  ${l}`)}`;
+    const expandedParts: string[] = [];
+    for (const l of lines) expandedParts.push(`\n${theme.fg("dim", `  ${l}`)}`);
+    line += expandedParts.join("");
   } else {
     const preview = d.resultPreview.split("\n")[0]?.slice(0, 80) ?? "";
     line += `\n  ${theme.fg("dim", `⎿  ${preview}`)}`;

@@ -26,11 +26,9 @@ describe("buildValidatorPrompt", () => {
   });
 
   it("removes control characters from output (CVE-004)", () => {
-    // eslint-disable-next-line no-control-regex
     const output = "clean\x00\x01\x02text";
     const prompt = buildValidatorPrompt(output, ["ok"], "desc");
 
-    // eslint-disable-next-line no-control-regex
     expect(prompt).not.toMatch(/[\x00-\x08\x0B\x0C\x0E-\x1F]/);
     expect(prompt).toContain("cleantext");
   });

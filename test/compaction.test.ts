@@ -156,7 +156,7 @@ describe("compaction", () => {
     });
 
     it("prunes tool results with array content from old turns", () => {
-      // 3-turn conversation, keep only last turn
+      // 3-turn conversation, keep only last 2 turns
       const messages: CompactableMessage[] = [
         user("q1"),
         assistant("a1"),

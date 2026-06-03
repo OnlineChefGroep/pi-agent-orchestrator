@@ -17,7 +17,7 @@ import { type ModelRegistry, resolveModel } from "./model-resolver.js";
 // fragile string matching.
 // ---------------------------------------------------------------------------
 
-export type RpcErrorCode = "RATE_LIMITED" | "UNAUTHORIZED" | "ERROR";
+export type RpcErrorCode = "RATE_LIMITED" | "UNAUTHORIZED" | "ERROR" | "INVALID_PARAMS";
 
 export class RpcError extends Error {
   readonly code: RpcErrorCode;
@@ -190,14 +190,22 @@ function handleRpc<P extends { requestId: string }>(
   fn: (params: P) => unknown | Promise<unknown>,
 ): () => void {
   return events.on(channel, async (raw: unknown) => {
-    const params = raw as P;
     try {
+      if (typeof raw !== "object" || raw === null) {
+        throw new RpcError("INVALID_PARAMS", "Expected object payload");
+      }
+      const rawObj = raw as Record<string, unknown>;
+      if (typeof rawObj.requestId !== "string" || !rawObj.requestId) {
+        throw new RpcError("INVALID_PARAMS", "Missing or empty requestId");
+      }
+      const params = raw as P;
       const data = await fn(params);
       const reply: { success: true; data?: unknown } = { success: true };
       if (data !== undefined) reply.data = data;
       events.emit(`${channel}:reply:${params.requestId}`, reply);
     } catch (err: any) {
-      events.emit(`${channel}:reply:${params.requestId}`, {
+      const requestId = (raw as Record<string, unknown>)?.requestId;
+      events.emit(`${channel}:reply:${requestId}`, {
         success: false, error: err?.message ?? String(err),
       });
     }
@@ -353,6 +361,12 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
       deps,
       "spawn",
       ({ requestId, type, prompt, options }) => {
+        if (typeof type !== "string" || !type) {
+          throw new RpcError("INVALID_PARAMS", "Missing or empty agent type");
+        }
+        if (typeof prompt !== "string" || !prompt) {
+          throw new RpcError("INVALID_PARAMS", "Missing or empty prompt");
+        }
         const ctx = getCtx();
         if (!ctx) throw new Error("No active session");
 
@@ -389,6 +403,9 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
     events,
     "subagents:rpc:stop",
     auditedRpc<{ requestId: string; agentId: string }>(deps, "stop", ({ requestId, agentId }) => {
+      if (typeof agentId !== "string" || !agentId) {
+        throw new RpcError("INVALID_PARAMS", "Missing or empty agentId");
+      }
       const auth = authorizeRpcMutation(deps, requestId, "stop");
       if (!manager.abort(agentId)) throw new Error("Agent not found");
       return { auth, result: undefined };

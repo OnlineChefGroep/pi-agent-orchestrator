@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   getDefaultMaxTurns,
   getGraceTurns,
@@ -10,6 +10,11 @@ import {
 describe("setDefaultMaxTurns / getDefaultMaxTurns", () => {
   beforeEach(() => {
     setDefaultMaxTurns(undefined);
+  });
+
+  afterEach(() => {
+    setDefaultMaxTurns(0);
+    setGraceTurns(0);
   });
 
   it("defaults to undefined (unlimited)", () => {
@@ -45,6 +50,11 @@ describe("setDefaultMaxTurns / getDefaultMaxTurns", () => {
 });
 
 describe("normalizeMaxTurns", () => {
+  afterEach(() => {
+    setDefaultMaxTurns(0);
+    setGraceTurns(0);
+  });
+
   it("treats undefined as unlimited", () => {
     expect(normalizeMaxTurns(undefined)).toBeUndefined();
   });
@@ -65,6 +75,11 @@ describe("normalizeMaxTurns", () => {
 describe("setGraceTurns / getGraceTurns", () => {
   beforeEach(() => {
     setGraceTurns(5);
+  });
+
+  afterEach(() => {
+    setDefaultMaxTurns(0);
+    setGraceTurns(0);
   });
 
   it("defaults to 5", () => {

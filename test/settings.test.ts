@@ -192,8 +192,8 @@ describe("settings persistence", () => {
       expect(loadSettings(projectDir)).toEqual({});
     });
 
-    it("accepts all three valid join modes", () => {
-      for (const mode of ["async", "group", "smart"] as const) {
+    it("accepts all four valid join modes", () => {
+      for (const mode of ["async", "group", "smart", "swarm"] as const) {
         writeProject({ defaultJoinMode: mode });
         expect(loadSettings(projectDir)).toEqual({ defaultJoinMode: mode });
       }
@@ -336,6 +336,10 @@ describe("settings persistence", () => {
         setShowActivityStream: vi.fn(),
         setShowTokenUsage: vi.fn(),
         setShowTurnProgress: vi.fn(),
+        setOrchestrationMode: vi.fn(),
+        setDashboardRefreshInterval: vi.fn(),
+        setSessionMaxSpawns: vi.fn(),
+        setSessionMaxTurns: vi.fn(),
       };
     });
 
@@ -481,6 +485,10 @@ describe("settings persistence", () => {
         setShowActivityStream: vi.fn(),
         setShowTokenUsage: vi.fn(),
         setShowTurnProgress: vi.fn(),
+        setOrchestrationMode: vi.fn(),
+        setDashboardRefreshInterval: vi.fn(),
+        setSessionMaxSpawns: vi.fn(),
+        setSessionMaxTurns: vi.fn(),
       };
     });
 
