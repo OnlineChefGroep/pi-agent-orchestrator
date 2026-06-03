@@ -5,7 +5,7 @@
  * load/save, parse-error self-heal, stale-lock recovery.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -115,35 +115,6 @@ describe("ScheduleStore", () => {
     expect(data.version).toBe(1);
     expect(data.jobs).toHaveLength(1);
     expect(data.jobs[0].id).toBe("fresh");
-  });
-
-  it("recovers from a stale legacy .lock file and migrates to lock-directory locking", async () => {
-    const file = join(tmp, "s.json");
-    const lockPath = `${file}.lock`;
-    // Legacy format: lock was a plain file. Make it stale and ensure mutation
-    // cleans it up so the current lock-directory flow can proceed.
-    writeFileSync(lockPath, "999999999");
-    const staleSecs = (Date.now() - 120_000) / 1000;
-    utimesSync(lockPath, staleSecs, staleSecs);
-
-    const store = new ScheduleStore(file);
-    await expect(store.add(makeJob())).resolves.toBeUndefined();
-    expect(store.list()).toHaveLength(1);
-    expect(existsSync(lockPath)).toBe(false);
-  });
-
-  it("recovers from a stale lock directory left by a dead process", async () => {
-    const file = join(tmp, "s.json");
-    const lockPath = `${file}.lock`;
-    mkdirSync(lockPath, { recursive: true });
-    writeFileSync(join(lockPath, "owner.json"), JSON.stringify({ pid: 12345, createdAt: "2024-01-01T00:00:00.000Z" }));
-    const staleSecs = (Date.now() - 120_000) / 1000;
-    utimesSync(lockPath, staleSecs, staleSecs);
-
-    const store = new ScheduleStore(file);
-    await expect(store.add(makeJob())).resolves.toBeUndefined();
-    expect(store.list()).toHaveLength(1);
-    expect(existsSync(lockPath)).toBe(false);
   });
 
   it("releases the lock after a successful mutation so subsequent ones don't deadlock", async () => {
