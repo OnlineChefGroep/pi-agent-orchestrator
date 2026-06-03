@@ -331,7 +331,7 @@ Guidelines:
       if (uiCtx) widget.setUICtx(uiCtx);
 
       // Reload custom agents so new .pi/agents/*.md files are picked up without restart
-      reloadCustomAgents();
+      await reloadCustomAgents();
 
       const rawType = params.subagent_type as SubagentType;
       const resolved = resolveType(rawType);

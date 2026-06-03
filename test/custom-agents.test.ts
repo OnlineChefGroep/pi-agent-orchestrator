@@ -28,12 +28,12 @@ describe("loadCustomAgents", () => {
     writeFileSync(join(dir, `${name}.md`), content);
   }
 
-  it("returns empty map when .pi/agents/ does not exist", () => {
-    const result = loadCustomAgents(tmpDir);
+  it("returns empty map when .pi/agents/ does not exist", async () => {
+    const result = await loadCustomAgents(tmpDir);
     expect(result.size).toBe(0);
   });
 
-  it("loads a basic agent with all frontmatter fields", () => {
+  it("loads a basic agent with all frontmatter fields", async () => {
     writeAgent("auditor", `---
 description: Security Auditor
 tools: read, grep
@@ -48,7 +48,7 @@ isolated: true
 
 You are a security auditor.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.size).toBe(1);
 
     const agent = result.get("auditor")!;
@@ -65,13 +65,13 @@ You are a security auditor.`);
     expect(agent.systemPrompt).toBe("You are a security auditor.");
   });
 
-  it("uses sensible defaults when frontmatter is empty", () => {
+  it("uses sensible defaults when frontmatter is empty", async () => {
     writeAgent("minimal", `---
 ---
 
 Just a prompt.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     const agent = result.get("minimal")!;
 
     expect(agent.name).toBe("minimal");
@@ -89,10 +89,10 @@ Just a prompt.`);
     expect(agent.systemPrompt).toBe("Just a prompt.");
   });
 
-  it("uses sensible defaults when no frontmatter at all", () => {
+  it("uses sensible defaults when no frontmatter at all", async () => {
     writeAgent("bare", "Just a system prompt, no frontmatter.");
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     const agent = result.get("bare")!;
 
     expect(agent.name).toBe("bare");
@@ -101,18 +101,18 @@ Just a prompt.`);
     expect(agent.systemPrompt).toBe("Just a system prompt, no frontmatter.");
   });
 
-  it("handles tools: none → empty array", () => {
+  it("handles tools: none → empty array", async () => {
     writeAgent("notool", `---
 tools: none
 ---
 
 No tools.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("notool")!.builtinToolNames).toEqual([]);
   });
 
-  it("handles extensions: false → no extensions", () => {
+  it("handles extensions: false → no extensions", async () => {
     writeAgent("noext", `---
 extensions: false
 skills: false
@@ -120,13 +120,13 @@ skills: false
 
 No extensions.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     const agent = result.get("noext")!;
     expect(agent.extensions).toBe(false);
     expect(agent.skills).toBe(false);
   });
 
-  it("handles extension allowlist", () => {
+  it("handles extension allowlist", async () => {
     writeAgent("partial", `---
 extensions: web-search, mcp-server
 skills: planning, review
@@ -134,100 +134,99 @@ skills: planning, review
 
 Partial access.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     const agent = result.get("partial")!;
     expect(agent.extensions).toEqual(["web-search", "mcp-server"]);
     expect(agent.skills).toEqual(["planning", "review"]);
   });
 
-  it("passes through unknown tool names (not filtered)", () => {
+  it("passes through unknown tool names (not filtered)", async () => {
     writeAgent("custom-tools", `---
 tools: read, my_custom_tool, grep
 ---
 
 Custom tools.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     // Unknown tool names are passed through — filtering happens at tool creation time
     expect(result.get("custom-tools")!.builtinToolNames).toEqual(["read", "my_custom_tool", "grep"]);
   });
 
-  it("emits agent:unknown-tools telemetry event for unknown tool names", () => {
+  it("emits agent:unknown-tools telemetry event for unknown tool names", async () => {
     writeAgent("custom-tools-telemetry", `---
 tools: read, my_custom_tool, grep, another_unknown
 ---
 
 Custom tools telemetry.`);
 
-    let emittedPayload: any = null;
+    let emittedPayload: unknown = null;
     const unsubscribe = onTelemetry("agent:unknown-tools", (payload) => {
       emittedPayload = payload;
     });
 
-    loadCustomAgents(tmpDir);
+    await loadCustomAgents(tmpDir);
     unsubscribe();
 
     expect(emittedPayload).toEqual({ name: "custom-tools-telemetry", tools: ["my_custom_tool", "another_unknown"] });
   });
 
-
-  it("passes through thinking level as-is (no validation)", () => {
+  it("passes through thinking level as-is (no validation)", async () => {
     writeAgent("anythink", `---
 thinking: turbo
 ---
 
 Any thinking.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     // Pi validates at session creation — we just pass through
     expect(result.get("anythink")!.thinking).toBe("turbo");
   });
 
-  it("accepts max_turns: 0 as unlimited", () => {
+  it("accepts max_turns: 0 as unlimited", async () => {
     writeAgent("unlimited", `---
 max_turns: 0
 ---
 
 Unlimited turns.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("unlimited")!.maxTurns).toBe(0);
   });
 
-  it("rejects negative max_turns", () => {
+  it("rejects negative max_turns", async () => {
     writeAgent("negturns", `---
 max_turns: -5
 ---
 
 Negative turns.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("negturns")!.maxTurns).toBeUndefined();
   });
 
-  it("handles prompt_mode: append", () => {
+  it("handles prompt_mode: append", async () => {
     writeAgent("appender", `---
 prompt_mode: append
 ---
 
 Extra instructions.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("appender")!.promptMode).toBe("append");
   });
 
-  it("defaults unknown prompt_mode to replace", () => {
+  it("defaults unknown prompt_mode to replace", async () => {
     writeAgent("badmode", `---
 prompt_mode: merge
 ---
 
 Unknown mode.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("badmode")!.promptMode).toBe("replace");
   });
 
-  it("loads multiple agents", () => {
+  it("loads multiple agents", async () => {
     writeAgent("agent1", `---
 description: First
 ---
@@ -239,13 +238,13 @@ description: Second
 
 Second agent.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.size).toBe(2);
     expect(result.has("agent1")).toBe(true);
     expect(result.has("agent2")).toBe(true);
   });
 
-  it("skips non-.md files", () => {
+  it("skips non-.md files", async () => {
     const dir = join(tmpDir, ".pi", "agents");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "notes.txt"), "not an agent");
@@ -255,12 +254,12 @@ description: Real Agent
 
 Real.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.size).toBe(1);
     expect(result.has("real")).toBe(true);
   });
 
-  it("allows agents with names matching defaults (overrides them)", () => {
+  it("allows agents with names matching defaults (overrides them)", async () => {
     writeAgent("Explore", `---
 description: Custom Explore
 ---
@@ -272,24 +271,24 @@ description: Custom Agent
 
 Should be loaded.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.has("Explore")).toBe(true);
     expect(result.get("Explore")!.description).toBe("Custom Explore");
     expect(result.has("custom")).toBe(true);
   });
 
-  it("handles empty body with frontmatter", () => {
+  it("handles empty body with frontmatter", async () => {
     writeAgent("nobody", `---
 description: No body
 tools: read
 ---
 `);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("nobody")!.systemPrompt).toBe("");
   });
 
-  it("supports inherit_extensions as alternative to extensions", () => {
+  it("supports inherit_extensions as alternative to extensions", async () => {
     writeAgent("altkey", `---
 inherit_extensions: false
 inherit_skills: false
@@ -297,13 +296,13 @@ inherit_skills: false
 
 Alt keys.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     const agent = result.get("altkey")!;
     expect(agent.extensions).toBe(false);
     expect(agent.skills).toBe(false);
   });
 
-  it("extensions: none → false", () => {
+  it("extensions: none → false", async () => {
     writeAgent("extnone", `---
 extensions: none
 skills: none
@@ -311,13 +310,13 @@ skills: none
 
 None.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     const agent = result.get("extnone")!;
     expect(agent.extensions).toBe(false);
     expect(agent.skills).toBe(false);
   });
 
-  it("extensions: true → true (inherit all)", () => {
+  it("extensions: true → true (inherit all)", async () => {
     writeAgent("exttrue", `---
 extensions: true
 skills: true
@@ -325,24 +324,24 @@ skills: true
 
 All.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     const agent = result.get("exttrue")!;
     expect(agent.extensions).toBe(true);
     expect(agent.skills).toBe(true);
   });
 
-  it("handles enabled: false frontmatter", () => {
+  it("handles enabled: false frontmatter", async () => {
     writeAgent("disabled", `---
 enabled: false
 ---
 `);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     const agent = result.get("disabled")!;
     expect(agent.enabled).toBe(false);
   });
 
-  it("parses display_name frontmatter", () => {
+  it("parses display_name frontmatter", async () => {
     writeAgent("myagent", `---
 description: My Agent
 display_name: MyAgent
@@ -350,11 +349,11 @@ display_name: MyAgent
 
 Agent prompt.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("myagent")!.displayName).toBe("MyAgent");
   });
 
-  it("parses disallowed_tools as csv list", () => {
+  it("parses disallowed_tools as csv list", async () => {
     writeAgent("restricted", `---
 description: Restricted Agent
 disallowed_tools: bash, write
@@ -362,23 +361,23 @@ disallowed_tools: bash, write
 
 No bash or write.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     const agent = result.get("restricted")!;
     expect(agent.disallowedTools).toEqual(["bash", "write"]);
   });
 
-  it("disallowed_tools defaults to undefined when omitted", () => {
+  it("disallowed_tools defaults to undefined when omitted", async () => {
     writeAgent("unrestricted", `---
 description: Unrestricted
 ---
 
 All tools.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("unrestricted")!.disallowedTools).toBeUndefined();
   });
 
-  it("parses memory scope", () => {
+  it("parses memory scope", async () => {
     writeAgent("rememberer", `---
 description: Agent with memory
 memory: project
@@ -386,44 +385,44 @@ memory: project
 
 Remember things.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("rememberer")!.memory).toBe("project");
   });
 
-  it("parses memory: user scope", () => {
+  it("parses memory: user scope", async () => {
     writeAgent("global-mem", `---
 memory: user
 ---
 
 User memory.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("global-mem")!.memory).toBe("user");
   });
 
-  it("memory defaults to undefined when omitted", () => {
+  it("memory defaults to undefined when omitted", async () => {
     writeAgent("no-mem", `---
 description: No memory
 ---
 
 Stateless.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("no-mem")!.memory).toBeUndefined();
   });
 
-  it("rejects invalid memory scope", () => {
+  it("rejects invalid memory scope", async () => {
     writeAgent("bad-mem", `---
 memory: invalid
 ---
 
 Bad memory.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("bad-mem")!.memory).toBeUndefined();
   });
 
-  it("parses isolation: worktree", () => {
+  it("parses isolation: worktree", async () => {
     writeAgent("isolated-wt", `---
 description: Worktree agent
 isolation: worktree
@@ -431,33 +430,33 @@ isolation: worktree
 
 Isolated.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("isolated-wt")!.isolation).toBe("worktree");
   });
 
-  it("isolation defaults to undefined when omitted", () => {
+  it("isolation defaults to undefined when omitted", async () => {
     writeAgent("no-isolation", `---
 description: Normal
 ---
 
 Normal.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("no-isolation")!.isolation).toBeUndefined();
   });
 
-  it("rejects invalid isolation mode", () => {
+  it("rejects invalid isolation mode", async () => {
     writeAgent("bad-isolation", `---
 isolation: docker
 ---
 
 Bad isolation.`);
 
-    const result = loadCustomAgents(tmpDir);
+    const result = await loadCustomAgents(tmpDir);
     expect(result.get("bad-isolation")!.isolation).toBeUndefined();
   });
 
-  it("honors PI_CODING_AGENT_DIR for global custom agent discovery", () => {
+  it("honors PI_CODING_AGENT_DIR for global custom agent discovery", async () => {
     const altAgentDir = mkdtempSync(join(tmpdir(), "pi-alt-agent-"));
     const originalEnv = process.env.PI_CODING_AGENT_DIR;
     process.env.PI_CODING_AGENT_DIR = altAgentDir;
@@ -469,7 +468,7 @@ Bad isolation.`);
         "---\ndescription: Discovered via env var\n---\n\nTest body.",
       );
 
-      const result = loadCustomAgents(tmpDir);
+      const result = await loadCustomAgents(tmpDir);
 
       // Agent is found at $PI_CODING_AGENT_DIR/agents, not at $HOME/.pi/agent/agents
       expect(result.has("via-env")).toBe(true);
