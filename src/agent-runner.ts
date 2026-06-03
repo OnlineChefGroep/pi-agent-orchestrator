@@ -2,7 +2,7 @@
  * agent-runner.ts — Core execution engine: creates sessions, runs agents, collects results.
  */
 
-import type { Api, Model } from "@earendil-works/pi-ai";
+import type { Model } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   type AgentSession,
@@ -63,12 +63,12 @@ let _cachedRegistry: unknown = null;
 let _cachedKeys: Set<string> | null = null;
 
 function getAvailableKeys(
-  registry: { getAvailable?(): Model<Api>[] },
+  registry: { getAvailable?(): Model<any>[] },
 ): Set<string> | undefined {
   if (registry === _cachedRegistry && _cachedKeys) return _cachedKeys;
   const available = registry.getAvailable?.();
   if (!available) return undefined;
-  _cachedKeys = new Set(available.map((m) => `${m.provider}/${m.id}`));
+  _cachedKeys = new Set(available.map((m: any) => `${m.provider}/${m.id}`));
   _cachedRegistry = registry;
   return _cachedKeys;
 }
@@ -78,10 +78,10 @@ function getAvailableKeys(
  * Priority: explicit option > config.model > parent model.
  */
 function resolveDefaultModel(
-  parentModel: Model<Api> | undefined,
-  registry: { find(provider: string, modelId: string): Model<Api> | undefined; getAvailable?(): Model<Api>[] },
+  parentModel: Model<any> | undefined,
+  registry: { find(provider: string, modelId: string): Model<any> | undefined; getAvailable?(): Model<any>[] },
   configModel?: string,
-): Model<Api> | undefined {
+): Model<any> | undefined {
   if (configModel) {
     const slashIdx = configModel.indexOf("/");
     if (slashIdx !== -1) {
@@ -111,7 +111,7 @@ export interface RunOptions {
   pi: ExtensionAPI;
   /** Manager-assigned id; suffixes session name to disambiguate parallel spawns (e.g. `Explore#a1b2c3d4`). */
   agentId?: string;
-  model?: Model<Api>;
+  model?: Model<any>;
   maxTurns?: number;
   signal?: AbortSignal;
   isolated?: boolean;
@@ -756,7 +756,7 @@ export function getAgentConversation(session: AgentSession): string {
       const toolCalls: string[] = [];
       for (const c of msg.content) {
         if (c.type === "text" && c.text) textParts.push(c.text);
-        else if (c.type === "toolCall") toolCalls.push(`  Tool: ${c.name ?? "unknown"}`);
+        else if (c.type === "toolCall") toolCalls.push(`  Tool: ${(c as any).name ?? (c as any).toolName ?? "unknown"}`);
       }
       if (textParts.length > 0) parts.push(`[Assistant]: ${textParts.join("\n")}`);
       if (toolCalls.length > 0) parts.push(`[Tool Calls]:\n${toolCalls.join("\n")}`);
