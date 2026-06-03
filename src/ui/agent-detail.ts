@@ -92,7 +92,7 @@ export async function showAgentDetail(ctx: ExtensionCommandContext, name: string
     const edited = await ctx.ui.editor(`Edit ${name}`, content);
     if (edited !== undefined && edited !== content) {
       await writeFile(file.path, edited, "utf-8");
-      reloadCustomAgents();
+      await reloadCustomAgents();
       ctx.ui.notify(`Updated ${file.path}`, "info");
     }
   } else if (choice === "Delete") {
@@ -100,7 +100,7 @@ export async function showAgentDetail(ctx: ExtensionCommandContext, name: string
       const confirmed = await ctx.ui.confirm("Delete agent", `Delete ${name} from ${file.location} (${file.path})?`);
       if (confirmed) {
         await unlink(file.path);
-        reloadCustomAgents();
+        await reloadCustomAgents();
         ctx.ui.notify(`Deleted ${file.path}`, "info");
       }
     }
@@ -108,7 +108,7 @@ export async function showAgentDetail(ctx: ExtensionCommandContext, name: string
     const confirmed = await ctx.ui.confirm("Reset to default", `Delete override ${file.path} and restore embedded default?`);
     if (confirmed) {
       await unlink(file.path);
-      reloadCustomAgents();
+      await reloadCustomAgents();
       ctx.ui.notify(`Restored default ${name}`, "info");
     }
   } else if (choice.startsWith("Eject")) {

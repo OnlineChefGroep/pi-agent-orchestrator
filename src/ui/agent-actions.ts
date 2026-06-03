@@ -45,7 +45,7 @@ export async function ejectAgent(ctx: ExtensionCommandContext, name: string, cfg
   const content = `---\n${fmFields.join("\n")}\n---\n\n${cfg.systemPrompt}\n`;
 
   writeFileSync(targetPath, content, "utf-8");
-  reloadCustomAgents();
+  await reloadCustomAgents();
   ctx.ui.notify(`Ejected ${name} to ${targetPath}`, "info");
 }
 
@@ -61,7 +61,7 @@ export async function disableAgent(ctx: ExtensionCommandContext, name: string): 
     }
     const updated = content.replace(/^---\n/, "---\nenabled: false\n");
     writeFileSync(file.path, updated, "utf-8");
-    reloadCustomAgents();
+    await reloadCustomAgents();
     ctx.ui.notify(`Disabled ${name} (${file.path})`, "info");
     return;
   }
@@ -78,7 +78,7 @@ export async function disableAgent(ctx: ExtensionCommandContext, name: string): 
 
   const targetPath = join(targetDir, `${name}.md`);
   writeFileSync(targetPath, "---\nenabled: false\n---\n", "utf-8");
-  reloadCustomAgents();
+  await reloadCustomAgents();
   ctx.ui.notify(`Disabled ${name} (${targetPath})`, "info");
 }
 
@@ -93,11 +93,11 @@ export async function enableAgent(ctx: ExtensionCommandContext, name: string): P
   // If the file was just a stub ("---\n---\n"), delete it to restore the built-in default
   if (updated.trim() === "---\n---" || updated.trim() === "---\n---\n") {
     unlinkSync(file.path);
-    reloadCustomAgents();
+    await reloadCustomAgents();
     ctx.ui.notify(`Enabled ${name} (removed ${file.path})`, "info");
   } else {
     writeFileSync(file.path, updated, "utf-8");
-    reloadCustomAgents();
+    await reloadCustomAgents();
     ctx.ui.notify(`Enabled ${name} (${file.path})`, "info");
   }
 }
