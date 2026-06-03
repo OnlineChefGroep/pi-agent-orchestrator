@@ -1,6 +1,8 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { buildParentContext, extractText } from "../src/context";
+import { buildParentContext, extractText } from "../src/context.js";
+
+type BranchEntries = ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
 
 describe("extractText", () => {
   it("returns an empty string for an empty array", () => {
@@ -36,7 +38,7 @@ describe("extractText", () => {
 });
 
 describe("buildParentContext", () => {
-  function mockContext(entries: any[]): ExtensionContext {
+  function mockContext(entries: BranchEntries | undefined): ExtensionContext {
     return {
       sessionManager: {
         getBranch: () => entries
@@ -47,7 +49,7 @@ describe("buildParentContext", () => {
   it("returns empty string if entries are missing or empty", () => {
     expect(buildParentContext(mockContext([]))).toBe("");
     // getBranch might return undefined in some cases
-    expect(buildParentContext(mockContext(undefined as any))).toBe("");
+    expect(buildParentContext(mockContext(undefined))).toBe("");
   });
 
   it("builds context from user and assistant messages", () => {
@@ -117,6 +119,30 @@ describe("buildParentContext", () => {
       {
         type: "unknown_event",
         data: "..."
+      }
+    ];
+
+    expect(buildParentContext(mockContext(entries))).toBe("");
+  });
+
+  it("ignores tool result messages", () => {
+    const entries = [
+      {
+        type: "message",
+        message: {
+          role: "toolResult",
+          content: [{ type: "text", text: "tool output" }]
+        }
+      }
+    ];
+
+    expect(buildParentContext(mockContext(entries))).toBe("");
+  });
+
+  it("ignores compaction entries without summaries", () => {
+    const entries = [
+      {
+        type: "compaction"
       }
     ];
 
