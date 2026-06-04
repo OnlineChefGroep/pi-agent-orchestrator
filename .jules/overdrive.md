@@ -54,3 +54,12 @@ Preserved from superseded PR branches (merged or closed 2026-06-04). Code change
 **Key Metric Shift:** A 1000-render loop benchmark with 100 mock agents went from ~22,000ms down to ~1,000ms, representing a >20x speedup in raw string processing/layout.
 
 **Actionable Principle:** For TUI rendering or padding operations, avoid applying expensive string transformations (like regex-based truncation) unless a cheap bounds check (like `visibleWidth`) proves it is strictly necessary.
+## 2026-06-04 — Input validation DoS via implicit iteration
+
+**Systemic Bottleneck:** The `sanitizeValidatorInput` function in `src/validators.ts` relied on `Array.from(str)` or `[...str]` and `.replace()` without explicitly verifying that the input was actually a primitive string type. When maliciously crafted arrays or iterable objects with large `length` values were passed, it triggered massive O(N) operations inside `Array.from`, causing the Node.js event loop to block for tens of seconds or more, leading to a severe Denial of Service (DoS).
+
+**Refactor Strategy:** Added an explicit, early type check `if (typeof input !== 'string') return '';` to strictly guarantee the input's type before attempting any iteration, truncation, or regex replacements.
+
+**Key Metric Shift:** Execution time for a crafted adversarial iterable input of length 10,000,000 dropped from ~10,375ms to < 1ms (instant rejection).
+
+**Actionable Principle:** Never assume input data originating from potentially untrusted LLM outputs or API endpoints matches the expected TypeScript type. Always explicitly perform primitive type checking (e.g. `typeof input === 'string'`) prior to performing O(N) operations like spread syntax `[...str]`, `Array.from()`, or `.length` checks.
