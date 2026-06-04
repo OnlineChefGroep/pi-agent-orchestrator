@@ -1,72 +1,69 @@
-<div align="center">
+# // PI AGENT ORCHESTRATOR
+
+![Brutalist UI Hero](docs/hero.png)
+
+
+**AUTONOMOUS SUB-AGENTS. TUI DASHBOARD. SWARM COORDINATION.**
 
 ![Pi Agent Orchestrator Banner](docs/images/orchestrator_banner.png)
 
-# 🤖 @onlinechefgroep/pi-agent-orchestrator
+Bring autonomous sub-agents to Pi. Spawn specialized agents, enforce strict budgets, execute structured handoffs, and manage agent swarms. All monitored through a high-density, interactive TUI dashboard. 
 
-**Autonomous sub-agents + cinematic TUI dashboard + swarm coordination for the Pi coding agent**
-
----
-
-</div>
-
-Bring Claude Code-style autonomous sub-agents to Pi. Spawn specialized agents, enforce budgets, chain them with structured handoffs, swarm agents together, and watch a rich interactive TUI dashboard render their progress in real time.
-
-[![Tests](https://img.shields.io/badge/tests-670%2F670-green)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions)
-[![Version](https://img.shields.io/badge/version-0.10.1-blue)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/releases)
-[![Node](https://img.shields.io/badge/node-%3E%3D22-green)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+**STATUS:** ACTIVE
+**VERSION:** 0.10.1
+**RUNTIME:** Node.js >= 22
+**HOST:** pi >= 0.70.5
+**LICENSE:** MIT
 
 ---
 
-## Install
+## // INSTALLATION
+
+Execute the following command to install the extension into the Pi environment:
 
 ```bash
 pi install npm:@onlinechefgroep/pi-agent-orchestrator
 ```
 
-Requires Node.js >= 22 and pi >= 0.70.5.
+---
+
+## // FEATURES AND SPECIFICATIONS
+
+| Capability | Technical Description |
+|---|---|
+| **Autonomous Sub-agents** | Spawn specialized agents (Explore, Plan, Analysis) operating independently to return structured outputs. |
+| **Interactive Dashboard** | High-density TUI. Vim-style hotkeys (`j/k/Enter/K/?`), multi-select, bulk termination, permission inspection. |
+| **Swarm Mode** | Live `SwarmCoordinator`. Dynamic join/leave operations. Collaborative multi-agent processing (`w` hotkey). |
+| **Execution Budgets** | Strict depth limiting (`levelLimit`, default: 5). Bounded concurrent tasks via `taskBudget`. |
+| **Adversarial Validation** | Post-completion `Promise.all` validation with deterministic pass/fail states. |
+| **Structured Handoff** | Machine-parseable JSON chain-of-agents. Graceful degradation on malformed sequences. |
+| **Hook System** | 11 lifecycle event types (spawn, complete, error). 5s execution timeout. Fail-open architecture. |
+| **Permission Inheritance** | Directional parent→child tool restriction. Read-only parents yield strictly read-only children. |
+| **Partitioned State** | Isolated tool/skill subsets per partition. Zero cross-contamination guarantees. |
+| **Deferred Context** | Boundary-level context construction. Token efficiency yields 15-48% savings on queued operations. |
+| **Dual-phase Compaction** | Aggressive pruning of legacy tool outputs. Per-agent memory limits (default retention: 5 turns). |
+| **Scheduling Engine** | Cron/interval/one-shot jobs. File-backed persistence via `.pi/subagent-schedules/`. |
+| **Context-mode Sandbox** | Optional `ctx_*` sandbox injection via `@onlinechef/context-mode` peer dependency. |
+| **Cinematic TUI** | Optional visual sidecar via `@onlinechefgroep/pi-subagents-tui`. |
 
 ---
 
-## Features
+## // BUILT-IN AGENT TYPES
 
-| Feature | Description |
-|---------|-------------|
-| **Autonomous sub-agents** | Spawn specialized agents (Explore, Plan, Analysis) that run independently and return structured results |
-| **Rich interactive dashboard** | Vim-style hotkeys (`j/k/Enter/K/?`), multi-select, bulk kill, permissions view, spinners |
-| **Swarm mode** | Live SwarmCoordinator with dynamic join/leave, collaborative multi-agent swarms, `w` hotkey |
-| **Task budget & depth limiting** | Prevent runaway agent trees with configurable `levelLimit` (default 5) and `taskBudget` |
-| **Adversarial validators** | Post-completion `Promise.all` validation with pass/fail indicators |
-| **Structured handoff protocol** | JSON machine-parseable chain-of-agents with graceful degrade on malformed data |
-| **Hook system** | 11 lifecycle event types (spawn, complete, error, etc.) with 5s timeout, fail-open |
-| **Permission inheritance** | Directional parent→child tool restriction — a read-only parent forces a read-only child |
-| **Partitioned agent state** | Isolated tool/skill subsets per partition — no cross-contamination |
-| **Deferred context engine** | Build context at session boundary, saving 15-48% tokens on queued agents |
-| **Dual-phase compaction** | Prune old tool outputs + per-agent memory limits (default keep 5 turns) |
-| **Scheduling** | Cron/interval/one-shot recurring agent jobs with file-backed persistence |
-| **Context-mode sandbox** | Optional `ctx_*` sandbox tool injection via `@onlinechef/context-mode` peer dependency |
-| **Cinematic TUI dashboard** | Optional rich visual sidecar via `@onlinechefgroep/pi-subagents-tui` |
+| Class | Function | Authorized Tools | Context-Mode |
+|---|---|---|---|
+| `general-purpose` | Universal execution for complex procedures | All built-in | Opt-in |
+| `Explore` | High-speed read-only structural analysis | read, bash, grep, find, ls | No |
+| `Plan` | Implementation planning and architectural design | read, bash, grep, find, ls | No |
+| `Analysis` | Data processing with sandboxed execution | read, bash, grep, find, ls | Yes |
 
 ---
 
-## Built-in Agent Types
+## // CUSTOM AGENT PROFILES
 
-| Type | Description | Tools | Context-mode |
-|------|-------------|-------|-------------|
-| `general-purpose` | All-rounder for complex multi-step tasks | all built-in | opt-in |
-| `Explore` | Fast read-only codebase exploration | read, bash, grep, find, ls | no |
-| `Plan` | Software architect and implementation planner | read, bash, grep, find, ls | no |
-| `Analysis` | Data analysis with sandboxed code execution | read, bash, grep, find, ls | yes |
+Define project-level overrides in `.pi/agents/<name>.md`. Global definitions reside in `~/.pi/agent/agents/`. Project definitions take strict precedence.
 
----
-
-## Custom Agents
-
-Create `.pi/agents/<name>.md` in your project (or globally in `~/.pi/agent/agents/`). Project-level agents override global ones.
-
-### Example: `.pi/agents/security-auditor.md`
+### Example Profile: `security-auditor.md`
 
 ```markdown
 ---
@@ -87,49 +84,45 @@ You are a security auditor. Review the provided code for:
 Output findings as a markdown list with severity (Critical / High / Medium / Low) and suggested fix.
 ```
 
-### Frontmatter reference
+### Frontmatter Schema
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `display_name` | string | agent name | Human-readable name |
-| `description` | string | agent name | Short description shown in UI |
-| `tools` | CSV or `none` | all built-in | Allowed tools |
-| `disallowed_tools` | CSV | — | Explicitly forbidden tools |
-| `extensions` | `true` / `false` / CSV | `true` | Extension access |
-| `skills` | `true` / `false` / CSV | `true` | Skill access |
-| `model` | string | (host default) | LLM model override |
-| `thinking` | string | — | Thinking level hint |
-| `max_turns` | number | — | Turn limit |
-| `prompt_mode` | `"replace"` / `"append"` | `"replace"` | How system prompt is applied |
-| `inherit_context` | boolean | — | Inherit parent conversation context |
-| `run_in_background` | boolean | — | Run without blocking parent |
-| `isolated` | boolean | — | Run in isolated context |
-| `memory` | `"user"` / `"project"` / `"local"` | — | Memory scope |
-| `isolation` | `"worktree"` | — | Worktree isolation |
-| `enabled` | boolean | `true` | Enable/disable this agent |
+| Directive | Type | Default | Operational Definition |
+|---|---|---|---|
+| `display_name` | string | filename | Interface identification string |
+| `description` | string | filename | Short telemetry description |
+| `tools` | CSV / `none` | all | Authorized tool subset |
+| `disallowed_tools` | CSV | null | Explicit tool denial list |
+| `extensions` | bool / CSV | `true` | Extension access flag |
+| `skills` | bool / CSV | `true` | Skill module access flag |
+| `model` | string | host default | Model identifier override |
+| `thinking` | string | null | Inference effort directive |
+| `max_turns` | number | null | Hard execution turn limit |
+| `prompt_mode` | `replace` / `append` | `replace` | System prompt integration strategy |
+| `inherit_context` | boolean | null | Parent conversation context transmission |
+| `run_in_background` | boolean | null | Non-blocking execution flag |
+| `isolated` | boolean | null | Strict context isolation |
+| `memory` | `user` / `project` / `local` | null | State persistence scope |
+| `isolation` | `worktree` | null | Physical directory isolation |
+| `enabled` | boolean | `true` | Profile activation state |
 
 ---
 
-## Cinematic Dashboard (TUI Sidecar)
+## // CINEMATIC DASHBOARD (TUI SIDECAR)
 
-The cinematic dashboard is an **optional** Go Bubble Tea application that renders agent status in real time with animated backgrounds.
+The cinematic dashboard provides real-time telemetry rendering via an independent Go Bubble Tea application.
 
 ![Cinematic Dashboard Preview](docs/images/dashboard_preview.png)
 
-### Installation
+### Sidecar Installation
 
-The TUI sidecar is now a separate package: **[@onlinechefgroep/pi-subagents-tui](https://github.com/OnlineChefGroep/pi-subagents-tui)**
+Package identifier: `@onlinechefgroep/pi-subagents-tui`
 
-To enable cinematic mode:
+1. Execute: `pi install npm:@onlinechefgroep/pi-subagents-tui`
+2. Configure parameter: `subagents.cinematic.uiStyle = "cinematic"`
 
-1. Install the TUI package: `pi install npm:@onlinechefgroep/pi-subagents-tui`
-2. Set `subagents.cinematic.uiStyle` to `"cinematic"` in settings
+Degrades gracefully to the standard terminal display if the sidecar is absent.
 
-Without the TUI package installed, cinematic mode will gracefully fall back to the standard TUI display.
-
-### Manual Build
-
-If you prefer to build from source:
+### Source Compilation
 
 ```bash
 git clone https://github.com/OnlineChefGroep/pi-subagents-tui.git
@@ -139,92 +132,78 @@ go build -o cinematic-tui .
 
 ---
 
-## Configuration
+## // CONFIGURATION PARAMETERS
 
-Settings are managed via pi's settings UI or `pi settings` CLI:
+Manage via `pi settings` CLI or direct configuration injection.
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `subagents.levelLimit` | `5` | Maximum depth of agent tree |
-| `subagents.taskBudget` | `unlimited` | Max concurrent tasks |
-| `subagents.orchestrationMode` | `spawn` | Default orchestration: `spawn`, `parallel`, or `sequential` |
-| `subagents.dashboardRefreshInterval` | `5000` | Dashboard refresh interval in ms |
-| `subagents.compaction.keepTurns` | `5` | Memory turns to retain per agent |
-| `subagents.deferredContext` | `true` | Build context at session boundary |
-| `subagents.validators.enabled` | `true` | Run adversarial validators |
-| `subagents.swarm.enabled` | `true` | Enable swarm mode |
-| `subagents.cinematic.animation` | `"smooth"` | TUI animation style |
-| `subagents.cinematic.uiStyle` | `"dark"` | TUI color theme |
+| Parameter | Default | Function |
+|---|---|---|
+| `subagents.levelLimit` | `5` | Absolute depth ceiling for agent hierarchies |
+| `subagents.taskBudget` | `unlimited` | Concurrent execution limit |
+| `subagents.orchestrationMode` | `spawn` | Default topology: `spawn`, `parallel`, `sequential` |
+| `subagents.dashboardRefreshInterval` | `5000` | Telemetry refresh rate (ms) |
+| `subagents.compaction.keepTurns` | `5` | Memory retention limit per agent |
+| `subagents.deferredContext` | `true` | Lazy boundary context compilation |
+| `subagents.validators.enabled` | `true` | Adversarial validation enforcement |
+| `subagents.swarm.enabled` | `true` | Swarm mode activation |
+| `subagents.cinematic.animation` | `"smooth"` | TUI render mode |
+| `subagents.cinematic.uiStyle` | `"dark"` | TUI visual theme |
 
 ---
 
-## Architecture
+## // SYSTEM ARCHITECTURE
 
 ![Pi Agent Orchestrator Architecture](docs/images/orchestrator_architecture.png)
 
-```
+```text
 pi host
-  └── pi-agent-orchestrator extension
-        ├── AgentRegistry (defaults + custom .md agents)
-        ├── AgentDashboard (live TUI with vim hotkeys, swarm view)
+  └── pi-agent-orchestrator
+        ├── AgentRegistry (defaults + filesystem overrides)
+        ├── AgentDashboard (live telemetry, vim navigation)
         ├── AgentRunner (spawn → execute → handoff → validate)
-        ├── SwarmCoordinator (live join/leave, collaborative swarms)
-        ├── ScheduleStore (file-backed persistence, PID-locked)
+        ├── SwarmCoordinator (cluster topology management)
+        ├── ScheduleStore (file-backed persistence, PID locks)
         ├── Hooks (lifecycle events)
-        └── PartitionedState (isolated tool/skill subsets)
+        └── PartitionedState (strict tool isolation boundaries)
 
 [Optional] pi-subagents-tui sidecar
-        └── Go Bubble Tea cinematic dashboard
+        └── Go Bubble Tea executable
 ```
 
 ---
 
-## Development
+## // DEVELOPMENT OPERATIONS
 
 ```bash
-# Install dependencies
-npm install
-
-# Typecheck
-npm run typecheck
-
-# Run tests
-npm test
-
-# Lint
-npm run lint
+npm install     # Fetch dependencies
+npm run typecheck # Static analysis
+npm test        # Run verification suite
+npm run lint    # Code style enforcement
 ```
 
 ---
 
-## Hotkeys (AgentDashboard)
+## // HOTKEYS
 
-| Key | Action |
-|-----|--------|
-| `j` / `↓` | Move selection down |
-| `k` / `↑` | Move selection up |
-| `Enter` | Steer selected agent |
-| `K` | Kill selected agent |
-| `v` | Visual mode (multi-select) |
-| `p` | Toggle permissions view |
-| `w` | Toggle swarm view |
-| `?` | Show help overlay |
-| `q` | Close dashboard / quit view |
-
----
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for version history.
+| Key | Operation |
+|---|---|
+| `j` / `↓` | Cursor down |
+| `k` / `↑` | Cursor up |
+| `Enter` | Intervene / steer agent |
+| `K` | Terminate process |
+| `v` | Visual selection mode |
+| `p` | Inspect permission matrix |
+| `w` | Inspect swarm topology |
+| `?` | Show overlay documentation |
+| `q` | Exit interface |
 
 ---
 
-## Security
+## // REFERENCE MATERIAL
 
-See [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) and [SECURITY_AUDIT_VERIFICATION_2026-05-23.md](SECURITY_AUDIT_VERIFICATION_2026-05-23.md) for detailed findings and mitigations.
+- **Changelog**: [CHANGELOG.md](CHANGELOG.md)
+- **Security Audit**: [SECURITY_AUDIT_REPORT.md](docs/SECURITY_AUDIT_REPORT.md)
+- **Mitigation Verification**: [SECURITY_AUDIT_VERIFICATION_2026-05-23.md](docs/SECURITY_AUDIT_VERIFICATION_2026-05-23.md)
 
----
+**LICENSE:** MIT — OnlineChef
 
-## License
-
-MIT — [OnlineChef](https://github.com/OnlineChef)

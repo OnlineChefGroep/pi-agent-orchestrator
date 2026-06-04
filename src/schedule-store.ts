@@ -12,81 +12,35 @@
 
 import { existsSync, promises as fs, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { lock } from "proper-lockfile";
 import type { ScheduledSubagent, ScheduleStoreData } from "./types.js";
 
-const LOCK_RETRY_MS = 50;
-const LOCK_MAX_RETRIES = 100;
-const LOCK_STALE_MS = 30_000;
 
-async function sleep(ms: number): Promise<void> {
-  await new Promise((r) => setTimeout(r, ms));
-}
-
-async function writeLockOwner(lockPath: string): Promise<void> {
-  await fs.writeFile(
-    join(lockPath, "owner.json"),
-    JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }, null, 2),
-    "utf-8",
-  );
-}
-
-async function recoverExistingLock(lockPath: string): Promise<boolean> {
-  try {
-    const stat = await fs.stat(lockPath);
-    if (!stat.isDirectory()) {
-      await fs.unlink(lockPath);
-      return true;
-    }
-    if (Date.now() - stat.mtimeMs > LOCK_STALE_MS) {
-      await fs.rm(lockPath, { recursive: true, force: true });
-      return true;
-    }
-  } catch {
-    return true;
-  }
-  return false;
-}
-
-/** Acquire an atomic lock directory — async retry with stale-lock recovery. */
-async function acquireLock(lockPath: string): Promise<void> {
-  for (let i = 0; i < LOCK_MAX_RETRIES; i++) {
-    try {
-      await fs.mkdir(lockPath);
-      await writeLockOwner(lockPath);
-      return;
-    } catch (e: any) {
-      if (e.code === "EEXIST") {
-        if (await recoverExistingLock(lockPath)) continue;
-        await sleep(LOCK_RETRY_MS);
-        continue;
-      }
-      throw e;
-    }
-  }
-  throw new Error(`Failed to acquire schedule lock: ${lockPath}`);
-}
-
-async function releaseLock(lockPath: string): Promise<void> {
-  try {
-    await fs.rm(lockPath, { recursive: true, force: true });
-  } catch {
-    /* ignore */
-  }
-}
 
 /** Resolve the storage path for a session-scoped store. */
 export function resolveStorePath(cwd: string, sessionId: string): string {
   return join(cwd, ".pi", "subagent-schedules", `${sessionId}.json`);
 }
 
+async function removeLegacyFileLock(lockPath: string): Promise<void> {
+  try {
+    const stat = await fs.stat(lockPath);
+    if (!stat.isDirectory()) await fs.unlink(lockPath);
+  } catch {
+    /* no legacy lock to migrate */
+  }
+}
+
 export class ScheduleStore {
   private filePath: string;
   private lockPath: string;
+
   private jobs = new Map<string, ScheduledSubagent>();
 
   constructor(filePath: string) {
     this.filePath = filePath;
     this.lockPath = `${filePath}.lock`;
+
     this.loadSync();
   }
 
@@ -152,14 +106,30 @@ export class ScheduleStore {
   /** Acquire lock → reload → mutate → save → release. */
   private async withLock<T>(fn: () => T): Promise<T> {
     await this.ensureDir();
-    await acquireLock(this.lockPath);
+    await removeLegacyFileLock(this.lockPath);
+
+    // Ensure the file exists so proper-lockfile has something to lock onto
+    if (!existsSync(this.filePath)) {
+      await fs.writeFile(this.filePath, JSON.stringify({ version: 1, jobs: [] }));
+    }
+
+    const release = await lock(this.filePath, {
+      retries: {
+        retries: 100,
+        factor: 1,
+        minTimeout: 50,
+        maxTimeout: 50,
+      },
+      stale: 30000,
+    });
+
     try {
       await this.load();
       const result = fn();
       await this.save();
       return result;
     } finally {
-      await releaseLock(this.lockPath);
+      await release();
     }
   }
 
@@ -180,8 +150,17 @@ export class ScheduleStore {
     return this.jobs.get(id);
   }
 
-  async add(job: ScheduledSubagent): Promise<void> {
+  async add(job: ScheduledSubagent, maxSchedules?: number): Promise<void> {
     await this.withLock(() => {
+      // CVE-005 FIX: Enforce limits strictly inside the store lock to prevent TOCTOU race conditions
+      if (maxSchedules !== undefined && this.jobs.size >= maxSchedules) {
+        throw new Error(`Maximum number of schedules reached (${maxSchedules}). Remove existing schedules before adding new ones.`);
+      }
+      for (const j of this.jobs.values()) {
+        if (j.id !== job.id && j.name === job.name) {
+          throw new Error(`A scheduled job named "${job.name}" already exists.`);
+        }
+      }
       this.jobs.set(job.id, job);
     });
   }

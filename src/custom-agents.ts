@@ -2,7 +2,8 @@
  * custom-agents.ts — Load user-defined agents from project (.pi/agents/) and global ($PI_CODING_AGENT_DIR/agents/, default ~/.pi/agent/agents/) locations.
  */
 
-import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { BUILTIN_TOOL_NAMES, getDefaultAgentNames } from "./agent-types.js";
@@ -10,7 +11,7 @@ import { emitTelemetry, hashContentSync } from "./telemetry.js";
 import type { AgentConfig, MemoryScope, ThinkingLevel } from "./types.js";
 
 // CVE-002 FIX: Validation patterns for agent configs
-const UNSAFE_NAME_PATTERN = /^(\.\.|\.\.|\/|\\|[\x00-\x1F])|(\.\.|\.\.|\/|\\|[\x00-\x1F])$/;
+const UNSAFE_NAME_PATTERN = /[/\\]|\.\.|[\x00-\x1F]/;
 const MAX_NAME_LENGTH = 100;
 const MAX_PROMPT_LENGTH = 100000;  // 100KB
 const MAX_TOOLS_COUNT = 100;
@@ -78,42 +79,38 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
  * @param cwd - Current working directory (project root) for agent discovery
  * @returns Map of agent name → parsed {@link AgentConfig}
  */
-export function loadCustomAgents(cwd: string): Map<string, AgentConfig> {
+export async function loadCustomAgents(cwd: string): Promise<Map<string, AgentConfig>> {
   const globalDir = join(getAgentDir(), "agents");
   const projectDir = join(cwd, ".pi", "agents");
 
   const agents = new Map<string, AgentConfig>();
-  loadFromDir(globalDir, agents, "global");   // lower priority
-  loadFromDir(projectDir, agents, "project");  // higher priority (overwrites)
+  await loadFromDir(globalDir, agents, "global");   // lower priority
+  await loadFromDir(projectDir, agents, "project");  // higher priority (overwrites)
   return agents;
 }
 
 /** Load agent configs from a directory into the map. */
-function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source: "project" | "global"): void {
+async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source: "project" | "global"): Promise<void> {
   if (!existsSync(dir)) return;
 
   let files: string[];
   try {
-    files = readdirSync(dir).filter(f => {
-      if (!f.endsWith(".md")) return false;
-      try {
-        return !lstatSync(join(dir, f)).isSymbolicLink();
-      } catch {
-        return false;
-      }
-    });
+    const dirents = await readdir(dir, { withFileTypes: true });
+    files = dirents
+      .filter(f => !f.isDirectory() && !f.isSymbolicLink() && f.name.endsWith(".md"))
+      .map(f => f.name);
   } catch {
     return;
   }
 
-  for (const file of files) {
+  await Promise.all(files.map(async (file) => {
     const name = basename(file, ".md");
 
     let content: string;
     try {
-      content = readFileSync(join(dir, file), "utf-8");
+      content = await readFile(join(dir, file), "utf-8");
     } catch {
-      continue;
+      return;
     }
 
     const { frontmatter: fm, body } = parseFrontmatter<Record<string, unknown>>(content);
@@ -158,7 +155,7 @@ function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source: "pro
     });
 
     agents.set(name, config);
-  }
+  }));
 }
 
 // ---- Field Parsers ----

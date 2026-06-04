@@ -202,7 +202,7 @@ export async function showAgentsMenu(
   ctx: ExtensionCommandContext,
   deps: AgentsMenuDeps,
 ): Promise<void> {
-  reloadCustomAgents();
+  await reloadCustomAgents();
   const allNames = getAllTypes();
   const agents = deps.manager.listAgents();
 
