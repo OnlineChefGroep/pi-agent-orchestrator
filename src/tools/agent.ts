@@ -523,7 +523,7 @@ Guidelines:
 
         agentActivity.set(id, bgState);
         widget.ensureTimer();
-        widget.update();
+        widget.debouncedUpdate();
 
         // Emit created event
         pi.events.emit("subagents:created", {

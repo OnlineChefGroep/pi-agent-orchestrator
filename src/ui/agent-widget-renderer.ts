@@ -11,6 +11,11 @@ import { activeTheme, type Theme } from "./theme.js";
 
 const MAX_WIDGET_LINES = 12;
 
+/** Compact batch rendering: agents with the same type+status are grouped when count exceeds this. */
+const BATCH_COMPACT_THRESHOLD = 3;
+
+/** Minimum batch size for showing a compact summary line (uses `BATCH_COMPACT_THRESHOLD`). */
+
 export const ERROR_STATUSES = new Set(["error", "aborted", "steered", "stopped"]);
 
 type WidgetTuiLike = {
@@ -188,6 +193,36 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     finishedLines.push(truncate(`${theme.fg("dim", c_tree)} ${renderFinishedLine(a, options.agentActivity.get(a.id), theme)}`));
   }
 
+  // ── Compact batch rendering ──
+  // Group queued agents by type for compact display (e.g. "5× Explore agents queued").
+  const queuedByType = new Map<string, { type: string; name: string; count: number }>();
+  for (const a of queued) {
+    const key = a.type;
+    const existing = queuedByType.get(key);
+    if (existing) {
+      existing.count++;
+    } else {
+      queuedByType.set(key, { type: key, name: getDisplayName(key), count: 1 });
+    }
+  }
+
+  // Show compact queued line(s): "5× Explore" for large batches, individual for small.
+  const queuedLines: string[] = [];
+  for (const [key, group] of queuedByType) {
+    if (group.count >= BATCH_COMPACT_THRESHOLD) {
+      queuedLines.push(
+        truncate(`${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("accent", `${group.count}× ${group.name}`)} ${theme.fg("dim", "queued")}`),
+      );
+    } else {
+      // Individual lines for small batches
+      for (const a of queued.filter((q) => q.type === key)) {
+        queuedLines.push(
+          truncate(`${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("dim", group.name)}  ${theme.fg("muted", a.description)}`),
+        );
+      }
+    }
+  }
+
   const runningLines: string[][] = [];
   for (const a of running) {
     const name = getDisplayName(a.type);
@@ -221,31 +256,29 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     ]);
   }
 
-  const queuedLine = queued.length > 0
-    ? truncate(`${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("dim", `${queued.length} queued`)}`)
-    : undefined;
-
   // Activity heatmap: shown when there are active (running/queued) agents
   const heatLine = hasActive
     ? renderActivityHeatmap(options.agentActivity, theme, w)
     : undefined;
+
+  const totalQueuedLines = queuedLines.length;
 
   const lines: string[] = heatLine
     ? [truncate(heatLine)]
     : [truncate(`${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}`)];
 
   const maxBody = MAX_WIDGET_LINES - (heatLine ? 1 : 0);
-  const totalBody = finishedLines.length + runningLines.length * 2 + (queuedLine ? 1 : 0);
+  const totalBody = finishedLines.length + runningLines.length * 2 + totalQueuedLines;
 
   if (totalBody <= maxBody) {
     lines.push(...finishedLines);
     for (const pair of runningLines) lines.push(...pair);
-    if (queuedLine) lines.push(queuedLine);
+    for (const ql of queuedLines) lines.push(ql);
 
     if (lines.length > 1) {
       const last = lines.length - 1;
       lines[last] = lines[last].replace(c_tree, c_angle);
-      if (runningLines.length > 0 && !queuedLine && last >= 2) {
+      if (runningLines.length > 0 && totalQueuedLines === 0 && last >= 2) {
         lines[last - 1] = lines[last - 1].replace(c_tree, c_angle);
         lines[last] = lines[last].replace(c_bar, " ".repeat(c_bar.length));
       }
@@ -264,9 +297,11 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
       }
     }
 
-    if (queuedLine && budget >= 1) {
-      lines.push(queuedLine);
-      budget--;
+    for (const ql of queuedLines) {
+      if (budget >= 1) {
+        lines.push(ql);
+        budget--;
+      }
     }
 
     for (const fl of finishedLines) {

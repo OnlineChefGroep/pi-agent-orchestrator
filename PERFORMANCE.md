@@ -235,7 +235,54 @@ Het gebruikt een vaste 1s refresh interval. Dit is bewust gekozen: `/agents top`
 
 ---
 
-## 9. Aanbevolen Benchmarks
+---
+
+## 9. Spawn Batching (Phase 3.1)
+
+### Beslissing
+Bij bulk spawns (meerdere achtergrond agents die tegelijk worden gestart), gebruiken we een **tweetraps debounce** om de widget-updates te coalesceren:
+
+1. **Eerste spawn**: `debouncedUpdate()` roept `update()` direct aan voor onmiddellijke feedback
+2. **Timer (16ms)**: een korte setTimeout wordt gestart om eventuele volgende spawns binnen 16ms op te vangen
+3. **Timer callback**: een tweede `update()` wordt uitgevoerd met de volledige batch
+4. **Tussentijdse calls**: alle `debouncedUpdate()` calls tijdens de 16ms window worden overgeslagen
+
+### Compacte batch rendering
+Wanneer er 3+ agents van hetzelfde type in "queued" status zijn, worden ze getoond als een compacte regel:
+```
+├── ◦ 5× Explore queued
+```
+in plaats van 5 individuele regels. Dit bespaart verticale ruimte en vermindert render overhead.
+
+### Waarom geen strict batching op spawn-niveau
+Anders dan de batch orchestrator (die completions debounced), hebben spawns geen aparte buffer nodig omdat:
+- De `AgentManager.spawn()` is synchroon — alle records worden in dezelfde call stack toegevoegd
+- De widget timer (200ms actief) ziet alle records in één keer
+- De dashboard requestRender is al rate gelimiteerd op 16ms
+
+De debounce in `debouncedUpdate()` voorkomt alleen dat `widget.update()` 20x wordt aangeroepen voor 20 spawns — de snapshot build en `listAgents()` sort worden zo teruggebracht van 20 naar 2 calls.
+
+### Key code
+```typescript
+// src/ui/agent-widget.ts
+debouncedUpdate(): void {
+  if (this.updateTimer) return;          // timer pending → skip
+  this.update();                          // immediate: eerste spawn
+  this.updateTimer = setTimeout(() => {    // coalesce volgende spawns
+    this.updateTimer = undefined;
+    this.update();
+  }, AgentWidget.SPAWN_BATCH_MS);          // 16ms
+}
+```
+
+### Trade-offs
+- **Pro**: `listAgents()` en snapshot build worden 10-20x minder aangeroepen bij bulk spawns
+- **Con**: eerste render toont 1 agent, tweede render 16ms later toont de volledige batch — korte visuele flits
+- **Con**: compacte weergave verbergt individuele descriptions voor batches van 3+ agents
+
+---
+
+## 10. Aanbevolen Benchmarks
 
 Voor het valideren van performance veranderingen:
 

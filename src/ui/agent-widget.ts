@@ -60,6 +60,14 @@ export class AgentWidget {
    */
   private dirty = false;
 
+  // ── Performance: spawn batching ──
+
+  /** Debounce timer for coalescing rapid update() calls during spawn bursts. */
+  private updateTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Minimum gap between consecutive update() calls (16ms ~ 60fps). */
+  private static readonly SPAWN_BATCH_MS = 16;
+
   /**
    * Build a compact hash from agent IDs + statuses.
    */
@@ -142,9 +150,38 @@ export class AgentWidget {
     });
   }
 
+  /**
+   * Debounced update: coalesces rapid calls (e.g. bulk spawns) into a single
+   * update after 16ms. Falls back to immediate update when the timer is not
+   * already pending — ensures the widget still updates promptly for the
+   * first spawn, while batching subsequent ones.
+   *
+   * Usage: call from spawn paths where multiple agents may be created in
+   * quick succession (background spawns, swarm joins, group joins).
+   */
+  debouncedUpdate(): void {
+    if (!this.uiCtx) return;
+    if (this.updateTimer) {
+      // Timer already pending — will fire after window expires
+      return;
+    }
+    // First call: immediate update to show the first agent promptly.
+    // Then schedule a coalesced update to catch any subsequent spawns.
+    this.update();
+    this.updateTimer = setTimeout(() => {
+      this.updateTimer = undefined;
+      this.update();
+    }, AgentWidget.SPAWN_BATCH_MS);
+  }
+
   /** Force an immediate widget update. */
   update() {
     if (!this.uiCtx) return;
+    // Clear any pending debounce timer — we're updating now.
+    if (this.updateTimer) {
+      clearTimeout(this.updateTimer);
+      this.updateTimer = undefined;
+    }
     const allAgents = this.manager.listAgents();
 
     // Build structural snapshot to detect real changes.
