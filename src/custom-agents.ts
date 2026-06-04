@@ -46,11 +46,26 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
   if (config.systemPrompt && config.systemPrompt.length > MAX_PROMPT_LENGTH) {
     errors.push(`System prompt exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
   }
+
+  // Validate description length
+  if (config.description && config.description.length > MAX_PROMPT_LENGTH) {
+    errors.push(`Description exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
+  }
+
+  // Validate display name length
+  if (config.displayName && config.displayName.length > MAX_NAME_LENGTH) {
+    errors.push(`Display name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
+  }
   
   // Validate tool names
   if (config.builtinToolNames) {
     if (config.builtinToolNames.length > MAX_TOOLS_COUNT) {
       errors.push(`Too many tools specified (max ${MAX_TOOLS_COUNT})`);
+    }
+
+    const hasLongTool = config.builtinToolNames.some(t => t.length > MAX_NAME_LENGTH);
+    if (hasLongTool) {
+      errors.push(`Tool name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
     }
     
     // CVE-011 FIX: Emit telemetry for unknown tool names (don't block, just log)
@@ -61,6 +76,17 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
     }
   }
   
+  if (config.disallowedTools) {
+    if (config.disallowedTools.length > MAX_TOOLS_COUNT) {
+      errors.push(`Too many disallowed tools specified (max ${MAX_TOOLS_COUNT})`);
+    }
+
+    const hasLongDisallowedTool = config.disallowedTools.some(t => t.length > MAX_NAME_LENGTH);
+    if (hasLongDisallowedTool) {
+      errors.push(`Disallowed tool name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
+    }
+  }
+
   return errors;
 }
 
