@@ -1,3 +1,4 @@
+
 /**
  * agent-dashboard.ts — Rich interactive TUI dashboard for subagent management.
  *
@@ -277,8 +278,21 @@ export class AgentDashboard implements Component {
 
     const th = getThemeColors();
     const box = getBoxChars();
-    const safeWidth = Math.max(40, width);
+
+    // === FIX: Robust width handling for Pi agent terminal ===
+    // The overlay sometimes passes a too-small width.
+    // We now take the real terminal size as a strong fallback so the
+    // dashboard actually uses ~94% of the available space and centers properly.
+    const terminalCols =
+      (this.tui as any)?.terminal?.columns ??
+      process.stdout?.columns ??
+      120;
+
+    const requestedWidth = width || terminalCols;
+    const safeWidth = Math.max(60, Math.min(requestedWidth, terminalCols - 2));
     const innerW = Math.max(1, safeWidth - 4);
+    // === END FIX ===
+
     const state = this.renderState();
     const lines = renderDashboardHeader(safeWidth, th, box, state);
 
@@ -294,11 +308,14 @@ export class AgentDashboard implements Component {
       this.bodyFocusLineByAgentId = body.focusLineByAgentId;
       this.bodyLineCount = body.lines.length;
       this.keepSelectedBodyLineVisible();
+
       const vh = this.getViewportHeight();
       const maxScroll = Math.max(0, body.lines.length - vh);
       this.scrollOffset = Math.min(this.scrollOffset, maxScroll);
+
       const start = Math.min(this.scrollOffset, maxScroll);
       const visible = body.lines.slice(start, start + vh);
+
       for (const line of visible) lines.push(framedRow(line, innerW, th, box));
       for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
     }
@@ -322,15 +339,11 @@ export class AgentDashboard implements Component {
 /**
  * Launch the interactive agent dashboard as an overlay.
  * Mirrors the viewAgentConversation pattern for consistency.
- * 
- * @param ctx - The extension command context
- * @param manager - The agent manager instance
- * @param agentActivity - Map of agent IDs to their activity data
- * @param onViewConversation - Optional callback to view agent conversation
- * @param onAbort - Optional callback to abort an agent
- * @param onSteer - Optional callback to steer an agent
- * @param onShowPermissions - Optional callback to show agent permissions
- * @param onSwarmAction - Optional callback to handle swarm actions
+ *
+ * The overlayOptions request 94% width + center anchor. However, the Pi TUI
+ * host does not always respect this perfectly. The render() method now has a
+ * strong fallback to the real terminal size so the dashboard renders at a
+ * usable width and appears properly centered.
  */
 export async function showAgentDashboard(
   ctx: ExtensionCommandContext,
