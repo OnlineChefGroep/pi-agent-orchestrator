@@ -105,28 +105,36 @@ export class SubagentScheduler {
     const errors: string[] = [];
     
     // Validate name
-    if (!input.name || input.name.length > MAX_NAME_LENGTH) {
-      errors.push(`Schedule name is required and must be <= ${MAX_NAME_LENGTH} characters`);
+    if (!input.name || typeof input.name !== 'string' || input.name.length > MAX_NAME_LENGTH) {
+      errors.push(`Schedule name is required and must be a string <= ${MAX_NAME_LENGTH} characters`);
     }
     
     // Validate description
-    if (input.description && input.description.length > MAX_DESCRIPTION_LENGTH) {
-      errors.push(`Description must be <= ${MAX_DESCRIPTION_LENGTH} characters`);
+    if (input.description !== undefined && (typeof input.description !== 'string' || input.description.length > MAX_DESCRIPTION_LENGTH)) {
+      errors.push(`Description must be a string <= ${MAX_DESCRIPTION_LENGTH} characters`);
     }
     
     // Validate prompt size
-    if (!input.prompt || input.prompt.length > MAX_PROMPT_SIZE) {
-      errors.push(`Prompt is required and must be <= ${MAX_PROMPT_SIZE} characters`);
+    if (!input.prompt || typeof input.prompt !== 'string' || input.prompt.length > MAX_PROMPT_SIZE) {
+      errors.push(`Prompt is required and must be a string <= ${MAX_PROMPT_SIZE} characters`);
     }
     
     // Validate schedule format and bounds
-    const detected = SubagentScheduler.detectSchedule(input.schedule);
-    if (detected.type === 'interval' && detected.intervalMs) {
-      if (detected.intervalMs < MIN_INTERVAL) {
-        errors.push(`Interval ${detected.intervalMs}ms is below minimum ${MIN_INTERVAL}ms (1 minute)`);
-      }
-      if (detected.intervalMs > MAX_INTERVAL) {
-        errors.push(`Interval ${detected.intervalMs}ms exceeds maximum ${MAX_INTERVAL}ms (~24.8 days)`);
+    if (typeof input.schedule !== 'string') {
+      errors.push('Schedule must be a string');
+    } else {
+      try {
+        const detected = SubagentScheduler.detectSchedule(input.schedule);
+        if (detected.type === 'interval' && detected.intervalMs) {
+          if (detected.intervalMs < MIN_INTERVAL) {
+            errors.push(`Interval ${detected.intervalMs}ms is below minimum ${MIN_INTERVAL}ms (1 minute)`);
+          }
+          if (detected.intervalMs > MAX_INTERVAL) {
+            errors.push(`Interval ${detected.intervalMs}ms exceeds maximum ${MAX_INTERVAL}ms (~24.8 days)`);
+          }
+        }
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err));
       }
     }
     
