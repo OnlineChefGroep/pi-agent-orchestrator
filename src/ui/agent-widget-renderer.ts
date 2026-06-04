@@ -28,8 +28,7 @@ type RenderAgentWidgetOptions = {
 
 function renderFinishedLine(a: AgentRecord, activity: AgentActivity | undefined, theme: Theme): string {
   const name = getDisplayName(a.type);
-  const modeLabel = getPromptModeLabel(a.type);
-  const duration = formatMs(((a.completedAt ?? Date.now()) - a.startedAt));
+  const modeLabel = getPromptModeLabel(a.type);    const duration = formatMs(((a.completedAt ?? Date.now()) - (a.startedAt ?? 0)));
   const activeUiStyle = getUiStyle();
 
   let icon: string;
@@ -115,7 +114,7 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     const name = getDisplayName(a.type);
     const modeLabel = getPromptModeLabel(a.type);
     const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
-    const elapsed = formatMs(Date.now() - a.startedAt);
+    const elapsed = formatMs(Date.now() - (a.startedAt ?? 0));
 
     const bg = options.agentActivity.get(a.id);
     const toolUses = bg?.toolUses ?? a.toolUses;

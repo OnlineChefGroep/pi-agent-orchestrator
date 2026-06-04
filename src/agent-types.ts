@@ -7,6 +7,7 @@
 
 import { isContextModeAvailable } from "./context-mode-bridge.js";
 import { DEFAULT_AGENTS } from "./default-agents.js";
+import { getReadOnlyMemoryToolNames, READ_ONLY_TOOLS } from "./readonly-helpers.js";
 import type { AgentConfig } from "./types.js";
 
 /**
@@ -18,8 +19,8 @@ import type { AgentConfig } from "./types.js";
  * - Partition name not in membership → contributes nothing (isolated)
  */
 function resolvePartitionTools(
-  membership: Record<string, string[]> | undefined,
-  partitions: string[],
+  membership: Record<string, readonly string[]> | undefined,
+  partitions: readonly string[],
 ): string[] {
   // No membership configured → empty (no restriction — feature not enabled)
   if (!membership) return [];
@@ -48,7 +49,7 @@ function resolvePartitionTools(
  * - Partitions specified → union of all tool names from matching partition memberships
  * - Empty partitionMembership ({}) → empty set = isolated
  */
-export function filterByPartitions(config: AgentConfig, partitions?: string[]): string[] {
+export function filterByPartitions(config: AgentConfig, partitions?: readonly string[]): string[] {
   // Expand `*` in the agent's own tool list (audit A1). Partition membership
   // is already a concrete allowlist, so it is never re-expanded.
   const baseTools = normalizeBuiltinToolNames(config.builtinToolNames) ?? [...BUILTIN_TOOL_NAMES];
@@ -80,14 +81,11 @@ export const BUILTIN_TOOL_NAMES: string[] = ["read", "bash", "edit", "write", "g
  * fallback path (audit A2).
  *
  * Read-only — no file modifications, no extension or skills exposure.
- * A caller that triggers the fallback with a malicious or unknown agent
- * type name is intentionally restricted to a non-destructive subset
- * rather than being granted the full BUILTIN_TOOL_NAMES plus all
- * extensions and skills. This constant lives at module scope so the
- * fallback in {@link getConfig} reads it as trusted data, with no
- * branching inside the hot path.
+ * Aliased from {@link READ_ONLY_TOOLS} for semantic clarity in the
+ * fallback context, where the value is identical but the purpose differs
+ * from the standard Explore/Plan/Analysis read-only toolset.
  */
-const SAFE_FALLBACK_TOOL_NAMES: readonly string[] = ["read", "bash", "grep"];
+const SAFE_FALLBACK_TOOL_NAMES: readonly string[] = READ_ONLY_TOOLS;
 
 /**
  * Normalize a custom agent's `builtinToolNames` array.
@@ -110,7 +108,7 @@ const SAFE_FALLBACK_TOOL_NAMES: readonly string[] = ["read", "bash", "grep"];
  * @param names - The raw `builtinToolNames` array from an AgentConfig
  * @returns A fresh, normalized array; `undefined` if the input was undefined
  */
-export function normalizeBuiltinToolNames(names: string[] | undefined): string[] | undefined {
+export function normalizeBuiltinToolNames(names: readonly string[] | undefined): string[] | undefined {
   if (!names) return names;
   if (names.includes("*")) {
     // Wildcard expands to the full built-in list, unioned with any concrete
@@ -222,15 +220,8 @@ export function getMemoryToolNames(existingToolNames: Set<string>): string[] {
   return MEMORY_TOOL_NAMES.filter(n => !existingToolNames.has(n));
 }
 
-/** Tool names needed for read-only memory access. */
-const READONLY_MEMORY_TOOL_NAMES = ["read"];
-
-/**
- * Get read-only memory tool names not already in the provided set.
- */
-export function getReadOnlyMemoryToolNames(existingToolNames: Set<string>): string[] {
-  return READONLY_MEMORY_TOOL_NAMES.filter(n => !existingToolNames.has(n));
-}
+// Re-export for backward compatibility — the canonical definition lives in readonly-helpers.ts.
+export { getReadOnlyMemoryToolNames };
 
 /** Get built-in tool names for a type (case-insensitive). */
 export function getToolNamesForType(type: string): string[] {
@@ -250,14 +241,14 @@ export function getToolNamesForType(type: string): string[] {
  * Parent overrides child: if parent has a restriction, the child cannot exceed it.
  */
 function intersectPermission(
-  child: true | string[] | false,
-  parent: true | string[] | false,
+  child: true | readonly string[] | false,
+  parent: true | readonly string[] | false,
 ): true | string[] | false {
   // Early returns for common cases
   if (parent === false) return false;
-  if (parent === true) return child;
+  if (parent === true) return child === true || child === false ? child : [...child];
   if (child === false) return false;
-  if (child === true) return parent;
+  if (child === true) return [...parent];
   
   // Both are arrays - return intersection
   const parentSet = new Set(parent);
@@ -301,8 +292,8 @@ export interface EffectiveConfig {
  * Hoisted to module level to avoid recreating on every getConfig() call.
  */
 function applyPartitionFilter(
-  membership: Record<string, string[]> | undefined,
-  partitions: string[] | undefined,
+  membership: Record<string, readonly string[]> | undefined,
+  partitions: readonly string[] | undefined,
   toolNames: string[],
 ): string[] {
   // Early exit: no partitions specified → no filtering (backward compat)
@@ -333,7 +324,7 @@ function applyPartitionFilter(
 export function getConfig(
   type: string,
   parentConfig?: EffectiveConfig,
-  partitions?: string[],
+  partitions?: readonly string[],
 ): {
   displayName: string;
   description: string;
@@ -352,8 +343,8 @@ export function getConfig(
       // restrictions are applied, so a wildcard child is intersected with
       // the parent's concrete list rather than yielding an empty set.
       builtinToolNames: normalizeBuiltinToolNames(config.builtinToolNames) ?? BUILTIN_TOOL_NAMES,
-      extensions: config.extensions,
-      skills: config.skills,
+      extensions: config.extensions === true || config.extensions === false ? config.extensions : [...config.extensions],
+      skills: config.skills === true || config.skills === false ? config.skills : [...config.skills],
     }, parentConfig);
 
     // Inject ctx_* tools when context-mode is installed and agent opts in

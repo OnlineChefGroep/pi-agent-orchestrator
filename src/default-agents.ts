@@ -4,9 +4,8 @@
  * These are always available but can be overridden by user .md files with the same name.
  */
 
+import { READ_ONLY_TOOLS } from "./readonly-helpers.js";
 import type { AgentConfig } from "./types.js";
-
-const READ_ONLY_TOOLS = ["read", "bash", "grep"];
 
 const READ_ONLY_WARNING = `# CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS
 You are {{ROLE}}.
