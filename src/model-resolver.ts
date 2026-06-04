@@ -8,10 +8,10 @@ export interface ModelEntry {
   provider: string;
 }
 
-export interface ModelRegistry {
-  find(provider: string, modelId: string): any;
-  getAll(): any[];
-  getAvailable?(): any[];
+export interface ModelRegistry<T extends ModelEntry = ModelEntry> {
+  find(provider: string, modelId: string): T | undefined;
+  getAll(): T[];
+  getAvailable?(): T[];
 }
 
 // Module-level cache for the expensive Set+array build in resolveModel.
@@ -20,14 +20,20 @@ let cachedRegistry: unknown = null;
 let cachedSet: Set<string> | null = null;
 let cachedAll: ModelEntry[] | null = null;
 
-function getAvailableSet(registry: ModelRegistry): { set: Set<string>; all: ModelEntry[] } {
+/**
+ * Builds (and caches) a set of lowercase "provider/id" keys and the corresponding model list from the registry.
+ *
+ * @param registry - Registry to query; uses `getAvailable()` if present, otherwise falls back to `getAll()`.
+ * @returns An object with `set` containing lowercase `"provider/id"` entries for available models and `all` containing the list used to build the set.
+ */
+function getAvailableSet<T extends ModelEntry>(registry: ModelRegistry<T>): { set: Set<string>; all: T[] } {
   if (registry !== cachedRegistry || !cachedSet) {
-    const all = (registry.getAvailable?.() ?? registry.getAll()) as ModelEntry[];
+    const all = registry.getAvailable?.() ?? registry.getAll();
     cachedAll = all;
     cachedSet = new Set(all.map(m => `${m.provider}/${m.id}`.toLowerCase()));
     cachedRegistry = registry;
   }
-  return { set: cachedSet, all: cachedAll! };
+  return { set: cachedSet, all: cachedAll! as T[] };
 }
 
 /** Manually invalidate the model cache (e.g. after registry mutation). */
@@ -38,14 +44,18 @@ export function invalidateModelCache(): void {
 }
 
 /**
- * Resolve a model string to a Model instance.
- * Tries exact match first ("provider/modelId"), then fuzzy match against all available models.
- * Returns the Model on success, or an error message string on failure.
+ * Resolve a model identifier to a registered model.
+ *
+ * Attempts an exact "provider/modelId" match against available models, then falls back to a fuzzy search over provider, id, and name.
+ *
+ * @param input - The model identifier or search query
+ * @param registry - Registry to resolve the model from
+ * @returns The matched model of type `T` if found, otherwise an error message string that lists available models
  */
-export function resolveModel(
+export function resolveModel<T extends ModelEntry>(
   input: string,
-  registry: ModelRegistry,
-): any | string {
+  registry: ModelRegistry<T>,
+): T | string {
   // Available models (those with auth configured) — cached per registry instance
   const { set: availableSet, all } = getAvailableSet(registry);
 
