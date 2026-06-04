@@ -13,6 +13,9 @@ export function buildAgentTreeMermaid(records: AgentRecord[]): string {
     return lines.join("\n");
   }
 
+  // Group by groupId to avoid O(N^2) complexity
+  const childrenMap = new Map<string, AgentRecord[]>();
+
   // Pre-calculate node declarations
   for (const record of sorted) {
     lines.push(`  ${record.id.replace(/-/g, "_")}["${label(record)}"]`);
@@ -23,9 +26,6 @@ export function buildAgentTreeMermaid(records: AgentRecord[]): string {
       childrenMap.get(record.groupId)!.push(record);
     }
   }
-
-  // Group by groupId to avoid O(N^2) complexity
-  const childrenMap = new Map<string, AgentRecord[]>();
   for (const record of sorted) {
     if (record.groupId) {
       if (!childrenMap.has(record.groupId)) {

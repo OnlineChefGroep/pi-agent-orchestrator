@@ -17,7 +17,7 @@ import { type ModelRegistry, resolveModel } from "./model-resolver.js";
 // fragile string matching.
 // ---------------------------------------------------------------------------
 
-export type RpcErrorCode = "RATE_LIMITED" | "UNAUTHORIZED" | "ERROR";
+export type RpcErrorCode = "RATE_LIMITED" | "UNAUTHORIZED" | "INVALID_PARAMS" | "ERROR";
 
 export class RpcError extends Error {
   readonly code: RpcErrorCode;

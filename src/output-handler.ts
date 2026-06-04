@@ -189,7 +189,7 @@ function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" |
     for (let i = 0; i < roots.length; i++) {
       render(roots[i].id, "", i === roots.length - 1);
     }
-    return treeParts.join("") || "No execution tree available.";
+    return out || "No execution tree available.";
   }
 
   return "";
