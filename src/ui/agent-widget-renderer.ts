@@ -1,11 +1,10 @@
-import { truncateToWidth } from "@earendil-works/pi-tui";
 import { getUiStyle } from "../agent-registry.js";
 import type { AgentRecord } from "../types.js";
 import { getLifetimeTotal, getSessionContextPercent } from "../usage.js";
 import { describeActivity, formatMs, formatSessionTokens, formatTurns, getDisplayName, getPromptModeLabel } from "./agent-format.js";
 import type { AgentActivity } from "./agent-ui-types.js";
 import { getSpinnerFrame } from "./animation.js";
-import { activeTheme, type Theme } from "./theme.js";
+import { activeTheme, fastTruncate, type Theme } from "./theme.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -188,7 +187,7 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
   }
 
   const w = options.tui.terminal.columns;
-  const truncate = (line: string) => truncateToWidth(line, w);
+  const truncate = (line: string) => fastTruncate(line, w);
   const headingColor = hasActive ? "accent" : "dim";
   const frame = getSpinnerFrame(options.frame);
 

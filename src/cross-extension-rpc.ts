@@ -53,6 +53,18 @@ export interface SessionCapable extends SpawnCapable {
   getSessionMaxTurns(): number;
 }
 
+export interface SwarmCapable {
+  listSwarms(): Array<{ swarmId: string; name: string; agentCount: number; strategy: string; leaderId?: string }>;
+  getSwarmMetrics(swarmId?: string): {
+    totalDeliveries: number;
+    totalRecordsDelivered: number;
+    partialDeliveries: number;
+    timedOutDeliveries: number;
+    averageLatencyMs?: number;
+    bySwarm: Record<string, { deliveries: number; records: number; partials: number; timeouts: number }>;
+  };
+}
+
 // Host-provided authentication context for RPC calls.
 export interface AuthContext {
   extensionId: string;
@@ -186,6 +198,8 @@ export interface RpcDeps {
   rateLimit?: RateLimitConfig;
   /** Optional session-capable manager for session usage RPC. */
   sessionManager?: SessionCapable;
+  /** Optional swarm coordinator for swarm health RPC. */
+  swarmCoordinator?: SwarmCapable;
 }
 
 export interface RpcHandle {
@@ -193,6 +207,8 @@ export interface RpcHandle {
   unsubSpawn: () => void;
   unsubStop: () => void;
   unsubSessionUsage: () => void;
+  /** No-op when swarmCoordinator was not provided to registerRpcHandlers. */
+  unsubSwarmHealth?: () => void;
 }
 
 /**
@@ -294,7 +310,7 @@ function authorizeRpcMutation(deps: RpcDeps, requestId: string, operation: strin
 // Audit-trail helper — wraps an RPC handler to capture outcome and duration.
 // ---------------------------------------------------------------------------
 
-type AuditableOperation = "ping" | "spawn" | "stop" | "sessionUsage";
+type AuditableOperation = "ping" | "spawn" | "stop" | "sessionUsage" | "swarmHealth";
 
 function auditedRpc<P extends { requestId: string }>(
   deps: RpcDeps,
@@ -356,7 +372,7 @@ function auditedRpc<P extends { requestId: string }>(
  * times should be aware of the side effect.
  */
 export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
-  const { events, pi, getCtx, manager, sessionManager } = deps;
+  const { events, pi, getCtx, manager, sessionManager, swarmCoordinator } = deps;
 
   // Apply caller-provided rate-limit tunables (if any).
   if (deps.rateLimit) configureRateLimit(deps.rateLimit);
@@ -439,5 +455,22 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
       )
     : () => {};
 
-  return { unsubPing, unsubSpawn, unsubStop, unsubSessionUsage };
+  const unsubSwarmHealth = swarmCoordinator
+    ? handleRpc(
+        events,
+        "subagents:rpc:swarmHealth",
+        auditedRpc<{ requestId: string }>(deps, "swarmHealth", ({ requestId }) => {
+          const auth = resolveAuth(deps, requestId, { requestId });
+          return {
+            auth,
+            result: {
+              swarms: swarmCoordinator!.listSwarms(),
+              metrics: swarmCoordinator!.getSwarmMetrics(),
+            },
+          };
+        }),
+      )
+    : () => {};
+
+  return { unsubPing, unsubSpawn, unsubStop, unsubSessionUsage, unsubSwarmHealth };
 }
