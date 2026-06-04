@@ -200,6 +200,22 @@ describe("SubagentScheduler — lifecycle", () => {
   // at create time, so this is the only remaining production path.
 
   describe("SubagentScheduler — bounds (CVE-005)", () => {
+    it("updateJob enforces input bounds", async () => {
+      const job = await scheduler.addJob({
+        name: "test", description: "test", schedule: "+10m",
+        subagent_type: "general-purpose", prompt: "x",
+      });
+
+      await expect(scheduler.updateJob(job.id, { prompt: "c".repeat(50001) }))
+        .rejects.toThrow(/Prompt must be <= 50000 characters/);
+
+      await expect(scheduler.updateJob(job.id, { name: "n".repeat(101) }))
+        .rejects.toThrow(/Schedule name must be <= 100 characters/);
+
+      await expect(scheduler.updateJob(job.id, { description: "d".repeat(501) }))
+        .rejects.toThrow(/Description must be <= 500 characters/);
+    });
+
     it("enforces MAX_SCHEDULES concurrently (TOCTOU protection)", { timeout: 15000 }, async () => {
       // Mock MAX_SCHEDULES to a smaller number just for this test implicitly by
       // filling the store to just below the real limit (100).
