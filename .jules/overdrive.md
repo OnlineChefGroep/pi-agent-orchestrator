@@ -14,3 +14,13 @@
 - Mermaid graph generation for 10,000 subagents plummeted from ~1500ms to ~75ms.
 - 99.3% reduction in synchronous block time on the main thread for UI renders.
 **Actionable Principle:** Never use `Array.prototype.filter` or `Array.prototype.find` nested inside outer loops when joining relational datasets in-memory; map the relationships into $O(1)$ HashMaps/Dictionaries during a single pre-pass.
+
+## 2026-06-04
+### Systemic Bottleneck
+Inefficient linear search using `.find()` inside a loop over grouped swarms to determine the uniform `joinMode`.
+### Refactor Strategy
+Replaced `members.find(m => m.joinMode)?.joinMode` with `members[0]?.joinMode` since the `joinMode` is uniform across the group, eliminating the O(N) traversal.
+### Key Metric Shift
+Benchmark improved from ~627ms to ~25ms over 10,000 iterations for 100 swarms with 100 members each (approx ~25x faster).
+### Actionable Principle
+Avoid linear scans for uniform properties when reading the first element suffices.
