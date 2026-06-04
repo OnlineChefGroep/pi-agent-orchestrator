@@ -1,3 +1,58 @@
+import { truncateToWidth } from "@earendil-works/pi-tui";
+import { getUiStyle } from "../agent-registry.js";
+import type { AgentRecord } from "../types.js";
+import { getLifetimeTotal, getSessionContextPercent } from "../usage.js";
+import { describeActivity, formatMs, formatSessionTokens, formatTurns, getDisplayName, getPromptModeLabel } from "./agent-format.js";
+import type { AgentActivity } from "./agent-ui-types.js";
+import { getSpinnerFrame } from "./animation.js";
+import { activeTheme, type Theme } from "./theme.js";
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const MAX_WIDGET_LINES = 12;
+
+export const ERROR_STATUSES = new Set(["error", "aborted", "steered", "stopped"]);
+
+type WidgetTuiLike = {
+  terminal: {
+    columns: number;
+  };
+};
+
+type RenderAgentWidgetOptions = {
+  agents: AgentRecord[];
+  agentActivity: Map<string, AgentActivity>;
+  frame: number;
+  shouldShowFinished(agentId: string, status: string): boolean;
+  theme: Theme;
+  tui: WidgetTuiLike;
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Format elapsed seconds as tokens/sec burn rate (e.g. "2.3K/s"). */
+function formatBurnRate(tokens: number, elapsedMs: number, theme: Theme): string {
+  const secs = elapsedMs / 1000;
+  if (secs < 1) return "";
+  const rate = tokens / secs;
+  if (rate >= 1_000_000) return theme.fg("error", `${(rate / 1_000_000).toFixed(1)}M/s`);
+  if (rate >= 1_000) return theme.fg("warning", `${(rate / 1_000).toFixed(1)}K/s`);
+  return theme.fg("dim", `${rate.toFixed(0)}/s`);
+}
+
+/** Format lastSeenMs as a relative time string (e.g. "now", "5s", "2m"). */
+function formatLastSeen(lastSeenMs: number | undefined, theme: Theme): string {
+  if (lastSeenMs === undefined) return "";
+  const secs = Math.floor((Date.now() - lastSeenMs) / 1000);
+  if (secs < 5) return theme.fg("success", "now");
+  if (secs < 60) return theme.fg("muted", `${secs}s`);
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return theme.fg("muted", `${mins}m`);
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return theme.fg("dim", `${hrs}h`);
+  return theme.fg("dim", `${Math.floor(hrs / 24)}d`);
+}
+
 /**
  * Render a compact activity heatmap of recent agent activity.
  * Shows 10 segments (each = 30 seconds, 5-minute window) with Unicode block intensity.
@@ -49,37 +104,10 @@ function renderActivityHeatmap(
   return label;
 }
 
-import { truncateToWidth } from "@earendil-works/pi-tui";
-import { getUiStyle } from "../agent-registry.js";
-import type { AgentRecord } from "../types.js";
-import { getLifetimeTotal, getSessionContextPercent } from "../usage.js";
-import { describeActivity, formatMs, formatSessionTokens, formatTurns, getDisplayName, getPromptModeLabel } from "./agent-format.js";
-import type { AgentActivity } from "./agent-ui-types.js";
-import { getSpinnerFrame } from "./animation.js";
-import { activeTheme, type Theme } from "./theme.js";
-
-const MAX_WIDGET_LINES = 12;
-
-export const ERROR_STATUSES = new Set(["error", "aborted", "steered", "stopped"]);
-
-type WidgetTuiLike = {
-  terminal: {
-    columns: number;
-  };
-};
-
-type RenderAgentWidgetOptions = {
-  agents: AgentRecord[];
-  agentActivity: Map<string, AgentActivity>;
-  frame: number;
-  shouldShowFinished(agentId: string, status: string): boolean;
-  theme: Theme;
-  tui: WidgetTuiLike;
-};
-
 function renderFinishedLine(a: AgentRecord, activity: AgentActivity | undefined, theme: Theme): string {
   const name = getDisplayName(a.type);
-  const modeLabel = getPromptModeLabel(a.type);    const duration = formatMs(((a.completedAt ?? Date.now()) - (a.startedAt ?? 0)));
+  const modeLabel = getPromptModeLabel(a.type);
+  const duration = formatMs(((a.completedAt ?? Date.now()) - (a.startedAt ?? 0)));
   const activeUiStyle = getUiStyle();
 
   let icon: string;
@@ -171,12 +199,17 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     const toolUses = bg?.toolUses ?? a.toolUses;
     const tokens = getLifetimeTotal(bg?.lifetimeUsage);
     const contextPercent = getSessionContextPercent(bg?.session);
+    const elapsedMs = Date.now() - (a.startedAt ?? 0);
     const tokenText = tokens > 0 ? formatSessionTokens(tokens, contextPercent, theme, a.compactionCount) : "";
+    const burnRate = tokens > 0 ? formatBurnRate(tokens, elapsedMs, theme) : "";
+    const lastSeen = bg?.lastSeenMs !== undefined ? formatLastSeen(bg.lastSeenMs, theme) : "";
 
     const parts: string[] = [];
     if (bg) parts.push(formatTurns(bg.turnCount, bg.maxTurns));
-    if (toolUses > 0) parts.push(`${toolUses} tool use${toolUses === 1 ? "" : "s"}`);
+    if (toolUses > 0) parts.push(`${toolUses} tool`);
     if (tokenText) parts.push(tokenText);
+    if (burnRate) parts.push(burnRate);
+    if (lastSeen) parts.push(lastSeen);
     parts.push(elapsed);
     const statsText = parts.join(" · ");
 
