@@ -195,6 +195,17 @@ export class SubagentScheduler {
 
   /** Toggle / mutate a job. Re-arms based on the new `enabled` state. */
   async updateJob(id: string, patch: Partial<ScheduledSubagent>): Promise<ScheduledSubagent | undefined> {
+    // CVE-005 FIX: Enforce bounds on updates to prevent bypassing size limits
+    if (patch.name !== undefined && patch.name.length > MAX_NAME_LENGTH) {
+      throw new Error(`Schedule name must be <= ${MAX_NAME_LENGTH} characters`);
+    }
+    if (patch.description !== undefined && patch.description.length > MAX_DESCRIPTION_LENGTH) {
+      throw new Error(`Description must be <= ${MAX_DESCRIPTION_LENGTH} characters`);
+    }
+    if (patch.prompt !== undefined && patch.prompt.length > MAX_PROMPT_SIZE) {
+      throw new Error(`Prompt must be <= ${MAX_PROMPT_SIZE} characters`);
+    }
+
     const store = this.requireStore();
     const updated = await store.update(id, patch);
     if (!updated) return undefined;
