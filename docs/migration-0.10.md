@@ -1,28 +1,35 @@
-# Migrating to 0.10.0
+# // MIGRATING TO 0.10.0
 
-Version 0.10.0 introduces a major rebranding and some new features, but retains full backward compatibility for existing scripts and custom agents.
+> VERSION 0.10.0 UPGRADE MATRIX. ARCHITECTURAL RENAMING AND SUBSYSTEM CAPABILITIES. BACKWARD COMPATIBILITY MAINTAINED.
 
-## Package & Repository Rename
+---
 
-The package has been renamed from `pi-subagents` to `@onlinechefgroep/pi-agent-orchestrator`.
-The repository has been moved to `OnlineChefGroep/pi-agent-orchestrator`.
+## // PACKAGE & REPOSITORY IDENTIFIERS
 
-### Old Install Command
+System identifier mutated from `pi-subagents` to `@onlinechefgroep/pi-agent-orchestrator`.
+Repository physical location migrated to `OnlineChefGroep/pi-agent-orchestrator`.
+
+### Legacy Execution
 ```bash
 pi install npm:pi-subagents
 ```
 
-### New Install Command
+### Current Execution
 ```bash
 pi install npm:@onlinechefgroep/pi-agent-orchestrator
 ```
 
-## Compatibility Namespace Stability
+---
 
-All existing `.pi/agents/*.md` files will continue to work without modification.
-The internal plugin namespaces (`pi-subagents:hooks`, etc.) remain stable to ensure existing hook integrations do not break.
-All API methods exposed to the host application (like the cross-extension RPC) have been kept backward compatible.
+## // COMPATIBILITY NAMESPACE
 
-## What's New in 0.10.x?
-- **0.10.0**: Session-wide limits (spawn and turns), `estimate_only` dry-runs, typed handoff artifacts, lock-directory scheduling persistence.
-- **0.10.1**: Bugfixes for TUI overflow, validation colors, and falsy inputs.
+Existing `.pi/agents/*.md` definitions process without mutation.
+Internal execution namespaces (`pi-subagents:hooks`) remain locked. External hook integrators suffer zero disruption.
+Host application API surfaces (cross-extension RPC) guarantee backward compatibility constraints.
+
+---
+
+## // SUBSYSTEM DELTAS 0.10.X
+
+- **0.10.0**: Session-wide block limits (spawn/turns). `estimate_only` execution flag. Typed JSON handoff artifacts. Lock-directory temporal persistence mechanism.
+- **0.10.1**: Display block overflow patches. Validation matrix color codes. Falsy parameter hardening.
