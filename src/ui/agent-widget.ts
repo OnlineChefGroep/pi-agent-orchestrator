@@ -16,6 +16,7 @@ import type { AgentManager } from "../agent-manager.js";
 import type { AgentRecord } from "../types.js";
 import type { AgentActivity, UICtx } from "./agent-ui-types.js";
 import { ERROR_STATUSES, renderAgentWidget } from "./agent-widget-renderer.js";
+import { RenderMetrics } from "./render-metrics.js";
 import type { Theme } from "./theme.js";
 
 // ---- Constants ----
@@ -31,6 +32,9 @@ const IDLE_REFRESH_MS = 1000;
  * Matches MAX_WIDGET_LINES in agent-widget-renderer minus heading.
  */
 const PAGE_SIZE = 11;
+
+/** Widget render considered slow if it exceeds 16ms (~60fps budget). */
+const SLOW_WIDGET_UPDATE_MS = 16;
 
 // ---- Widget manager ----
 
@@ -81,6 +85,11 @@ export class AgentWidget {
 
   // No totalAgentCount field — page count is derived from line estimates
   // in getVisibleWindow().
+
+  // ── Performance metrics ──
+
+  /** Render timing tracker for monitoring update() performance. */
+  private renderMetrics = new RenderMetrics("widget-update", SLOW_WIDGET_UPDATE_MS);
 
   /** Minimum gap between consecutive update() calls (16ms ~ 60fps). */
   private static readonly SPAWN_BATCH_MS = 16;
@@ -236,20 +245,30 @@ export class AgentWidget {
     return this.maxPages;
   }
 
+  /** Get render performance metrics snapshot. */
+  getRenderMetrics() {
+    return this.renderMetrics.snapshot();
+  }
+
   private renderWidget(tui: any, theme: Theme): string[] {
-    const allAgents = this.manager.listAgents();
-    const visibleAgents = this.getVisibleWindow(allAgents);
-    return renderAgentWidget({
-      agents: visibleAgents,
-      agentActivity: this.agentActivity,
-      frame: this.widgetFrame,
-      shouldShowFinished: (agentId, status) => this.shouldShowFinished(agentId, status),
-      theme,
-      tui,
-      // Pagination info for the heading indicator
-      pageIndex: this.scrollPage,
-      pageCount: this.maxPages,
-    });
+    const renderStart = performance.now();
+    try {
+      const allAgents = this.manager.listAgents();
+      const visibleAgents = this.getVisibleWindow(allAgents);
+      return renderAgentWidget({
+        agents: visibleAgents,
+        agentActivity: this.agentActivity,
+        frame: this.widgetFrame,
+        shouldShowFinished: (agentId, status) => this.shouldShowFinished(agentId, status),
+        theme,
+        tui,
+        // Pagination info for the heading indicator
+        pageIndex: this.scrollPage,
+        pageCount: this.maxPages,
+      });
+    } finally {
+      this.renderMetrics.record(performance.now() - renderStart);
+    }
   }
 
   /**

@@ -31,6 +31,7 @@ import {
 } from "./agent-dashboard-renderer.js";
 import { getAgentTopEntries, renderTopTable, type SortKey, sortEntries } from "./agent-top-renderer.js";
 import type { AgentActivity } from "./agent-ui-types.js";
+import { RenderMetrics } from "./render-metrics.js";
 import {
   type BoxChars,
   type DashboardTheme,
@@ -119,6 +120,11 @@ export class AgentDashboard implements Component {
    * Reset after each render. Used to decide whether full recompute is needed.
    */
   private dirty = true;
+
+  // ── Performance: render timing metrics ──
+
+  /** Render timing tracker for monitoring dashboard render() performance. */
+  private renderMetrics = new RenderMetrics("dashboard-render", 50);
 
   constructor(
     private readonly tui: TUI,
@@ -536,6 +542,8 @@ export class AgentDashboard implements Component {
   }
 
   render(width: number): string[] {
+    const renderStart = performance.now();
+
     // Use memoized theme/box chars (only recomputed on UI style change).
     const th = this.getTheme();
     const box = this.getBox();
@@ -586,7 +594,15 @@ export class AgentDashboard implements Component {
     // Reset dirty flag after a full render.
     this.dirty = false;
 
+    // Record render timing.
+    this.renderMetrics.record(performance.now() - renderStart);
+
     return lines;
+  }
+
+  /** Get render performance metrics snapshot. */
+  getRenderMetrics() {
+    return this.renderMetrics.snapshot();
   }
 
   invalidate(): void {

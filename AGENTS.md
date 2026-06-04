@@ -47,11 +47,18 @@ All runtime-configurable settings are defined in `src/settings.ts` (`SubagentsSe
 - `src/agent-types.ts` — permission model (base tools → parent restrictions → partition filter → disallow floor)
 - `src/agent-runner.ts` — agent lifecycle: spawn → build context → create session → run loop
 - `src/index.ts` — extension entry point, command registration, batch/group coordination
-- `src/ui/agent-dashboard.ts` — vim-hotkey interactive TUI (supersedes legacy agent-widget)
+- `src/ui/agent-dashboard.ts` — vim-hotkey interactive TUI featuring standard view and the `/agents top` resource usage view
+- `src/ui/agent-top-renderer.ts` — top view table calculations, sorting (by tokens, turns, duration, tool uses, name, recency), and pagination
+- `src/ui/agent-widget-renderer.ts` + `src/ui/agent-widget.ts` — virtual scrolling logic, rendering safety limits, batching and debouncing spawns
 - `src/swarm-join.ts` — live swarm join/leave coordination
 - `src/schedule.ts` + `src/schedule-store.ts` — cron-style scheduling, persisted to `.pi/subagent-schedules/`
 
 See `docs/architecture.md` for the full module map and data-flow diagram.
+
+## Verification Suite
+
+Ensure you run `npm run typecheck && npm run lint && npm test` before committing.
+Currently passing: **907 tests** across **51 test files**, including performance benchmarks for render, snapshot, and virtual scrolling.
 
 ## graphify
 
