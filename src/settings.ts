@@ -194,7 +194,7 @@ function readSettingsFile(path: string): SubagentsSettings {
     return sanitize(JSON.parse(readFileSync(path, "utf-8")));
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
-    logger.warn(`[pi-subagents] Ignoring malformed settings at ${path}: ${reason}`);
+    logger.warn(`Ignoring malformed settings at ${path}: ${reason}`);
     return {};
   }
 }
