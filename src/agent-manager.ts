@@ -335,7 +335,7 @@ export class AgentManager {
         currentLevel: record.currentLevel,
         levelLimit: record.invocation?.levelLimit,
         parentConfig,
-        partitions: childPartitions,
+        partitions: childPartitions ? [...childPartitions] : undefined,
         cwd: worktreeCwd,
         signal: record.abortController!.signal,
         hooks: this.hooks,
@@ -561,7 +561,7 @@ export class AgentManager {
 
   listAgents(): AgentRecord[] {
     return [...this.agents.values()].sort(
-      (a, b) => b.startedAt - a.startedAt,
+      (a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0),
     );
   }
 

@@ -33,6 +33,9 @@ export function getThemeColors() {
       success: "",
       error: "",
       reset: "",
+      bgCard: "",
+      bgSelected: "",
+      bgHeader: "",
     };
   }
   if (style === "retro") {
@@ -46,18 +49,24 @@ export function getThemeColors() {
       success: "\x1b[1;32m",
       error: "\x1b[1;31m",
       reset: "\x1b[0m",
+      bgCard: "",
+      bgSelected: "",
+      bgHeader: "",
     };
   }
   return {
     border: "\x1b[38;2;255;100;100m",
     title: "\x1b[1;38;2;220;220;220m",
-    dim: "\x1b[2m",
+    dim: "\x1b[38;2;100;100;120m",
     muted: "\x1b[38;2;160;160;170m",
     highlight: "\x1b[1;38;2;255;200;100m",
     accent: "\x1b[1;38;2;120;180;255m",
     success: "\x1b[1;38;2;80;220;140m",
     error: "\x1b[1;38;2;255;100;120m",
     reset: "\x1b[0m",
+    bgCard: "\x1b[48;2;25;25;40m",
+    bgSelected: "\x1b[48;2;35;35;55m",
+    bgHeader: "\x1b[48;2;20;20;35m",
   };
 }
 

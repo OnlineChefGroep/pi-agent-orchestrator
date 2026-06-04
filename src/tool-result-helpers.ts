@@ -95,7 +95,7 @@ export function escapeXml(s: string): string {
 /** Format a structured task notification matching Claude Code's <task-notification> XML. */
 export function formatTaskNotification(record: AgentRecord, resultMaxLen: number): string {
   const status = getStatusLabel(record.status, record.error);
-  const durationMs = record.completedAt ? record.completedAt - record.startedAt : 0;
+  const durationMs = record.completedAt ? record.completedAt - (record.startedAt ?? 0) : 0;
   const totalTokens = getLifetimeTotal(record.lifetimeUsage);
   const contextPercent = getSessionContextPercent(record.session);
   const ctxXml = contextPercent === null ? "" : `<context_percent>${Math.round(contextPercent)}</context_percent>`;
@@ -133,7 +133,7 @@ export function buildDetails(
     tokens: formatLifetimeTokens(record),
     turnCount: activity?.turnCount,
     maxTurns: activity?.maxTurns,
-    durationMs: (record.completedAt ?? Date.now()) - record.startedAt,
+    durationMs: (record.completedAt ?? Date.now()) - (record.startedAt ?? 0),
     status: record.status as AgentDetails["status"],
     agentId: record.id,
     error: record.error,
@@ -154,7 +154,7 @@ export function buildNotificationDetails(record: AgentRecord, resultMaxLen: numb
     turnCount: activity?.turnCount ?? 0,
     maxTurns: activity?.maxTurns,
     totalTokens,
-    durationMs: record.completedAt ? record.completedAt - record.startedAt : 0,
+    durationMs: record.completedAt ? record.completedAt - (record.startedAt ?? 0) : 0,
     outputFile: record.outputFile,
     error: record.error,
     validated: record.validated,

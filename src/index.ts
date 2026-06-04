@@ -171,7 +171,7 @@ export default async function (pi: ExtensionAPI) {
 
   /** Helper: build event data for lifecycle events from an AgentRecord. */
   function buildEventData(record: AgentRecord) {
-    const durationMs = record.completedAt ? record.completedAt - record.startedAt : Date.now() - record.startedAt;
+    const durationMs = record.completedAt ? record.completedAt - (record.startedAt ?? 0) : Date.now() - (record.startedAt ?? 0);
     // All three fields are lifetime-accumulated (Σ over every assistant message_end),
     // so they survive compaction together — input + output ≤ total always.
     // tokens is omitted when nothing was ever produced (e.g. agent errored before
@@ -347,7 +347,7 @@ export default async function (pi: ExtensionAPI) {
     manager.abortAll();
     for (const timer of pendingNudges.values()) clearTimeout(timer);
     pendingNudges.clear();
-    batchOrchestrator.dispose();
+    await batchOrchestrator.dispose();
     manager.dispose();
   });
 
