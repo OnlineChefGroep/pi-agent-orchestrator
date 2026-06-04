@@ -106,7 +106,7 @@ export class SubagentScheduler {
     
     // Validate name
     if (!input.name || typeof input.name !== 'string' || input.name.length > MAX_NAME_LENGTH) {
-      errors.push(`Schedule name is required and must be a string <= ${MAX_NAME_LENGTH} characters`);
+      errors.push(`Schedule name must be <= ${MAX_NAME_LENGTH} characters`);
     }
     
     // Validate description
@@ -116,7 +116,7 @@ export class SubagentScheduler {
     
     // Validate prompt size
     if (!input.prompt || typeof input.prompt !== 'string' || input.prompt.length > MAX_PROMPT_SIZE) {
-      errors.push(`Prompt is required and must be a string <= ${MAX_PROMPT_SIZE} characters`);
+      errors.push(`Prompt must be <= ${MAX_PROMPT_SIZE} characters`);
     }
     
     // Validate schedule format and bounds

@@ -6,7 +6,7 @@
  */
 
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { type Component, matchesKey, type TUI, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { type Component, matchesKey, type TUI, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { getUiStyle } from "../agent-registry.js";
 import { extractText } from "../context.js";
 import type { AgentRecord } from "../types.js";
@@ -14,7 +14,7 @@ import { getLifetimeTotal, getSessionContextPercent } from "../usage.js";
 import { buildInvocationTags, describeActivity, formatDuration, formatSessionTokens, getDisplayName, getPromptModeLabel } from "./agent-format.js";
 import type { AgentActivity } from "./agent-ui-types.js";
 import { getTimeSpinnerFrame } from "./animation.js";
-import { activeTheme, getBoxChars, padVisible, type Theme } from "./theme.js";
+import { activeTheme, fastTruncate, getBoxChars, padVisible, type Theme } from "./theme.js";
 
 /** Base lines consumed by chrome: top border + header + header sep + footer sep + footer + bottom border. */
 const CHROME_LINES_BASE = 6;
@@ -86,7 +86,7 @@ export class ConversationViewer implements Component {
     const lines: string[] = [];
 
     const row = (content: string) => {
-      const body = truncateToWidth(padVisible(content, innerW), innerW);
+      const body = fastTruncate(padVisible(content, innerW), innerW);
       if (activeUiStyle === "plain") {
         return `  ${body}  `;
       }
@@ -388,9 +388,9 @@ export class ConversationViewer implements Component {
       } else if (activeUiStyle === "plain") {
         runningLineStr = `  ${spinnerFrame} Hermes is working: ${act}`;
       }
-      lines.push(truncateToWidth(runningLineStr, width));
+      lines.push(fastTruncate(runningLineStr, width));
     }
 
-    return lines.map(l => truncateToWidth(l, width));
+    return lines.map(l => fastTruncate(l, width));
   }
 }
