@@ -451,6 +451,11 @@ export class AgentDashboard implements Component {
         else { this.topSortKey = "toolUses"; this.topSortAsc = false; }
         this.topPage = 0;
         this.requestRender();
+      } else if (matchesKey(data, "l")) {
+        if (this.topSortKey === "lastSeen") this.topSortAsc = !this.topSortAsc;
+        else { this.topSortKey = "lastSeen"; this.topSortAsc = false; }
+        this.topPage = 0;
+        this.requestRender();
       } else if (matchesKey(data, "n")) {
         if (this.topSortKey === "name") this.topSortAsc = !this.topSortAsc;
         else { this.topSortKey = "name"; this.topSortAsc = false; }

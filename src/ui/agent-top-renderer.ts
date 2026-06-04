@@ -14,7 +14,7 @@ import type { DashboardTheme } from "./theme.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type SortKey = "tokens" | "turns" | "duration" | "toolUses" | "name";
+export type SortKey = "tokens" | "turns" | "duration" | "toolUses" | "name" | "lastSeen";
 
 export interface AgentTopEntry {
   id: string;
@@ -24,6 +24,7 @@ export interface AgentTopEntry {
   turns: number;
   toolUses: number;
   durationMs: number;
+  lastSeenMs: number | undefined;
 }
 
 // ── Data extraction ───────────────────────────────────────────────────────────
@@ -49,6 +50,7 @@ export function getAgentTopEntries(
       turns,
       toolUses,
       durationMs,
+      lastSeenMs: act?.lastSeenMs,
     };
   });
 }
@@ -65,6 +67,7 @@ export function sortEntries(
     else if (key === "turns") cmp = a.turns - b.turns;
     else if (key === "toolUses") cmp = a.toolUses - b.toolUses;
     else if (key === "duration") cmp = a.durationMs - b.durationMs;
+    else if (key === "lastSeen") cmp = (a.lastSeenMs ?? 0) - (b.lastSeenMs ?? 0);
     return asc ? cmp : -cmp;
   });
 }
@@ -113,6 +116,19 @@ function topStatusColor(status: string, fg: (c: string, t: string) => string): s
   return fg("dim", status);
 }
 
+/** Format lastSeenMs as a relative time string (e.g. "now", "5s", "2m", "1h"). */
+function formatLastSeen(lastSeenMs: number | undefined): string {
+  if (lastSeenMs === undefined) return "—";
+  const secs = Math.floor((Date.now() - lastSeenMs) / 1000);
+  if (secs < 5) return "now";
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
+}
+
 /**
  * Render the agent top table as an array of display lines.
  *
@@ -137,8 +153,8 @@ export function renderTopTable(
 ): string[] {
   const theme = createTopThemeAdapter(th);
 
-  const headers = ["NAME", "STATUS", "TOKENS", "TURNS", "TOOLS", "DURATION"];
-  const colWidths = [18, 10, 12, 10, 10, 12];
+  const headers = ["NAME", "STATUS", "TOKENS", "TURNS", "TOOLS", "DURATION", "LAST"];
+  const colWidths = [18, 10, 10, 10, 10, 12, 7];
   const minW = colWidths.reduce((a, b) => a + b, 0) + 20;
   const w = Math.max(width, minW);
 
@@ -166,7 +182,8 @@ export function renderTopTable(
     renderHeaderCell(headers[2], colWidths[2]) + " " +
     renderHeaderCell(headers[3], colWidths[3]) + " " +
     renderHeaderCell(headers[4], colWidths[4]) + " " +
-    renderHeaderCell(headers[5], colWidths[5]),
+    renderHeaderCell(headers[5], colWidths[5]) + " " +
+    renderHeaderCell(headers[6], colWidths[6]),
   );
 
   // Divider
@@ -187,13 +204,17 @@ export function renderTopTable(
     const turns = formatTurns(e.turns).padStart(colWidths[3]);
     const tools = `${e.toolUses}`.padStart(colWidths[4]);
     const dur = formatMs(e.durationMs).padStart(colWidths[5]);
+    const last = formatLastSeen(e.lastSeenMs);
+    // Color "now" / recent activity green, stale activity muted
+    const lastColor = last === "now" ? "success" : last === "—" ? "dim" : "muted";
     lines.push(
       `${theme.fg("dim", "│")} ${theme.fg("accent", name)} ${theme.fg("dim", "|")} ` +
       `${status} ${theme.fg("dim", "|")} ` +
       `${theme.fg("muted", tokens)} ${theme.fg("dim", "|")} ` +
       `${theme.fg("muted", turns)} ${theme.fg("dim", "|")} ` +
       `${theme.fg("muted", tools)} ${theme.fg("dim", "|")} ` +
-      `${theme.fg("dim", dur)}`,
+      `${theme.fg("dim", dur)} ${theme.fg("dim", "|")} ` +
+      `${theme.fg(lastColor, last.padStart(colWidths[6]))}`,
     );
   }
 
