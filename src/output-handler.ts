@@ -161,26 +161,26 @@ function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" |
   if (format === "text") {
     const roots: AgentRecord[] = [];
     const childrenMap = new Map<string, AgentRecord[]>();
-    const recordMap = new Map<string, AgentRecord>();
+    const nodeMap = new Map<string, AgentRecord>();
 
-    for (const record of records) {
-      recordMap.set(record.id, record);
-      if (!record.parentId) {
-        roots.push(record);
+    for (const r of records) {
+      nodeMap.set(r.id, r);
+      if (!r.parentId) {
+        roots.push(r);
       } else {
-        if (!childrenMap.has(record.parentId)) {
-          childrenMap.set(record.parentId, []);
+        if (!childrenMap.has(r.parentId)) {
+          childrenMap.set(r.parentId, []);
         }
-        childrenMap.get(record.parentId)!.push(record);
+        childrenMap.get(r.parentId)!.push(r);
       }
     }
 
-    const treeParts: string[] = [];
+    let out = "";
     const render = (nodeId: string, indent: string, isLast: boolean) => {
-      const r = recordMap.get(nodeId);
+      const r = nodeMap.get(nodeId);
       if (!r) return;
       const branch = indent ? (isLast ? "└─ " : "├─ ") : "";
-      treeParts.push(`${indent}${branch}${r.id} (${r.type}) [${r.status}]\n`);
+      out += `${indent}${branch}${r.id} (${r.type}) [${r.status}]\n`;
       const children = childrenMap.get(nodeId) || [];
       for (let i = 0; i < children.length; i++) {
         render(children[i].id, indent + (indent ? (isLast ? "   " : "│  ") : ""), i === children.length - 1);
