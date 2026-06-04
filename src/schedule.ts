@@ -19,8 +19,8 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Cron } from "croner";
 import { nanoid } from "nanoid";
-import { logger } from "./logger.js";
 import type { AgentManager } from "./agent-manager.js";
+import { logger } from "./logger.js";
 import { resolveModel } from "./model-resolver.js";
 import type { ScheduleStore } from "./schedule-store.js";
 import type { IsolationMode, ScheduledSubagent, SubagentType, ThinkingLevel } from "./types.js";
