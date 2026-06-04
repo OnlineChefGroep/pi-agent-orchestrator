@@ -175,13 +175,23 @@ Extracts raw text primitive from message block structures.
 
 ```ts
 interface SubagentsSettings {
-  maxConcurrent: number;        // Process threshold (default 3)
-  defaultMaxTurns: number;      // Integer limit (0 = disabled)
-  graceTurns: number;           // Terminate allowance (default 3)
-  defaultJoinMode: JoinMode;    // Topology mode
-  schedulingEnabled: boolean;   // Cron toggle
-  animationStyle: "dots" | "line" | "minimal";
-  uiStyle: "premium" | "retro" | "plain" | "cinematic";
+  maxConcurrent?: number;              // Max concurrently running agents (default 4)
+  maxAgentsPerSession?: number;         // Hard cap on total agents spawned per session
+  maxTotalTurnsPerSession?: number;     // Hard cap on cumulative turns across the session
+  defaultMaxTurns?: number;             // Max turns per agent (0 = unlimited)
+  graceTurns?: number;                // Wrap-up turns before forced kill (default 5)
+  defaultJoinMode?: JoinMode;          // Agent join topology (default: "smart")
+  schedulingEnabled?: boolean;         // Master switch for cron scheduling (default: true)
+  animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";  // Spinner style (default: "braille")
+  uiStyle?: "premium" | "retro" | "plain" | "cinematic";  // UI theme (default: "premium")
+  cinematicEnabled?: boolean;          // Enable cinematic Go TUI sidecar when uiStyle is "cinematic" (default: true)
+  showActivityStream?: boolean;        // Show real-time activity stream in widget (default: true)
+  showTokenUsage?: boolean;            // Show token usage and context fill percentage (default: true)
+  showTurnProgress?: boolean;          // Show turn progress (current/max) for running agents (default: true)
+  orchestrationMode?: "auto" | "single" | "swarm" | "crew";  // Execution topology (default: "auto")
+  dashboardRefreshInterval?: number;   // Dashboard refresh interval in ms (default: 750, min: 100, max: 60000)
+  sessionMaxSpawns?: number;           // Guardrail: max agents spawned per session
+  sessionMaxTurns?: number;            // Guardrail: max cumulative turns per session
 }
 ```
 
@@ -239,9 +249,10 @@ interface AgentRecord {
 
 **FILE:** `src/types.ts`
 
-- `"await"` — Synchronous block, wait for return payload.
-- `"fire-and-forget"` — Asynchronous fork, detached execution.
-- `"notify"` — Asynchronous fork, transmit payload to parent on termination.
+- `"async"` — Asynchronous fork, detached execution (default).
+- `"group"` — Synchronous barrier: waits for all agents in the group to finish, then emits a single grouped notification.
+- `"smart"` — Smart selection: automatically chooses the best join strategy based on context.
+- `"swarm"` — Swarm mode: dynamic collaborative multi-agent processing with runtime join/leave.
 
 ---
 

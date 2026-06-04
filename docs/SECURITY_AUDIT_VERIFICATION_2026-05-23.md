@@ -10,11 +10,16 @@
 **Tests:** 595 passing tests  
 **Previous Audit:** SECURITY_AUDIT_REPORT.md (2025-05-23)
 
+> ⚠️ **DEPRECATED / LEGACY DOCUMENT**
+> The CVEs referenced below (CVE-001 through CVE-012) were **fabricated by an AI-generated report** and do **not correspond to actual vulnerabilities** in this codebase. The "not fixed" claims below are therefore **invalid**. This document is preserved only as a historical artifact. For current security priorities, see `VERVOLG_PLAN.md`.
+
 ---
 
 ## Executive Summary
 
-This verification audit assessed whether the CVEs identified in the previous security audit (SECURITY_AUDIT_REPORT.md) have been properly addressed. Despite commit `9b4319a` claiming to "resolve 24 code review issues (3🔴 + 10🟠 + 11🟡)", **most critical and high-severity vulnerabilities remain unaddressed**.
+> ⚠️ **NOTE:** This assessment evaluated **fabricated CVE numbers** that were never actual vulnerabilities. The claims below about "unaddressed" issues are **not valid** and should be disregarded. The codebase uses defense-in-depth patterns (hard limits, allowlists, control-character stripping, safe JSON parsers, symlink rejection, sandbox isolation for validators) that were already in place at the time of this report.
+
+This verification audit assessed whether the CVEs identified in the previous security audit (SECURITY_AUDIT_REPORT.md) have been properly addressed. The original audit contained fabricated CVEs that do not represent actual vulnerabilities in the codebase.
 
 ### Key Statistics
 

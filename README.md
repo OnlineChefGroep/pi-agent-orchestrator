@@ -10,7 +10,7 @@
 Bring autonomous sub-agents to Pi. Spawn specialized agents, enforce strict budgets, execute structured handoffs, and manage agent swarms. All monitored through a high-density, interactive TUI dashboard. 
 
 **STATUS:** ACTIVE
-**VERSION:** 0.10.1
+**VERSION:** 0.10.3
 **RUNTIME:** Node.js >= 22
 **HOST:** pi >= 0.70.5
 **LICENSE:** MIT
@@ -118,7 +118,7 @@ The cinematic dashboard provides real-time telemetry rendering via an independen
 Package identifier: `@onlinechefgroep/pi-subagents-tui`
 
 1. Execute: `pi install npm:@onlinechefgroep/pi-subagents-tui`
-2. Configure parameter: `subagents.cinematic.uiStyle = "cinematic"`
+2. Configure parameter: `subagents.uiStyle = "cinematic"`
 
 Degrades gracefully to the standard terminal display if the sidecar is absent.
 
@@ -138,16 +138,21 @@ Manage via `pi settings` CLI or direct configuration injection.
 
 | Parameter | Default | Function |
 |---|---|---|
-| `subagents.levelLimit` | `5` | Absolute depth ceiling for agent hierarchies |
-| `subagents.taskBudget` | `unlimited` | Concurrent execution limit |
-| `subagents.orchestrationMode` | `spawn` | Default topology: `spawn`, `parallel`, `sequential` |
-| `subagents.dashboardRefreshInterval` | `5000` | Telemetry refresh rate (ms) |
-| `subagents.compaction.keepTurns` | `5` | Memory retention limit per agent |
-| `subagents.deferredContext` | `true` | Lazy boundary context compilation |
-| `subagents.validators.enabled` | `true` | Adversarial validation enforcement |
-| `subagents.swarm.enabled` | `true` | Swarm mode activation |
-| `subagents.cinematic.animation` | `"smooth"` | TUI render mode |
-| `subagents.cinematic.uiStyle` | `"dark"` | TUI visual theme |
+| `subagents.defaultMaxTurns` | `0` (unlimited) | Maximum turns per agent (`0` = unlimited) |
+| `subagents.maxConcurrent` | `4` | Maximum concurrently running agents |
+| `subagents.orchestrationMode` | `auto` | Execution topology: `auto`, `single`, `swarm`, `crew` |
+| `subagents.dashboardRefreshInterval` | `750` | Dashboard refresh interval in ms (min 100, max 60000) |
+| `subagents.maxAgentsPerSession` | — | Optional hard cap on total agents spawned per session |
+| `subagents.maxTotalTurnsPerSession` | — | Optional hard cap on cumulative turns across the session |
+| `subagents.graceTurns` | `5` | Wrap-up turns before forced termination |
+| `subagents.defaultJoinMode` | `smart` | Agent join topology: `async`, `group`, `smart`, `swarm` |
+| `subagents.animationStyle` | `"braille"` | Spinner style: `braille`, `dots`, `lines`, `classic`, `none` |
+| `subagents.uiStyle` | `"premium"` | UI theme: `premium`, `retro`, `plain`, `cinematic` |
+| `subagents.sessionMaxSpawns` | — | Guardrail: max agents spawned per session |
+| `subagents.sessionMaxTurns` | — | Guardrail: max cumulative turns per session |
+| `subagents.showActivityStream` | `true` | Show real-time activity stream in widget |
+| `subagents.showTokenUsage` | `true` | Show token usage and context fill percentage |
+| `subagents.showTurnProgress` | `true` | Show turn progress (current/max) for running agents |
 
 ---
 
@@ -162,7 +167,7 @@ pi host
         ├── AgentDashboard (live telemetry, vim navigation)
         ├── AgentRunner (spawn → execute → handoff → validate)
         ├── SwarmCoordinator (cluster topology management)
-        ├── ScheduleStore (file-backed persistence, PID locks)
+        ├── ScheduleStore (file-backed persistence, proper-lockfile atomic locks)
         ├── Hooks (lifecycle events)
         └── PartitionedState (strict tool isolation boundaries)
 

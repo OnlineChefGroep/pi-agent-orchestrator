@@ -28,7 +28,7 @@ ES modules only (`"type": "module"`). No CommonJS.
 ## Adding built-in agents or settings
 
 - New agent type → update `src/default-agents.ts` + `test/default-agents.test.ts` + `README.md`
-- New setting → update `src/settings.ts` (interface + defaults) + `src/output-handler.ts` (`buildSettingsSnapshot` + settings menu)
+- New setting → update `src/settings.ts` (interface + defaults) + `src/output-handler.ts` (`buildSettingsSnapshot` + settings menu) + `docs/api-reference.md`
 
 ## Commit style
 
@@ -37,6 +37,10 @@ Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
 ## Optional peer deps
 
 `@onlinechef/context-mode` enables `ctx_*` sandbox tools. `@onlinechefgroep/pi-subagents-tui` enables the cinematic TUI sidecar. Code paths for both are gated behind feature detection (`src/context-mode-bridge.ts`, `src/ui/agent-widget.ts`).
+
+## Settings reference
+
+All runtime-configurable settings are defined in `src/settings.ts` (`SubagentsSettings` interface) and surfaced through `/agents → Settings`. See `docs/api-reference.md` for the full settings schema.
 
 ## Architecture at a glance
 

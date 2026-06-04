@@ -96,7 +96,7 @@ npm test -- test/default-agents.test.ts
 npm test -- --coverage
 ```
 
-**Known issue:** On Windows, `schedule.test.ts` and `schedule-store.test.ts` have pre-existing flaky tests related to temp directory races. These are tracked separately and should not block PRs.
+**Known issue:** On Windows, `schedule.test.ts` and `schedule-store.test.ts` have pre-existing flaky tests related to temp directory races. CI marks these `continue-on-error`. These failures should not block PRs or dev workflow on Windows.
 
 ---
 
@@ -123,6 +123,7 @@ If you add new settings, update:
 
 - `src/settings.ts` — add to `SubagentsSettings` interface and defaults
 - `src/output-handler.ts` — wire into `buildSettingsSnapshot` and settings menu
+- `docs/api-reference.md` — add to the public API settings documentation
 
 ---
 

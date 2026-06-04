@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.10.3 (2026-06-04)
+
+### Fixes
+- Fixed `.gitignore` merge conflict after integrating tool context extraction v2.
+- Restored agent tool typing compatibility in extracted modules.
+- Added docstrings to refactored tool context modules.
+- Resolved local `node_modules` sync issue (`proper-lockfile` was declared in `package.json` but not installed locally).
+
+### Documentation
+- Updated README version to 0.10.3 and corrected all settings parameters to match actual codebase defaults.
+- Updated CHANGELOG with v0.10.3 release entry.
+- Created `VERVOLG_PLAN.md` as living roadmap with accurate completion status.
+- Updated security audit docs with clear deprecation notices (CVEs were fabricated, no action required).
+- Updated `docs/architecture.md` with missing modules (`batch-orchestrator`, `telemetry`, `logger`, etc.).
+- Updated `docs/api-reference.md` with complete `SubagentsSettings` interface.
+- Updated `AGENTS.md` and `CONTRIBUTING.md` with current test counts and branch workflow.
+
+### Metrics
+- 795 tests, 46 test files.
+
+---
+
 ## v0.10.1 (2026-05-29)
 
 ### Fixes
