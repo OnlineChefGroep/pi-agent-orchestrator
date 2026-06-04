@@ -304,7 +304,7 @@ export default async function (pi: ExtensionAPI) {
     } catch (err) {
       // Scheduling is non-essential — log and move on so the rest of the
       // extension keeps working if e.g. .pi/ is unwritable.
-      logger.warn("[pi-subagents] Failed to start scheduler:", { error: err instanceof Error ? err.message : String(err) });
+      logger.warn("Failed to start scheduler:", { error: err instanceof Error ? err.message : String(err) });
     }
   }
 
