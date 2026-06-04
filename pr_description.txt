@@ -1,3 +1,0 @@
-🎯 **What:** Adding comprehensive unit tests for `GroupJoinManager` in `src/group-join.ts`.
-📊 **Coverage:** The tests cover the group registration logic (`registerGroup`), checks (`isGrouped`), bypassing ungrouped agents (`onAgentComplete`), and timer logic handling full group deliveries before timeout (`DEFAULT_TIMEOUT`), partial timeout deliveries, and consecutive straggler re-batch grouping with its shorter custom timeout (`STRAGGLER_TIMEOUT`). Proper clear down behavior on `dispose()` is also validated.
-✨ **Result:** Enhanced the codebase reliability by providing robust, deterministic 100% test coverage around `GroupJoinManager` using mocked vitest timers (`vi.useFakeTimers()`).
