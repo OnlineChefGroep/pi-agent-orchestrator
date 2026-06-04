@@ -92,7 +92,7 @@ describe("telemetry", () => {
       emitTelemetry("agent:validation-failed", payload);
 
       expect(logger.warn).toHaveBeenCalledWith(
-        "[telemetry] security event: agent:validation-failed",
+        "security event: agent:validation-failed",
         { payload }
       );
     });

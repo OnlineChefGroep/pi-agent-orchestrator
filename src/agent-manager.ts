@@ -255,7 +255,7 @@ export class AgentManager {
         isBackground: options.isBackground ?? false,
       })
       .catch((err) => {
-        logger.warn(`[pi-subagents] Hook dispatch failed:`, { error: err instanceof Error ? err.message : String(err) });
+        logger.warn(`Hook dispatch failed:`, { error: err instanceof Error ? err.message : String(err) });
       });
 
     const args: SpawnArgs = { pi, ctx, type, prompt, options };
