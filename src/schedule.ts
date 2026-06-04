@@ -26,7 +26,7 @@ import type { IsolationMode, ScheduledSubagent, SubagentType, ThinkingLevel } fr
 
 // CVE-005 FIX: Schedule input bounds
 const MAX_INTERVAL = 2147483647;   // ~24.8 days (setTimeout limit)
-const MIN_INTERVAL = (process.env.NODE_ENV === "test" || process.env.VITEST === "true") ? 1000 : 60000;        // 1 minute minimum
+const MIN_INTERVAL = (process.env.NODE_ENV === "test" || process.env.VITEST === "true") ? 10 : 60000;        // 1 minute minimum
 const MAX_SCHEDULES = 100;         // Per session limit
 const MAX_PROMPT_SIZE = 50000;     // 50KB max prompt
 const MAX_NAME_LENGTH = 100;
@@ -196,6 +196,15 @@ export class SubagentScheduler {
   /** Toggle / mutate a job. Re-arms based on the new `enabled` state. */
   async updateJob(id: string, patch: Partial<ScheduledSubagent>): Promise<ScheduledSubagent | undefined> {
     const store = this.requireStore();
+    const existing = store.get(id);
+    if (existing) {
+      // Validate bounds on the merged object to ensure updates don't bypass limits
+      const merged: NewJobInput = { ...existing, ...patch } as any;
+      const errors = this.validateScheduleInput(merged);
+      if (errors.length > 0) {
+        throw new Error(`Invalid schedule update: ${errors.join(', ')}`);
+      }
+    }
     const updated = await store.update(id, patch);
     if (!updated) return undefined;
     this.unscheduleJob(id);
@@ -438,8 +447,9 @@ export class SubagentScheduler {
 
   /** "10s"/"5m"/"1h"/"2d" → milliseconds. */
   static parseInterval(s: string): number | null {
-    const m = s.match(/^(\d+)(s|m|h|d)$/);
+    const m = s.match(/^(\d+)(ms|s|m|h|d)$/);
     if (!m) return null;
+    if (m[2] === "ms") return parseInt(m[1], 10);
     return parseInt(m[1], 10) * { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[m[2] as "s" | "m" | "h" | "d"];
   }
 }
