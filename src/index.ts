@@ -264,6 +264,22 @@ export default async function (pi: ExtensionAPI) {
   // Attach the global hook registry to the agent manager
   manager.hooks = hookRegistry;
 
+  // Session budget warning at 80% — emit a pi.events notification so the
+  // user sees it as a non-blocking alert even if the dashboard isn't open.
+  manager.setBudgetWarningHandler((type, usage, limits) => {
+    const threshold = type === "agents_at_80"
+      ? `agent budget 80% used (${usage.spawnedAgents}/${limits.maxAgents})`
+      : `turn budget 80% used (${usage.totalTurns}/${limits.maxTurns})`;
+    pi.events.emit("subagents:budget_warning", {
+      type,
+      usage,
+      limits,
+      threshold,
+      message: `⚠️ Session ${threshold}. Consider /agents → Settings to increase limits.`,
+    });
+    pi.sendMessage({ customType: "subagent-notification", content: `⚠️ Session ${threshold}. Consider /agents → Settings to raise limits.`, display: true });
+  });
+
   // Expose hook registry via Symbol.for() global registry for cross-package access.
   // Extensions and other packages can discover and register hooks by reading:
   //   (globalThis as any)[Symbol.for('pi-subagents:hooks')]
@@ -330,11 +346,13 @@ export default async function (pi: ExtensionAPI) {
 
     // Auth provider validates caller identity using authContext provided in the payload.
   // Using the payload ensures each calling extension has its own rate-limit bucket.
-  const { unsubPing: unsubPingRpc, unsubSpawn: unsubSpawnRpc, unsubStop: unsubStopRpc } = registerRpcHandlers({
+  const { unsubPing: unsubPingRpc, unsubSpawn: unsubSpawnRpc, unsubStop: unsubStopRpc, unsubSessionUsage: unsubSessionUsageRpc, unsubSwarmHealth: unsubSwarmHealthRpc } = registerRpcHandlers({
     events: pi.events,
     pi,
     getCtx: () => currentCtx,
     manager,
+    sessionManager: manager as any,
+    swarmCoordinator: swarmJoin as any,
     authProvider: (_requestId, payload) => {
       const extensionId = payload?.authContext?.extensionId;
       if (extensionId && typeof extensionId === "string") {
@@ -353,6 +371,8 @@ export default async function (pi: ExtensionAPI) {
     unsubSpawnRpc();
     unsubStopRpc();
     unsubPingRpc();
+    unsubSessionUsageRpc?.();
+    unsubSwarmHealthRpc?.();
     currentCtx = undefined;
     delete (globalThis as any)[MANAGER_KEY];
     delete (globalThis as any)[HOOKS_KEY];

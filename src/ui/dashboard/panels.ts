@@ -92,14 +92,56 @@ export function renderDashboardFooter(
   width: number,
   th: DashboardTheme,
   box: BoxChars,
+  agentActivity?: Map<string, { turnCount: number; lastSeenMs?: number }>,
 ): string[] {
   const innerW = Math.max(1, width - 4);
   const primary = "↑↓/jk navigate  ·  space select  ·  enter view  ·  s steer  ·  Shift+K kill";
   const secondary = "p perms  ·  w swarm  ·  r refresh  ·  ? help  ·  q/esc close";
   const both = `${primary}  ·  ${secondary}`;
   const footerText = both.length <= innerW ? both : primary;
+
+  // Activity heatmap: show a compact bar of recent agent activity.
+  // Each segment represents ~30 seconds of activity, colored by intensity.
+  // Only shown when there is activity to visualize.
+  const heatmapLines: string[] = [];
+  if (agentActivity && agentActivity.size > 0) {
+    const now = Date.now();
+    const WINDOW_MS = 5 * 60_000; // 5-minute heatmap window
+    const SEGMENT_MS = 30_000;    // each segment = 30 seconds
+    const SEGMENT_COUNT = 12;     // show 12 segments (6 minutes total)
+
+    const buckets = new Array(SEGMENT_COUNT).fill(0);
+    let activeCount = 0;
+
+    for (const [, act] of agentActivity) {
+      if (!act.lastSeenMs) continue;
+      const age = now - act.lastSeenMs;
+      if (age > WINDOW_MS) continue;
+      activeCount++;
+      const bucketIdx = Math.min(SEGMENT_COUNT - 1, Math.floor((WINDOW_MS - age) / SEGMENT_MS));
+      buckets[bucketIdx]++;
+    }
+
+    if (activeCount > 0) {
+      const maxBucket = Math.max(1, ...buckets);
+      // Unicode block chars for 4-level heat intensity
+      const blocks = ["░", "▒", "▓", "█"];
+      const heatBar = buckets.map((count) => {
+        const level = count === 0 ? 0 : count < maxBucket * 0.33 ? 1 : count < maxBucket * 0.66 ? 2 : 3;
+        return `${th.dim}${blocks[level]}${th.reset}`;
+      }).join("");
+
+      const activeLabel = `${th.accent}◉ ${activeCount} active${th.reset}`;
+      const heatLabel = `${th.dim}heat:${th.reset} ${heatBar}`;
+      const sep = "  ";
+      const label = activeLabel + sep + heatLabel;
+      heatmapLines.push(framedRow(label, innerW, th, box));
+    }
+  }
+
   return [
     borderLine(width, th, box, "mid"),
+    ...heatmapLines,
     framedRow(`${th.dim}${footerText}${th.reset}`, innerW, th, box),
     borderLine(width, th, box, "bottom"),
   ];

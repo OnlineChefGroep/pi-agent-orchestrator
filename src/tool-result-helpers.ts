@@ -32,6 +32,7 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
     responseText: "",
     session: undefined,
     lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
+    lastSeenMs: Date.now(),
   };
 
   const callbacks = {
@@ -44,14 +45,17 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
         }
         state.toolUses++;
       }
+      state.lastSeenMs = Date.now();
       onStreamUpdate?.();
     },
     onTextDelta: (_delta: string, fullText: string) => {
       state.responseText = fullText;
+      state.lastSeenMs = Date.now();
       onStreamUpdate?.();
     },
     onTurnEnd: (turnCount: number) => {
       state.turnCount = turnCount;
+      state.lastSeenMs = Date.now();
       onStreamUpdate?.();
     },
     onSessionCreated: (session: any) => {
