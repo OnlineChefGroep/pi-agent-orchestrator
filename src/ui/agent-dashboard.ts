@@ -35,6 +35,7 @@ import type { AgentActivity } from "./agent-ui-types.js";
 import { RenderMetrics } from "./render-metrics.js";
 import {
   type BoxChars,
+  borderLine,
   type DashboardTheme,
   framedRow,
   getBoxChars,
