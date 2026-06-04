@@ -31,7 +31,7 @@
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.72.0",
     "@earendil-works/pi-coding-agent": ">=0.72.0",
-    "@earendil-works/pi-tui": ">=0.72.0"
+    "@earendil-works/pi-tui": "^0.78.0"
   },
   "peerDependenciesMeta": {
     "@onlinechef/context-mode": {

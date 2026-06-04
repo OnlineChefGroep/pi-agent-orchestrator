@@ -121,7 +121,7 @@ function renderSwarmSection(innerW: number, th: DashboardTheme, box: BoxChars, s
   for (const [swarmId, members] of grouped) {
     const cardW = Math.max(28, innerW - 2);
     const contentW = Math.max(1, cardW - 4);
-    const mode = members.find(m => m.joinMode)?.joinMode ?? "group";
+    const mode = members[0]?.joinMode ?? "group";
     const header = ` ${swarmId} · ${mode} · ${members.length} agents `;
     const dash = box.h.repeat(Math.max(2, cardW - visibleWidth(header) - 2));
     lines.push(` ${th.border}${box.tl}${box.h}${th.reset}${th.highlight}${header}${th.reset}${th.border}${dash}${box.tr}${th.reset}`);
