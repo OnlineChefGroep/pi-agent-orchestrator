@@ -31,6 +31,10 @@ type RenderAgentWidgetOptions = {
   shouldShowFinished(agentId: string, status: string): boolean;
   theme: Theme;
   tui: WidgetTuiLike;
+  /** Current page index for pagination heading (0 = first page). */
+  pageIndex?: number;
+  /** Total page count for pagination heading. */
+  pageCount?: number;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -263,9 +267,25 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
 
   const totalQueuedLines = queuedLines.length;
 
-  const lines: string[] = heatLine
-    ? [truncate(heatLine)]
-    : [truncate(`${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}`)];
+  // ── Safety cap: prevent runaway memory in pathological cases ──
+  if (finishedLines.length > 100) finishedLines.length = 100;
+  if (runningLines.length > 50) runningLines.length = 50;
+  if (queuedLines.length > 50) queuedLines.length = 50;
+
+  const pageIndex = options.pageIndex ?? 0;
+  const pageCount = options.pageCount ?? 1;
+
+  // ── Build heading with optional page indicator ──
+  const lines: string[] = [];
+  if (heatLine) {
+    lines.push(truncate(heatLine));
+  } else if (pageCount > 1) {
+    lines.push(truncate(
+      `${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}  ${theme.fg("dim", `[${pageIndex + 1}/${pageCount}]`)}`,
+    ));
+  } else {
+    lines.push(truncate(`${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}`));
+  }
 
   const maxBody = MAX_WIDGET_LINES - (heatLine ? 1 : 0);
   const totalBody = finishedLines.length + runningLines.length * 2 + totalQueuedLines;
@@ -318,6 +338,18 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     if (hiddenFinished > 0) overflowParts.push(`${hiddenFinished} finished`);
     const overflowText = overflowParts.join(", ");
     lines.push(truncate(`${theme.fg("dim", c_angle)} ${theme.fg("dim", `+${hiddenRunning + hiddenFinished} more (${overflowText})`)}`));
+  }
+
+  // ── Scroll hint: show when there are multiple pages ──
+  if (pageCount > 1 && lines.length < MAX_WIDGET_LINES) {
+    const hasPrev = pageIndex > 0;
+    const hasNext = pageIndex < pageCount - 1;
+    const hint = hasPrev && hasNext
+      ? `${theme.fg("dim", "↑↓ scroll for more")}`
+      : hasPrev
+        ? `${theme.fg("dim", "↑ scroll up")}`
+        : `${theme.fg("dim", "↓ scroll down")}`;
+    lines.push(truncate(`${theme.fg("dim", c_angle)} ${hint}`));
   }
 
   return lines;

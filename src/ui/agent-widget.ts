@@ -13,9 +13,9 @@
  */
 
 import type { AgentManager } from "../agent-manager.js";
+import type { AgentRecord } from "../types.js";
 import type { AgentActivity, UICtx } from "./agent-ui-types.js";
 import { ERROR_STATUSES, renderAgentWidget } from "./agent-widget-renderer.js";
-
 import type { Theme } from "./theme.js";
 
 // ---- Constants ----
@@ -25,6 +25,12 @@ const ACTIVE_REFRESH_MS = 200;
 
 /** Idle refresh interval when all agents are finished — animates spinner cheaply. */
 const IDLE_REFRESH_MS = 1000;
+
+/**
+ * Virtual scroll page size: max body lines per page.
+ * Matches MAX_WIDGET_LINES in agent-widget-renderer minus heading.
+ */
+const PAGE_SIZE = 11;
 
 // ---- Widget manager ----
 
@@ -64,6 +70,17 @@ export class AgentWidget {
 
   /** Debounce timer for coalescing rapid update() calls during spawn bursts. */
   private updateTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // ── Virtual scrolling ──
+
+  /** Current scroll page (0 = first). */
+  private scrollPage = 0;
+
+  /** Total pages available based on current agent count. */
+  private maxPages = 1;
+
+  // No totalAgentCount field — page count is derived from line estimates
+  // in getVisibleWindow().
 
   /** Minimum gap between consecutive update() calls (16ms ~ 60fps). */
   private static readonly SPAWN_BATCH_MS = 16;
@@ -139,14 +156,99 @@ export class AgentWidget {
     }
   }
 
+  /** Get the agents for the current scroll page. */
+  private getVisibleWindow(agents: AgentRecord[]): AgentRecord[] {
+    // Categorize agents by display priority: running first, then queued, then finished.
+    const running = agents.filter(a => a.status === "running");
+    const queued = agents.filter(a => a.status === "queued");
+    const finished = agents.filter(a => a.status !== "running" && a.status !== "queued");
+
+    // Estimate lines per agent: running=2, queued=1, finished=1.
+    // Build flat line estimate array.
+    const lineEstimates: { agent: AgentRecord; lines: number }[] = [];
+    for (const a of running) lineEstimates.push({ agent: a, lines: 2 });
+    for (const a of queued) lineEstimates.push({ agent: a, lines: 1 });
+    for (const a of finished) lineEstimates.push({ agent: a, lines: 1 });
+
+    this.maxPages = Math.max(1, Math.ceil(
+      lineEstimates.reduce((sum, e) => sum + e.lines, 0) / PAGE_SIZE,
+    ));
+
+    // Clamp scroll page
+    if (this.scrollPage >= this.maxPages) {
+      this.scrollPage = Math.max(0, this.maxPages - 1);
+    }
+
+    // Compute visible window: slice from lineEstimates
+    const visible: AgentRecord[] = [];
+    let remainingLines = PAGE_SIZE;
+    let skippedLines = this.scrollPage * PAGE_SIZE;
+
+    for (const est of lineEstimates) {
+      if (skippedLines > 0) {
+        // Skip agents entirely within the skip region
+        if (est.lines <= skippedLines) {
+          skippedLines -= est.lines;
+          continue;
+        }
+        // Partial skip: agent starts mid-page
+        skippedLines = 0;
+        // This agent is partially visible — show it
+        visible.push(est.agent);
+        remainingLines -= est.lines;
+      } else if (remainingLines >= est.lines) {
+        visible.push(est.agent);
+        remainingLines -= est.lines;
+      } else {
+        // Agent doesn't fit — stop
+        break;
+      }
+    }
+
+    return visible;
+  }
+
+  /** Scroll one page up (toward newest agents). */
+  scrollUp(): void {
+    if (this.scrollPage > 0) {
+      this.scrollPage--;
+      this.dirty = true;
+      this.update();
+    }
+  }
+
+  /** Scroll one page down (toward older/finished agents). */
+  scrollDown(): void {
+    if (this.scrollPage < this.maxPages - 1) {
+      this.scrollPage++;
+      this.dirty = true;
+      this.update();
+    }
+  }
+
+  /** Get current scroll page. */
+  getScrollPage(): number {
+    return this.scrollPage;
+  }
+
+  /** Get total pages. */
+  getMaxPages(): number {
+    return this.maxPages;
+  }
+
   private renderWidget(tui: any, theme: Theme): string[] {
+    const allAgents = this.manager.listAgents();
+    const visibleAgents = this.getVisibleWindow(allAgents);
     return renderAgentWidget({
-      agents: this.manager.listAgents(),
+      agents: visibleAgents,
       agentActivity: this.agentActivity,
       frame: this.widgetFrame,
       shouldShowFinished: (agentId, status) => this.shouldShowFinished(agentId, status),
       theme,
       tui,
+      // Pagination info for the heading indicator
+      pageIndex: this.scrollPage,
+      pageCount: this.maxPages,
     });
   }
 
