@@ -460,7 +460,7 @@ Guidelines:
         }
         return textResult(
           record.result?.trim() || record.error?.trim() || "No output.",
-          buildDetails(detailBase, record),
+          buildDetails(detailBase, { ...record, startedAt: record.startedAt ?? 0 }),
         );
       }
 
@@ -625,7 +625,7 @@ Guidelines:
       // Get final token count
       const tokenText = formatLifetimeTokens(fgState);
 
-      const details = buildDetails(detailBase, record, fgState, { tokens: tokenText });
+      const details = buildDetails(detailBase, { ...record, startedAt: record.startedAt ?? 0 }, fgState, { tokens: tokenText });
 
       const fallbackNote = fellBack
         ? `Note: Unknown agent type "${rawType}" — using general-purpose.\n\n`
@@ -635,7 +635,7 @@ Guidelines:
         return textResult(`${fallbackNote}Agent failed: ${record.error}`, details);
       }
 
-      const durationMs = (record.completedAt ?? Date.now()) - record.startedAt;
+      const durationMs = (record.completedAt ?? Date.now()) - (record.startedAt ?? 0);
       const statsParts = [`${record.toolUses} tool uses`];
       if (tokenText) statsParts.push(tokenText);
       return textResult(

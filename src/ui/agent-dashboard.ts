@@ -35,8 +35,8 @@ import {
 import type { AgentActivity } from "./agent-ui-types.js";
 import { framedRow, getBoxChars, getThemeColors } from "./theme.js";
 
-const MIN_VIEWPORT = 5;
-export const DASHBOARD_HEIGHT_PCT = 85;
+const MIN_VIEWPORT = 8;
+export const DASHBOARD_HEIGHT_PCT = 92;
 
 export interface AgentDashboardOptions {
   manager: AgentManager;
@@ -235,7 +235,7 @@ export class AgentDashboard implements Component {
    * @returns The number of chrome lines
    */
   private chromeLines(): number {
-    return 13; // frame + header + detail panel + footer
+    return 16; // header(5) + detail panel(5) + footer(3) + padding(3)
   }
 
   private keepSelectedBodyLineVisible(): void {
@@ -278,7 +278,6 @@ export class AgentDashboard implements Component {
 
     const th = getThemeColors();
     const box = getBoxChars();
-
     // === FIX: Robust width handling for Pi agent terminal ===
     // The overlay sometimes passes a too-small width.
     // We now take the real terminal size as a strong fallback so the
@@ -298,9 +297,6 @@ export class AgentDashboard implements Component {
 
     if (this.showHelp) {
       lines.push(...renderDashboardHelp(innerW, th, box));
-      lines.push(...renderDashboardDetailPanel(safeWidth, th, box, state));
-      lines.push(...renderDashboardFooter(safeWidth, th, box));
-      return lines;
     } else if (this.agents.length === 0) {
       lines.push(...renderDashboardEmpty(innerW, th, box));
     } else {
@@ -360,10 +356,9 @@ export async function showAgentDashboard(
       return new AgentDashboard(tui, { manager, agentActivity, onViewConversation, onAbort, onSteer, onShowPermissions, onSwarmAction }, done);
     },
     {
-      overlay: true,
-      overlayOptions: {
+      overlay: true,        overlayOptions: {
         anchor: "center",
-        width: "94%",
+        width: "98%",
         maxHeight: `${DASHBOARD_HEIGHT_PCT}%`,
       },
     },

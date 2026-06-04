@@ -255,7 +255,7 @@ export class AgentManager {
         isBackground: options.isBackground ?? false,
       })
       .catch((err) => {
-        logger.warn(`[pi-subagents] Hook dispatch failed:`, { error: err instanceof Error ? err.message : String(err) });
+        logger.warn(`Hook dispatch failed:`, { error: err instanceof Error ? err.message : String(err) });
       });
 
     const args: SpawnArgs = { pi, ctx, type, prompt, options };
@@ -335,7 +335,7 @@ export class AgentManager {
         currentLevel: record.currentLevel,
         levelLimit: record.invocation?.levelLimit,
         parentConfig,
-        partitions: childPartitions,
+        partitions: childPartitions ? [...childPartitions] : undefined,
         cwd: worktreeCwd,
         signal: record.abortController!.signal,
         hooks: this.hooks,
@@ -561,7 +561,7 @@ export class AgentManager {
 
   listAgents(): AgentRecord[] {
     return [...this.agents.values()].sort(
-      (a, b) => b.startedAt - a.startedAt,
+      (a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0),
     );
   }
 

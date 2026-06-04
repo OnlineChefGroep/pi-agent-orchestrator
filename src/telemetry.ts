@@ -92,7 +92,7 @@ export function emitTelemetry<E extends TelemetryEventName>(
         handler(payload);
       } catch (err) {
         // Handler errors are logged but don't break the emitter
-        logger.warn(`[pi-subagents] Telemetry handler error for ${event}:`, { error: err instanceof Error ? err.message : String(err) });
+        logger.warn(`Telemetry handler error for ${event}:`, { error: err instanceof Error ? err.message : String(err) });
       }
     }
   } else {

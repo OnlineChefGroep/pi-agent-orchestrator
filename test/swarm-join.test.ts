@@ -21,8 +21,8 @@ describe("SwarmCoordinator", () => {
     it("creates a new swarm with given ID", () => {
       coordinator.registerSwarm("test-swarm", ["agent1", "agent2"], "Test Swarm");
       
-      expect(coordinator.listSwarms()).toContain("test-swarm");
-      expect(coordinator.getSwarmMembers("test-swarm")).toEqual(["agent1", "agent2"]);
+      expect(coordinator.listSwarms().map(s => s.swarmId)).toContain("test-swarm");
+      expect(coordinator.getSwarmMembers("test-swarm").map(s => s.agentId)).toEqual(["agent1", "agent2"]);
     });
 
     it("returns the swarm ID", () => {
@@ -34,7 +34,7 @@ describe("SwarmCoordinator", () => {
       coordinator.registerSwarm("test-swarm", ["agent1"]);
       coordinator.registerSwarm("test-swarm", ["agent2"]);
       
-      expect(coordinator.getSwarmMembers("test-swarm")).toEqual(["agent1", "agent2"]);
+      expect(coordinator.getSwarmMembers("test-swarm").map(s => s.agentId)).toEqual(["agent1", "agent2"]);
     });
 
     it("handles empty initial members", () => {
@@ -49,15 +49,15 @@ describe("SwarmCoordinator", () => {
       const result = coordinator.addAgentToSwarm("test-swarm", "agent2");
       
       expect(result).toBe(true);
-      expect(coordinator.getSwarmMembers("test-swarm")).toEqual(["agent1", "agent2"]);
+      expect(coordinator.getSwarmMembers("test-swarm").map(s => s.agentId)).toEqual(["agent1", "agent2"]);
     });
 
     it("creates swarm on the fly if it doesn't exist", () => {
       const result = coordinator.addAgentToSwarm("new-swarm", "agent1", "New Swarm");
       
       expect(result).toBe(true);
-      expect(coordinator.listSwarms()).toContain("new-swarm");
-      expect(coordinator.getSwarmMembers("new-swarm")).toEqual(["agent1"]);
+      expect(coordinator.listSwarms().map(s => s.swarmId)).toContain("new-swarm");
+      expect(coordinator.getSwarmMembers("new-swarm").map(s => s.agentId)).toEqual(["agent1"]);
     });
 
     it("returns false if swarm is already delivered", () => {
@@ -76,7 +76,7 @@ describe("SwarmCoordinator", () => {
       const result = coordinator.removeAgentFromSwarm("agent1");
       
       expect(result).toBe(true);
-      expect(coordinator.getSwarmMembers("test-swarm")).toEqual(["agent2"]);
+      expect(coordinator.getSwarmMembers("test-swarm").map(s => s.agentId)).toEqual(["agent2"]);
     });
 
     it("returns false if agent not in any swarm", () => {
@@ -88,16 +88,16 @@ describe("SwarmCoordinator", () => {
       coordinator.registerSwarm("test-swarm", ["agent1"]);
       coordinator.removeAgentFromSwarm("agent1");
       
-      expect(coordinator.listSwarms()).not.toContain("test-swarm");
+      expect(coordinator.listSwarms().map(s => s.swarmId)).not.toContain("test-swarm");
     });
   });
 
   describe("createSwarm", () => {
-    it("creates swarm with auto-generated ID", () => {
+    it("creates swarm with auto-generated ID from name", () => {
       const swarmId = coordinator.createSwarm("Auto Swarm");
       
       expect(swarmId).toMatch(/^swarm-/);
-      expect(coordinator.listSwarms()).toContain(swarmId);
+      expect(coordinator.listSwarms().map(s => s.swarmId)).toContain(swarmId);
       expect(coordinator.getSwarmMembers(swarmId)).toEqual([]);
     });
 
@@ -105,8 +105,8 @@ describe("SwarmCoordinator", () => {
       const swarmId1 = coordinator.createSwarm();
       const swarmId2 = coordinator.createSwarm();
       
-      expect(coordinator.listSwarms()).toContain(swarmId1);
-      expect(coordinator.listSwarms()).toContain(swarmId2);
+      expect(coordinator.listSwarms().map(s => s.swarmId)).toContain(swarmId1);
+      expect(coordinator.listSwarms().map(s => s.swarmId)).toContain(swarmId2);
     });
   });
 
@@ -115,9 +115,16 @@ describe("SwarmCoordinator", () => {
       const record: AgentRecord = {
         id: "agent1",
         type: "general-purpose",
+        description: "test",
         status: "completed",
+        toolUses: 0,
+        spawnedAt: Date.now(),
         startedAt: Date.now(),
         completedAt: Date.now(),
+        lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
+        compactionCount: 0,
+        currentLevel: 0,
+        totalSpawned: 0,
       };
       
       const result = coordinator.onAgentComplete(record);
@@ -130,15 +137,22 @@ describe("SwarmCoordinator", () => {
       const record: AgentRecord = {
         id: "agent1",
         type: "general-purpose",
+        description: "test",
         status: "completed",
+        toolUses: 0,
+        spawnedAt: Date.now(),
         startedAt: Date.now(),
         completedAt: Date.now(),
+        lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
+        compactionCount: 0,
+        currentLevel: 0,
+        totalSpawned: 0,
         swarmId: "test-swarm",
       };
       
       const result = coordinator.onAgentComplete(record);
       expect(result).toBe("delivered");
-      expect(deliveryCallback).toHaveBeenCalledWith([record], true, "test-swarm");
+      expect(deliveryCallback).toHaveBeenCalledWith([record], false, "test-swarm", expect.any(Object));
     });
 
     it("returns 'pass' for agent in delivered swarm", () => {
@@ -146,9 +160,16 @@ describe("SwarmCoordinator", () => {
       const record: AgentRecord = {
         id: "agent1",
         type: "general-purpose",
+        description: "test",
         status: "completed",
+        toolUses: 0,
+        spawnedAt: Date.now(),
         startedAt: Date.now(),
         completedAt: Date.now(),
+        lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
+        compactionCount: 0,
+        currentLevel: 0,
+        totalSpawned: 0,
         swarmId: "test-swarm",
       };
       
@@ -170,9 +191,16 @@ describe("SwarmCoordinator", () => {
       const record: AgentRecord = {
         id: "agent1",
         type: "general-purpose",
+        description: "test",
         status: "completed",
+        toolUses: 0,
+        spawnedAt: Date.now(),
         startedAt: Date.now(),
         completedAt: Date.now(),
+        lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
+        compactionCount: 0,
+        currentLevel: 0,
+        totalSpawned: 0,
         swarmId: "test-swarm",
       };
 
@@ -190,16 +218,23 @@ describe("SwarmCoordinator", () => {
       const record: AgentRecord = {
         id: "agent1",
         type: "general-purpose",
+        description: "test",
         status: "completed",
+        toolUses: 0,
+        spawnedAt: Date.now(),
         startedAt: Date.now(),
         completedAt: Date.now(),
+        lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
+        compactionCount: 0,
+        currentLevel: 0,
+        totalSpawned: 0,
         swarmId: "test-swarm",
       };
 
       coordinator.onAgentComplete(record);
       await vi.advanceTimersByTimeAsync(20);
 
-      expect(coordinator.getSwarmMembers("test-swarm")).toEqual(["agent2"]);
+      expect(coordinator.getSwarmMembers("test-swarm").map(s => s.agentId)).toEqual(["agent2"]);
       expect(coordinator.getSwarmIdForAgent("agent1")).toBeUndefined();
       expect(coordinator.getSwarmIdForAgent("agent2")).toBe("test-swarm");
     });
@@ -213,14 +248,14 @@ describe("SwarmCoordinator", () => {
 
     it("listSwarms returns all swarm IDs", () => {
       const swarms = coordinator.listSwarms();
-      expect(swarms).toContain("swarm1");
-      expect(swarms).toContain("swarm2");
+      expect(swarms.map(s => s.swarmId)).toContain("swarm1");
+      expect(swarms.map(s => s.swarmId)).toContain("swarm2");
       expect(swarms.length).toBe(2);
     });
 
     it("getSwarmMembers returns agents for specific swarm", () => {
       const members = coordinator.getSwarmMembers("swarm1");
-      expect(members).toEqual(["agent1", "agent2"]);
+      expect(members.map(s => s.agentId)).toEqual(["agent1", "agent2"]);
     });
 
     it("getSwarmMembers returns empty array for nonexistent swarm", () => {
@@ -241,6 +276,112 @@ describe("SwarmCoordinator", () => {
     });
   });
 
+  describe("straggler behavior", () => {
+    const makeRecord = (id: string, swarmId: string): AgentRecord => ({
+      id,
+      type: "general-purpose",
+      description: "test",
+      status: "completed",
+      toolUses: 0,
+      spawnedAt: Date.now(),
+      startedAt: Date.now(),
+      completedAt: Date.now(),
+      lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
+      compactionCount: 0,
+      currentLevel: 0,
+      totalSpawned: 0,
+      swarmId,
+    });
+
+    it("delivers partial results on main timeout after first completion", async () => {
+      vi.useFakeTimers();
+      coordinator = new SwarmCoordinator(deliveryCallback, 30_000);
+      // Use "batch" strategy so completions are held until timeout/all-done
+      coordinator.createSwarm({ swarmId: "test-swarm", strategy: "batch" });
+      coordinator.addAgentToSwarm("test-swarm", "agent1");
+      coordinator.addAgentToSwarm("test-swarm", "agent2");
+      coordinator.addAgentToSwarm("test-swarm", "agent3");
+
+      const r1 = makeRecord("agent1", "test-swarm");
+      expect(coordinator.onAgentComplete(r1)).toBe("held");
+      expect(deliveryCallback).not.toHaveBeenCalled();
+
+      // Advance past main timeout (30s)
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      // Should deliver partial results with timedOut flag
+      expect(deliveryCallback).toHaveBeenCalledTimes(1);
+      const callArgs = deliveryCallback.mock.calls[0];
+      expect(callArgs[1]).toBe(true); // partial
+      expect(callArgs[2]).toBe("test-swarm");
+      expect(callArgs[3].timedOut).toBe(true);
+      expect(callArgs[3].quorumMet).toBe(false);
+
+      // Completed agent should be cleaned from reverse mapping
+      expect(coordinator.getSwarmIdForAgent("agent1")).toBeUndefined();
+      // Remaining agents should still be in swarm
+      expect(coordinator.getSwarmIdForAgent("agent2")).toBe("test-swarm");
+      expect(coordinator.getSwarmIdForAgent("agent3")).toBe("test-swarm");
+    });
+
+    it("uses shorter straggler timeout after first timeout wave", async () => {
+      vi.useFakeTimers();
+      coordinator = new SwarmCoordinator(deliveryCallback, 30_000);
+      // Use "batch" strategy — completions held until timeout/all-done
+      coordinator.createSwarm({ swarmId: "test-swarm", strategy: "batch" });
+      coordinator.addAgentToSwarm("test-swarm", "agent1");
+      coordinator.addAgentToSwarm("test-swarm", "agent2");
+      coordinator.addAgentToSwarm("test-swarm", "agent3");
+
+      // First agent completes → starts main 30s timeout
+      coordinator.onAgentComplete(makeRecord("agent1", "test-swarm"));
+      await vi.advanceTimersByTimeAsync(30_000);
+      // Main timeout fires → partial delivery, swarm now isStraggler
+
+      deliveryCallback.mockClear();
+
+      // Straggler agent completes → starts straggler timeout (15s)
+      const r2 = makeRecord("agent2", "test-swarm");
+      expect(coordinator.onAgentComplete(r2)).toBe("held");
+      expect(deliveryCallback).not.toHaveBeenCalled();
+
+      // Advance past straggler timeout (15s) but NOT full main timeout
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      // Should deliver straggler partial
+      expect(deliveryCallback).toHaveBeenCalledTimes(1);
+      const callArgs = deliveryCallback.mock.calls[0];
+      expect(callArgs[1]).toBe(true); // partial
+      expect(callArgs[3].timedOut).toBe(true);
+
+      deliveryCallback.mockClear();
+
+      // Final straggler completes immediately (only one left)
+      const r3 = makeRecord("agent3", "test-swarm");
+      expect(coordinator.onAgentComplete(r3)).toBe("delivered");
+      expect(deliveryCallback).toHaveBeenCalledTimes(1);
+      expect(deliveryCallback.mock.calls[0][1]).toBe(false); // not partial - all done
+    });
+
+    it("does not double-deliver if all agents complete before timeout", async () => {
+      vi.useFakeTimers();
+      coordinator = new SwarmCoordinator(deliveryCallback, 30_000);
+      // Use "batch" strategy — timeout-based delivery only
+      coordinator.createSwarm({ swarmId: "test-swarm", strategy: "batch" });
+      coordinator.addAgentToSwarm("test-swarm", "agent1");
+      coordinator.addAgentToSwarm("test-swarm", "agent2");
+
+      coordinator.onAgentComplete(makeRecord("agent1", "test-swarm"));
+      coordinator.onAgentComplete(makeRecord("agent2", "test-swarm"));
+
+      expect(deliveryCallback).toHaveBeenCalledTimes(1);
+
+      // Timeout should not cause re-delivery
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(deliveryCallback).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("dispose", () => {
     it("clears all swarms and mappings", () => {
       coordinator.registerSwarm("swarm1", ["agent1"]);
@@ -258,9 +399,16 @@ describe("SwarmCoordinator", () => {
       const record: AgentRecord = {
         id: "agent1",
         type: "general-purpose",
+        description: "test",
         status: "completed",
+        toolUses: 0,
+        spawnedAt: Date.now(),
         startedAt: Date.now(),
         completedAt: Date.now(),
+        lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
+        compactionCount: 0,
+        currentLevel: 0,
+        totalSpawned: 0,
         swarmId: "swarm1",
       };
       

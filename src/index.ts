@@ -171,7 +171,7 @@ export default async function (pi: ExtensionAPI) {
 
   /** Helper: build event data for lifecycle events from an AgentRecord. */
   function buildEventData(record: AgentRecord) {
-    const durationMs = record.completedAt ? record.completedAt - record.startedAt : Date.now() - record.startedAt;
+    const durationMs = record.completedAt ? record.completedAt - (record.startedAt ?? 0) : Date.now() - (record.startedAt ?? 0);
     // All three fields are lifetime-accumulated (Σ over every assistant message_end),
     // so they survive compaction together — input + output ≤ total always.
     // tokens is omitted when nothing was ever produced (e.g. agent errored before
@@ -304,7 +304,7 @@ export default async function (pi: ExtensionAPI) {
     } catch (err) {
       // Scheduling is non-essential — log and move on so the rest of the
       // extension keeps working if e.g. .pi/ is unwritable.
-      logger.warn("[pi-subagents] Failed to start scheduler:", { error: err instanceof Error ? err.message : String(err) });
+      logger.warn("Failed to start scheduler:", { error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -322,13 +322,20 @@ export default async function (pi: ExtensionAPI) {
     scheduler.stop();
   });
 
-  // TODO: Implement proper authProvider to verify extension identity.
-  // Currently all calls authenticate as "legacy" with a shared rate limit bucket.
+    // Auth provider validates caller identity using authContext provided in the payload.
+  // Using the payload ensures each calling extension has its own rate-limit bucket.
   const { unsubPing: unsubPingRpc, unsubSpawn: unsubSpawnRpc, unsubStop: unsubStopRpc } = registerRpcHandlers({
     events: pi.events,
     pi,
     getCtx: () => currentCtx,
     manager,
+    authProvider: (_requestId, payload) => {
+      const extensionId = payload?.authContext?.extensionId;
+      if (extensionId && typeof extensionId === "string") {
+        return { extensionId, extensionName: payload?.authContext?.extensionName };
+      }
+      return undefined; // Will throw UNAUTHORIZED in cross-extension-rpc.ts if undefined
+    },
   });
 
   // Broadcast readiness so extensions loaded after us can discover us
@@ -347,7 +354,7 @@ export default async function (pi: ExtensionAPI) {
     manager.abortAll();
     for (const timer of pendingNudges.values()) clearTimeout(timer);
     pendingNudges.clear();
-    batchOrchestrator.dispose();
+    await batchOrchestrator.dispose();
     manager.dispose();
   });
 

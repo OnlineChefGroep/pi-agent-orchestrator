@@ -179,7 +179,7 @@ describe("cross-extension RPC", () => {
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
       expect(reply).toHaveBeenCalledWith({ success: true, data: { id: "agent-42" } });
-      expect(authProvider).toHaveBeenCalledWith("req-auth");
+      expect(authProvider).toHaveBeenCalledWith("req-auth", expect.any(Object));
     });
 
     it("rejects spawn when authProvider is configured but returns no identity", async () => {

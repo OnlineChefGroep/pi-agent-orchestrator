@@ -99,7 +99,7 @@ function createSession(finalText: string) {
 
 const ctx = {
   cwd: "/tmp",
-  model: undefined,
+  model: { provider: "test", id: "test-model" },
   modelRegistry: { find: vi.fn(), getAvailable: vi.fn(() => []) },
   getSystemPrompt: vi.fn(() => "parent prompt"),
   sessionManager: { getBranch: vi.fn(() => []) },

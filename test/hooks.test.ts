@@ -11,12 +11,12 @@ import {
 } from "../src/hooks.js";
 
 /** Build a standard payload for testing. */
-function payload(
+function _payload(
   event: HookEvent,
   agentId = "test-agent-1",
   data?: Record<string, unknown>,
 ): HookPayload {
-  return { event, agentId, ...(data ? { data } : {}) };
+  return { event, agentId, timestamp: Date.now(), ...(data ? { data } : {}) };
 }
 
 describe("HookRegistry", () => {
@@ -39,7 +39,7 @@ describe("HookRegistry", () => {
 
       expect(handler).toHaveBeenCalledOnce();
       expect(handler).toHaveBeenCalledWith(
-        payload("subagent:start", "test-agent-1"),
+        expect.objectContaining({ event: "subagent:start", agentId: "test-agent-1" }),
       );
     });
 
@@ -209,7 +209,7 @@ describe("HookRegistry", () => {
   });
 
   describe("getHandlers", () => {
-    it("returns the correct Map structure", () => {
+    it("returns the correct Map structure with metadata", () => {
       const h1 = vi.fn();
       const h2 = vi.fn();
 
@@ -219,8 +219,8 @@ describe("HookRegistry", () => {
       const map = registry.getHandlers();
 
       expect(map).toBeInstanceOf(Map);
-      expect(map.get("subagent:start")).toEqual([h1]);
-      expect(map.get("subagent:end")).toEqual([h2]);
+      expect(map.get("subagent:start")).toEqual([expect.objectContaining({ id: expect.any(String), priority: expect.any(Number), fatal: expect.any(Boolean) })]);
+      expect(map.get("subagent:end")).toEqual([expect.objectContaining({ id: expect.any(String), priority: expect.any(Number), fatal: expect.any(Boolean) })]);
       expect(map.get("turn:start")).toBeUndefined();
     });
 
@@ -242,11 +242,13 @@ describe("HookRegistry", () => {
         args: { filePath: "/tmp/test" },
       });
 
-      expect(handler).toHaveBeenCalledWith({
-        event: "tool:call",
-        agentId: "agent-x",
-        data: { toolName: "read", args: { filePath: "/tmp/test" } },
-      });
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "tool:call",
+          agentId: "agent-x",
+          data: { toolName: "read", args: { filePath: "/tmp/test" } },
+        }),
+      );
     });
   });
 });

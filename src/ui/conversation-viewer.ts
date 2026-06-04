@@ -118,7 +118,7 @@ export class ConversationViewer implements Component {
         : this.record.status === "error"
           ? th.fg("error", "✗")
           : th.fg("dim", "○");
-    const duration = formatDuration(this.record.startedAt, this.record.completedAt);
+    const duration = formatDuration(this.record.startedAt ?? 0, this.record.completedAt);
 
     const headerParts: string[] = [duration];
     const toolUses = this.activity?.toolUses ?? this.record.toolUses;

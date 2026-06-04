@@ -14,7 +14,7 @@ describe('GroupJoinManager', () => {
     toolUses: 0,
     spawnedAt: Date.now(),
     startedAt: Date.now(),
-    lifetimeUsage: { inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, totalDurationMs: 0 },
+    lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
     compactionCount: 0,
     currentLevel: 0,
     totalSpawned: 0,
@@ -64,7 +64,7 @@ describe('GroupJoinManager', () => {
       expect(manager.onAgentComplete(r2)).toBe('delivered');
 
       expect(deliverCb).toHaveBeenCalledTimes(1);
-      expect(deliverCb).toHaveBeenCalledWith([r1, r2], false);
+      expect(deliverCb).toHaveBeenCalledWith([r1, r2], false, expect.any(Object));
 
       // Cleanup check
       expect(manager.isGrouped('a1')).toBe(false);
@@ -79,7 +79,7 @@ describe('GroupJoinManager', () => {
       vi.advanceTimersByTime(30_000);
 
       expect(deliverCb).toHaveBeenCalledTimes(1);
-      expect(deliverCb).toHaveBeenCalledWith([r1], true);
+      expect(deliverCb).toHaveBeenCalledWith([r1], true, expect.any(Object));
 
       // Completed agent is cleaned up
       expect(manager.isGrouped('a1')).toBe(false);
@@ -104,7 +104,7 @@ describe('GroupJoinManager', () => {
       vi.advanceTimersByTime(15_000);
 
       expect(deliverCb).toHaveBeenCalledTimes(1);
-      expect(deliverCb).toHaveBeenCalledWith([r2], true);
+      expect(deliverCb).toHaveBeenCalledWith([r2], true, expect.any(Object));
 
       deliverCb.mockClear();
 
@@ -112,7 +112,7 @@ describe('GroupJoinManager', () => {
       const r3 = createDummyRecord('a3');
       expect(manager.onAgentComplete(r3)).toBe('delivered');
       expect(deliverCb).toHaveBeenCalledTimes(1);
-      expect(deliverCb).toHaveBeenCalledWith([r3], false);
+      expect(deliverCb).toHaveBeenCalledWith([r3], false, expect.any(Object));
 
       expect(manager.isGrouped('a3')).toBe(false);
     });

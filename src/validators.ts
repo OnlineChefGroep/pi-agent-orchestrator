@@ -43,7 +43,7 @@ function logCriteriaLimit(criteriaCount: number, maxCount: number): void {
  */
 export function buildValidatorPrompt(
   originalOutput: string,
-  criteria: string[],
+  criteria: readonly string[],
   mainAgentDescription: string,
 ): string {
   // CVE-004 FIX: Validate and sanitize inputs
