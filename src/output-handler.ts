@@ -14,6 +14,7 @@
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { type Component, matchesKey } from "@earendil-works/pi-tui";
 import type { AgentManager } from "./agent-manager.js";
 import { reloadCustomAgents } from "./agent-registry.js";
 import { getAllTypes } from "./agent-types.js";
@@ -22,12 +23,20 @@ import { uiCreateOrJoinSwarm } from "./swarm-join.js";
 import type { AgentRecord, JoinMode } from "./types.js";
 import { showAgentDashboard } from "./ui/agent-dashboard.js";
 import { showAgentPermissions } from "./ui/agent-detail.js";
+import {
+  formatMs,
+  formatTokens,
+  formatTurns,
+  getDisplayName,
+} from "./ui/agent-format.js";
 import { showAllAgentsList, showRunningAgents } from "./ui/agent-list-views.js";
 import type { AgentActivity } from "./ui/agent-ui-types.js";
 import { viewAgentConversation } from "./ui/agent-viewer.js";
 import { showCreateWizard } from "./ui/agent-wizards.js";
 import { showSchedulesMenu } from "./ui/schedule-menu.js";
 import { showSettings } from "./ui/settings-menu.js";
+import { getThemeColors } from "./ui/theme.js";
+import { getLifetimeTotal } from "./usage.js";
 
 /** Dependencies injected into the agents menu so callers don't pass 11 positional args. */
 export interface AgentsMenuDeps {
@@ -195,6 +204,226 @@ function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" |
   return "";
 }
 
+// ============================================================================
+// /agents top — live resource stats TUI
+// ============================================================================
+
+type SortKey = "tokens" | "turns" | "duration" | "toolUses" | "name";
+
+interface AgentTopEntry {
+  id: string;
+  name: string;
+  status: string;
+  tokens: number;
+  turns: number;
+  toolUses: number;
+  durationMs: number;
+}
+
+function getAgentTopEntries(
+  agents: AgentRecord[],
+  activity: Map<string, AgentActivity>,
+): AgentTopEntry[] {
+  const now = Date.now();
+  return agents.map((r) => {
+    const act = activity.get(r.id);
+    const tokens = act ? getLifetimeTotal(act.lifetimeUsage) : (r.lifetimeUsage?.input ?? 0) + (r.lifetimeUsage?.output ?? 0);
+    const turns = act?.turnCount ?? 0;
+    const toolUses = act?.toolUses ?? r.toolUses;
+    const durationMs = (r.completedAt ?? now) - (r.startedAt ?? now);
+    return { id: r.id, name: getDisplayName(r.type), status: r.status, tokens, turns, toolUses, durationMs };
+  });
+}
+
+function sortEntries(entries: AgentTopEntry[], key: SortKey, asc: boolean): AgentTopEntry[] {
+  return [...entries].sort((a, b) => {
+    let cmp = 0;
+    if (key === "name") cmp = a.name.localeCompare(b.name);
+    else if (key === "tokens") cmp = a.tokens - b.tokens;
+    else if (key === "turns") cmp = a.turns - b.turns;
+    else if (key === "toolUses") cmp = a.toolUses - b.toolUses;
+    else if (key === "duration") cmp = a.durationMs - b.durationMs;
+    return asc ? cmp : -cmp;
+  });
+}
+
+
+
+function topStatusColor(status: string, fg: (c: string, t: string) => string): string {
+  if (status === "running") return fg("accent", status);
+  if (status === "queued") return fg("muted", status);
+  if (status === "completed") return fg("success", status);
+  if (status === "aborted") return fg("error", status);
+  if (status === "steered") return fg("warning", status);
+  return fg("dim", status);
+}
+
+function renderTopTable(
+  entries: AgentTopEntry[],
+  sortKey: SortKey,
+  sortAsc: boolean,
+  page: number,
+  pageSize: number,
+  th: ReturnType<typeof getThemeColors>,
+  width: number,
+): string[] {
+  // DashboardTheme stores ANSI codes as strings (e.g. "\x1b[38;2;100;100;120m"),
+  // not as functions. We wrap them to produce colored text by concatenating
+  // the code + text + reset sequence.
+  const theme = {
+    fg: (c: string, t: string) => {
+      const code = (c === "title" ? th.title
+        : c === "dim" ? th.dim
+        : c === "muted" ? th.muted
+        : c === "highlight" ? th.highlight
+        : c === "accent" ? th.accent
+        : c === "success" ? th.success
+        : c === "error" ? th.error
+        : c === "warning" ? th.error  // warning maps to error color
+        : c === "border" ? th.border
+        : th.dim) as string;
+      return `${code}${t}${th.reset}`;
+    },
+    bold: (t: string) => `${th.title}${t}${th.reset}`,
+  };
+
+  const headers = ["NAME", "STATUS", "TOKENS", "TURNS", "TOOLS", "DURATION"];
+  const colWidths = [18, 10, 12, 10, 10, 12];
+  const minW = colWidths.reduce((a, b) => a + b, 0) + 20;
+  const w = Math.max(width, minW);
+
+  const totalPages = Math.max(1, Math.ceil(entries.length / pageSize));
+  const start = page * pageSize;
+  const slice = entries.slice(start, start + pageSize);
+
+  const lines: string[] = [];
+
+  // Title line
+  lines.push(`${theme.fg("title", theme.bold(" AGENT TOP "))}  ${theme.fg("dim", `sorted by ${sortKey} ${sortAsc ? "↑" : "↓"}  page ${page + 1}/${totalPages}`)}  ` +
+    `${theme.fg("dim", `← → navigate  q/esc close`)}`);
+
+  // Column headers
+  const renderHeaderCell = (label: string, colW: number) => {
+    const l = sortKey === label.toLowerCase() ? `*${label}` : label;
+    return theme.fg("highlight", l.padEnd(colW));
+  };
+  lines.push(renderHeaderCell(headers[0], colWidths[0]) + " " +
+    renderHeaderCell(headers[1], colWidths[1]) + " " +
+    renderHeaderCell(headers[2], colWidths[2]) + " " +
+    renderHeaderCell(headers[3], colWidths[3]) + " " +
+    renderHeaderCell(headers[4], colWidths[4]) + " " +
+    renderHeaderCell(headers[5], colWidths[5]));
+
+  // Divider
+  lines.push(theme.fg("border", "─".repeat(w - 2)));
+
+  if (entries.length === 0) {
+    lines.push(theme.fg("muted", "  No agents to display"));
+    return lines;
+  }
+
+  for (const e of slice) {
+    const name = e.name.length > colWidths[0] - 2 ? `${e.name.slice(0, colWidths[0] - 2)}…` : e.name.padEnd(colWidths[0]);
+    const status = topStatusColor(e.status, theme.fg).padEnd(colWidths[1]);
+    const tokens = formatTokens(e.tokens).padStart(colWidths[2]);
+    const turns = formatTurns(e.turns).padStart(colWidths[3]);
+    const tools = `${e.toolUses}`.padStart(colWidths[4]);
+    const dur = formatMs(e.durationMs).padStart(colWidths[5]);
+    lines.push(`${theme.fg("dim", "│")} ${theme.fg("accent", name)} ${theme.fg("dim", "|")} ${status} ${theme.fg("dim", "|")} ${theme.fg("muted", tokens)} ${theme.fg("dim", "|")} ${theme.fg("muted", turns)} ${theme.fg("dim", "|")} ${theme.fg("muted", tools)} ${theme.fg("dim", "|")} ${theme.fg("dim", dur)}`);
+  }
+
+  return lines;
+}
+
+/** TUI component for the live agent top view. */
+class AgentsTopComponent implements Component {
+  private closed = false;
+  private sortKey: SortKey = "tokens";
+  private sortAsc = false;
+  private page = 0;
+  private pageSize = 12;
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+  constructor(
+    private readonly tui: { requestRender?: () => void; terminal: { rows: number; columns: number } },
+    private readonly manager: AgentManager,
+    private readonly activity: Map<string, AgentActivity>,
+    private readonly done: (r: undefined) => void,
+  ) {
+    this.refreshTimer = setInterval(() => {
+      if (!this.closed) this.tui.requestRender?.();
+    }, 1000);
+  }
+
+  handleInput(data: string): void {
+    if (matchesKey(data, "q") || matchesKey(data, "escape")) {
+      this.close();
+      return;
+    }
+    if (matchesKey(data, "left") || matchesKey(data, "shift+left")) {
+      this.page = Math.max(0, this.page - 1);
+    } else if (matchesKey(data, "right") || matchesKey(data, "shift+right")) {
+      const entries = getAgentTopEntries(this.manager.listAgents(), this.activity);
+      const totalPages = Math.max(1, Math.ceil(entries.length / this.pageSize));
+      this.page = Math.min(totalPages - 1, this.page + 1);
+    } else if (matchesKey(data, "t")) {
+      if (this.sortKey === "tokens") this.sortAsc = !this.sortAsc;
+      else { this.sortKey = "tokens"; this.sortAsc = false; }
+      this.page = 0;
+    } else if (matchesKey(data, "r")) {
+      if (this.sortKey === "turns") this.sortAsc = !this.sortAsc;
+      else { this.sortKey = "turns"; this.sortAsc = false; }
+      this.page = 0;
+    } else if (matchesKey(data, "d")) {
+      if (this.sortKey === "duration") this.sortAsc = !this.sortAsc;
+      else { this.sortKey = "duration"; this.sortAsc = false; }
+      this.page = 0;
+    } else if (matchesKey(data, "u")) {
+      if (this.sortKey === "toolUses") this.sortAsc = !this.sortAsc;
+      else { this.sortKey = "toolUses"; this.sortAsc = false; }
+      this.page = 0;
+    } else if (matchesKey(data, "n")) {
+      if (this.sortKey === "name") this.sortAsc = !this.sortAsc;
+      else { this.sortKey = "name"; this.sortAsc = false; }
+      this.page = 0;
+    }
+  }
+
+  render(width: number): string[] {
+    const th = getThemeColors();
+    // Simple passthrough theme — real theme injected by the TUI framework
+    const entries = sortEntries(getAgentTopEntries(this.manager.listAgents(), this.activity), this.sortKey, this.sortAsc);
+    const rows = this.tui.terminal.rows;
+    this.pageSize = Math.max(5, rows - 5);
+    return renderTopTable(entries, this.sortKey, this.sortAsc, this.page, this.pageSize, th, width);
+  }
+
+  invalidate(): void {
+    // No-op: this component has no cached theme to invalidate
+  }
+
+  dispose(): void {
+    if (this.refreshTimer) { clearInterval(this.refreshTimer); this.refreshTimer = null; }
+    this.closed = true;
+  }
+
+  private close(): void {
+    this.dispose();
+    this.done(undefined);
+  }
+}
+
+/** Launch the /agents top live stats view. */
+async function showAgentsTop(
+  ctx: ExtensionCommandContext,
+  manager: AgentManager,
+  activity: Map<string, AgentActivity>,
+): Promise<void> {
+  await ctx.ui.custom<undefined>((tui, _theme, _kb, done) => {
+    return new AgentsTopComponent(tui, manager, activity, done);
+  }, { overlay: true, overlayOptions: { anchor: "center", width: "95%", maxHeight: "80%" } });
+}
+
 /**
  * Display the main agents menu with options for dashboard, agent types, scheduling, and settings.
  */
@@ -230,6 +459,7 @@ export async function showAgentsMenu(
 
   options.push("Create new agent");
   options.push("Settings");
+  options.push("Agent top (live stats — CPU, tokens, turns)");
 
   const noAgentsMsg = allNames.length === 0 && agents.length === 0
     ? "No agents found. Create specialized subagents that can be delegated to.\n\n" +
@@ -280,6 +510,9 @@ export async function showAgentsMenu(
       deps.isSchedulingEnabled, deps.setDefaultMaxTurns, deps.setGraceTurns,
       deps.setDefaultJoinMode, deps.setSchedulingEnabled, deps.scheduler,
     );
+    await reopenMenu(ctx, deps);
+  } else if (choice === "Agent top (live stats — CPU, tokens, turns)") {
+    await showAgentsTop(ctx, deps.manager, deps.agentActivity);
     await reopenMenu(ctx, deps);
   }
 }
