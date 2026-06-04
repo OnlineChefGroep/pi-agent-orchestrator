@@ -107,6 +107,26 @@ Output findings as a markdown list with severity (Critical / High / Medium / Low
 
 ---
 
+## // SHOWCASE (v0.11.0 TUI)
+
+Recorded from the real TypeScript renderers (`npm run build` + `scripts/render-showcase-assets.sh`). Not mock artwork.
+
+| View | Demo |
+|------|------|
+| **Dashboard** (swarms, running cards, vim nav) | ![Dashboard](docs/images/showcase_dashboard.gif) |
+| **Top view** (`t` — sort tokens / last seen) | ![Top view](docs/images/showcase_top_view.gif) |
+| **Agent widget** (heatmap + live agents) | ![Widget](docs/images/showcase_widget.gif) |
+
+**Full walkthrough (combined clip):**
+
+![Hero preview](docs/images/dashboard_preview.gif)
+
+<video src="docs/images/dashboard_preview.mp4" controls width="100%"></video>
+
+Regenerate locally: `bash scripts/render-showcase-assets.sh`
+
+---
+
 ## // CINEMATIC DASHBOARD (TUI SIDECAR)
 
 The cinematic dashboard provides real-time telemetry rendering via an independent Go Bubble Tea application. It features real-time resource utilization, agent status heatmaps, and smooth virtual scrolling.

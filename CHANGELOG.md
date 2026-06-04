@@ -22,6 +22,9 @@
 - **Widget Dirty Snapshotting**: Saves cycles by skipping expensive UI buffer paints when no structural status or agent state has modified.
 - **SwarmHealth Consolidation**: RPC checks consolidated to avoid chatty inter-process handshakes.
 
+### Documentation
+- Added real TUI showcase media (GIF + MP4) generated from dist renderers: dashboard, top view, widget heatmap (`scripts/render-showcase-assets.sh`).
+
 ### Metrics
 - 907 tests, 51 test files.
 
