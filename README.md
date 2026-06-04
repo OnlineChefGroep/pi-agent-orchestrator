@@ -1,5 +1,8 @@
 # // PI AGENT ORCHESTRATOR
 
+![Brutalist UI Hero](docs/hero.png)
+
+
 **AUTONOMOUS SUB-AGENTS. TUI DASHBOARD. SWARM COORDINATION.**
 
 ![Pi Agent Orchestrator Banner](docs/images/orchestrator_banner.png)
