@@ -34,7 +34,8 @@ Thumbs.db
 .claude
 .autoresearch
 .Jules
-.jules
+.jules/*
+!.jules/overdrive.md
 .codex
 .devin
 
