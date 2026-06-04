@@ -111,19 +111,27 @@ function buildVirtualBodyLines(
 
   const lines: string[] = [];
 
-  // Swarm section (collapsed for performance — show count only)
+  // Swarm section with virtual scroll for large swarm counts.
+  // Swarm count is typically small, so we just show the first SWARM_VIRTUAL_WINDOW
+  // when there are too many. selectedIndex is global (not swarm-relative), so we don't
+  // try to center the window around it — that would produce incorrect results.
+  const SWARM_VIRTUAL_WINDOW = 10;
+  const showAllSwarms = swarms.length <= SWARM_VIRTUAL_WINDOW;
+  const displaySwarms = showAllSwarms ? swarms : swarms.slice(0, SWARM_VIRTUAL_WINDOW);
+
   if (swarms.length > 0) {
     lines.push("");
-    lines.push(renderSectionTitle("◆ SWARMS", `${swarms.length} active`, innerW, th, box));
-    // Show first swarm member of each swarm
-    for (const swarmId of swarms.slice(0, 5)) {
+    lines.push(renderSectionTitle("◆ SWARMS", `${swarms.length} swarms · ${total} agents`, innerW, th, box));
+    for (const swarmId of displaySwarms) {
       const first = solo.find(a => a.swarmId === swarmId);
       if (first) {
         focusLineByAgentId.set(first.id, lines.length);
         lines.push(`  ${renderCompactRow(first, innerW - 2, th, state)}`);
       }
     }
-    if (swarms.length > 5) {
+    if (!showAllSwarms) {
+      lines.push(`  ${th.dim}+ ${swarms.length - SWARM_VIRTUAL_WINDOW} more swarms${th.reset}`);
+    } else if (swarms.length > 5) {
       lines.push(`  ${th.dim}+ ${swarms.length - 5} more swarms${th.reset}`);
     }
   }

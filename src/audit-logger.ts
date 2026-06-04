@@ -18,7 +18,7 @@ import { emitTelemetry } from "./telemetry.js";
 // Types
 // ---------------------------------------------------------------------------
 
-export type AuditOperation = "ping" | "spawn" | "stop";
+export type AuditOperation = "ping" | "spawn" | "stop" | "sessionUsage";
 export type AuditOutcome = "success" | "error" | "rate_limited" | "unauthorized";
 
 export interface AuditEntry {

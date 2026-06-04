@@ -47,6 +47,12 @@ export interface SpawnCapable {
   abort(id: string): boolean;
 }
 
+export interface SessionCapable extends SpawnCapable {
+  getSessionUsage(): { spawnedAgents: number; totalTurns: number };
+  getSessionMaxSpawns(): number;
+  getSessionMaxTurns(): number;
+}
+
 // Host-provided authentication context for RPC calls.
 export interface AuthContext {
   extensionId: string;
@@ -63,6 +69,11 @@ export interface StopRpcRequest {
   agentId: string;
 }
 
+export interface SessionUsageRpcReply {
+  usage: { spawnedAgents: number; totalTurns: number };
+  limits: { maxAgents: number; maxTurns: number };
+}
+
 export interface PingRpcReply {
   version: number;
 }
@@ -71,6 +82,7 @@ export interface SubagentsRpcClient {
   ping(): Promise<PingRpcReply>;
   spawn(request: SpawnRpcRequest): Promise<{ id: string }>;
   stop(request: StopRpcRequest): Promise<void>;
+  sessionUsage(): Promise<SessionUsageRpcReply>;
 }
 
 // ---------------------------------------------------------------------------
@@ -172,12 +184,15 @@ export interface RpcDeps {
   authProvider?: (requestId: string, payload: any) => AuthContext | undefined;
   /** Optional rate-limit tunables applied at registration time. */
   rateLimit?: RateLimitConfig;
+  /** Optional session-capable manager for session usage RPC. */
+  sessionManager?: SessionCapable;
 }
 
 export interface RpcHandle {
   unsubPing: () => void;
   unsubSpawn: () => void;
   unsubStop: () => void;
+  unsubSessionUsage: () => void;
 }
 
 /**
@@ -251,6 +266,7 @@ export function createSubagentsRpcClient(
     stop: async (request) => {
       await requestRpc<void>(events, "subagents:rpc:stop", { ...request, authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs);
     },
+    sessionUsage: () => requestRpc<SessionUsageRpcReply>(events, "subagents:rpc:sessionUsage", { authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs),
   };
 }
 
@@ -278,7 +294,7 @@ function authorizeRpcMutation(deps: RpcDeps, requestId: string, operation: strin
 // Audit-trail helper — wraps an RPC handler to capture outcome and duration.
 // ---------------------------------------------------------------------------
 
-type AuditableOperation = "ping" | "spawn" | "stop";
+type AuditableOperation = "ping" | "spawn" | "stop" | "sessionUsage";
 
 function auditedRpc<P extends { requestId: string }>(
   deps: RpcDeps,
@@ -329,7 +345,7 @@ function auditedRpc<P extends { requestId: string }>(
 }
 
 /**
- * Register ping, spawn, and stop RPC handlers on the event bus.
+ * Register ping, spawn, stop, and sessionUsage RPC handlers on the event bus.
  * Returns unsub functions for cleanup.
  *
  * **Global rate-limit state:** Calling this function with `deps.rateLimit` will
@@ -340,7 +356,7 @@ function auditedRpc<P extends { requestId: string }>(
  * times should be aware of the side effect.
  */
 export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
-  const { events, pi, getCtx, manager } = deps;
+  const { events, pi, getCtx, manager, sessionManager } = deps;
 
   // Apply caller-provided rate-limit tunables (if any).
   if (deps.rateLimit) configureRateLimit(deps.rateLimit);
@@ -403,5 +419,25 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
     }),
   );
 
-  return { unsubPing, unsubSpawn, unsubStop };
+  const unsubSessionUsage = sessionManager
+    ? handleRpc(
+        events,
+        "subagents:rpc:sessionUsage",
+        auditedRpc<{ requestId: string }>(deps, "sessionUsage", ({ requestId }) => {
+          const auth = resolveAuth(deps, requestId, { requestId });
+          return {
+            auth,
+            result: {
+              usage: sessionManager!.getSessionUsage(),
+              limits: {
+                maxAgents: sessionManager!.getSessionMaxSpawns(),
+                maxTurns: sessionManager!.getSessionMaxTurns(),
+              },
+            },
+          };
+        }),
+      )
+    : () => {};
+
+  return { unsubPing, unsubSpawn, unsubStop, unsubSessionUsage };
 }
