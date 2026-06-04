@@ -15,6 +15,7 @@ export {
   renderDashboardEmpty,
   renderDashboardFooter,
   renderDashboardHelp,
+  renderDashboardPerf,
 } from "./panels.js";
 export { renderProgressBar, renderTurnProgress } from "./progress.js";
 export { renderRunningCard } from "./running-card.js";

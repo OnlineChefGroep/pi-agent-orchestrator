@@ -60,3 +60,4 @@ graphify-out/
 docs/superpowers/plans/
 temp_test_agents*
 temp_test_files
+coverage/

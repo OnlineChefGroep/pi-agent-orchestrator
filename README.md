@@ -1,6 +1,6 @@
 # // PI AGENT ORCHESTRATOR
 
-![Brutalist UI Hero](docs/hero.png)
+![Brutalist UI Hero](docs/images/dashboard_preview.gif)
 
 
 **AUTONOMOUS SUB-AGENTS. TUI DASHBOARD. SWARM COORDINATION.**
@@ -10,7 +10,7 @@
 Bring autonomous sub-agents to Pi. Spawn specialized agents, enforce strict budgets, execute structured handoffs, and manage agent swarms. All monitored through a high-density, interactive TUI dashboard. 
 
 **STATUS:** ACTIVE
-**VERSION:** 0.10.3
+**VERSION:** 0.11.0
 **RUNTIME:** Node.js >= 22
 **HOST:** pi >= 0.70.5
 **LICENSE:** MIT
@@ -32,7 +32,7 @@ pi install npm:@onlinechefgroep/pi-agent-orchestrator
 | Capability | Technical Description |
 |---|---|
 | **Autonomous Sub-agents** | Spawn specialized agents (Explore, Plan, Analysis) operating independently to return structured outputs. |
-| **Interactive Dashboard** | High-density TUI. Vim-style hotkeys (`j/k/Enter/K/?`), multi-select, bulk termination, permission inspection. |
+| **Interactive Dashboard** | High-density TUI accessible via `/agents top`. Vim-style hotkeys (`j/k/Enter/K/?`), virtual scrolling, multi-select, live resource stats, and activity heatmaps. |
 | **Swarm Mode** | Live `SwarmCoordinator`. Dynamic join/leave operations. Collaborative multi-agent processing (`w` hotkey). |
 | **Execution Budgets** | Strict depth limiting (`levelLimit`, default: 5). Bounded concurrent tasks via `taskBudget`. |
 | **Adversarial Validation** | Post-completion `Promise.all` validation with deterministic pass/fail states. |
@@ -109,9 +109,9 @@ Output findings as a markdown list with severity (Critical / High / Medium / Low
 
 ## // CINEMATIC DASHBOARD (TUI SIDECAR)
 
-The cinematic dashboard provides real-time telemetry rendering via an independent Go Bubble Tea application.
+The cinematic dashboard provides real-time telemetry rendering via an independent Go Bubble Tea application. It features real-time resource utilization, agent status heatmaps, and smooth virtual scrolling.
 
-![Cinematic Dashboard Preview](docs/images/dashboard_preview.png)
+![Cinematic Dashboard Preview](docs/images/dashboard_preview.gif)
 
 ### Sidecar Installation
 

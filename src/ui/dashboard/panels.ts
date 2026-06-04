@@ -96,7 +96,7 @@ export function renderDashboardFooter(
 ): string[] {
   const innerW = Math.max(1, width - 4);
   const primary = "↑↓/jk navigate  ·  space select  ·  enter view  ·  s steer  ·  Shift+K kill";
-  const secondary = "p perms  ·  w swarm  ·  r refresh  ·  ? help  ·  q/esc close";
+  const secondary = "p perms  ·  w swarm  ·  r refresh  ·  /:cmd  ·  ? help  ·  q/esc close";
   const both = `${primary}  ·  ${secondary}`;
   const footerText = both.length <= innerW ? both : primary;
 
@@ -177,10 +177,65 @@ export function renderDashboardHelp(
     "",
     section("General"),
     key("r", "Force refresh"),
-    key("?", "Toggle this help"),
+    key("?:/perf", "Toggle help / perf panel"),
+    key("/perf reset", "Reset performance counters"),
     key("q / Esc", "Close dashboard"),
   ];
   return helpLines.map(h => framedRow(h ? h : "", innerW, th, box));
+}
+
+// ── Render Performance Metrics ────────────────────────────────────────────
+
+export function renderDashboardPerf(
+  innerW: number,
+  th: DashboardTheme,
+  box: BoxChars,
+  metrics: import("../render-metrics.js").RenderMetricsSnapshot,
+): string[] {
+  const key = (k: string, v: string) => {
+    const pad = " ".repeat(Math.max(1, 24 - k.length));
+    return `  ${th.muted}${k}${th.reset}${pad}${v}${th.reset}`;
+  };
+  const section = (label: string) => `  ${th.title}▸ ${label}${th.reset}`;
+  const fmt = (n: number, unit = "") =>
+    n < 10 ? `${n.toFixed(2)}${unit}` : n < 1000 ? `${Math.round(n * 100) / 100}${unit}` : `${Math.round(n)}${unit}`;
+
+  const elapsedMins = Math.floor(metrics.elapsedMs / 60000);
+  const elapsedSecs = Math.floor((metrics.elapsedMs % 60000) / 1000);
+  const elapsedStr = elapsedMins > 0
+    ? `${elapsedMins}m ${elapsedSecs}s`
+    : `${elapsedSecs}s`;
+
+  const lines = [
+    section("Render Duration"),
+    key("last", `${fmt(metrics.lastMs, "ms")}`),
+    key("mean", `${fmt(metrics.meanMs, "ms")}`),
+    key("min", `${fmt(metrics.minMs, "ms")}`),
+    key("max", `${fmt(metrics.maxMs, "ms")}`),
+    "",
+    section("Debounce Effectiveness"),
+    key("requested renders", `${metrics.requestedRenderCount}`),
+    key("actual renders", `${metrics.renderCount}`),
+    key("skipped (debounced)", `${metrics.skippedRenderCount}`),
+    key("request/actual ratio", `${metrics.requestToActualRatio}x`),
+    "",
+    section("Agent Context"),
+    key("current agents", `${metrics.activeAgentCount}`),
+    key("mean agents/render", `${fmt(metrics.activeAgentMean)}`),
+    key("min agents", `${metrics.activeAgentMin}`),
+    key("max agents", `${metrics.activeAgentMax}`),
+    "",
+    section("Timing"),
+    ...(metrics.timeToFirstVisibleMs > 0
+      ? [key("time to first visible", `${fmt(metrics.timeToFirstVisibleMs, "ms")}`)]
+      : []),
+    key("renders/sec", `${fmt(metrics.rendersPerSecond)}`),
+    key("renders/min", `${fmt(metrics.rendersPerMinute)}`),
+    key("elapsed", elapsedStr),
+    "",
+    `  ${th.dim}[${th.highlight}/perf reset${th.reset}${th.dim}] ${th.reset}${th.dim}[${th.highlight}q/esc${th.reset}${th.dim}] close perf panel${th.reset}`,
+  ];
+  return lines.map(h => framedRow(h ? h : "", innerW, th, box));
 }
 
 // ── Empty State ─────────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ export {
   renderDashboardFooter,
   renderDashboardHeader,
   renderDashboardHelp,
+  renderDashboardPerf,
   renderProgressBar,
   renderRunningCard,
   renderSectionTitle,

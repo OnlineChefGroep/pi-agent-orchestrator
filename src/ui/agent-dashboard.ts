@@ -28,6 +28,7 @@ import {
   renderDashboardFooter,
   renderDashboardHeader,
   renderDashboardHelp,
+  renderDashboardPerf,
 } from "./agent-dashboard-renderer.js";
 import { getAgentTopEntries, renderTopTable, type SortKey, sortEntries } from "./agent-top-renderer.js";
 import type { AgentActivity } from "./agent-ui-types.js";
@@ -77,6 +78,9 @@ export class AgentDashboard implements Component {
   /** Multi-select support */
   private selectedIds = new Set<string>();
   private showHelp = false;
+  private showPerf = false;
+  private inCommandMode = false;
+  private commandBuffer = "";
   private topViewMode = false;
   private topSortKey: SortKey = "tokens";
   private topSortAsc = false;
@@ -329,6 +333,22 @@ export class AgentDashboard implements Component {
   }
 
   // ════════════════════════════════════════════════════════════════
+  // Command Mode
+  // ════════════════════════════════════════════════════════════════
+
+  private executeCommand(buffer: string): void {
+    const cmd = buffer.toLowerCase().trim();
+    if (cmd === "/perf") {
+      this.showPerf = !this.showPerf;
+      if (this.showPerf) {
+        this.showHelp = false;
+      }
+    } else if (cmd === "/perf reset") {
+      this.renderMetrics.reset();
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════
   // Input Handling
   // ════════════════════════════════════════════════════════════════
 
@@ -336,6 +356,69 @@ export class AgentDashboard implements Component {
     const rec = this.agents[this.selectedIndex];
     const viewportHeight = this.getViewportHeight();
     const maxScroll = Math.max(0, this.bodyLineCount - viewportHeight);
+
+    // ── Command mode ───────────────────────────────────────────────
+    if (this.inCommandMode) {
+      if (matchesKey(data, "escape")) {
+        this.inCommandMode = false;
+        this.commandBuffer = "";
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "enter") || matchesKey(data, "return")) {
+        this.executeCommand(this.commandBuffer);
+        this.inCommandMode = false;
+        this.commandBuffer = "";
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "backspace")) {
+        this.commandBuffer = this.commandBuffer.slice(0, -1);
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      // Single character → append to buffer
+      if (data.length === 1 && !data.includes("+")) {
+        this.commandBuffer += data;
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      // Unknown key while in command mode → cancel and fall through
+      this.inCommandMode = false;
+      this.commandBuffer = "";
+    }
+
+    // ── Toggle perf view if it's showing (q/esc close perf, not dashboard) ──
+    if (this.showPerf) {
+      if (matchesKey(data, "q") || matchesKey(data, "escape")) {
+        this.showPerf = false;
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      // Allow / to enter command mode even when perf is showing
+      if (data === "/" && !this.inCommandMode) {
+        this.inCommandMode = true;
+        this.commandBuffer = "/";
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      // Forward other keys to normal handling (navigate behind perf overlay)
+    }
+
+    // ── Enter command mode from normal mode ──
+    if (matchesKey(data, "/") && !this.inCommandMode) {
+      this.inCommandMode = true;
+      this.commandBuffer = "/";
+      this.dirty = true;
+      this.requestRender();
+      return;
+    }
 
     if (matchesKey(data, "escape") || matchesKey(data, "q")) {
       this.close();
@@ -576,6 +659,9 @@ export class AgentDashboard implements Component {
 
     if (this.showHelp) {
       lines.push(...renderDashboardHelp(innerW, th, box));
+    } else if (this.showPerf) {
+      const metrics = this.renderMetrics.snapshot();
+      lines.push(...renderDashboardPerf(innerW, th, box, metrics));
     } else if (this.agents.length === 0) {
       lines.push(...renderDashboardEmpty(innerW, th, box));
     } else if (this.topViewMode) {
@@ -601,8 +687,19 @@ export class AgentDashboard implements Component {
       for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
     }
 
-    lines.push(...renderDashboardDetailPanel(safeWidth, th, box, state, this.options.manager));
-    lines.push(...renderDashboardFooter(safeWidth, th, box, this.options.agentActivity));
+    // Show command input line when in command mode.
+    if (this.inCommandMode) {
+      const cursor = " ".repeat(Math.max(0, innerW - 2 - this.commandBuffer.length - 2));
+      const cmdLine = `${th.accent}${this.commandBuffer}${cursor}${th.dim}▌${th.reset}`;
+      lines.push(...renderDashboardDetailPanel(safeWidth, th, box, state, this.options.manager));
+      lines.push(borderLine(safeWidth, th, box, "mid"));
+      lines.push(framedRow(`${th.title}cmd${th.reset}  ${cmdLine}`, innerW, th, box));
+      lines.push(framedRow(`${th.dim}Enter to run · Esc to cancel${th.reset}`, innerW, th, box));
+      lines.push(...renderDashboardFooter(safeWidth, th, box, this.options.agentActivity));
+    } else {
+      lines.push(...renderDashboardDetailPanel(safeWidth, th, box, state, this.options.manager));
+      lines.push(...renderDashboardFooter(safeWidth, th, box, this.options.agentActivity));
+    }
 
     // Reset dirty flag after a full render.
     this.dirty = false;
