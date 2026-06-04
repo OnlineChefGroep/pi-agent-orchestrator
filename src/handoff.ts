@@ -226,7 +226,7 @@ export function parseHandoff(text: string): AgentHandoff | null {
     // If the text contains a ```json opener, a handoff was attempted but we
     // couldn't extract parseable content — log a warning.
     if (text.includes("```json")) {
-      logger.warn("[handoff] Handoff block found but could not extract parseable JSON content");
+      logger.warn("Handoff block found but could not extract parseable JSON content");
     }
     return null;
   }
@@ -237,20 +237,20 @@ export function parseHandoff(text: string): AgentHandoff | null {
     parsed = safeJsonParse(jsonBlock);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown error';
-    logger.warn(`[handoff] Failed to parse handoff JSON — malformed JSON: ${msg}`);
+    logger.warn(`Failed to parse handoff JSON — malformed JSON: ${msg}`);
     return null;
   }
 
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     // Replace console.warn with central logger
-    logger.warn("[handoff] Parsed JSON is not an object");
+    logger.warn("Parsed JSON is not an object");
     return null;
   }
 
   const obj = parsed as Record<string, unknown>;
   const issues = validateHandoffShape(obj);
   if (issues.length > 0) {
-    logger.warn(`[handoff] Missing or invalid fields: ${issues.join(", ")}`);
+    logger.warn(`Missing or invalid fields: ${issues.join(", ")}`);
     return null;
   }
 

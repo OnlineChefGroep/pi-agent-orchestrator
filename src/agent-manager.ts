@@ -103,19 +103,42 @@ export class AgentManager {
   /** Stack of currently executing agent IDs (for budget/depth tracking). */
   private activeAgentIdStack: string[] = [];
 
+  /** Cleanup TTL: completed agents older than this are pruned periodically. */
+  private cleanupTtlMs: number;
+
   constructor(
     onComplete?: OnAgentComplete,
     maxConcurrent = DEFAULT_MAX_CONCURRENT,
     onStart?: OnAgentStart,
     onCompact?: OnAgentCompact,
+    /**
+     * Cleanup TTL in milliseconds: completed/stopped/errored agents older than
+     * this are pruned from memory during periodic cleanup cycles.
+     * Default: 60 seconds (down from 120s to reduce memory pressure during long sessions).
+     */
+    cleanupTtlMs = 60_000,
   ) {
     this.onComplete = onComplete;
     this.onStart = onStart;
     this.onCompact = onCompact;
     this.maxConcurrent = maxConcurrent;
-    const CLEANUP_INTERVAL_MS = 60_000;
+    this.cleanupTtlMs = cleanupTtlMs;
+    const CLEANUP_INTERVAL_MS = 30_000;
     this.cleanupInterval = setInterval(() => this.cleanup(), CLEANUP_INTERVAL_MS);
     this.cleanupInterval.unref();
+  }
+
+  /**
+   * Set a new cleanup TTL. Completed/stopped/errored agents older than this
+   * value will be pruned on the next periodic cleanup cycle.
+   */
+  setCleanupTtl(ms: number): void {
+    this.cleanupTtlMs = Math.max(10_000, ms);
+  }
+
+  /** Get the current cleanup TTL in milliseconds. */
+  getCleanupTtl(): number {
+    return this.cleanupTtlMs;
   }
 
   /** Update the max concurrent background agents limit. */
@@ -637,13 +660,18 @@ export class AgentManager {
   }
 
   private cleanup() {
-    // Aggressive cleanup: remove inactive records after 2 minutes (down from 10).
-    // This keeps memory usage low during long sessions with many agent spawns.
-    const cutoff = Date.now() - 2 * 60_000;
+    // Aggressive cleanup: remove inactive records after cleanupTtlMs.
+    // Default 60s keeps memory usage low during long sessions.
+    const cutoff = Date.now() - this.cleanupTtlMs;
+    let removed = 0;
     for (const [id, record] of this.agents) {
       if (record.status === "running" || record.status === "queued") continue;
       if ((record.completedAt ?? 0) >= cutoff) continue;
       this.removeRecord(id, record);
+      removed++;
+    }
+    if (removed > 0) {
+      logger.debug(`Cleanup: removed ${removed} stale agent records (TTL: ${this.cleanupTtlMs}ms)`);
     }
   }
 

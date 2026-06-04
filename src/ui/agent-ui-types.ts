@@ -18,6 +18,8 @@ export interface AgentActivity {
   turnCount: number;
   maxTurns?: number;
   lifetimeUsage: LifetimeUsage;
+  /** Timestamp (ms) of the most recent activity for heatmap rendering. */
+  lastSeenMs?: number;
 }
 
 export interface AgentDetails {
