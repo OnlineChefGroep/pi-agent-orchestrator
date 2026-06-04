@@ -29,6 +29,7 @@ import {
   renderDashboardHeader,
   renderDashboardHelp,
 } from "./agent-dashboard-renderer.js";
+import { getAgentTopEntries, renderTopTable, type SortKey, sortEntries } from "./agent-top-renderer.js";
 import type { AgentActivity } from "./agent-ui-types.js";
 import {
   type BoxChars,
@@ -43,6 +44,12 @@ export const DASHBOARD_HEIGHT_PCT = 92;
 
 /** Fast refresh when agents are running (5 fps). */
 const ACTIVE_REFRESH_MS = 200;
+
+/** Fastest possible refresh (10 fps) for very large agent lists. */
+const TURBO_REFRESH_MS = 100;
+
+/** Aggressive refresh (6.7 fps) for large agent lists (50+ agents). */
+const HIGH_LOAD_REFRESH_MS = 150;
 
 /** Minimum time between render calls, even under pressure (60 fps cap). */
 const MIN_RENDER_GAP_MS = 16;
@@ -69,6 +76,11 @@ export class AgentDashboard implements Component {
   /** Multi-select support */
   private selectedIds = new Set<string>();
   private showHelp = false;
+  private topViewMode = false;
+  private topSortKey: SortKey = "tokens";
+  private topSortAsc = false;
+  private topPage = 0;
+  private topPageSize = 12;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   // ── Performance: debounce & rate limiting ──
@@ -122,14 +134,28 @@ export class AgentDashboard implements Component {
   // ════════════════════════════════════════════════════════════════
 
   /**
+   * Compute the optimal refresh interval based on current agent state.
+   * - 100+ agents: TURBO_REFRESH_MS (100ms) — high throughput, rapid state changes
+   * - 50-99 agents: HIGH_LOAD_REFRESH_MS (150ms) — balanced for medium-large lists
+   * - Running/queued agents: ACTIVE_REFRESH_MS (200ms) — captures state transitions
+   * - Idle with < 50 agents: getDashboardRefreshInterval() (750ms) — low overhead
+   */
+  private computeRefreshInterval(): number {
+    const count = this.agents.length;
+    if (count >= 100) return TURBO_REFRESH_MS;
+    if (count >= 50) return HIGH_LOAD_REFRESH_MS;
+    if (this.hasRunningAgents()) return ACTIVE_REFRESH_MS;
+    return getDashboardRefreshInterval();
+  }
+
+  /**
    * Start (or restart) the refresh timer with an adaptive interval.
-   * Fast (200ms) when agents are running, normal (750ms) when idle.
+   * Interval adapts to agent count and activity level.
    */
   private startRefreshTimer(): void {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
 
-    const isFast = this.hasRunningAgents();
-    const interval = isFast ? ACTIVE_REFRESH_MS : getDashboardRefreshInterval();
+    const interval = this.computeRefreshInterval();
 
     this.refreshTimer = setInterval(() => {
       if (this.closed) return;
@@ -138,14 +164,14 @@ export class AgentDashboard implements Component {
       this.spinnerFrame++;
       this.refreshAgents();
 
-      // Only re-render if something actually changed or we're in active mode.
-      if (this.dirty || this.hasRunningAgents() || this.spinnerFrame % 3 === 0) {
+      // Only re-render if something actually changed or we're in active/turbo mode.
+      if (this.dirty || this.spinnerFrame % 3 === 0) {
         this.requestRender();
       }
 
-      // Adapt interval: if agents started/finished running, restart the timer.
-      const shouldBeFast = this.hasRunningAgents();
-      if (shouldBeFast !== isFast) {
+      // Adapt interval: if agent count or activity changed significantly, restart.
+      const newInterval = this.computeRefreshInterval();
+      if (newInterval !== interval) {
         this.startRefreshTimer();
       }
     }, interval);
@@ -385,6 +411,11 @@ export class AgentDashboard implements Component {
       this.showHelp = !this.showHelp;
       this.dirty = true;
       this.requestRender();
+    } else if (matchesKey(data, "t") || matchesKey(data, "shift+t")) {
+      this.topViewMode = !this.topViewMode;
+      if (this.topViewMode) this.topPage = 0;
+      this.dirty = true;
+      this.requestRender();
     } else if (matchesKey(data, "w") || matchesKey(data, "shift+w")) {
       const targets = this.selectedIds.size > 0
         ? this.agents.filter((a) => this.selectedIds.has(a.id))
@@ -394,6 +425,47 @@ export class AgentDashboard implements Component {
         this.close();
         void this.options.onSwarmAction("create", targets.map((t) => t.id));
         return;
+      }
+    }
+
+    // ── Top view mode ─────────────────────────────────────────────
+    else if (this.topViewMode) {
+      // Sort keys: t=tokens, r=turns, d=duration, u=toolUses, n=name
+      if (matchesKey(data, "t")) {
+        if (this.topSortKey === "tokens") this.topSortAsc = !this.topSortAsc;
+        else { this.topSortKey = "tokens"; this.topSortAsc = false; }
+        this.topPage = 0;
+        this.requestRender();
+      } else if (matchesKey(data, "r")) {
+        if (this.topSortKey === "turns") this.topSortAsc = !this.topSortAsc;
+        else { this.topSortKey = "turns"; this.topSortAsc = false; }
+        this.topPage = 0;
+        this.requestRender();
+      } else if (matchesKey(data, "d")) {
+        if (this.topSortKey === "duration") this.topSortAsc = !this.topSortAsc;
+        else { this.topSortKey = "duration"; this.topSortAsc = false; }
+        this.topPage = 0;
+        this.requestRender();
+      } else if (matchesKey(data, "u")) {
+        if (this.topSortKey === "toolUses") this.topSortAsc = !this.topSortAsc;
+        else { this.topSortKey = "toolUses"; this.topSortAsc = false; }
+        this.topPage = 0;
+        this.requestRender();
+      } else if (matchesKey(data, "n")) {
+        if (this.topSortKey === "name") this.topSortAsc = !this.topSortAsc;
+        else { this.topSortKey = "name"; this.topSortAsc = false; }
+        this.topPage = 0;
+        this.requestRender();
+      }
+      // Page navigation
+      else if (matchesKey(data, "left") || matchesKey(data, "shift+left")) {
+        this.topPage = Math.max(0, this.topPage - 1);
+        this.requestRender();
+      } else if (matchesKey(data, "right") || matchesKey(data, "shift+right")) {
+        const entries = sortEntries(getAgentTopEntries(this.agents, this.options.agentActivity), this.topSortKey, this.topSortAsc);
+        const totalPages = Math.max(1, Math.ceil(entries.length / this.getViewportHeight()));
+        this.topPage = Math.min(totalPages - 1, this.topPage + 1);
+        this.requestRender();
       }
     }
 
@@ -474,12 +546,18 @@ export class AgentDashboard implements Component {
     const innerW = Math.max(1, safeWidth - 4);
 
     const state = this.renderState();
-    const lines = renderDashboardHeader(safeWidth, th, box, state);
+    const lines = renderDashboardHeader(safeWidth, th, box, state, this.options.manager);
 
     if (this.showHelp) {
       lines.push(...renderDashboardHelp(innerW, th, box));
     } else if (this.agents.length === 0) {
       lines.push(...renderDashboardEmpty(innerW, th, box));
+    } else if (this.topViewMode) {
+      // Top view: render the agent stats table instead of the list
+      const vh = this.getViewportHeight();
+      this.topPageSize = Math.max(5, vh);
+      const entries = sortEntries(getAgentTopEntries(this.agents, this.options.agentActivity), this.topSortKey, this.topSortAsc);
+      lines.push(...renderTopTable(entries, this.topSortKey, this.topSortAsc, this.topPage, this.topPageSize, th, safeWidth, "t: back to list"));
     } else {
       const body = buildDashboardBodyLines(innerW, th, box, state);
       this.bodyFocusLineByAgentId = body.focusLineByAgentId;
@@ -497,8 +575,8 @@ export class AgentDashboard implements Component {
       for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
     }
 
-    lines.push(...renderDashboardDetailPanel(safeWidth, th, box, state));
-    lines.push(...renderDashboardFooter(safeWidth, th, box));
+    lines.push(...renderDashboardDetailPanel(safeWidth, th, box, state, this.options.manager));
+    lines.push(...renderDashboardFooter(safeWidth, th, box, this.options.agentActivity));
 
     // Reset dirty flag after a full render.
     this.dirty = false;

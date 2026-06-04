@@ -23,20 +23,14 @@ import { uiCreateOrJoinSwarm } from "./swarm-join.js";
 import type { AgentRecord, JoinMode } from "./types.js";
 import { showAgentDashboard } from "./ui/agent-dashboard.js";
 import { showAgentPermissions } from "./ui/agent-detail.js";
-import {
-  formatMs,
-  formatTokens,
-  formatTurns,
-  getDisplayName,
-} from "./ui/agent-format.js";
 import { showAllAgentsList, showRunningAgents } from "./ui/agent-list-views.js";
+import { getAgentTopEntries, renderTopTable, type SortKey, sortEntries } from "./ui/agent-top-renderer.js";
 import type { AgentActivity } from "./ui/agent-ui-types.js";
 import { viewAgentConversation } from "./ui/agent-viewer.js";
 import { showCreateWizard } from "./ui/agent-wizards.js";
 import { showSchedulesMenu } from "./ui/schedule-menu.js";
 import { showSettings } from "./ui/settings-menu.js";
 import { getThemeColors } from "./ui/theme.js";
-import { getLifetimeTotal } from "./usage.js";
 
 /** Dependencies injected into the agents menu so callers don't pass 11 positional args. */
 export interface AgentsMenuDeps {
@@ -202,137 +196,6 @@ function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" |
   }
 
   return "";
-}
-
-// ============================================================================
-// /agents top — live resource stats TUI
-// ============================================================================
-
-type SortKey = "tokens" | "turns" | "duration" | "toolUses" | "name";
-
-interface AgentTopEntry {
-  id: string;
-  name: string;
-  status: string;
-  tokens: number;
-  turns: number;
-  toolUses: number;
-  durationMs: number;
-}
-
-function getAgentTopEntries(
-  agents: AgentRecord[],
-  activity: Map<string, AgentActivity>,
-): AgentTopEntry[] {
-  const now = Date.now();
-  return agents.map((r) => {
-    const act = activity.get(r.id);
-    const tokens = act ? getLifetimeTotal(act.lifetimeUsage) : (r.lifetimeUsage?.input ?? 0) + (r.lifetimeUsage?.output ?? 0);
-    const turns = act?.turnCount ?? 0;
-    const toolUses = act?.toolUses ?? r.toolUses;
-    const durationMs = (r.completedAt ?? now) - (r.startedAt ?? now);
-    return { id: r.id, name: getDisplayName(r.type), status: r.status, tokens, turns, toolUses, durationMs };
-  });
-}
-
-function sortEntries(entries: AgentTopEntry[], key: SortKey, asc: boolean): AgentTopEntry[] {
-  return [...entries].sort((a, b) => {
-    let cmp = 0;
-    if (key === "name") cmp = a.name.localeCompare(b.name);
-    else if (key === "tokens") cmp = a.tokens - b.tokens;
-    else if (key === "turns") cmp = a.turns - b.turns;
-    else if (key === "toolUses") cmp = a.toolUses - b.toolUses;
-    else if (key === "duration") cmp = a.durationMs - b.durationMs;
-    return asc ? cmp : -cmp;
-  });
-}
-
-
-
-function topStatusColor(status: string, fg: (c: string, t: string) => string): string {
-  if (status === "running") return fg("accent", status);
-  if (status === "queued") return fg("muted", status);
-  if (status === "completed") return fg("success", status);
-  if (status === "aborted") return fg("error", status);
-  if (status === "steered") return fg("warning", status);
-  return fg("dim", status);
-}
-
-function renderTopTable(
-  entries: AgentTopEntry[],
-  sortKey: SortKey,
-  sortAsc: boolean,
-  page: number,
-  pageSize: number,
-  th: ReturnType<typeof getThemeColors>,
-  width: number,
-): string[] {
-  // DashboardTheme stores ANSI codes as strings (e.g. "\x1b[38;2;100;100;120m"),
-  // not as functions. We wrap them to produce colored text by concatenating
-  // the code + text + reset sequence.
-  const theme = {
-    fg: (c: string, t: string) => {
-      const code = (c === "title" ? th.title
-        : c === "dim" ? th.dim
-        : c === "muted" ? th.muted
-        : c === "highlight" ? th.highlight
-        : c === "accent" ? th.accent
-        : c === "success" ? th.success
-        : c === "error" ? th.error
-        : c === "warning" ? th.error  // warning maps to error color
-        : c === "border" ? th.border
-        : th.dim) as string;
-      return `${code}${t}${th.reset}`;
-    },
-    bold: (t: string) => `${th.title}${t}${th.reset}`,
-  };
-
-  const headers = ["NAME", "STATUS", "TOKENS", "TURNS", "TOOLS", "DURATION"];
-  const colWidths = [18, 10, 12, 10, 10, 12];
-  const minW = colWidths.reduce((a, b) => a + b, 0) + 20;
-  const w = Math.max(width, minW);
-
-  const totalPages = Math.max(1, Math.ceil(entries.length / pageSize));
-  const start = page * pageSize;
-  const slice = entries.slice(start, start + pageSize);
-
-  const lines: string[] = [];
-
-  // Title line
-  lines.push(`${theme.fg("title", theme.bold(" AGENT TOP "))}  ${theme.fg("dim", `sorted by ${sortKey} ${sortAsc ? "↑" : "↓"}  page ${page + 1}/${totalPages}`)}  ` +
-    `${theme.fg("dim", `← → navigate  q/esc close`)}`);
-
-  // Column headers
-  const renderHeaderCell = (label: string, colW: number) => {
-    const l = sortKey === label.toLowerCase() ? `*${label}` : label;
-    return theme.fg("highlight", l.padEnd(colW));
-  };
-  lines.push(renderHeaderCell(headers[0], colWidths[0]) + " " +
-    renderHeaderCell(headers[1], colWidths[1]) + " " +
-    renderHeaderCell(headers[2], colWidths[2]) + " " +
-    renderHeaderCell(headers[3], colWidths[3]) + " " +
-    renderHeaderCell(headers[4], colWidths[4]) + " " +
-    renderHeaderCell(headers[5], colWidths[5]));
-
-  // Divider
-  lines.push(theme.fg("border", "─".repeat(w - 2)));
-
-  if (entries.length === 0) {
-    lines.push(theme.fg("muted", "  No agents to display"));
-    return lines;
-  }
-
-  for (const e of slice) {
-    const name = e.name.length > colWidths[0] - 2 ? `${e.name.slice(0, colWidths[0] - 2)}…` : e.name.padEnd(colWidths[0]);
-    const status = topStatusColor(e.status, theme.fg).padEnd(colWidths[1]);
-    const tokens = formatTokens(e.tokens).padStart(colWidths[2]);
-    const turns = formatTurns(e.turns).padStart(colWidths[3]);
-    const tools = `${e.toolUses}`.padStart(colWidths[4]);
-    const dur = formatMs(e.durationMs).padStart(colWidths[5]);
-    lines.push(`${theme.fg("dim", "│")} ${theme.fg("accent", name)} ${theme.fg("dim", "|")} ${status} ${theme.fg("dim", "|")} ${theme.fg("muted", tokens)} ${theme.fg("dim", "|")} ${theme.fg("muted", turns)} ${theme.fg("dim", "|")} ${theme.fg("muted", tools)} ${theme.fg("dim", "|")} ${theme.fg("dim", dur)}`);
-  }
-
-  return lines;
 }
 
 /** TUI component for the live agent top view. */
