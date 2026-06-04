@@ -486,8 +486,10 @@ export class AgentManager {
       if (record?.status !== "queued") continue;
       // startAgent is async — handle late failures via catch
       this.startAgent(next.id, record, next.args).catch((err) => {
-        // Late failure (e.g. strict worktree-isolation) — surface on the record
-        // so the user/agent can see it via /agents, then keep draining.
+        // Late failure (e.g. strict worktree-isolation) — clean up counters,
+        // surface on the record so the user/agent can see it via /agents, then keep draining.
+        this.sessionUsage.spawnedAgents--;
+        this.runningBackground--;
         record.status = "error";
         record.error = err instanceof Error ? err.message : String(err);
         record.completedAt = Date.now();
