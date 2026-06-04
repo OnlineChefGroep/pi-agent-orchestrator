@@ -6,6 +6,12 @@ import { renderSectionTitle } from "./section-title.js";
 import { renderSwarmSection } from "./swarm-section.js";
 import type { DashboardBody, DashboardRenderState } from "./types.js";
 
+/**
+ * Virtual scrolling window size — only render agents in this range around the viewport.
+ * This keeps rendering O(viewport_height) regardless of total agent count.
+ */
+const VIRTUAL_WINDOW = 50;
+
 function renderAgentSections(
   innerW: number,
   th: DashboardTheme,
@@ -42,6 +48,19 @@ function renderAgentSections(
   return lines;
 }
 
+/**
+ * Build dashboard body lines with optional virtual scrolling window.
+ *
+ * When total agent count exceeds VIRTUAL_WINDOW, only agents within a window
+ * around the selected index are fully rendered. This keeps render time O(vh)
+ * regardless of how many agents exist (50+ agents no longer block the event loop).
+ *
+ * @param innerW Inner width for content
+ * @param th Dashboard theme
+ * @param box Box drawing characters
+ * @param state Render state (agents, selection, activity)
+ * @returns DashboardBody with lines and focus map
+ */
 export function buildDashboardBodyLines(
   innerW: number,
   th: DashboardTheme,
@@ -49,7 +68,145 @@ export function buildDashboardBodyLines(
   state: DashboardRenderState,
 ): DashboardBody {
   const focusLineByAgentId = new Map<string, number>();
+
+  // --- Virtual scroll path: large agent lists use windowed rendering ---
+  if (state.agents.length > VIRTUAL_WINDOW) {
+    return buildVirtualBodyLines(innerW, th, box, state, focusLineByAgentId);
+  }
+
+  // --- Normal path: render all agents (fast for typical counts) ---
   const swarmLines = renderSwarmSection(innerW, th, box, state, focusLineByAgentId);
   const agentLines = renderAgentSections(innerW, th, box, state, focusLineByAgentId, swarmLines.length);
   return { lines: [...swarmLines, ...agentLines], focusLineByAgentId };
+}
+
+/**
+ * Virtual-scrolled body rendering for large agent lists.
+ *
+ * Renders only agents within a window around the selected index:
+ * - window_start = max(0, selectedIndex - VIRTUAL_WINDOW / 2)
+ * - window_end = min(agents.length, selectedIndex + VIRTUAL_WINDOW / 2)
+ *
+ * Missing agents are represented by compact skeleton lines showing count.
+ * This gives O(vh) rendering time even with hundreds of agents.
+ */
+function buildVirtualBodyLines(
+  innerW: number,
+  th: DashboardTheme,
+  box: BoxChars,
+  state: DashboardRenderState,
+  focusLineByAgentId: Map<string, number>,
+): DashboardBody {
+  const { agents, selectedIndex } = state;
+  const total = agents.length;
+
+  // Window around selected index
+  const halfWindow = Math.floor(VIRTUAL_WINDOW / 2);
+  const windowStart = Math.max(0, selectedIndex - halfWindow);
+  const windowEnd = Math.min(total, selectedIndex + halfWindow);
+
+  // Separate sections
+  const solo = agents.filter(a => !a.swarmId);
+  const swarms = [...new Set(solo.filter(a => a.swarmId).map(a => a.swarmId))];
+
+  const lines: string[] = [];
+
+  // Swarm section (collapsed for performance — show count only)
+  if (swarms.length > 0) {
+    lines.push("");
+    lines.push(renderSectionTitle("◆ SWARMS", `${swarms.length} active`, innerW, th, box));
+    // Show first swarm member of each swarm
+    for (const swarmId of swarms.slice(0, 5)) {
+      const first = solo.find(a => a.swarmId === swarmId);
+      if (first) {
+        focusLineByAgentId.set(first.id, lines.length);
+        lines.push(`  ${renderCompactRow(first, innerW - 2, th, state)}`);
+      }
+    }
+    if (swarms.length > 5) {
+      lines.push(`  ${th.dim}+ ${swarms.length - 5} more swarms${th.reset}`);
+    }
+  }
+
+  // Running section with virtual window
+  const running = solo.filter(a => a.status === "running");
+  if (running.length > 0) {
+    lines.push("");
+    lines.push(renderSectionTitle("▶ RUNNING", `${running.length} active`, innerW, th, box));
+
+    const winRunStart = Math.max(0, windowStart);
+    const winRunEnd = Math.min(running.length, windowEnd);
+    for (let i = winRunStart; i < winRunEnd; i++) {
+      const rec = running[i];
+      focusLineByAgentId.set(rec.id, lines.length + 1);
+      lines.push(...renderRunningCard(rec, innerW, th, box, state));
+    }
+    if (winRunStart > 0) {
+      lines.push(`  ${th.dim}+ ${winRunStart} earlier running agents${th.reset}`);
+    }
+    if (winRunEnd < running.length) {
+      lines.push(`  ${th.dim}+ ${running.length - winRunEnd} more running agents${th.reset}`);
+    }
+  }
+
+  // Queued section
+  const queued = solo.filter(a => a.status === "queued");
+  if (queued.length > 0) {
+    lines.push("");
+    lines.push(renderSectionTitle("◔ QUEUED", `${queued.length} queued`, innerW, th, box));
+    const winQStart = Math.max(0, windowStart);
+    const winQEnd = Math.min(queued.length, windowEnd);
+    for (let i = winQStart; i < winQEnd; i++) {
+      const rec = queued[i];
+      focusLineByAgentId.set(rec.id, lines.length);
+      lines.push(`  ${renderCompactRow(rec, innerW - 2, th, state)}`);
+    }
+    if (winQStart > 0) {
+      lines.push(`  ${th.dim}+ ${winQStart} earlier queued${th.reset}`);
+    }
+    if (winQEnd < queued.length) {
+      lines.push(`  ${th.dim}+ ${queued.length - winQEnd} more queued${th.reset}`);
+    }
+  }
+
+  // Done section — most relevant for inspection, show in chunks
+  const done = solo.filter(a => a.status !== "running" && a.status !== "queued");
+  if (done.length > 0) {
+    lines.push("");
+    lines.push(renderSectionTitle("✓ DONE", `${done.length} finished`, innerW, th, box));
+
+    // Map the global selectedIndex to a done-section-relative index.
+    // The global agents array is: [running agents][queued agents][done agents]
+    // We need to find which done agent the selectedIndex points to.
+    const doneOffset = selectedIndex - running.length - queued.length;
+    const halfWindow = Math.floor(VIRTUAL_WINDOW / 2);
+
+    // Window within the done section — clamp to keep result in [0, done.length]
+    const winDStart = Math.max(0, doneOffset - halfWindow);
+    const winDEnd = Math.min(done.length, doneOffset + halfWindow);
+
+    // If selectedIndex points to running/queued (doneOffset < 0), just show recent done
+    const startIdx = doneOffset < 0 ? Math.max(0, done.length - VIRTUAL_WINDOW) : winDStart;
+    const endIdx = doneOffset < 0 ? done.length : winDEnd;
+
+    for (let i = startIdx; i < endIdx; i++) {
+      const rec = done[i];
+      focusLineByAgentId.set(rec.id, lines.length);
+      lines.push(`  ${renderCompactRow(rec, innerW - 2, th, state)}`);
+    }
+    if (startIdx > 0) {
+      lines.push(`  ${th.dim}+ ${startIdx} earlier finished agents${th.reset}`);
+    }
+    if (endIdx < done.length) {
+      lines.push(`  ${th.dim}+ ${done.length - endIdx} more finished agents${th.reset}`);
+    }
+  }
+
+  // Virtual scroll indicator
+  if (total > VIRTUAL_WINDOW) {
+    lines.push("");
+    lines.push(`  ${th.dim}◈ ${total} total agents — showing window around selection${th.reset}`);
+  }
+
+  return { lines, focusLineByAgentId };
 }

@@ -1,4 +1,5 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
+import type { AgentManager } from "../../agent-manager.js";
 import { type BoxChars, borderLine, type DashboardTheme, framedRow } from "../theme.js";
 import { activityText, agentStats, getDisplayName } from "./helpers.js";
 import { renderTurnProgress } from "./progress.js";
@@ -11,6 +12,7 @@ export function renderDashboardDetailPanel(
   th: DashboardTheme,
   box: BoxChars,
   state: DashboardRenderState,
+  manager?: AgentManager,
 ): string[] {
   const innerW = Math.max(1, width - 4);
   const rec = state.agents[state.selectedIndex];
@@ -53,6 +55,30 @@ export function renderDashboardDetailPanel(
   if (rec.outputFile) details.push(`${th.dim}output: ${rec.outputFile}${th.reset}`);
   if (details.length > 0) {
     lines.push(framedRow(details.join(`  ${th.border}│${th.reset}  `), innerW, th, box));
+  }
+
+  // Session usage section
+  if (manager) {
+    const usage = manager.getSessionUsage();
+    const maxAgents = manager.getSessionMaxSpawns();
+    const maxTurns = manager.getSessionMaxTurns();
+
+    if (maxAgents > 0 || maxTurns > 0) {
+      const usageParts: string[] = [];
+      if (maxAgents > 0) {
+        const pct = Math.round((usage.spawnedAgents / maxAgents) * 100);
+        const color = pct >= 90 ? th.error : pct >= 75 ? th.dim : th.accent;
+        usageParts.push(`${color}⬡ agents: ${usage.spawnedAgents}/${maxAgents} (${pct}%)${th.reset}`);
+      }
+      if (maxTurns > 0) {
+        const pct = Math.round((usage.totalTurns / maxTurns) * 100);
+        const color = pct >= 90 ? th.error : pct >= 75 ? th.dim : th.dim;
+        usageParts.push(`${color}⟳ turns: ${usage.totalTurns}/${maxTurns} (${pct}%)${th.reset}`);
+      }
+      if (usageParts.length > 0) {
+        lines.push(framedRow(`${th.dim}session:  ${usageParts.join(`  ${th.border}│${th.reset}  `)}${th.reset}`, innerW, th, box));
+      }
+    }
   }
 
   const act = activityText(rec, activity);
