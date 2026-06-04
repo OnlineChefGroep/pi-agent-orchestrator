@@ -2,16 +2,10 @@
 /**
  * agent-dashboard.ts — Rich interactive TUI dashboard for subagent management.
  *
- * Current state (strong iteration on feat/rich-subagent-tui):
- * - Full Component + vim navigation (matchesKey)
- * - Live rich activity (spinners, describeActivity, turns, tokens)
- * - Multi-select (Space) + bulk kill
- * - Real hotkeys: Shift+K=kill, s=steer (with editor), Enter=view
- * - Toggleable ? help screen
- * - Rich per-agent metadata (worktree, group/handoff, validation, outputFile)
- * - Themed (premium/retro/plain)
- *
- * Still fully additive. Matches the spirit of OpenCode + Claude Code agent control.
+ * Performance notes:
+ * - We use debounced requestRender() to avoid lag spikes when many agents are spawned quickly.
+ * - refreshAgents() is only called from the timer and explicit action points, not from render().
+ * - spinnerFrame is only incremented during actual visible renders.
  */
 
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
@@ -53,21 +47,17 @@ export class AgentDashboard implements Component {
   private selectedIndex = 0;
   private closed = false;
   private agents: AgentRecord[] = [];
-  private spinnerFrame = 0; // for live activity animation
+  private spinnerFrame = 0;
   private bodyLineCount = 0;
   private bodyFocusLineByAgentId = new Map<string, number>();
 
-  /** Multi-select support (Space to toggle) — very powerful for bulk operations */
+  /** Multi-select support */
   private selectedIds = new Set<string>();
-  private showHelp = false; // toggled by ?
+  private showHelp = false;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-  /**
-   * Create a new AgentDashboard instance.
-   * @param tui - The TUI instance for rendering and input handling
-   * @param options - Dashboard configuration and callbacks
-   * @param done - Callback to invoke when the dashboard is closed
-   */
+  /** Debounce mechanism to prevent lag spikes on rapid state changes (e.g. spawning many agents) */
+  private renderPending = false;
 
   constructor(
     private readonly tui: TUI,
@@ -76,15 +66,30 @@ export class AgentDashboard implements Component {
   ) {
     this.refreshAgents();
 
-    // Live reactivity: auto-refresh the view at configured interval while open
-    // (makes spinners and activity feel much more alive)
     const refreshInterval = getDashboardRefreshInterval();
     this.refreshTimer = setInterval(() => {
       if (!this.closed) {
         this.refreshAgents();
-        this.tui.requestRender?.();
+        this.requestRender();
       }
     }, refreshInterval);
+  }
+
+  /**
+   * Debounced render request.
+   * Prevents multiple renders in the same microtask when many agents are spawned quickly.
+   */
+  private requestRender(): void {
+    if (this.renderPending || this.closed) return;
+
+    this.renderPending = true;
+
+    queueMicrotask(() => {
+      if (!this.closed && this.renderPending) {
+        this.tui.requestRender?.();
+      }
+      this.renderPending = false;
+    });
   }
 
   private close(): void {
@@ -97,26 +102,19 @@ export class AgentDashboard implements Component {
     this.done(undefined);
   }
 
-  /**
-   * Refresh the agent list from the manager and update selection bounds.
-   */
   private refreshAgents(): void {
     this.agents = this.options.manager.listAgents();
-    // Clamp selection
+
     if (this.selectedIndex >= this.agents.length) {
       this.selectedIndex = Math.max(0, this.agents.length - 1);
     }
-    // Remove any selected IDs that no longer exist (agents finished/cleaned)
+
     const currentIds = new Set(this.agents.map(a => a.id));
     for (const id of this.selectedIds) {
       if (!currentIds.has(id)) this.selectedIds.delete(id);
     }
   }
 
-  /**
-   * Handle keyboard input for dashboard navigation and actions.
-   * @param data - The input character or key sequence
-   */
   handleInput(data: string): void {
     const rec = this.agents[this.selectedIndex];
     const viewportHeight = this.getViewportHeight();
@@ -127,7 +125,6 @@ export class AgentDashboard implements Component {
       return;
     }
 
-    // Navigation (vim + arrows)
     if (matchesKey(data, "up") || matchesKey(data, "k")) {
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
     } else if (matchesKey(data, "down") || matchesKey(data, "j")) {
@@ -141,21 +138,20 @@ export class AgentDashboard implements Component {
       this.selectedIndex = Math.min(this.agents.length - 1, this.selectedIndex + this.getViewportHeight());
       this.scrollOffset = Math.min(maxScroll, this.scrollOffset + this.getViewportHeight());
     } else if (matchesKey(data, "home")) {
-      this.selectedIndex = 0; this.scrollOffset = 0;
+      this.selectedIndex = 0;
+      this.scrollOffset = 0;
     } else if (matchesKey(data, "end")) {
       if (this.agents.length === 0) return;
-      this.selectedIndex = this.agents.length - 1; this.scrollOffset = maxScroll;
+      this.selectedIndex = this.agents.length - 1;
+      this.scrollOffset = maxScroll;
     }
-
-    // Actions (Claude Code / OpenCode style hotkeys)
     else if (matchesKey(data, "enter") || matchesKey(data, "return")) {
       if (rec && this.options.onViewConversation) {
         this.close();
         void this.options.onViewConversation(rec);
         return;
       }
-    } 
-    // Multi-select toggle (Space) - foundation for bulk operations
+    }
     else if (matchesKey(data, "space")) {
       if (rec) {
         if (this.selectedIds.has(rec.id)) {
@@ -163,13 +159,12 @@ export class AgentDashboard implements Component {
         } else {
           this.selectedIds.add(rec.id);
         }
-        this.tui.requestRender();
+        this.requestRender();
       }
     }
-    // Kill / Abort — supports both single and bulk (multi-select)
     else if (matchesKey(data, "shift+k")) {
-      const idsToKill = this.selectedIds.size > 0 
-        ? Array.from(this.selectedIds) 
+      const idsToKill = this.selectedIds.size > 0
+        ? Array.from(this.selectedIds)
         : (rec ? [rec.id] : []);
 
       let anyAborted = false;
@@ -178,33 +173,35 @@ export class AgentDashboard implements Component {
         if (aborted) anyAborted = true;
       }
       if (anyAborted) {
-        this.selectedIds.clear(); // clear selection after bulk action
+        this.selectedIds.clear();
         this.refreshAgents();
-        this.tui.requestRender();
+        this.requestRender();
       }
-    } 
+    }
     else if (matchesKey(data, "s") || matchesKey(data, "shift+s")) {
-      // Steer (currently only supports single; multi-steer is advanced)
       if (rec && this.options.onSteer) {
         this.close();
         void this.options.onSteer(rec.id);
         return;
       }
-    } else if (matchesKey(data, "p") || matchesKey(data, "shift+p")) {
-      // Permissions / tool scope view (very valuable for understanding what the agent can actually do)
+    }
+    else if (matchesKey(data, "p") || matchesKey(data, "shift+p")) {
       if (rec && this.options.onShowPermissions) {
         this.close();
         void this.options.onShowPermissions(rec);
         return;
       }
-    } else if (matchesKey(data, "r") || matchesKey(data, "shift+r")) {
+    }
+    else if (matchesKey(data, "r") || matchesKey(data, "shift+r")) {
       this.refreshAgents();
-      this.tui.requestRender();
-    } else if (matchesKey(data, "?")) {
+      this.requestRender();
+    }
+    else if (matchesKey(data, "?")) {
       this.showHelp = !this.showHelp;
-      this.tui.requestRender();
-    } else if (matchesKey(data, "w") || matchesKey(data, "shift+w")) {
-      const targets = this.selectedIds.size > 0 
+      this.requestRender();
+    }
+    else if (matchesKey(data, "w") || matchesKey(data, "shift+w")) {
+      const targets = this.selectedIds.size > 0
         ? this.agents.filter(a => this.selectedIds.has(a.id))
         : (rec ? [rec] : []);
 
@@ -215,27 +212,19 @@ export class AgentDashboard implements Component {
       }
     }
 
-    // Advance spinner for live feel on any input
+    // Only advance spinner when user is actively interacting
     this.spinnerFrame++;
     this.keepSelectedBodyLineVisible();
   }
 
-  /**
-   * Calculate the viewport height based on terminal size and dashboard percentage.
-   * @returns The number of rows available for agent display
-   */
   private getViewportHeight(): number {
     const rows = this.tui.terminal.rows;
     const maxRows = Math.floor((rows * DASHBOARD_HEIGHT_PCT) / 100);
     return Math.max(MIN_VIEWPORT, maxRows - this.chromeLines());
   }
 
-  /**
-   * Calculate the number of lines used for chrome (header, footer, etc.).
-   * @returns The number of chrome lines
-   */
   private chromeLines(): number {
-    return 16; // header(5) + detail panel(5) + footer(3) + padding(3)
+    return 16;
   }
 
   private keepSelectedBodyLineVisible(): void {
@@ -268,20 +257,14 @@ export class AgentDashboard implements Component {
   }
 
   /**
-   * Render the dashboard UI as an array of strings.
-   * @param width - The available width for rendering
-   * @returns Array of strings representing the dashboard UI
+   * Main render method.
+   * Note: We no longer call refreshAgents() here to avoid redundant work during rapid state changes.
    */
   render(width: number): string[] {
-    this.refreshAgents();
-    this.spinnerFrame++;
-
     const th = getThemeColors();
     const box = getBoxChars();
-    // === FIX: Robust width handling for Pi agent terminal ===
-    // The overlay sometimes passes a too-small width.
-    // We now take the real terminal size as a strong fallback so the
-    // dashboard actually uses ~94% of the available space and centers properly.
+
+    // Robust width handling
     const terminalCols =
       (this.tui as any)?.terminal?.columns ??
       process.stdout?.columns ??
@@ -290,7 +273,6 @@ export class AgentDashboard implements Component {
     const requestedWidth = width || terminalCols;
     const safeWidth = Math.max(60, Math.min(requestedWidth, terminalCols - 2));
     const innerW = Math.max(1, safeWidth - 4);
-    // === END FIX ===
 
     const state = this.renderState();
     const lines = renderDashboardHeader(safeWidth, th, box, state);
@@ -334,12 +316,6 @@ export class AgentDashboard implements Component {
 
 /**
  * Launch the interactive agent dashboard as an overlay.
- * Mirrors the viewAgentConversation pattern for consistency.
- *
- * The overlayOptions request 94% width + center anchor. However, the Pi TUI
- * host does not always respect this perfectly. The render() method now has a
- * strong fallback to the real terminal size so the dashboard renders at a
- * usable width and appears properly centered.
  */
 export async function showAgentDashboard(
   ctx: ExtensionCommandContext,
@@ -356,7 +332,8 @@ export async function showAgentDashboard(
       return new AgentDashboard(tui, { manager, agentActivity, onViewConversation, onAbort, onSteer, onShowPermissions, onSwarmAction }, done);
     },
     {
-      overlay: true,        overlayOptions: {
+      overlay: true,
+      overlayOptions: {
         anchor: "center",
         width: "98%",
         maxHeight: `${DASHBOARD_HEIGHT_PCT}%`,
