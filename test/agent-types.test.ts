@@ -86,7 +86,7 @@ describe("agent type registry", () => {
 
     it("Explore has read-only tools", () => {
       const config = getConfig("Explore");
-      expect(config.builtinToolNames).toEqual(["read", "grep"]);
+      expect(config.builtinToolNames).toEqual(["read", "bash", "grep"]);
       expect(config.builtinToolNames).not.toContain("edit");
       expect(config.builtinToolNames).not.toContain("write");
     });
@@ -221,7 +221,7 @@ describe("agent type registry", () => {
       expect(config.displayName).toBe("Agent");
       expect(config.description).toBe("Safe fallback agent with minimal read-only permissions");
       // Safe-minimal allowlist: read-only, no file modifications.
-      expect(config.builtinToolNames).toEqual(["read", "grep"]);
+      expect(config.builtinToolNames).toEqual(["read", "bash", "grep"]);
       // No extension or skills exposure (audit A2).
       expect(config.extensions).toBe(false);
       expect(config.skills).toBe(false);
@@ -308,7 +308,7 @@ describe("agent type registry", () => {
   });
 
   describe("permission inheritance", () => {
-    const READ_ONLY_TOOLS = ["read", "grep"];
+    const READ_ONLY_TOOLS = ["read", "bash", "grep"];
     const ALL_TOOLS = BUILTIN_TOOL_NAMES;
 
     it("RO parent spawns child → child tools are subset of parent RO tools", () => {
@@ -637,7 +637,7 @@ describe("agent type registry", () => {
       });
 
       it("wildcard child is intersected with parent's concrete tools (not yielding empty set)", () => {
-        const READ_ONLY_TOOLS = ["read", "grep"];
+        const READ_ONLY_TOOLS = ["read", "bash", "grep"];
         // Without the fix: intersectToolNames(["*"], READ_ONLY_TOOLS) = []
         // With the fix: normalize(["*"]) = BUILTIN_TOOL_NAMES, then
         // intersected with READ_ONLY_TOOLS = READ_ONLY_TOOLS.
@@ -694,7 +694,7 @@ describe("agent type registry", () => {
 
         const config = getConfig("nonexistent-type");
         // Fallback is the safe-minimal allowlist, not the wildcard expansion.
-        expect(config.builtinToolNames).toEqual(["read", "grep"]);
+        expect(config.builtinToolNames).toEqual(["read", "bash", "grep"]);
         expect(config.builtinToolNames).not.toContain("*");
         expect(config.builtinToolNames).not.toContain("write");
         expect(config.builtinToolNames).not.toContain("edit");
@@ -734,11 +734,11 @@ describe("agent type registry", () => {
         const config: AgentConfig = makeAgentConfig({
           name: "wildcard-partition-filtered",
           builtinToolNames: ["*"],
-          partitionMembership: { secure: ["read", "grep"] },
+          partitionMembership: { secure: ["read", "bash", "grep"] },
         });
 
         const tools = filterByPartitions(config, ["secure"]);
-        expect(tools).toEqual(["read", "grep"]);
+        expect(tools).toEqual(["read", "bash", "grep"]);
         expect(tools).not.toContain("*");
         expect(tools).not.toContain("write");
         expect(tools).not.toContain("edit");
@@ -785,13 +785,6 @@ describe("agent type registry", () => {
       }
     });
 
-    it("fallback does not include bash (read-only)", () => {
-      const config = getConfig("unknown");
-      expect(config.builtinToolNames).not.toContain("bash");
-      expect(config.builtinToolNames).toContain("read");
-      expect(config.builtinToolNames).toContain("grep");
-    });
-
     it("fallback still respects parent restrictions (defense in depth)", () => {
       // The safe-minimal fallback must still flow through
       // applyParentRestrictions, so a parent that has fewer tools
@@ -802,7 +795,7 @@ describe("agent type registry", () => {
         skills: true,
       };
       const config = getConfig("unknown", parentConfig);
-      // Intersection of safe-minimal ["read", "grep"] with
+      // Intersection of safe-minimal ["read", "bash", "grep"] with
       // parent ["read"] = ["read"].
       expect(config.builtinToolNames).toEqual(["read"]);
     });

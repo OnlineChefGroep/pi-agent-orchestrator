@@ -90,10 +90,11 @@ export function recordAudit(entry: AuditEntry): void {
   if (!silent) {
     const level = entry.outcome === "success" ? "info" : "warn";
     logger[level](`rpc:${entry.operation} ${entry.outcome}`, {
+      // Spread metadata first so trusted fields cannot be spoofed.
+      ...(entry.metadata ?? {}),
       extensionId: entry.extensionId,
       ...(entry.extensionName ? { extensionName: entry.extensionName } : {}),
       durationMs: entry.durationMs,
-      ...(entry.metadata && Object.keys(entry.metadata).length > 0 ? { meta: entry.metadata } : {}),
     });
   }
 

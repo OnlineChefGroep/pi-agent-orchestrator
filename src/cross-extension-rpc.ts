@@ -17,7 +17,7 @@ import { type ModelRegistry, resolveModel } from "./model-resolver.js";
 // fragile string matching.
 // ---------------------------------------------------------------------------
 
-export type RpcErrorCode = "RATE_LIMITED" | "UNAUTHORIZED" | "ERROR" | "INVALID_PARAMS";
+export type RpcErrorCode = "RATE_LIMITED" | "UNAUTHORIZED" | "ERROR";
 
 export class RpcError extends Error {
   readonly code: RpcErrorCode;
@@ -361,12 +361,6 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
       deps,
       "spawn",
       ({ requestId, type, prompt, options }) => {
-        if (typeof type !== "string" || !type) {
-          throw new RpcError("INVALID_PARAMS", "Missing or empty agent type");
-        }
-        if (typeof prompt !== "string" || !prompt) {
-          throw new RpcError("INVALID_PARAMS", "Missing or empty prompt");
-        }
         const ctx = getCtx();
         if (!ctx) throw new Error("No active session");
 
@@ -403,9 +397,6 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
     events,
     "subagents:rpc:stop",
     auditedRpc<{ requestId: string; agentId: string }>(deps, "stop", ({ requestId, agentId }) => {
-      if (typeof agentId !== "string" || !agentId) {
-        throw new RpcError("INVALID_PARAMS", "Missing or empty agentId");
-      }
       const auth = authorizeRpcMutation(deps, requestId, "stop");
       if (!manager.abort(agentId)) throw new Error("Agent not found");
       return { auth, result: undefined };
