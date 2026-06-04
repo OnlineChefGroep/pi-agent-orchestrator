@@ -91,6 +91,9 @@ export class AgentWidget {
   /** Render timing tracker for monitoring update() performance. */
   private renderMetrics = new RenderMetrics("widget-update", SLOW_WIDGET_UPDATE_MS);
 
+  /** Timestamp of first spawned agent (for time-to-first-visible). */
+  private firstSpawnedAt = 0;
+
   /** Minimum gap between consecutive update() calls (16ms ~ 60fps). */
   private static readonly SPAWN_BATCH_MS = 16;
 
@@ -250,10 +253,10 @@ export class AgentWidget {
     return this.renderMetrics.snapshot();
   }
 
-  private renderWidget(tui: any, theme: Theme): string[] {
+private renderWidget(tui: any, theme: Theme): string[] {
     const renderStart = performance.now();
+    const allAgents = this.manager.listAgents();
     try {
-      const allAgents = this.manager.listAgents();
       const visibleAgents = this.getVisibleWindow(allAgents);
       return renderAgentWidget({
         agents: visibleAgents,
@@ -267,7 +270,8 @@ export class AgentWidget {
         pageCount: this.maxPages,
       });
     } finally {
-      this.renderMetrics.record(performance.now() - renderStart);
+      const activeAgents = allAgents.filter(a => a.status === "running" || a.status === "queued").length;
+      this.renderMetrics.record(performance.now() - renderStart, activeAgents);
     }
   }
 
@@ -337,6 +341,13 @@ export class AgentWidget {
     }
     const hasActive = runningCount > 0 || queuedCount > 0;
 
+    // Track active agents and first spawn timestamp
+    const totalActive = runningCount + queuedCount;
+    if (totalActive > 0 && this.firstSpawnedAt === 0) {
+      this.firstSpawnedAt = Date.now();
+      this.renderMetrics.setFirstSpawnTimestamp(this.firstSpawnedAt);
+    }
+
     // Nothing to show — clear widget
     if (!hasActive && !hasFinished) {
       if (this.widgetRegistered) {
@@ -377,6 +388,7 @@ export class AgentWidget {
     // Dirty check: skip TUI re-render when only the spinner frame advanced.
     // On turn boundaries and structural changes, we always re-render.
     if (!this.dirty && this.widgetRegistered) {
+      this.renderMetrics.recordRequested(); // Track skipped renders
       return; // Nothing changed — don't trigger TUI re-render
     }
 

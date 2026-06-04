@@ -126,6 +126,9 @@ export class AgentDashboard implements Component {
   /** Render timing tracker for monitoring dashboard render() performance. */
   private renderMetrics = new RenderMetrics("dashboard-render", 50);
 
+  /** Timestamp of first spawned agent (for time-to-first-visible). */
+  private firstSpawnedAt = 0;
+
   constructor(
     private readonly tui: TUI,
     private readonly options: AgentDashboardOptions,
@@ -202,6 +205,9 @@ export class AgentDashboard implements Component {
    */
   private requestRender(): void {
     if (this.closed) return;
+
+    // Track request count for debounce effectiveness (called before debounce filtering).
+    this.renderMetrics.recordRequested();
 
     const now = Date.now();
     const elapsed = now - this.lastRenderTime;
@@ -544,6 +550,13 @@ export class AgentDashboard implements Component {
   render(width: number): string[] {
     const renderStart = performance.now();
 
+    // Track first spawn timestamp for time-to-first-visible.
+    const hasSpawned = this.agents.length > 0;
+    if (hasSpawned && this.firstSpawnedAt === 0) {
+      this.firstSpawnedAt = Date.now();
+      this.renderMetrics.setFirstSpawnTimestamp(this.firstSpawnedAt);
+    }
+
     // Use memoized theme/box chars (only recomputed on UI style change).
     const th = this.getTheme();
     const box = this.getBox();
@@ -594,8 +607,9 @@ export class AgentDashboard implements Component {
     // Reset dirty flag after a full render.
     this.dirty = false;
 
-    // Record render timing.
-    this.renderMetrics.record(performance.now() - renderStart);
+    // Record render timing with active agent context.
+    const activeAgents = this.agents.filter(a => a.status === "running" || a.status === "queued").length;
+    this.renderMetrics.record(performance.now() - renderStart, activeAgents);
 
     return lines;
   }
