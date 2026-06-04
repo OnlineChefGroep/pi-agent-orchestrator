@@ -181,13 +181,18 @@ function buildVirtualBodyLines(
     const doneOffset = selectedIndex - running.length - queued.length;
     const halfWindow = Math.floor(VIRTUAL_WINDOW / 2);
 
-    // Window within the done section — clamp to keep result in [0, done.length]
-    const winDStart = Math.max(0, doneOffset - halfWindow);
-    const winDEnd = Math.min(done.length, doneOffset + halfWindow);
+    // Window within the done section — always VIRTUAL_WINDOW sized, centered around
+    // doneOffset. When doneOffset < 0 (selection in running/queued), show the most recent
+    // VIRTUAL_WINDOW agents from the end of the done list (recent history scrollback).
+    const winDStart = doneOffset < 0
+      ? Math.max(0, done.length - VIRTUAL_WINDOW)
+      : Math.max(0, doneOffset - halfWindow);
+    const winDEnd = doneOffset < 0
+      ? done.length
+      : Math.min(done.length, doneOffset + halfWindow);
 
-    // If selectedIndex points to running/queued (doneOffset < 0), just show recent done
-    const startIdx = doneOffset < 0 ? Math.max(0, done.length - VIRTUAL_WINDOW) : winDStart;
-    const endIdx = doneOffset < 0 ? done.length : winDEnd;
+    const startIdx = winDStart;
+    const endIdx = winDEnd;
 
     for (let i = startIdx; i < endIdx; i++) {
       const rec = done[i];
