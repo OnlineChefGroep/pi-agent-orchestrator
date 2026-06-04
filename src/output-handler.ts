@@ -128,7 +128,7 @@ interface TreeNode {
   children: TreeNode[];
 }
 
-function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" | "json"): string {
+export function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" | "json"): string {
   if (format === "json") {
     const roots: TreeNode[] = [];
     const map = new Map<string, TreeNode>();

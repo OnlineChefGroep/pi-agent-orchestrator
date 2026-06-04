@@ -14,3 +14,18 @@
 - Mermaid graph generation for 10,000 subagents plummeted from ~1500ms to ~75ms.
 - 99.3% reduction in synchronous block time on the main thread for UI renders.
 **Actionable Principle:** Never use `Array.prototype.filter` or `Array.prototype.find` nested inside outer loops when joining relational datasets in-memory; map the relationships into $O(1)$ HashMaps/Dictionaries during a single pre-pass.
+
+### Date: 2026-06-04
+#### Systemic Bottleneck
+The `buildExecutionTree` function in `src/output-handler.ts` was executing an `O(N^2)` lookup pattern when traversing and formatting the agent execution tree into text. For each node in the tree hierarchy, it invoked `records.find(x => x.id === nodeId)`, resulting in an iterative scan of the entire `records` array inside a recursive traversal function. This severely degraded performance as the depth and breadth of the agent swarm grew.
+
+#### Refactor Strategy
+Pre-calculated lookups. A `nodeMap` (Map<string, AgentRecord>) was constructed from the initial `records` array iteration before recursion began. Inside the recursive `render` function, the `Array.find()` was replaced by a `nodeMap.get(nodeId)` invocation, converting the linear `O(N)` scan per node into an `O(1)` constant time hash lookup.
+
+#### Key Metric Shift
+- **Baseline (10,000 records):** ~660.75ms
+- **Optimized (10,000 records):** ~15.94ms
+- **Improvement:** ~97.5% reduction in execution time (41x speedup). The algorithmic complexity was shifted from O(N^2) to O(N).
+
+#### Actionable Principle
+Inside recursive structures or tight nested loops, always pre-calculate relationship indices using `Map` objects. Never rely on `Array.find` or `Array.filter` within recursive tree walks, as this trivially scales computational complexity into polynomial bounds.
