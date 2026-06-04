@@ -1,3 +1,54 @@
+/**
+ * Render a compact activity heatmap of recent agent activity.
+ * Shows 10 segments (each = 30 seconds, 5-minute window) with Unicode block intensity.
+ */
+function renderActivityHeatmap(
+  agentActivity: Map<string, AgentActivity>,
+  theme: Theme,
+  availableWidth: number,
+): string | undefined {
+  if (agentActivity.size === 0) return undefined;
+
+  const now = Date.now();
+  const WINDOW_MS = 5 * 60_000;
+  const SEGMENT_MS = 30_000;
+  const SEGMENT_COUNT = 10;
+
+  const buckets = new Array(SEGMENT_COUNT).fill(0);
+  let activeCount = 0;
+
+  for (const [, act] of agentActivity) {
+    if (!act.lastSeenMs) continue;
+    const age = now - act.lastSeenMs;
+    if (age > WINDOW_MS) continue;
+    activeCount++;
+    const bucketIdx = Math.min(SEGMENT_COUNT - 1, Math.floor((WINDOW_MS - age) / SEGMENT_MS));
+    buckets[bucketIdx]++;
+  }
+
+  if (activeCount === 0) return undefined;
+
+  const maxBucket = Math.max(1, ...buckets);
+  const blocks = ["░", "▒", "▓", "█"];
+  const heatBar = buckets.map((count) => {
+    const level = count === 0 ? 0 : count < maxBucket * 0.33 ? 1 : count < maxBucket * 0.66 ? 2 : 3;
+    return blocks[level];
+  }).join("");
+
+  const label = `${theme.fg("dim", "heat:")} ${heatBar}  ${theme.fg("accent", `◉ ${activeCount} active`)}`;
+
+  // Truncate if needed
+  const w = availableWidth;
+  if (label.length > w) {
+    const heatOnly = `${theme.fg("dim", "heat:")} ${heatBar}`;
+    const extra = activeCount > 1 ? ` +${activeCount - 1}` : "";
+    const compact = `${heatOnly}  ${theme.fg("accent", `◉ ${activeCount}`)}${extra}`;
+    return compact.length > w ? `${compact.slice(0, w - 1)}…` : compact;
+  }
+
+  return label;
+}
+
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { getUiStyle } from "../agent-registry.js";
 import type { AgentRecord } from "../types.js";
@@ -141,9 +192,17 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     ? truncate(`${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("dim", `${queued.length} queued`)}`)
     : undefined;
 
-  const maxBody = MAX_WIDGET_LINES - 1;
+  // Activity heatmap: shown when there are active (running/queued) agents
+  const heatLine = hasActive
+    ? renderActivityHeatmap(options.agentActivity, theme, w)
+    : undefined;
+
+  const lines: string[] = heatLine
+    ? [truncate(heatLine)]
+    : [truncate(`${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}`)];
+
+  const maxBody = MAX_WIDGET_LINES - (heatLine ? 1 : 0);
   const totalBody = finishedLines.length + runningLines.length * 2 + (queuedLine ? 1 : 0);
-  const lines: string[] = [truncate(`${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}`)];
 
   if (totalBody <= maxBody) {
     lines.push(...finishedLines);
