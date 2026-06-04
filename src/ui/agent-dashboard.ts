@@ -412,8 +412,20 @@ export class AgentDashboard implements Component {
     return Math.max(MIN_VIEWPORT, maxRows - this.chromeLines());
   }
 
+  /**
+   * Dynamically compute chrome lines based on terminal height.
+   * Small terminals get proportionally less chrome; large terminals get more.
+   * - Very small (< 30 rows): 10 lines (minimal chrome)
+   * - Small (30-50 rows): 13 lines
+   * - Normal (50-80 rows): 16 lines
+   * - Large (> 80 rows): 19 lines
+   */
   private chromeLines(): number {
-    return 16;
+    const rows = this.tui.terminal.rows;
+    if (rows < 30) return 10;
+    if (rows < 50) return 13;
+    if (rows < 80) return 16;
+    return 19;
   }
 
   private keepSelectedBodyLineVisible(): void {

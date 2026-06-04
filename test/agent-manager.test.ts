@@ -468,16 +468,22 @@ describe("AgentManager — isolation: worktree fails loud, no silent fallback", 
     manager?.dispose();
   });
 
-  it("spawn() throws when createWorktree returns undefined; no orphan record left behind", async () => {
+  it("spawn() handles async worktree failure and cleans up record", async () => {
     const { createWorktree } = await import("../src/worktree.js");
-    vi.mocked(createWorktree).mockReturnValueOnce(undefined);
+    vi.mocked(createWorktree).mockResolvedValueOnce(undefined);
     vi.mocked(runAgent).mockClear();
 
     manager = new AgentManager();
-    expect(() => manager.spawn(mockPi, mockCtx, "general-purpose", "test", {
+    manager.spawn(mockPi, mockCtx, "general-purpose", "test", {
       description: "test",
       isolation: "worktree",
-    })).toThrow(/isolation: "worktree"/);
+    });
+
+    // Wait for the async startup to fail (catch handler runs in microtask)
+    // and for the rejected promise to settle
+    await new Promise((r) => setTimeout(r, 20));
+    // Flush microtasks to ensure unhandled rejections are processed
+    await new Promise((r) => queueMicrotask(r));
 
     // Cleaned up — no orphan in listAgents()
     expect(manager.listAgents()).toEqual([]);

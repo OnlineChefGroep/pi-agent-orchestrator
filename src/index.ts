@@ -255,6 +255,12 @@ export default async function (pi: ExtensionAPI) {
     });
   });
 
+  // Wire up agentActivity cleanup: when records are removed from the
+  // manager (cleanup cycle, clearCompleted), purge corresponding activity entries.
+  manager.onRecordRemoved = (id: string) => {
+    agentActivity.delete(id);
+  };
+
   // Attach the global hook registry to the agent manager
   manager.hooks = hookRegistry;
 

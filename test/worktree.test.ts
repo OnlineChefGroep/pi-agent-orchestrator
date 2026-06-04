@@ -33,8 +33,8 @@ describe("worktree", () => {
   });
 
   describe("createWorktree", () => {
-    it("creates a worktree in tmpdir", () => {
-      const wt = createWorktree(repoDir, "test-id-1");
+    it("creates a worktree in tmpdir", async () => {
+      const wt = await createWorktree(repoDir, "test-id-1");
       expect(wt).toBeDefined();
       expect(existsSync(wt!.path)).toBe(true);
       expect(wt!.branch).toBe("pi-agent-test-id-1");
@@ -46,30 +46,30 @@ describe("worktree", () => {
       try { execFileSync("git", ["worktree", "remove", "--force", wt!.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
     });
 
-    it("returns undefined for non-git directory", () => {
+    it("returns undefined for non-git directory", async () => {
       const nonGit = mkdtempSync(join(tmpdir(), "pi-wt-nongit-"));
       try {
-        const wt = createWorktree(nonGit, "test-id-2");
+        const wt = await createWorktree(nonGit, "test-id-2");
         expect(wt).toBeUndefined();
       } finally {
         rmSync(nonGit, { recursive: true, force: true });
       }
     });
 
-    it("returns undefined for git repo with no commits", () => {
+    it("returns undefined for git repo with no commits", async () => {
       const emptyRepo = mkdtempSync(join(tmpdir(), "pi-wt-empty-"));
       try {
         execFileSync("git", ["init"], { cwd: emptyRepo, stdio: "pipe" });
-        const wt = createWorktree(emptyRepo, "no-commits");
+        const wt = await createWorktree(emptyRepo, "no-commits");
         expect(wt).toBeUndefined();
       } finally {
         rmSync(emptyRepo, { recursive: true, force: true });
       }
     });
 
-    it("uses unique paths for multiple worktrees", () => {
-      const wt1 = createWorktree(repoDir, "multi-1");
-      const wt2 = createWorktree(repoDir, "multi-2");
+    it("uses unique paths for multiple worktrees", async () => {
+      const wt1 = await createWorktree(repoDir, "multi-1");
+      const wt2 = await createWorktree(repoDir, "multi-2");
       expect(wt1).toBeDefined();
       expect(wt2).toBeDefined();
       expect(wt1!.path).not.toBe(wt2!.path);
@@ -81,8 +81,8 @@ describe("worktree", () => {
   });
 
   describe("cleanupWorktree", () => {
-    it("removes worktree when no changes made", () => {
-      const wt = createWorktree(repoDir, "clean-1")!;
+    it("removes worktree when no changes made", async () => {
+      const wt = (await createWorktree(repoDir, "clean-1"))!;
       expect(wt).toBeDefined();
 
       const result = cleanupWorktree(repoDir, wt, "test cleanup");
@@ -90,8 +90,8 @@ describe("worktree", () => {
       expect(result.branch).toBeUndefined();
     });
 
-    it("commits changes and creates branch when changes exist", () => {
-      const wt = createWorktree(repoDir, "dirty-1")!;
+    it("commits changes and creates branch when changes exist", async () => {
+      const wt = (await createWorktree(repoDir, "dirty-1"))!;
       expect(wt).toBeDefined();
 
       // Make a change in the worktree
@@ -118,15 +118,15 @@ describe("worktree", () => {
       try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
     });
 
-    it("does not force-overwrite existing branch", () => {
+    it("does not force-overwrite existing branch", async () => {
       // Create first worktree, make changes, cleanup → creates branch
-      const wt1 = createWorktree(repoDir, "conflict-1")!;
+      const wt1 = (await createWorktree(repoDir, "conflict-1"))!;
       writeFileSync(join(wt1.path, "file1.txt"), "first run");
       const result1 = cleanupWorktree(repoDir, wt1, "first");
       expect(result1.branch).toBe("pi-agent-conflict-1");
 
       // Create second worktree with same agent ID, make changes
-      const wt2 = createWorktree(repoDir, "conflict-1")!;
+      const wt2 = (await createWorktree(repoDir, "conflict-1"))!;
       writeFileSync(join(wt2.path, "file2.txt"), "second run");
       const result2 = cleanupWorktree(repoDir, wt2, "second");
 
@@ -148,8 +148,8 @@ describe("worktree", () => {
       try { execFileSync("git", ["branch", "-D", result2.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
     });
 
-    it("handles already-deleted worktree gracefully", () => {
-      const wt = createWorktree(repoDir, "gone-1")!;
+    it("handles already-deleted worktree gracefully", async () => {
+      const wt = (await createWorktree(repoDir, "gone-1"))!;
       // Manually delete the worktree directory
       rmSync(wt.path, { recursive: true, force: true });
 
@@ -158,8 +158,8 @@ describe("worktree", () => {
     });
 
 
-    it("sanitizes agent description to prevent git hook injection (CVE-001)", () => {
-      const wt = createWorktree(repoDir, "sanitize-1")!;
+    it("sanitizes agent description to prevent git hook injection (CVE-001)", async () => {
+      const wt = (await createWorktree(repoDir, "sanitize-1"))!;
       writeFileSync(join(wt.path, "change.txt"), "something");
 
       const maliciousDesc = 'test\n`malicious`\r\n$(echo foo)\x00"quote"';
@@ -185,8 +185,8 @@ describe("worktree", () => {
       try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
     });
 
-    it("truncates commit message at 200 chars", () => {
-      const wt = createWorktree(repoDir, "long-msg")!;
+    it("truncates commit message at 200 chars", async () => {
+      const wt = (await createWorktree(repoDir, "long-msg"))!;
       writeFileSync(join(wt.path, "change.txt"), "something");
       const longDesc = "x".repeat(300);
       const result = cleanupWorktree(repoDir, wt, longDesc);

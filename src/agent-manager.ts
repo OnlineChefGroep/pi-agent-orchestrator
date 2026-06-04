@@ -266,25 +266,27 @@ export class AgentManager {
       return id;
     }
 
-    // startAgent can throw (e.g. strict worktree-isolation failure) — clean
-    // up the record so callers don't see an orphan in `listAgents()`.
-    try {
-      this.startAgent(id, record, args);
-    } catch (err) {
-      this.agents.delete(id);
-      throw err;
-    }
+    // startAgent is async (worktree creation is non-blocking) — catch
+    // late startup failures and clean up the record.
+    this.startAgent(id, record, args).catch((_err) => {
+      // Clean up orphaned record on startup failure (e.g. worktree creation).
+      // Decrement usage counter so failed spawns don't consume the session budget.
+      this.sessionUsage.spawnedAgents--;
+      // Use removeRecord to clean up map, lastTurnCounts, session, and notify onRecordRemoved.
+      this.removeRecord(id, record);
+    });
     return id;
   }
 
   /** Actually start an agent (called immediately or from queue drain). */
-  private startAgent(id: string, record: AgentRecord, { pi, ctx, type, prompt, options }: SpawnArgs) {
+  private async startAgent(id: string, record: AgentRecord, { pi, ctx, type, prompt, options }: SpawnArgs) {
     // Worktree isolation: try to create a temporary git worktree. Strict —
     // fail loud if not possible (no silent fallback to main tree). Done
     // BEFORE state mutation so a throw doesn't leave the record half-running.
+    // Now async to avoid blocking the spawn pipeline during `git worktree add`.
     let worktreeCwd: string | undefined;
     if (options.isolation === "worktree") {
-      const wt = createWorktree(ctx.cwd, id);
+      const wt = await createWorktree(ctx.cwd, id);
       if (!wt) {
         throw new Error(
           'Cannot run with isolation: "worktree" — not a git repo, no commits yet, or `git worktree add` failed. ' +
@@ -482,16 +484,15 @@ export class AgentManager {
       const next = this.queue.shift()!;
       const record = this.agents.get(next.id);
       if (record?.status !== "queued") continue;
-      try {
-        this.startAgent(next.id, record, next.args);
-      } catch (err) {
+      // startAgent is async — handle late failures via catch
+      this.startAgent(next.id, record, next.args).catch((err) => {
         // Late failure (e.g. strict worktree-isolation) — surface on the record
         // so the user/agent can see it via /agents, then keep draining.
         record.status = "error";
         record.error = err instanceof Error ? err.message : String(err);
         record.completedAt = Date.now();
         this.onComplete?.(record);
-      }
+      });
     }
   }
 
@@ -584,16 +585,23 @@ export class AgentManager {
     return true;
   }
 
+  /** Callback invoked when a record is removed from the agent map (cleanup). */
+  onRecordRemoved?: (id: string) => void;
+
   /** Dispose a record's session and remove it from the map. */
   private removeRecord(id: string, record: AgentRecord): void {
     record.session?.dispose?.();
     record.session = undefined;
     this.agents.delete(id);
     this.lastTurnCounts.delete(id);
+    // Notify external observers (e.g. index.ts) so they can purge agentActivity
+    this.onRecordRemoved?.(id);
   }
 
   private cleanup() {
-    const cutoff = Date.now() - 10 * 60_000;
+    // Aggressive cleanup: remove inactive records after 2 minutes (down from 10).
+    // This keeps memory usage low during long sessions with many agent spawns.
+    const cutoff = Date.now() - 2 * 60_000;
     for (const [id, record] of this.agents) {
       if (record.status === "running" || record.status === "queued") continue;
       if ((record.completedAt ?? 0) >= cutoff) continue;
