@@ -20,6 +20,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Cron } from "croner";
 import { nanoid } from "nanoid";
 import type { AgentManager } from "./agent-manager.js";
+import { logger } from "./logger.js";
 import { resolveModel } from "./model-resolver.js";
 import type { ScheduleStore } from "./schedule-store.js";
 import type { IsolationMode, ScheduledSubagent, SubagentType, ThinkingLevel } from "./types.js";
@@ -230,7 +231,7 @@ export class SubagentScheduler {
       if (job.scheduleType === "interval" && job.intervalMs) {
         // CVE-005 FIX: Cap interval at max 24 days to avoid setTimeout limits
         if (job.intervalMs > MAX_INTERVAL) {
-          console.warn(`[pi-subagents] Interval ${job.intervalMs}ms exceeds max ${MAX_INTERVAL}ms; capping to ${MAX_INTERVAL}ms`);
+          logger.warn(`Interval ${job.intervalMs}ms exceeds max ${MAX_INTERVAL}ms; capping to ${MAX_INTERVAL}ms`);
         }
         const interval = Math.min(job.intervalMs, MAX_INTERVAL);
         const t = setInterval(() => this.executeJob(job.id), interval);
