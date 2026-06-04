@@ -169,7 +169,7 @@ export interface RpcDeps {
   pi: unknown;                    // passed through to manager.spawn
   getCtx: () => unknown | undefined;  // returns current ExtensionContext
   manager: SpawnCapable;
-  authProvider?: (requestId: string) => AuthContext | undefined;
+  authProvider?: (requestId: string, payload: any) => AuthContext | undefined;
   /** Optional rate-limit tunables applied at registration time. */
   rateLimit?: RateLimitConfig;
 }
@@ -242,32 +242,32 @@ function requestRpc<T>(
 
 export function createSubagentsRpcClient(
   events: EventBus,
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; extensionId?: string } = {},
 ): SubagentsRpcClient {
   const timeoutMs = options.timeoutMs ?? 30_000;
   return {
-    ping: () => requestRpc<PingRpcReply>(events, "subagents:rpc:ping", {}, timeoutMs),
-    spawn: (request) => requestRpc<{ id: string }>(events, "subagents:rpc:spawn", request, timeoutMs),
+    ping: () => requestRpc<PingRpcReply>(events, "subagents:rpc:ping", { authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs),
+    spawn: (request) => requestRpc<{ id: string }>(events, "subagents:rpc:spawn", { ...request, authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs),
     stop: async (request) => {
-      await requestRpc<void>(events, "subagents:rpc:stop", request, timeoutMs);
+      await requestRpc<void>(events, "subagents:rpc:stop", { ...request, authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs);
     },
   };
 }
 
-function resolveAuth(deps: RpcDeps, requestId: string): AuthContext {
+function resolveAuth(deps: RpcDeps, requestId: string, payload: any): AuthContext {
   if (!deps.authProvider) {
     return { extensionId: "legacy" };
   }
 
-  const auth = deps.authProvider(requestId);
+  const auth = deps.authProvider(requestId, payload);
   if (!auth?.extensionId) {
     throw new RpcError("UNAUTHORIZED", "Unauthorized RPC request");
   }
   return auth;
 }
 
-function authorizeRpcMutation(deps: RpcDeps, requestId: string, operation: string): AuthContext {
-  const auth = resolveAuth(deps, requestId);
+function authorizeRpcMutation(deps: RpcDeps, requestId: string, operation: string, payload: any): AuthContext {
+  const auth = resolveAuth(deps, requestId, payload);
   if (!checkRateLimit(auth.extensionId, operation)) {
     throw new RpcError("RATE_LIMITED", `Rate limit exceeded for extension ${auth.extensionId}`);
   }
@@ -292,7 +292,7 @@ function auditedRpc<P extends { requestId: string }>(
     // even when the handler throws (rate-limit, unauthorized, etc.).
     let auth: AuthContext;
     try {
-      auth = resolveAuth(deps, params.requestId);
+      auth = resolveAuth(deps, params.requestId, params);
     } catch {
       auth = { extensionId: "unknown" };
     }
@@ -349,7 +349,7 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
     events,
     "subagents:rpc:ping",
     auditedRpc<{ requestId: string }>(deps, "ping", ({ requestId }) => {
-      const auth = resolveAuth(deps, requestId);
+      const auth = resolveAuth(deps, requestId, { requestId });
       return { auth, result: { version: PROTOCOL_VERSION } };
     }),
   );
@@ -364,7 +364,7 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
         const ctx = getCtx();
         if (!ctx) throw new Error("No active session");
 
-        const auth = authorizeRpcMutation(deps, requestId, "spawn");
+        const auth = authorizeRpcMutation(deps, requestId, "spawn", { requestId, type, prompt, options });
 
         // Cross-extension RPC callers (e.g. pi-tasks TaskExecute) naturally
         // forward serializable values, so options.model can be a string like
@@ -397,7 +397,7 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
     events,
     "subagents:rpc:stop",
     auditedRpc<{ requestId: string; agentId: string }>(deps, "stop", ({ requestId, agentId }) => {
-      const auth = authorizeRpcMutation(deps, requestId, "stop");
+      const auth = authorizeRpcMutation(deps, requestId, "stop", { requestId, agentId });
       if (!manager.abort(agentId)) throw new Error("Agent not found");
       return { auth, result: undefined };
     }),

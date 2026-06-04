@@ -322,13 +322,20 @@ export default async function (pi: ExtensionAPI) {
     scheduler.stop();
   });
 
-  // TODO: Implement proper authProvider to verify extension identity.
-  // Currently all calls authenticate as "legacy" with a shared rate limit bucket.
+    // Auth provider validates caller identity using authContext provided in the payload.
+  // Using the payload ensures each calling extension has its own rate-limit bucket.
   const { unsubPing: unsubPingRpc, unsubSpawn: unsubSpawnRpc, unsubStop: unsubStopRpc } = registerRpcHandlers({
     events: pi.events,
     pi,
     getCtx: () => currentCtx,
     manager,
+    authProvider: (_requestId, payload) => {
+      const extensionId = payload?.authContext?.extensionId;
+      if (extensionId && typeof extensionId === "string") {
+        return { extensionId, extensionName: payload?.authContext?.extensionName };
+      }
+      return undefined; // Will throw UNAUTHORIZED in cross-extension-rpc.ts if undefined
+    },
   });
 
   // Broadcast readiness so extensions loaded after us can discover us
