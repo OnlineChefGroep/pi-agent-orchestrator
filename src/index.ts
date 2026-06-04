@@ -267,17 +267,22 @@ export default async function (pi: ExtensionAPI) {
   // Session budget warning at 80% — emit a pi.events notification so the
   // user sees it as a non-blocking alert even if the dashboard isn't open.
   manager.setBudgetWarningHandler((type, usage, limits) => {
-    const threshold = type === "agents_at_80"
-      ? `agent budget 80% used (${usage.spawnedAgents}/${limits.maxAgents})`
-      : `turn budget 80% used (${usage.totalTurns}/${limits.maxTurns})`;
+    const isCritical = type === "agents_at_90" || type === "turns_at_90";
+    const threshold = type === "agents_at_80" || type === "agents_at_90"
+      ? `agent budget ${isCritical ? "90" : "80"}% used (${usage.spawnedAgents}/${limits.maxAgents})`
+      : `turn budget ${isCritical ? "90" : "80"}% used (${usage.totalTurns}/${limits.maxTurns})`;
+    const prefix = isCritical ? "🚨" : "⚠️";
+    const advice = isCritical
+      ? "Session budget nearly exhausted — spawns will stop soon!"
+      : "Consider /agents → Settings to increase limits.";
     pi.events.emit("subagents:budget_warning", {
       type,
       usage,
       limits,
       threshold,
-      message: `⚠️ Session ${threshold}. Consider /agents → Settings to increase limits.`,
+      message: `${prefix} Session ${threshold}. ${advice}`,
     });
-    pi.sendMessage({ customType: "subagent-notification", content: `⚠️ Session ${threshold}. Consider /agents → Settings to raise limits.`, display: true });
+    pi.sendMessage({ customType: "subagent-notification", content: `${prefix} Session ${threshold}. ${advice}`, display: true });
   });
 
   // Expose hook registry via Symbol.for() global registry for cross-package access.

@@ -26,6 +26,9 @@ export type OnAgentStart = (record: AgentRecord) => void;
 export type OnAgentCompact = (record: AgentRecord, info: CompactionInfo) => void;
 export type CompactionInfo = { reason: "manual" | "threshold" | "overflow"; tokensBefore: number };
 
+export type BudgetWarningType = "agents_at_80" | "turns_at_80" | "agents_at_90" | "turns_at_90";
+export type OnBudgetWarning = (type: BudgetWarningType, usage: { spawnedAgents: number; totalTurns: number }, limits: { maxAgents: number; maxTurns: number }) => void;
+
 /** Default max concurrent background agents. */
 const DEFAULT_MAX_CONCURRENT = 4;
 
@@ -91,6 +94,7 @@ export class AgentManager {
   private sessionMaxSpawns = 0;
   private sessionMaxTurns = 0;
   hooks?: HookRegistry;
+  onBudgetWarning?: OnBudgetWarning;
 
   /** Queue of background agents waiting to start. */
   private queue: { id: string; args: SpawnArgs }[] = [];
@@ -166,6 +170,10 @@ export class AgentManager {
   resetSessionUsage(): void {
     this.sessionUsage = { spawnedAgents: 0, totalTurns: 0 };
     this.lastTurnCounts.clear();
+  }
+
+  setBudgetWarningHandler(handler: OnBudgetWarning): void {
+    this.onBudgetWarning = handler;
   }
 
   /** Get the ID of the currently executing agent (top of active stack). */
@@ -361,6 +369,8 @@ export class AgentManager {
             record.abortController?.abort();
             record.error = `Session turn limit reached (${this.sessionUsage.totalTurns}/${maxTurns})`;
           }
+          // Budget warning at 80% of limits
+          this.checkBudgetWarning();
           options.onTurnEnd?.(turnCount);
         },
         onTextDelta: options.onTextDelta,
@@ -598,6 +608,32 @@ export class AgentManager {
     this.lastTurnCounts.delete(id);
     // Notify external observers (e.g. index.ts) so they can purge agentActivity
     this.onRecordRemoved?.(id);
+  }
+
+  private checkBudgetWarning(): void {
+    const handler = this.onBudgetWarning;
+    if (!handler) return;
+    const { maxAgentsPerSession, maxTotalTurnsPerSession } = this.sessionLimits;
+
+    if (maxAgentsPerSession !== undefined && maxAgentsPerSession > 0) {
+      const used = this.sessionUsage.spawnedAgents;
+      const pct = used / maxAgentsPerSession;
+      // 90% critical first, then 80% warning — don't double-fire if already at 90%
+      if (pct >= 0.9) {
+        handler("agents_at_90", this.sessionUsage, { maxAgents: maxAgentsPerSession, maxTurns: maxTotalTurnsPerSession ?? 0 });
+      } else if (pct >= 0.8) {
+        handler("agents_at_80", this.sessionUsage, { maxAgents: maxAgentsPerSession, maxTurns: maxTotalTurnsPerSession ?? 0 });
+      }
+    }
+    if (maxTotalTurnsPerSession !== undefined && maxTotalTurnsPerSession > 0) {
+      const used = this.sessionUsage.totalTurns;
+      const pct = used / maxTotalTurnsPerSession;
+      if (pct >= 0.9) {
+        handler("turns_at_90", this.sessionUsage, { maxAgents: maxAgentsPerSession ?? 0, maxTurns: maxTotalTurnsPerSession });
+      } else if (pct >= 0.8) {
+        handler("turns_at_80", this.sessionUsage, { maxAgents: maxAgentsPerSession ?? 0, maxTurns: maxTotalTurnsPerSession });
+      }
+    }
   }
 
   private cleanup() {
