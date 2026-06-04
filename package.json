@@ -64,6 +64,7 @@
     "@earendil-works/pi-agent-core": "^0.78.0",
     "@types/node": "^25.5.0",
     "@types/proper-lockfile": "^4.1.4",
+    "@vitest/coverage-v8": "^4.1.8",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   },
