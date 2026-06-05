@@ -71,9 +71,9 @@ vi.mock("../src/skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
 }));
 
+import { setPromptCompressionLevel } from "../src/agent-registry.js";
 import { resumeAgent, runAgent } from "../src/agent-runner.js";
 import { buildAgentPrompt } from "../src/prompts.js";
-import { setPromptCompressionLevel } from "../src/agent-registry.js";
 
 function createSession(finalText: string) {
   const listeners: Array<(event: any) => void> = [];

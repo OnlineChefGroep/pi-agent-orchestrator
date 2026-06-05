@@ -103,6 +103,7 @@ Output findings as a markdown list with severity (Critical / High / Medium / Low
 | `isolated` | boolean | null | Strict context isolation |
 | `memory` | `user` / `project` / `local` | null | State persistence scope |
 | `isolation` | `worktree` | null | Physical directory isolation |
+| `prompt_compression` | `minimal` / `balanced` / `aggressive` | (global setting) | Per-agent prompt compression override |
 | `enabled` | boolean | `true` | Profile activation state |
 
 ---
@@ -177,6 +178,7 @@ Manage via `pi settings` CLI or direct configuration injection.
 | `subagents.showActivityStream` | `true` | Show real-time activity stream in widget |
 | `subagents.showTokenUsage` | `true` | Show token usage and context fill percentage |
 | `subagents.showTurnProgress` | `true` | Show turn progress (current/max) for running agents |
+| `subagents.promptCompressionLevel` | `"balanced"` | Prompt verbosity: `minimal` (max quality), `balanced`, `aggressive` (max savings, −44% tokens) |
 
 ---
 

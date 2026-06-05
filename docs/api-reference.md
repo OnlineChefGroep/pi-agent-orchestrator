@@ -192,8 +192,31 @@ interface SubagentsSettings {
   dashboardRefreshInterval?: number;   // Dashboard refresh interval in ms (default: 750, min: 100, max: 60000)
   sessionMaxSpawns?: number;           // Guardrail: max agents spawned per session
   sessionMaxTurns?: number;            // Guardrail: max cumulative turns per session
+  promptCompressionLevel?: PromptCompressionLevel;  // "minimal" | "balanced" | "aggressive" (default: "balanced")
 }
 ```
+
+### `PromptCompressionLevel`
+
+**FILE:** `src/settings.ts`
+
+Controls the verbosity of system prompts injected into agents. Lower compression yields higher-quality instructions at the cost of more tokens; higher compression saves tokens at the cost of instruction detail.
+
+| Level | Behavior | Token Impact |
+|---|---|---|
+| `"minimal"` | Full verbose prompts with CAPS emphasis, per-tool bash equivalents, two handoff examples. Maximum instruction quality. | +70% vs balanced |
+| `"balanced"` | Concise prompts with realistic examples (default). Good trade-off between quality and token usage. | Baseline |
+| `"aggressive"` | Ultra-short one-liners for read-only warnings, tool usage, and handoff. Maximum token savings. | −44% vs balanced |
+
+**SCOPE:**
+- Affects all `replace`-mode built-in agents (Explore, Plan, Analysis) via lazy runtime regeneration.
+- Affects handoff prompt injection for all agents with `handoff: true`.
+- Custom agents (`.pi/agents/*.md`) can override per-agent via the `prompt_compression` frontmatter directive.
+- Append-mode agents (e.g. `general-purpose`) — only the handoff block varies; the inherited system prompt and bridge are unaffected.
+
+**PRECEDENCE:** Per-agent frontmatter `prompt_compression` > global `promptCompressionLevel` setting > default `"balanced"`.
+
+**PERSISTENCE:** Stored in `.pi/subagents.json` and managed via `SettingsAppliers.setPromptCompressionLevel`.
 
 ### `saveAndEmitChanged(settings: SubagentsSettings): void`
 
