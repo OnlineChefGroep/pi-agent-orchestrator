@@ -15,16 +15,19 @@ export function renderSwarmSection(
   focus: Map<string, number>,
   baseLine = 0,
 ): string[] {
+  let total = 0;
   const grouped = new Map<string, AgentRecord[]>();
   for (const rec of state.agents) {
     if (!rec.swarmId) continue;
-    const list = grouped.get(rec.swarmId) ?? [];
+    let list = grouped.get(rec.swarmId);
+    if (!list) {
+        list = [];
+        grouped.set(rec.swarmId, list);
+    }
     list.push(rec);
-    grouped.set(rec.swarmId, list);
+    total++;
   }
   if (grouped.size === 0) return [];
-
-  const total = Array.from(grouped.values()).reduce((sum, list) => sum + list.length, 0);
   const lines = ["", renderSectionTitle("⌬ SWARMS", `${grouped.size} swarms · ${total} agents`, innerW, th, box)];
   for (const [swarmId, members] of grouped) {
     const cardW = Math.max(28, innerW - 2);

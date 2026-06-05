@@ -20,10 +20,19 @@ function renderAgentSections(
   focus: Map<string, number>,
   baseLine = 0,
 ): string[] {
-  const solo = state.agents.filter(a => !a.swarmId);
-  const running = solo.filter(a => a.status === "running");
-  const queued = solo.filter(a => a.status === "queued");
-  const done = solo.filter(a => a.status !== "running" && a.status !== "queued");
+    const solo: AgentRecord[] = [];
+  const running: AgentRecord[] = [];
+  const queued: AgentRecord[] = [];
+  const done: AgentRecord[] = [];
+
+  for (const a of state.agents) {
+    if (!a.swarmId) {
+      solo.push(a);
+      if (a.status === "running") running.push(a);
+      else if (a.status === "queued") queued.push(a);
+      else done.push(a);
+    }
+  }
   const lines: string[] = [];
   const appendCompact = (label: string, records: AgentRecord[]) => {
     if (records.length === 0) return;
@@ -105,9 +114,28 @@ function buildVirtualBodyLines(
   const windowStart = Math.max(0, selectedIndex - halfWindow);
   const windowEnd = Math.min(total, selectedIndex + halfWindow);
 
-  // Separate sections
-  const solo = agents.filter(a => !a.swarmId);
-  const swarms = [...new Set(solo.filter(a => a.swarmId).map(a => a.swarmId))];
+    // Separate sections in a single pass to avoid O(N) filtering multiple times
+  const solo: AgentRecord[] = [];
+  const running: AgentRecord[] = [];
+  const queued: AgentRecord[] = [];
+  const done: AgentRecord[] = [];
+  const swarmsSet = new Set<string>();
+  const firstSwarmAgentMap = new Map<string, AgentRecord>();
+
+  for (const a of agents) {
+    if (!a.swarmId) {
+      solo.push(a);
+      if (a.status === "running") running.push(a);
+      else if (a.status === "queued") queued.push(a);
+      else done.push(a);
+    } else {
+      swarmsSet.add(a.swarmId);
+      if (!firstSwarmAgentMap.has(a.swarmId)) {
+        firstSwarmAgentMap.set(a.swarmId, a);
+      }
+    }
+  }
+  const swarms = Array.from(swarmsSet);
 
   const lines: string[] = [];
 
@@ -123,7 +151,7 @@ function buildVirtualBodyLines(
     lines.push("");
     lines.push(renderSectionTitle("◆ SWARMS", `${swarms.length} swarms · ${total} agents`, innerW, th, box));
     for (const swarmId of displaySwarms) {
-      const first = solo.find(a => a.swarmId === swarmId);
+      const first = firstSwarmAgentMap.get(swarmId);
       if (first) {
         focusLineByAgentId.set(first.id, lines.length);
         lines.push(`  ${renderCompactRow(first, innerW - 2, th, state)}`);
@@ -137,7 +165,7 @@ function buildVirtualBodyLines(
   }
 
   // Running section with virtual window
-  const running = solo.filter(a => a.status === "running");
+
   if (running.length > 0) {
     lines.push("");
     lines.push(renderSectionTitle("▶ RUNNING", `${running.length} active`, innerW, th, box));
@@ -158,7 +186,7 @@ function buildVirtualBodyLines(
   }
 
   // Queued section
-  const queued = solo.filter(a => a.status === "queued");
+
   if (queued.length > 0) {
     lines.push("");
     lines.push(renderSectionTitle("◔ QUEUED", `${queued.length} queued`, innerW, th, box));
@@ -178,7 +206,7 @@ function buildVirtualBodyLines(
   }
 
   // Done section — most relevant for inspection, show in chunks
-  const done = solo.filter(a => a.status !== "running" && a.status !== "queued");
+
   if (done.length > 0) {
     lines.push("");
     lines.push(renderSectionTitle("✓ DONE", `${done.length} finished`, innerW, th, box));
