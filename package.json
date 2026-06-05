@@ -52,6 +52,7 @@
     "test": "NODE_OPTIONS='--max-old-space-size=4096' vitest run --retry=2",
     "test:watch": "vitest",
     "typecheck": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit",
+    "bench:all": "NODE_OPTIONS='--max-old-space-size=4096' vitest run test/widget-render-perf.test.ts test/dashboard-render-perf.test.ts test/spawn-latency-bench.test.ts test/spawn-latency-e2e-bench.test.ts --reporter=verbose",
     "lint": "biome check src/ test/ scripts/",
     "lint:fix": "biome check --write --unsafe src/ test/ scripts/",
     "showcase": "bash scripts/showcase-all.sh",
