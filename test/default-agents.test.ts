@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { DEFAULT_AGENTS } from "../src/default-agents.js";
+import { createReadOnlyPrompt, DEFAULT_AGENTS, READONLY_PROMPT_PARAMS } from "../src/default-agents.js";
 
 describe("DEFAULT_AGENTS", () => {
   it("general-purpose agent exists and has minimal safe config", () => {
@@ -89,5 +89,75 @@ describe("DEFAULT_AGENTS", () => {
     expect(prompt).toContain("data analysis specialist");
     expect(prompt).toContain("ctx_search");
     expect(prompt).toContain("ctx_execute");
+  });
+
+  describe("READONLY_PROMPT_PARAMS", () => {
+    it("contains entries for all read-only default agents", () => {
+      expect(READONLY_PROMPT_PARAMS.has("Explore")).toBe(true);
+      expect(READONLY_PROMPT_PARAMS.has("Plan")).toBe(true);
+      expect(READONLY_PROMPT_PARAMS.has("Analysis")).toBe(true);
+    });
+
+    it("does NOT contain general-purpose (append mode, not read-only)", () => {
+      expect(READONLY_PROMPT_PARAMS.has("general-purpose")).toBe(false);
+    });
+
+    it("each entry has required role and task fields", () => {
+      for (const [name, params] of READONLY_PROMPT_PARAMS) {
+        expect(params.role, `${name} should have role`).toBeTruthy();
+        expect(params.task, `${name} should have task`).toBeTruthy();
+      }
+    });
+  });
+
+  describe("createReadOnlyPrompt compression levels", () => {
+    const testParams = {
+      role: "a test specialist",
+      task: "run tests",
+      toolInstructions: "Use Bash for read-only ops.",
+      outputInstructions: "- Report results clearly",
+    };
+
+    it("defaults to balanced when no compressionLevel specified", () => {
+      const balanced = createReadOnlyPrompt({ ...testParams, compressionLevel: "balanced" });
+      const defaulted = createReadOnlyPrompt(testParams);
+      expect(defaulted).toBe(balanced);
+    });
+
+    it("minimal produces longer output than balanced", () => {
+      const minimal = createReadOnlyPrompt({ ...testParams, compressionLevel: "minimal" });
+      const balanced = createReadOnlyPrompt({ ...testParams, compressionLevel: "balanced" });
+      expect(minimal.length).toBeGreaterThan(balanced.length);
+      expect(minimal).toContain("CRITICAL: READ-ONLY MODE");
+    });
+
+    it("aggressive produces shorter output than balanced", () => {
+      const aggressive = createReadOnlyPrompt({ ...testParams, compressionLevel: "aggressive" });
+      const balanced = createReadOnlyPrompt({ ...testParams, compressionLevel: "balanced" });
+      expect(aggressive.length).toBeLessThan(balanced.length);
+      expect(aggressive).toContain("READ-ONLY");
+    });
+
+    it("all three levels contain the role and task", () => {
+      for (const level of ["minimal", "balanced", "aggressive"] as const) {
+        const prompt = createReadOnlyPrompt({ ...testParams, compressionLevel: level });
+        expect(prompt, `level=${level}`).toContain("test specialist");
+        expect(prompt, `level=${level}`).toContain("run tests");
+      }
+    });
+
+    it("all three levels contain output instructions when provided", () => {
+      for (const level of ["minimal", "balanced", "aggressive"] as const) {
+        const prompt = createReadOnlyPrompt({ ...testParams, compressionLevel: level });
+        expect(prompt, `level=${level}`).toContain("Report results clearly");
+      }
+    });
+
+    it("no template placeholders leak at any level", () => {
+      for (const level of ["minimal", "balanced", "aggressive"] as const) {
+        const prompt = createReadOnlyPrompt({ ...testParams, compressionLevel: level });
+        expect(prompt, `level=${level}`).not.toMatch(/\{\{/);
+      }
+    });
   });
 });

@@ -25,6 +25,102 @@ function getDefaultConfig(name: string): AgentConfig {
 }
 
 describe("buildAgentPrompt", () => {
+  describe("compression level support", () => {
+    it("uses balanced by default (no compressionLevel param)", () => {
+      const config = getDefaultConfig("Explore");
+      const prompt = buildAgentPrompt(config, "/workspace", env);
+      // Balanced bake-in: READ-ONLY — NO FILE MODIFICATIONS (not "READ-ONLY MODE")
+      expect(prompt).toContain("READ-ONLY");
+    });
+
+    it("aggressive compression yields shorter read-only warning for Explore", () => {
+      const config = getDefaultConfig("Explore");
+      const balanced = buildAgentPrompt(config, "/workspace", env, undefined, undefined, "balanced");
+      const aggressive = buildAgentPrompt(config, "/workspace", env, undefined, undefined, "aggressive");
+      expect(aggressive.length).toBeLessThan(balanced.length);
+      // Both still contain the agent identity
+      expect(aggressive).toContain("file search specialist");
+      expect(balanced).toContain("file search specialist");
+    });
+
+    it("minimal compression yields longer read-only warning for Explore", () => {
+      const config = getDefaultConfig("Explore");
+      const balanced = buildAgentPrompt(config, "/workspace", env, undefined, undefined, "balanced");
+      const minimal = buildAgentPrompt(config, "/workspace", env, undefined, undefined, "minimal");
+      expect(minimal.length).toBeGreaterThan(balanced.length);
+      // Minimal includes full CAPS warning
+      expect(minimal).toContain("CRITICAL: READ-ONLY MODE");
+    });
+
+    it("aggressive compression yields shorter handoff prompt", () => {
+      const config: AgentConfig = {
+        name: "handoff-agent",
+        description: "Agent with handoff",
+        builtinToolNames: [],
+        extensions: true,
+        skills: true,
+        systemPrompt: "Test.",
+        promptMode: "replace",
+        inheritContext: false,
+        runInBackground: false,
+        isolated: false,
+        handoff: true,
+      };
+      const balanced = buildAgentPrompt(config, "/workspace", env, undefined, undefined, "balanced");
+      const aggressive = buildAgentPrompt(config, "/workspace", env, undefined, undefined, "aggressive");
+      expect(aggressive.length).toBeLessThan(balanced.length);
+      // Both include handoff
+      expect(balanced).toContain("handoff");
+      expect(aggressive).toContain("handoff");
+    });
+
+    it("compression level has no effect on non-default agents (custom)", () => {
+      const config: AgentConfig = {
+        name: "Explore", // same name as default, but not isDefault
+        description: "Custom explore",
+        builtinToolNames: [],
+        extensions: true,
+        skills: true,
+        systemPrompt: "Custom explore instructions.",
+        promptMode: "replace",
+        inheritContext: false,
+        runInBackground: false,
+        isolated: false,
+      };
+      const balanced = buildAgentPrompt(config, "/workspace", env, undefined, undefined, "balanced");
+      const aggressive = buildAgentPrompt(config, "/workspace", env, undefined, undefined, "aggressive");
+      // Custom agent with same name but isDefault=undefined → no lazy regeneration
+      expect(balanced).toContain("Custom explore instructions.");
+      expect(aggressive).toContain("Custom explore instructions.");
+      expect(balanced).toBe(aggressive);
+    });
+
+    it("append mode is unaffected by compression level", () => {
+      const config = getDefaultConfig("general-purpose");
+      const balanced = buildAgentPrompt(config, "/workspace", env, "Parent.", undefined, "balanced");
+      const aggressive = buildAgentPrompt(config, "/workspace", env, "Parent.", undefined, "aggressive");
+      // general-purpose has no READONLY_PROMPT_PARAMS — only handoff varies
+      expect(balanced).toContain("Parent.");
+      expect(aggressive).toContain("Parent.");
+    });
+
+    it("Plan agent gets shorter prompts at aggressive level", () => {
+      const config = getDefaultConfig("Plan");
+      const balanced = buildAgentPrompt(config, "/workspace", env, undefined, undefined, "balanced");
+      const aggressive = buildAgentPrompt(config, "/workspace", env, undefined, undefined, "aggressive");
+      expect(aggressive.length).toBeLessThan(balanced.length);
+      expect(aggressive).toContain("software architect");
+    });
+
+    it("Analysis agent gets shorter prompts at aggressive level", () => {
+      const config = getDefaultConfig("Analysis");
+      const balanced = buildAgentPrompt(config, "/workspace", env, undefined, undefined, "balanced");
+      const aggressive = buildAgentPrompt(config, "/workspace", env, undefined, undefined, "aggressive");
+      expect(aggressive.length).toBeLessThan(balanced.length);
+      expect(aggressive).toContain("data analysis specialist");
+    });
+  });
+
   it("includes cwd and git info", () => {
     const config = getDefaultConfig("general-purpose");
     const prompt = buildAgentPrompt(config, "/workspace", env);
