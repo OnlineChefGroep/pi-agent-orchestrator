@@ -128,6 +128,15 @@ interface TreeNode {
   children: TreeNode[];
 }
 
+/**
+ * Builds a string representation of the agent execution tree in various formats.
+ * Highly optimized for large swarm topologies by using an O(1) hash map lookup
+ * strategy instead of recursive array scanning.
+ *
+ * @param records - The flat list of agent records representing nodes in the swarm.
+ * @param format - The requested output format ('text', 'mermaid', or 'json').
+ * @returns The formatted tree as a string.
+ */
 export function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" | "json"): string {
   if (format === "json") {
     const roots: TreeNode[] = [];

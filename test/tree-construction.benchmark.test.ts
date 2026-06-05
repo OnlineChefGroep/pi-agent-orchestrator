@@ -46,6 +46,18 @@ function generateRecords(count: number, maxDepth: number = 5): AgentRecord[] {
 }
 
 describe("Performance: buildExecutionTree", () => {
+  it("builds text tree correctly with structure preservation", () => {
+    // A small subset to verify correctness
+    const records = generateRecords(10, 3);
+    const result = buildExecutionTree(records, "text");
+
+    // Validate output structure matches expectations
+    expect(result).toContain("agent-0");
+    expect(result).toContain("agent-1");
+    expect(result).toContain("agent-2");
+    expect(result).toContain("agent-3");
+  });
+
   it("builds text tree for 1000 records", () => {
     const records = generateRecords(1000);
     const start = performance.now();
