@@ -61,3 +61,10 @@ docs/superpowers/plans/
 temp_test_agents*
 temp_test_files
 coverage/
+
+# Bun lockfile (project uses npm)
+bun.lock
+bun.lockb
+
+# Autoresearch state (runtime data, not source)
+.agents/autoresearch/
