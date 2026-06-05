@@ -311,6 +311,11 @@ export default async function (pi: ExtensionAPI) {
     listAgentIds: (type: string) => manager.listAgents().filter(a => a.type === type).map(a => a.id),
   };
 
+  // Expose widget render metrics via Symbol.for() global registry for dashboard access.
+  // The dashboard reads this lazily via (globalThis as any)[Symbol.for("pi-subagents:widget-metrics")],
+  // so the symbol must be declared before any closure that references it (e.g. session_shutdown).
+  const WIDGET_KEY = Symbol.for("pi-subagents:widget-metrics");
+
   // --- Cross-extension RPC via pi.events ---
   let currentCtx: ExtensionContext | undefined;
 
@@ -381,6 +386,7 @@ export default async function (pi: ExtensionAPI) {
     currentCtx = undefined;
     delete (globalThis as any)[MANAGER_KEY];
     delete (globalThis as any)[HOOKS_KEY];
+    delete (globalThis as any)[WIDGET_KEY];
     scheduler.stop();
     manager.abortAll();
     for (const timer of pendingNudges.values()) clearTimeout(timer);
@@ -391,6 +397,10 @@ export default async function (pi: ExtensionAPI) {
 
   // Live widget: show running agents above editor
   const widget = new AgentWidget(manager, agentActivity);
+
+  (globalThis as any)[WIDGET_KEY] = {
+    getSnapshot: () => widget.getRenderMetrics(),
+  };
 
   // ---- Batch orchestrator for smart/group/swarm join modes ----
   const batchOrchestrator = new BatchOrchestrator({

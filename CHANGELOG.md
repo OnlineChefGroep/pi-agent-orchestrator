@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.11.0 (2026-06-04)
+
+### Features
+
+- **Interactive Top View (`/agents top`)**: Switch views with `t` in the dashboard to access a real-time table of active and completed agents sorted by resource usage metrics (Turns, Tokens, Tool Uses, Duration, Name, and Activity recency `LAST` column). Columns are sortable via keys: `t` (tokens), `r` (turns), `d` (duration), `u` (tool uses), `l` (last seen recency), `n` (name). Pagination supported with `left` / `right` arrow keys.
+- **Activity Heatmap Indicator**: Shows a visual heatmap representation of active subagent concurrency directly in the widget header.
+- **Virtual Scrolling**: Added virtual scrolling window calculations for the agent widget, with scroll hints and scroll boundaries to handle large lists gracefully.
+- **Token Burn Rate and Last-Seen Tracking**: Live token consumption rates and time-elapsed indicators are rendered next to running processes.
+- **Bulk Spawn Batching**: Coalesces concurrent subagent spawn requests over a 16ms window to debounce UI redraws and group matching agents in a compact queue row (e.g. `"5x Explore queued"`).
+- **Budget Critical Alerts**: Integrated 90% warning triggers (🚨 spawns will stop soon) to prevent session lockup on budget exhaustion.
+- **Security Hardening (CVE mitigations)**:
+  - **CVE-002**: Comprehensive field size checks on incoming agent configuration files.
+  - **CVE-003**: Fully authenticated cross-extension RPC endpoints with custom rate limiters.
+  - **CVE-005**: Bound schedule intervals and update caps.
+
+### Performance & Cleanup
+
+- **Configurable TTL & sweeps**: Reduced idle agent TTL (60s default) and shortened GC sweeps to 30s intervals.
+- **Adaptive Refresh Intervals**: Dynamically switches UI tick rates between 100ms (100+ agents), 150ms (50-99 agents), 200ms (active execution), and 750ms (idle) to conserve host CPU.
+- **Widget Dirty Snapshotting**: Saves cycles by skipping expensive UI buffer paints when no structural status or agent state has modified.
+- **SwarmHealth Consolidation**: RPC checks consolidated to avoid chatty inter-process handshakes.
+
+### Documentation
+- Added real TUI showcase media (GIF + MP4) generated from dist renderers: dashboard, top view, widget heatmap (`scripts/render-showcase-assets.sh`).
+
+### Metrics
+- 989 tests, 56 test files.
+
+---
+
 ## v0.10.3 (2026-06-04)
 
 ### Fixes

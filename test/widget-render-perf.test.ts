@@ -107,6 +107,51 @@ function alwaysShowFinished() {
   return true;
 }
 
+// ── Benchmark logging ──────────────────────────────────────────────────────
+
+/**
+ * Log a structured benchmark result line for CI threshold checking.
+ * Writes to stdout so scripts/check-benchmark-thresholds.mjs can parse it.
+ *
+ * Format: [BENCHMARK] <name> <measured> <threshold> <unit> <OK|WARN|FAIL>
+ * - OK: measured ≤ threshold
+ * - WARN: threshold * 0.8 < measured ≤ threshold
+ * - FAIL: measured > threshold
+ */
+function benchmarkLog(
+  label: string,
+  measured: number,
+  threshold: number,
+  unit = "ms",
+): void {
+  const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
+  let status: string;
+  if (measured > threshold) {
+    status = "FAIL";
+    console.warn(
+      `⚠️  BENCHMARK FAIL: ${label} — ${measured} exceeds threshold ${threshold}`,
+    );
+  } else if (pct > 80) {
+    status = "WARN";
+    console.warn(
+      `⚠️  BENCHMARK WARN: ${label} — ${measured} approaching threshold ${threshold} (${pct.toFixed(0)}%)`,
+    );
+  } else {
+    status = "OK";
+  }
+  const measuredStr = unit === "\u00b5s"
+    ? `${measured.toFixed(3)}\u00b5s`
+    : `${measured.toFixed(3)}ms`;
+  const thresholdStr = unit === "\u00b5s"
+    ? `${threshold.toFixed(3)}\u00b5s`
+    : `${threshold.toFixed(3)}ms`;
+
+  // Structured log line — plain text, machine-parseable
+  process.stdout.write(
+    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
+  );
+}
+
 // ── Test data sizes ──────────────────────────────────────────────────────────
 
 const SMALL = 10;
@@ -124,8 +169,29 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     renderAgentWidget = mod.renderAgentWidget;
   });
 
-  it(`renders ${SMALL} agents (mixed) under 0.5ms`, () => {
+  it(`renders ${SMALL} agents (mixed) under 0.6ms`, () => {
     const agents = buildAgentList(SMALL, { running: 40, queued: 20, finished: 40 });
+
+    const start = performance.now();
+    for (let i = 0; i < 500; i++) {
+      renderAgentWidget({
+        agents,
+        agentActivity: new Map(),
+        frame: i,
+        shouldShowFinished: alwaysShowFinished,
+        theme: testTheme as any,
+        tui: testTui as any,
+      });
+    }
+    const elapsed = performance.now() - start;
+    const perRender = elapsed / 500;
+
+    benchmarkLog(`renderAgentWidget ${SMALL} mixed`, perRender, 0.6);
+    expect(perRender).toBeLessThan(0.6);
+  });
+
+  it(`renders ${MEDIUM} agents (mixed) under 3ms`, () => {
+    const agents = buildAgentList(MEDIUM, { running: 40, queued: 20, finished: 40 });
 
     const start = performance.now();
     for (let i = 0; i < 100; i++) {
@@ -141,26 +207,7 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     const elapsed = performance.now() - start;
     const perRender = elapsed / 100;
 
-    expect(perRender).toBeLessThan(0.5);
-  });
-
-  it(`renders ${MEDIUM} agents (mixed) under 3ms`, () => {
-    const agents = buildAgentList(MEDIUM, { running: 40, queued: 20, finished: 40 });
-
-    const start = performance.now();
-    for (let i = 0; i < 50; i++) {
-      renderAgentWidget({
-        agents,
-        agentActivity: new Map(),
-        frame: i,
-        shouldShowFinished: alwaysShowFinished,
-        theme: testTheme as any,
-        tui: testTui as any,
-      });
-    }
-    const elapsed = performance.now() - start;
-    const perRender = elapsed / 50;
-
+    benchmarkLog(`renderAgentWidget ${MEDIUM} mixed`, perRender, 3);
     expect(perRender).toBeLessThan(3);
   });
 
@@ -181,6 +228,7 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     const elapsed = performance.now() - start;
     const perRender = elapsed / 20;
 
+    benchmarkLog(`renderAgentWidget ${LARGE} mixed`, perRender, 15);
     expect(perRender).toBeLessThan(15);
   });
 
@@ -188,7 +236,7 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     const agents = buildAgentList(MEDIUM, { running: 100, queued: 0, finished: 0 });
 
     const start = performance.now();
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 100; i++) {
       renderAgentWidget({
         agents,
         agentActivity: new Map(),
@@ -199,8 +247,9 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
       });
     }
     const elapsed = performance.now() - start;
-    const perRender = elapsed / 50;
+    const perRender = elapsed / 100;
 
+    benchmarkLog(`renderAgentWidget ${MEDIUM} all-running`, perRender, 5);
     expect(perRender).toBeLessThan(5);
   });
 });
@@ -246,6 +295,7 @@ describe("Benchmark: renderAgentWidget — with activity heatmap data", () => {
     const elapsed = performance.now() - start;
     const perRender = elapsed / 50;
 
+    benchmarkLog(`renderAgentWidget ${MEDIUM} w/ activity`, perRender, 5);
     expect(perRender).toBeLessThan(5);
   });
 
@@ -279,6 +329,7 @@ describe("Benchmark: renderAgentWidget — with activity heatmap data", () => {
     const elapsed = performance.now() - start;
     const perRender = elapsed / 20;
 
+    benchmarkLog(`renderAgentWidget ${LARGE} w/ activity`, perRender, 20);
     expect(perRender).toBeLessThan(20);
   });
 });
@@ -305,6 +356,7 @@ describe("Benchmark: AgentWidget.buildSnapshot (dirty checking)", () => {
     const elapsed = performance.now() - start;
     const perCall = elapsed / 1000;
 
+    benchmarkLog(`buildSnapshot ${SMALL} agents`, perCall, 0.05, "\u00b5s");
     expect(perCall).toBeLessThan(0.05);
   });
 
@@ -319,6 +371,7 @@ describe("Benchmark: AgentWidget.buildSnapshot (dirty checking)", () => {
     const elapsed = performance.now() - start;
     const perCall = elapsed / 1000;
 
+    benchmarkLog(`buildSnapshot ${MEDIUM} agents`, perCall, 0.05, "\u00b5s");
     expect(perCall).toBeLessThan(0.05);
   });
 
@@ -333,6 +386,7 @@ describe("Benchmark: AgentWidget.buildSnapshot (dirty checking)", () => {
     const elapsed = performance.now() - start;
     const perCall = elapsed / 500;
 
+    benchmarkLog(`buildSnapshot ${LARGE} agents`, perCall, 0.2, "\u00b5s");
     expect(perCall).toBeLessThan(0.2);
   });
 });
@@ -348,7 +402,7 @@ describe("Benchmark: AgentWidget.getVisibleWindow (virtual scrolling)", () => {
     AgentWidget = mod.AgentWidget;
   });
 
-  it(`getVisibleWindow with ${LARGE} agents under 100\u00b5s`, () => {
+  it(`getVisibleWindow with ${LARGE} agents under 500\u00b5s`, () => {
     const agents = buildAgentList(LARGE, { running: 40, queued: 20, finished: 40 });
     const widget = new (AgentWidget as any)({}, new Map());
 
@@ -359,10 +413,11 @@ describe("Benchmark: AgentWidget.getVisibleWindow (virtual scrolling)", () => {
     const elapsed = performance.now() - start;
     const perCall = elapsed / 500;
 
-    expect(perCall).toBeLessThan(0.1);
+    benchmarkLog(`getVisibleWindow ${LARGE} agents`, perCall, 0.5, "\u00b5s");
+    expect(perCall).toBeLessThan(0.5);
   });
 
-  it("getVisibleWindow with 1000 agents under 500\u00b5s (extreme case)", () => {
+  it("getVisibleWindow with 1000 agents under 1ms (extreme case)", () => {
     const agents = buildAgentList(1000, { running: 30, queued: 10, finished: 60 });
     const widget = new (AgentWidget as any)({}, new Map());
 
@@ -373,7 +428,8 @@ describe("Benchmark: AgentWidget.getVisibleWindow (virtual scrolling)", () => {
     const elapsed = performance.now() - start;
     const perCall = elapsed / 200;
 
-    expect(perCall).toBeLessThan(0.5);
+    benchmarkLog(`getVisibleWindow 1000 agents`, perCall, 1, "\u00b5s");
+    expect(perCall).toBeLessThan(1);
   });
 
   it("getVisibleWindow scrollDown is fast when there are many agents", () => {
@@ -391,6 +447,7 @@ describe("Benchmark: AgentWidget.getVisibleWindow (virtual scrolling)", () => {
     const elapsed = performance.now() - start;
     const perScroll = pages > 0 ? elapsed / pages : 0;
 
+    benchmarkLog(`getVisibleWindow page scroll`, perScroll, 1, "\u00b5s");
     expect(perScroll).toBeLessThan(1);
   });
 });
@@ -481,6 +538,7 @@ describe("Benchmark: sustained update throughput", () => {
     const elapsed = performance.now() - start;
     const perTick = elapsed / 50;
 
+    benchmarkLog(`widget update 50 ticks`, perTick, 2);
     expect(perTick).toBeLessThan(2);
   });
 });

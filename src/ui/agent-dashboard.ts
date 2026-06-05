@@ -28,11 +28,14 @@ import {
   renderDashboardFooter,
   renderDashboardHeader,
   renderDashboardHelp,
+  renderDashboardPerf,
 } from "./agent-dashboard-renderer.js";
 import { getAgentTopEntries, renderTopTable, type SortKey, sortEntries } from "./agent-top-renderer.js";
 import type { AgentActivity } from "./agent-ui-types.js";
+import { RenderMetrics, type RenderMetricsSnapshot } from "./render-metrics.js";
 import {
   type BoxChars,
+  borderLine,
   type DashboardTheme,
   framedRow,
   getBoxChars,
@@ -76,6 +79,11 @@ export class AgentDashboard implements Component {
   /** Multi-select support */
   private selectedIds = new Set<string>();
   private showHelp = false;
+  private showPerf = false;
+  /** Which metrics view to show: dashboard or widget. */
+  private perfView: "dashboard" | "widget" = "dashboard";
+  private inCommandMode = false;
+  private commandBuffer = "";
   private topViewMode = false;
   private topSortKey: SortKey = "tokens";
   private topSortAsc = false;
@@ -119,6 +127,14 @@ export class AgentDashboard implements Component {
    * Reset after each render. Used to decide whether full recompute is needed.
    */
   private dirty = true;
+
+  // ── Performance: render timing metrics ──
+
+  /** Render timing tracker for monitoring dashboard render() performance. */
+  private renderMetrics = new RenderMetrics("dashboard-render", 50);
+
+  /** Timestamp of first spawned agent (for time-to-first-visible). */
+  private firstSpawnedAt = 0;
 
   constructor(
     private readonly tui: TUI,
@@ -196,6 +212,9 @@ export class AgentDashboard implements Component {
    */
   private requestRender(): void {
     if (this.closed) return;
+
+    // Track request count for debounce effectiveness (called before debounce filtering).
+    this.renderMetrics.recordRequested();
 
     const now = Date.now();
     const elapsed = now - this.lastRenderTime;
@@ -317,6 +336,50 @@ export class AgentDashboard implements Component {
   }
 
   // ════════════════════════════════════════════════════════════════
+  // Command Mode
+  // ════════════════════════════════════════════════════════════════
+
+  private getWidgetMetrics(): RenderMetricsSnapshot | undefined {
+    const wm = (globalThis as any)[Symbol.for("pi-subagents:widget-metrics")];
+    if (wm?.getSnapshot) {
+      try { return wm.getSnapshot(); } catch { /* ignore */ }
+    }
+    return undefined;
+  }
+
+  private executeCommand(buffer: string): void {
+    const cmd = buffer.toLowerCase().trim();
+    if (cmd === "/perf") {
+      this.showPerf = !this.showPerf;
+      if (this.showPerf) {
+        this.perfView = "dashboard";
+        this.showHelp = false;
+      }
+    } else if (cmd === "/perf widget") {
+      this.showPerf = true;
+      this.perfView = "widget";
+      this.showHelp = false;
+    } else if (cmd === "/perf dashboard") {
+      this.showPerf = true;
+      this.perfView = "dashboard";
+      this.showHelp = false;
+    } else if (cmd === "/perf reset") {
+      if (this.perfView === "widget") {
+        // Widget metrics are owned by the AgentWidget instance; this
+        // dashboard cannot reach into it. Show the perf panel so the
+        // keystroke isn't silently swallowed — the user sees the panel
+        // appear and can take action in the editor.
+        this.showPerf = true;
+      } else {
+        this.renderMetrics.reset();
+        // Clear the first-spawn baseline so the next session can re-arm
+        // timeToFirstVisibleMs from the actual first agent arrival.
+        this.firstSpawnedAt = 0;
+      }
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════
   // Input Handling
   // ════════════════════════════════════════════════════════════════
 
@@ -324,6 +387,93 @@ export class AgentDashboard implements Component {
     const rec = this.agents[this.selectedIndex];
     const viewportHeight = this.getViewportHeight();
     const maxScroll = Math.max(0, this.bodyLineCount - viewportHeight);
+
+    // ── Command mode ───────────────────────────────────────────────
+    if (this.inCommandMode) {
+      if (matchesKey(data, "escape")) {
+        this.inCommandMode = false;
+        this.commandBuffer = "";
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "enter") || matchesKey(data, "return")) {
+        this.executeCommand(this.commandBuffer);
+        this.inCommandMode = false;
+        this.commandBuffer = "";
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "backspace")) {
+        this.commandBuffer = this.commandBuffer.slice(0, -1);
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      // Single character → append to buffer
+      if (data.length === 1 && !data.includes("+")) {
+        this.commandBuffer += data;
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      // Unknown key while in command mode → cancel and fall through
+      this.inCommandMode = false;
+      this.commandBuffer = "";
+    }
+
+    // ── Toggle perf view if it's showing (q/esc close perf, not dashboard) ──
+    if (this.showPerf) {
+      if (matchesKey(data, "q") || matchesKey(data, "escape")) {
+        this.showPerf = false;
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      // Allow / to enter command mode even when perf is showing
+      if (data === "/" && !this.inCommandMode) {
+        this.inCommandMode = true;
+        this.commandBuffer = "/";
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      // While the perf overlay covers the agent list, only allow safe navigation
+      // and view-only keys to pass through. Destructive/action keys (enter, space,
+      // shift+k, s/p/r/t/w, etc.) are swallowed to prevent aborting agents or
+      // mutating state behind a panel the user can no longer see.
+      const isPerfSafeKey =
+        matchesKey(data, "up") ||
+        matchesKey(data, "down") ||
+        matchesKey(data, "k") ||
+        matchesKey(data, "j") ||
+        matchesKey(data, "pageUp") ||
+        matchesKey(data, "pageDown") ||
+        matchesKey(data, "shift+up") ||
+        matchesKey(data, "shift+down") ||
+        matchesKey(data, "left") ||
+        matchesKey(data, "right") ||
+        matchesKey(data, "shift+left") ||
+        matchesKey(data, "shift+right") ||
+        matchesKey(data, "home") ||
+        matchesKey(data, "end");
+      if (!isPerfSafeKey) {
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      // Safe navigation keys fall through to the normal handler below.
+    }
+
+    // ── Enter command mode from normal mode ──
+    if (matchesKey(data, "/") && !this.inCommandMode) {
+      this.inCommandMode = true;
+      this.commandBuffer = "/";
+      this.dirty = true;
+      this.requestRender();
+      return;
+    }
 
     if (matchesKey(data, "escape") || matchesKey(data, "q")) {
       this.close();
@@ -536,6 +686,15 @@ export class AgentDashboard implements Component {
   }
 
   render(width: number): string[] {
+    const renderStart = performance.now();
+
+    // Track first spawn timestamp for time-to-first-visible.
+    const hasSpawned = this.agents.length > 0;
+    if (hasSpawned && this.firstSpawnedAt === 0) {
+      this.firstSpawnedAt = Date.now();
+      this.renderMetrics.setFirstSpawnTimestamp(this.firstSpawnedAt);
+    }
+
     // Use memoized theme/box chars (only recomputed on UI style change).
     const th = this.getTheme();
     const box = this.getBox();
@@ -555,6 +714,17 @@ export class AgentDashboard implements Component {
 
     if (this.showHelp) {
       lines.push(...renderDashboardHelp(innerW, th, box));
+    } else if (this.showPerf) {
+      if (this.perfView === "widget") {
+        const widgetMetrics = this.getWidgetMetrics();
+        if (widgetMetrics) {
+          lines.push(...renderDashboardPerf(innerW, th, box, widgetMetrics, "widget"));
+        } else {
+          lines.push(...renderDashboardPerf(innerW, th, box, this.renderMetrics.snapshot(), "widget"));
+        }
+      } else {
+        lines.push(...renderDashboardPerf(innerW, th, box, this.renderMetrics.snapshot(), "dashboard"));
+      }
     } else if (this.agents.length === 0) {
       lines.push(...renderDashboardEmpty(innerW, th, box));
     } else if (this.topViewMode) {
@@ -580,13 +750,33 @@ export class AgentDashboard implements Component {
       for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
     }
 
-    lines.push(...renderDashboardDetailPanel(safeWidth, th, box, state, this.options.manager));
-    lines.push(...renderDashboardFooter(safeWidth, th, box, this.options.agentActivity));
+    // Show command input line when in command mode.
+    if (this.inCommandMode) {
+      const cursor = " ".repeat(Math.max(0, innerW - 2 - this.commandBuffer.length - 2));
+      const cmdLine = `${th.accent}${this.commandBuffer}${cursor}${th.dim}▌${th.reset}`;
+      lines.push(...renderDashboardDetailPanel(safeWidth, th, box, state, this.options.manager));
+      lines.push(borderLine(safeWidth, th, box, "mid"));
+      lines.push(framedRow(`${th.title}cmd${th.reset}  ${cmdLine}`, innerW, th, box));
+      lines.push(framedRow(`${th.dim}Enter to run · Esc to cancel${th.reset}`, innerW, th, box));
+      lines.push(...renderDashboardFooter(safeWidth, th, box, this.options.agentActivity));
+    } else {
+      lines.push(...renderDashboardDetailPanel(safeWidth, th, box, state, this.options.manager));
+      lines.push(...renderDashboardFooter(safeWidth, th, box, this.options.agentActivity));
+    }
 
     // Reset dirty flag after a full render.
     this.dirty = false;
 
+    // Record render timing with active agent context.
+    const activeAgents = this.agents.filter(a => a.status === "running" || a.status === "queued").length;
+    this.renderMetrics.record(performance.now() - renderStart, activeAgents);
+
     return lines;
+  }
+
+  /** Get render performance metrics snapshot. */
+  getRenderMetrics() {
+    return this.renderMetrics.snapshot();
   }
 
   invalidate(): void {

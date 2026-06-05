@@ -216,17 +216,20 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/prompts.ts` | Template block constants |
 | `src/skill-loader.ts` | External module ingestion |
 | `src/telemetry.ts` | Activity datalogging pipeline |
-| `src/ui/agent-dashboard.ts` | Primary interactive telemetry view |
-| `src/ui/agent-widget.ts` | Legacy telemetry view |
+| `src/batch-orchestrator.ts` | Manages smart/group/swarm batch finalization and update debouncing |
+| `src/ui/agent-dashboard.ts` | Primary interactive telemetry view with list and top modes |
+| `src/ui/agent-top-renderer.ts` | Columns rendering, sorting, and pagination logic for resource top view |
+| `src/ui/agent-widget.ts` | Running subagents widget overlay above the editor |
 | `src/ui/conversation-viewer.ts` | Stream block trace |
 | `src/ui/schedule-menu.ts` | Temporal task list view |
 | `src/ui/animation.ts` | Execution feedback visual primitives |
 | `src/ui/theme.ts` | Constant mapping for visual output |
 | `src/ui/agent-format.ts` | Standard output data formatting |
 | `src/ui/agent-ui-types.ts` | Display constraints definition |
-| `src/ui/agent-widget-renderer.ts` | Legacy render sequence |
-| `src/ui/agent-dashboard-renderer.ts` | Primary render sequence |
+| `src/ui/agent-widget-renderer.ts` | Widget render sequence with virtual scrolling and batch safety caps |
+| `src/ui/agent-dashboard-renderer.ts` | Dashboard render sequence with details panel, help, and empty states |
 | `src/ui/notification-renderer.ts` | State change visual logic |
+| `src/ui/dashboard/` | Directory containing modular dashboard components (compact rows, progress bars, etc.) |
 
 ---
 
