@@ -76,6 +76,8 @@ export interface AgentConfig {
     partitionMembership?: Record<string, readonly string[]>;
     /** Enable @onlinechef/context-mode ctx_* tools for sandboxed code execution and search. */
     useContextMode?: boolean;
+    /** Per-agent prompt compression override. Falls back to global setting. */
+    promptCompressionLevel?: "minimal" | "balanced" | "aggressive";
 }
 
 export type JoinMode = "async" | "group" | "smart" | "swarm";

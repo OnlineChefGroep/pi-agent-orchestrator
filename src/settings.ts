@@ -9,6 +9,9 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { OrchestrationMode } from "./agent-registry.js";
 import type { JoinMode } from "./types.js";
 
+/** Prompt compression level: controls verbosity of system prompts. */
+export type PromptCompressionLevel = "minimal" | "balanced" | "aggressive";
+
 export interface SubagentsSettings {
   maxConcurrent?: number;
   /** Optional hard cap for all agents spawned during one pi session. Omit for unlimited. */
@@ -75,6 +78,8 @@ export interface SubagentsSettings {
   sessionMaxSpawns?: number;
   /** Guardrail limit for cumulative turns in a session */
   sessionMaxTurns?: number;
+  /** Prompt compression level. Defaults to "balanced". */
+  promptCompressionLevel?: PromptCompressionLevel;
 }
 
 /** Setter hooks used by applySettings to wire persisted values into in-memory state. */
@@ -95,6 +100,7 @@ export interface SettingsAppliers {
   setDashboardRefreshInterval: (interval: number) => void;
   setSessionMaxSpawns: (n: number) => void;
   setSessionMaxTurns: (n: number) => void;
+  setPromptCompressionLevel: (level: PromptCompressionLevel) => void;
 }
 
 /** Emit callback — a subset of `pi.events.emit` to keep helpers testable. */
@@ -104,6 +110,7 @@ const VALID_JOIN_MODES = ["async", "group", "smart", "swarm"] as const;
 const VALID_ORCHESTRATION_MODES = ["auto", "single", "swarm", "crew"] as const;
 const VALID_ANIMATION_STYLES = ["braille", "dots", "lines", "classic", "none"] as const;
 const VALID_UI_STYLES = ["premium", "retro", "plain", "cinematic"] as const;
+const VALID_COMPRESSION_LEVELS = ["minimal", "balanced", "aggressive"] as const;
 
 // Sanity ceilings — prevent hand-edited configs from asking for values that
 // make no operational sense (e.g. 1e6 concurrent subagents). Permissive enough
@@ -161,6 +168,7 @@ function sanitize(raw: unknown): SubagentsSettings {
     { key: "animationStyle" as const, valid: VALID_ANIMATION_STYLES as readonly string[] },
     { key: "uiStyle" as const, valid: VALID_UI_STYLES as readonly string[] },
     { key: "orchestrationMode" as const, valid: VALID_ORCHESTRATION_MODES as readonly string[] },
+    { key: "promptCompressionLevel" as const, valid: VALID_COMPRESSION_LEVELS as readonly string[] },
   ]) {
     const v = validateEnum(r, key, valid, "");
     if (v) (out as Record<string, unknown>)[key] = v;
@@ -243,6 +251,7 @@ export function applySettings(s: SubagentsSettings, appliers: SettingsAppliers):
   if (typeof s.dashboardRefreshInterval === "number") appliers.setDashboardRefreshInterval(s.dashboardRefreshInterval);
   if (typeof s.sessionMaxSpawns === "number") appliers.setSessionMaxSpawns(s.sessionMaxSpawns);
   if (typeof s.sessionMaxTurns === "number") appliers.setSessionMaxTurns(s.sessionMaxTurns);
+  if (s.promptCompressionLevel) appliers.setPromptCompressionLevel(s.promptCompressionLevel);
 }
 
 /**

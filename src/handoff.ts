@@ -1,4 +1,5 @@
 import { logger } from "./logger.js";
+import type { PromptCompressionLevel } from "./settings.js";
 /**
  * handoff.ts — Structured handoff protocol for chain-of-agents.
  *
@@ -268,14 +269,17 @@ export function parseHandoff(text: string): AgentHandoff | null {
 }
 
 /**
- * Build a handoff template for injection into an agent's system prompt.
+ * Handoff template variants by compression level.
+ * Selected at runtime by `buildHandoffPrompt(level)`.
  *
- * This tells the agent to produce a structured JSON handoff at the very end
- * of its response, enabling the parent to machine-parse the result for
- * chain-of-agents workflows.
+ * HANDOFF_FULL       = complete protocol with field descriptions + realistic example ("minimal" compression = max quality)
+ * HANDOFF_BALANCED   = compact example with single-line field summary (default)
+ * HANDOFF_AGGRESSIVE = bare-minimum one-liner format (max token savings)
+ *
+ * Note: "FULL" corresponds to the "minimal" compression level setting (minimal
+ * compression → maximum verbosity). Naming reflects verbosity, not compression.
  */
-export function buildHandoffPrompt(): string {
-  return `# Structured Handoff Protocol
+const HANDOFF_FULL = `# Structured Handoff Protocol
 At the end of your response, you MUST produce a structured JSON handoff. This allows parent agents to parse your results programmatically.
 
 The handoff must be enclosed in a \`\`\`json code block and must be the LAST thing in your response. Format:
@@ -320,6 +324,41 @@ Example:
   "artifacts": [{"type": "file", "title": "Fixed rate limiter", "value": "/home/user/project/src/rate-limiter.ts"}]
 }
 \`\`\``;
+
+const HANDOFF_BALANCED = `# Structured Handoff Protocol
+End your response with a \`\`\`json handoff block so parent agents can parse results programmatically.
+
+\`\`\`json
+{
+  "type": "handoff",
+  "status": "success",
+  "summary": "Fixed token bucket refill in rate-limiter.ts — interval was 0ms instead of 1000ms",
+  "findings": ["Refill interval was 0ms", "Token bucket never refilled after first burst"],
+  "nextSteps": ["Add unit test for refill behavior", "Check other RateLimiter instances"],
+  "confidence": 0.95,
+  "evidence": ["/home/user/project/src/rate-limiter.ts"],
+  "files": ["/home/user/project/src/rate-limiter.ts"],
+  "artifacts": [{"type": "file", "title": "Fixed rate limiter", "value": "/home/user/project/src/rate-limiter.ts"}]
+}
+\`\`\`
+
+Fields: **type**="handoff", **status**="success"|"partial"|"failed", **findings** required (≥1), **summary** required, **nextSteps** optional, **confidence** 0-1 optional, **evidence** optional, **files** optional, **artifacts** optional.`;
+
+/** @see HANDOFF_FULL — shared JSDoc for all three variants. */
+const HANDOFF_AGGRESSIVE = `# Handoff
+End with \`\`\`json: {"type":"handoff","status":"success|partial|failed","summary":"...","findings":["..."]}`;
+
+/**
+ * Build a handoff template for injection into an agent's system prompt.
+ *
+ * This tells the agent to produce a structured JSON handoff at the very end
+ * of its response, enabling the parent to machine-parse the result for
+ * chain-of-agents workflows.
+ */
+export function buildHandoffPrompt(level: PromptCompressionLevel = "balanced"): string {
+  if (level === "minimal") return HANDOFF_FULL;
+  if (level === "aggressive") return HANDOFF_AGGRESSIVE;
+  return HANDOFF_BALANCED;
 }
 
 /**

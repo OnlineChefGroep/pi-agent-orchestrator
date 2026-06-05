@@ -23,6 +23,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { getPromptCompressionLevel } from "./agent-registry.js";
 import { type EffectiveConfig, getAgentConfig, getConfig, getMemoryToolNames, getReadOnlyMemoryToolNames, getToolNamesForType } from "./agent-types.js";
 import { buildParentContext, extractText } from "./context.js";
 import { buildCtxInjection } from "./context-mode-bridge.js";
@@ -427,9 +428,10 @@ export async function runAgent(
   toolNames = toolNames.filter((t) => allowedTools.has(t));
 
   // Build system prompt
+  const compressionLevel = agentConfig?.promptCompressionLevel ?? getPromptCompressionLevel();
   let systemPrompt: string;
   if (agentConfig) {
-    systemPrompt = buildAgentPrompt(agentConfig, effectiveCwd, env, parentSystemPrompt, extras);
+    systemPrompt = buildAgentPrompt(agentConfig, effectiveCwd, env, parentSystemPrompt, extras, compressionLevel);
   } else {
     const fallback = DEFAULT_AGENTS.get("general-purpose");
     if (!fallback) {
@@ -438,7 +440,7 @@ export async function runAgent(
         "unknown",
       );
     }
-    systemPrompt = buildAgentPrompt({ ...fallback, name: type }, effectiveCwd, env, parentSystemPrompt, extras);
+    systemPrompt = buildAgentPrompt({ ...fallback, name: type }, effectiveCwd, env, parentSystemPrompt, extras, compressionLevel);
   }
 
   // Context-mode injection
