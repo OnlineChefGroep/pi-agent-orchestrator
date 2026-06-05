@@ -86,6 +86,7 @@ Just a prompt.`);
     expect(agent.inheritContext).toBeUndefined();
     expect(agent.runInBackground).toBeUndefined();
     expect(agent.isolated).toBeUndefined();
+    expect(agent.handoff).toBeUndefined();
     expect(agent.systemPrompt).toBe("Just a prompt.");
   });
 
@@ -448,6 +449,44 @@ Bad isolation.`);
 
     const result = await loadCustomAgents(tmpDir);
     expect(result.get("bad-isolation")!.isolation).toBeUndefined();
+  });
+
+  it("parses handoff: true from frontmatter", async () => {
+    writeAgent("chain-agent", `---\nhandoff: true\n---\n\nYou produce structured handoff JSON.`);
+
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("chain-agent")!.handoff).toBe(true);
+  });
+
+  it("handoff defaults to undefined when omitted", async () => {
+    writeAgent("no-handoff", `---\ndescription: No handoff\n---\n\nStandard agent.`);
+
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("no-handoff")!.handoff).toBeUndefined();
+  });
+
+  it("handoff: false parses as false (explicitly disabled)", async () => {
+    writeAgent("explicit-false", `---\nhandoff: false\n---\n\nExplicit false.`);
+
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("explicit-false")!.handoff).toBe(false);
+  });
+
+  it("handoff: \"true\" (string) parses as false - only boolean true enables", async () => {
+    writeAgent("string-true", `---\nhandoff: \"true\"\n---\n\nString true.`);
+
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("string-true")!.handoff).toBe(false);
+  });
+
+  it("parses handoff: true alongside other boolean fields", async () => {
+    writeAgent("full-chain", `---\ninherit_context: true\nrun_in_background: true\nhandoff: true\n---\n\nChain agent with inheritance and handoff.`);
+
+    const result = await loadCustomAgents(tmpDir);
+    const agent = result.get("full-chain")!;
+    expect(agent.inheritContext).toBe(true);
+    expect(agent.runInBackground).toBe(true);
+    expect(agent.handoff).toBe(true);
   });
 
   it("honors PI_CODING_AGENT_DIR for global custom agent discovery", async () => {
