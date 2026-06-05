@@ -1,34 +1,65 @@
 #!/usr/bin/env node
 /**
  * Generate asciicast recordings from real dashboard / top-view / widget renderers.
- * Output: /tmp/showcase-*.cast — convert with agg + ffmpeg (see create_showcase.sh).
+ * Output: $TMPDIR/showcase-*.cast — convert with agg + ffmpeg (see create_showcase.sh).
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 
-const {
-  getThemeColors,
-  getBoxChars,
-  framedRow,
-  plainTheme,
-} = await import(path.join(root, "dist/ui/theme.js"));
-const {
-  buildDashboardBodyLines,
-  renderDashboardHeader,
-  renderDashboardFooter,
-  renderDashboardHelp,
-} = await import(path.join(root, "dist/ui/dashboard/index.js"));
-const {
-  getAgentTopEntries,
-  renderTopTable,
-  sortEntries,
-} = await import(path.join(root, "dist/ui/agent-top-renderer.js"));
-const { renderAgentWidget } = await import(path.join(root, "dist/ui/agent-widget-renderer.js"));
-const { activeTheme } = await import(path.join(root, "dist/ui/theme.js"));
+// Use the platform temp directory instead of hardcoding /tmp (works on Windows
+// and macOS sandbox where /tmp may not be writable).
+const TMP_DIR = process.env.TMPDIR
+	? process.env.TMPDIR.replace(/\/$/, "")
+	: os.tmpdir();
+
+// Fail fast with a clear message if build artifacts are missing. Without this
+// the dynamic import errors look like cryptic "Cannot find module" stack traces.
+const distTheme = path.join(root, "dist/ui/theme.js");
+if (!fs.existsSync(distTheme)) {
+	console.error(
+		`Error: build artifacts not found at ${distTheme}.\n` +
+			`Run 'npm run build' first, then re-run this script.`,
+	);
+	process.exit(1);
+}
+
+let getThemeColors, getBoxChars, framedRow, plainTheme;
+let buildDashboardBodyLines, renderDashboardHeader, renderDashboardFooter, renderDashboardHelp;
+let getAgentTopEntries, renderTopTable, sortEntries;
+let renderAgentWidget, activeTheme;
+try {
+	({
+		getThemeColors,
+		getBoxChars,
+		framedRow,
+		plainTheme,
+	} = await import(path.join(root, "dist/ui/theme.js")));
+	({
+		buildDashboardBodyLines,
+		renderDashboardHeader,
+		renderDashboardFooter,
+		renderDashboardHelp,
+	} = await import(path.join(root, "dist/ui/dashboard/index.js")));
+	({
+		getAgentTopEntries,
+		renderTopTable,
+		sortEntries,
+	} = await import(path.join(root, "dist/ui/agent-top-renderer.js")));
+	({ renderAgentWidget } = await import(path.join(root, "dist/ui/agent-widget-renderer.js")));
+	({ activeTheme } = await import(path.join(root, "dist/ui/theme.js")));
+} catch (err) {
+	console.error(
+		`Error: failed to import dist/ui/* renderers.\n` +
+			`Run 'npm run build' first, then re-run this script.\n` +
+			`Underlying error: ${err.message}`,
+	);
+	process.exit(1);
+}
 
 const WIDTH = 110;
 const HEIGHT = 34;
@@ -207,7 +238,7 @@ function renderDashboardHelpScreen(frame) {
   for (let f = 32; f < 36; f++) {
     specs.push({ dt: 0.2, lines: renderDashboardList(f, f % 4) });
   }
-  writeCast("/tmp/showcase-dashboard.cast", specs);
+  writeCast(path.join(TMP_DIR, "showcase-dashboard.cast"), specs);
 }
 
 // ── Top view: sort by tokens → last seen, page flip ──
@@ -223,7 +254,7 @@ function renderDashboardHelpScreen(frame) {
     specs.push({ dt: 0.35, lines: renderDashboardTop(f, "toolUses", false, 0) });
   }
   specs.push({ dt: 0.5, lines: renderDashboardTop(0, "lastSeen", false, 1) });
-  writeCast("/tmp/showcase-top.cast", specs);
+  writeCast(path.join(TMP_DIR, "showcase-top.cast"), specs);
 }
 
 // ── Widget: heatmap + running agents ──
@@ -232,7 +263,7 @@ function renderDashboardHelpScreen(frame) {
   for (let f = 0; f < 28; f++) {
     specs.push({ dt: f === 0 ? 0.35 : 0.16, lines: renderWidget(f) });
   }
-  writeCast("/tmp/showcase-widget.cast", specs);
+  writeCast(path.join(TMP_DIR, "showcase-widget.cast"), specs);
 }
 
 // Combined hero cast (dashboard → top → widget sequence)
@@ -249,7 +280,7 @@ function renderDashboardHelpScreen(frame) {
   for (let f = 0; f < 14; f++) {
     specs.push({ dt: 0.14, lines: renderWidget(f) });
   }
-  writeCast("/tmp/showcase.cast", specs);
+  writeCast(path.join(TMP_DIR, "showcase.cast"), specs);
 }
 
-console.log("Showcase casts ready in /tmp/showcase*.cast");
+console.log(`Showcase casts ready in ${TMP_DIR}/showcase*.cast`);

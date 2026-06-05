@@ -5,8 +5,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_DIR="$ROOT/docs/images"
 FIDELITY="inspect"
+# Use TMPDIR (not /tmp) so the script works on Windows + macOS + Linux.
+TMP_DIR="${TMPDIR:-/tmp}"
 # shellcheck source=scripts/lib/showcase-agg.sh
 source "$ROOT/scripts/lib/showcase-agg.sh"
+
+# Fail fast with a clear message if required external tools are missing.
+for tool in node agg ffmpeg; do
+	if ! command -v "$tool" >/dev/null 2>&1; then
+		echo "Error: required tool '$tool' not found in PATH. Install it first." >&2
+		exit 1
+	fi
+done
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -31,10 +41,10 @@ render_gif() {
 	echo "GIF: $gif ($(du -h "$gif" | cut -f1))"
 }
 
-render_gif /tmp/showcase-dashboard.cast "$OUT_DIR/showcase_dashboard.gif"
-render_gif /tmp/showcase-top.cast "$OUT_DIR/showcase_top_view.gif"
-render_gif /tmp/showcase-widget.cast "$OUT_DIR/showcase_widget.gif"
-render_gif /tmp/showcase.cast "$OUT_DIR/dashboard_preview_programmatic.gif"
+render_gif "$TMP_DIR/showcase-dashboard.cast" "$OUT_DIR/showcase_dashboard.gif"
+render_gif "$TMP_DIR/showcase-top.cast" "$OUT_DIR/showcase_top_view.gif"
+render_gif "$TMP_DIR/showcase-widget.cast" "$OUT_DIR/showcase_widget.gif"
+render_gif "$TMP_DIR/showcase.cast" "$OUT_DIR/dashboard_preview_programmatic.gif"
 
 # Fallback hero when Remotion not run
 if [[ ! -f "$OUT_DIR/dashboard_preview.mp4" ]] || [[ "${FORCE_PROGRAMMATIC_HERO:-}" == "1" ]]; then

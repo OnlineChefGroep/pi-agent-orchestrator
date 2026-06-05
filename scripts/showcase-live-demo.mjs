@@ -3,31 +3,56 @@
  * Live terminal playback of dashboard / top / widget (dist renderers).
  * Record with: asciinema rec -c "node scripts/showcase-live-demo.mjs --auto"
  */
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 
-const {
-  getThemeColors,
-  getBoxChars,
-  framedRow,
-  plainTheme,
-  activeTheme,
-} = await import(path.join(root, "dist/ui/theme.js"));
-const {
-  buildDashboardBodyLines,
-  renderDashboardHeader,
-  renderDashboardFooter,
-  renderDashboardHelp,
-} = await import(path.join(root, "dist/ui/dashboard/index.js"));
-const {
-  getAgentTopEntries,
-  renderTopTable,
-  sortEntries,
-} = await import(path.join(root, "dist/ui/agent-top-renderer.js"));
-const { renderAgentWidget } = await import(path.join(root, "dist/ui/agent-widget-renderer.js"));
+// Fail fast with a clear message if build artifacts are missing. Without this
+// the dynamic import errors look like cryptic "Cannot find module" stack traces.
+const distTheme = path.join(root, "dist/ui/theme.js");
+if (!fs.existsSync(distTheme)) {
+	console.error(
+		`Error: build artifacts not found at ${distTheme}.\n` +
+			`Run 'npm run build' first, then re-run this script.`,
+	);
+	process.exit(1);
+}
+
+let getThemeColors, getBoxChars, framedRow, plainTheme, activeTheme;
+let buildDashboardBodyLines, renderDashboardHeader, renderDashboardFooter, renderDashboardHelp;
+let getAgentTopEntries, renderTopTable, sortEntries;
+let renderAgentWidget;
+try {
+	({
+		getThemeColors,
+		getBoxChars,
+		framedRow,
+		plainTheme,
+		activeTheme,
+	} = await import(path.join(root, "dist/ui/theme.js")));
+	({
+		buildDashboardBodyLines,
+		renderDashboardHeader,
+		renderDashboardFooter,
+		renderDashboardHelp,
+	} = await import(path.join(root, "dist/ui/dashboard/index.js")));
+	({
+		getAgentTopEntries,
+		renderTopTable,
+		sortEntries,
+	} = await import(path.join(root, "dist/ui/agent-top-renderer.js")));
+	({ renderAgentWidget } = await import(path.join(root, "dist/ui/agent-widget-renderer.js")));
+} catch (err) {
+	console.error(
+		`Error: failed to import dist/ui/* renderers.\n` +
+			`Run 'npm run build' first, then re-run this script.\n` +
+			`Underlying error: ${err.message}`,
+	);
+	process.exit(1);
+}
 
 const WIDTH = 110;
 const HEIGHT = 32;

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# A) Live capture — record showcase-live-demo via asciinema → cast → GIF/MP4
+# A) Live asciinema capture of the live demo
 set -euo pipefail
-
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_DIR="$ROOT/docs/images"
 # shellcheck source=scripts/lib/showcase-agg.sh
 source "$ROOT/scripts/lib/showcase-agg.sh"
 
+# Use mktemp so concurrent runs don't collide; respect TMPDIR for portability.
 FIDELITY="${SHOWCASE_FIDELITY:-inspect}"
-CAST="/tmp/showcase-live.cast"
+CAST="${CAST:-$(mktemp -t pi-orchestrator-showcase-live.XXXXXX.cast)}"
 GIF="$OUT_DIR/showcase_live.gif"
 MP4="$OUT_DIR/showcase_live.mp4"
 

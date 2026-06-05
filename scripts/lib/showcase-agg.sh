@@ -12,15 +12,18 @@ agg_render_cast() {
 	local speed="${4:-1.1}"
 
 	local cols rows agg_fps_cap agg_idle_limit
-	cols=$(python3 -c "
-import json
-h=json.loads(open('$cast').readline())
+	# Pass the cast path as an env var (not interpolated into the Python
+	# source) so filenames with quotes, backslashes, or other shell-active
+	# characters can't break the parser or smuggle code in.
+	cols=$(CAST="$cast" python3 -c "
+import json, os
+h=json.loads(open(os.environ['CAST']).readline())
 t=h.get('term') or {}
 print(h.get('width') or t.get('cols', 120))
 ")
-	rows=$(python3 -c "
-import json
-h=json.loads(open('$cast').readline())
+	rows=$(CAST="$cast" python3 -c "
+import json, os
+h=json.loads(open(os.environ['CAST']).readline())
 t=h.get('term') or {}
 print(h.get('height') or t.get('rows', 36))
 ")

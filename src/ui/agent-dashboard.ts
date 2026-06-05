@@ -365,10 +365,16 @@ export class AgentDashboard implements Component {
       this.showHelp = false;
     } else if (cmd === "/perf reset") {
       if (this.perfView === "widget") {
-        // Widget metrics reset is handled by widget itself — no-op in dashboard
+        // Widget metrics are owned by the AgentWidget instance; this
+        // dashboard cannot reach into it. Show the perf panel so the
+        // keystroke isn't silently swallowed — the user sees the panel
+        // appear and can take action in the editor.
         this.showPerf = true;
       } else {
         this.renderMetrics.reset();
+        // Clear the first-spawn baseline so the next session can re-arm
+        // timeToFirstVisibleMs from the actual first agent arrival.
+        this.firstSpawnedAt = 0;
       }
     }
   }

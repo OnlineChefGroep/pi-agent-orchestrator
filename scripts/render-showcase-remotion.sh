@@ -1,28 +1,40 @@
 #!/usr/bin/env bash
 # B) Remotion hero — title card, keystrokes, inspect fidelity
+# Optional polish step. Requires pi-agent-control-extension checked out
+# somewhere on disk; set DROID_PLUGIN_ROOT to its path before running.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_DIR="$ROOT/docs/images"
-DROID_PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-/home/jan/OrgChefgroep/pi-agent-control-extension}"
+DROID_PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-}"
 RENDER_SH="$DROID_PLUGIN_ROOT/scripts/render-showcase.sh"
 
-# Prefer live cast, then programmatic hero
+# Prefer live cast, then programmatic hero. Use TMPDIR (not /tmp) so the
+# script works on Windows + macOS + Linux.
+TMP_DIR="${TMPDIR:-/tmp}"
 CLIP_CAST="${1:-}"
 if [[ -z "$CLIP_CAST" ]]; then
-	if [[ -f /tmp/showcase-live.cast ]]; then
-		CLIP_CAST=/tmp/showcase-live.cast
+	if [[ -f "$TMP_DIR/showcase-live.cast" ]]; then
+		CLIP_CAST="$TMP_DIR/showcase-live.cast"
 	else
-		CLIP_CAST=/tmp/showcase.cast
+		CLIP_CAST="$TMP_DIR/showcase.cast"
 	fi
 fi
 
+if [[ -z "$DROID_PLUGIN_ROOT" ]]; then
+	echo "skip remotion: DROID_PLUGIN_ROOT not set"
+	exit 0
+fi
 [[ -x "$RENDER_SH" ]] || {
 	echo "skip remotion: $RENDER_SH not found (set DROID_PLUGIN_ROOT)"
 	exit 0
 }
 
-cat >/tmp/showcase-remotion-props.json <<'EOF'
+# Use mktemp for the props file so concurrent runs don't collide.
+PROPS_FILE="$(mktemp "${TMP_DIR}/pi-orchestrator-remotion-props.XXXXXX.json")"
+trap 'rm -f "$PROPS_FILE"' EXIT
+
+cat >"$PROPS_FILE" <<'EOF'
 {
   "preset": "warm-hero",
   "title": "Pi Agent Orchestrator",
@@ -50,7 +62,7 @@ cat >/tmp/showcase-remotion-props.json <<'EOF'
 EOF
 
 bash "$RENDER_SH" \
-	--props /tmp/showcase-remotion-props.json \
+	--props "$PROPS_FILE" \
 	--fidelity inspect \
 	--output "$OUT_DIR/dashboard_preview_remotion.mp4" \
 	"$CLIP_CAST"

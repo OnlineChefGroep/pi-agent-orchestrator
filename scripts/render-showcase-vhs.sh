@@ -4,7 +4,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TAPE_SRC="$ROOT/showcase/install-and-agents.tape"
-TAPE_TMP="/tmp/pi-orchestrator-showcase.tape"
+# Use mktemp + TMPDIR for portability; clean up the substituted tape on exit.
+TMP_DIR="${TMPDIR:-/tmp}"
+TAPE_TMP="$(mktemp "${TMP_DIR}/pi-orchestrator-showcase.XXXXXX.tape")"
+trap 'rm -f "$TAPE_TMP"' EXIT
 OUT_GIF="$ROOT/docs/images/showcase_vhs.gif"
 OUT_MP4="$ROOT/docs/images/showcase_vhs.mp4"
 
@@ -26,7 +29,9 @@ command -v vhs >/dev/null || {
 	exit 1
 }
 
-sed "s|REPO_PLACEHOLDER|$ROOT|g" "$TAPE_SRC" >"$TAPE_TMP"
+# Use '#' as the sed delimiter — '/' and '|' both appear in $ROOT on some
+# installations, '#' is much less likely to collide with a path component.
+sed "s#REPO_PLACEHOLDER#$ROOT#g" "$TAPE_SRC" >"$TAPE_TMP"
 
 cd "$ROOT"
 npm run build
