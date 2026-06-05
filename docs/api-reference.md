@@ -245,6 +245,10 @@ interface AgentConfig {
   model?: string;
   temperature?: number;
   parentType?: string;
+  handoff?: boolean;          // Produce structured JSON handoff at end of response
+  promptCompressionLevel?: PromptCompressionLevel;  // Per-agent compression override
+  memory?: MemoryScope;       // "user" | "project" | "local"
+  isolation?: "worktree";    // Isolation mode
 }
 ```
 
@@ -286,6 +290,23 @@ interface AgentRecord {
 **FILE:** `src/custom-agents.ts`
 
 Ingests markdown definitions, parsing YAML frontmatter into memory constraints. Validates identifiers and nullifies injection primitives.
+
+**FRONTMATTER EXAMPLE (handoff):**
+
+```markdown
+---
+display_name: "Chain Reviewer"
+description: "Code review that hands off structured findings"
+tools: read, grep, find
+handoff: true
+prompt_compression: minimal
+---
+
+Perform a thorough code review and produce a structured handoff JSON
+with your findings for downstream agents.
+```
+
+When `handoff: true` is set, the agent produces a structured JSON handoff at the end of its response, enabling chain-of-agents workflows where one agent's output feeds directly into the next.
 
 **SECURITY DIRECTIVE:** Symlinks are explicitly ignored to prevent LFI vulnerabilities.
 
