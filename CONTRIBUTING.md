@@ -17,6 +17,9 @@ Thank you for contributing. This document covers build, test, lint, and PR workf
 # Install dependencies
 npm install
 
+# Install local git hooks (lint + test on commit/push)
+bash scripts/setup-git-hooks.sh
+
 # TypeScript typecheck
 npm run typecheck
 
@@ -100,12 +103,27 @@ npm test -- --coverage
 
 ---
 
+## Git Hooks (Local)
+
+The project includes local git hooks that run checks automatically:
+
+| Hook | When | What it runs |
+|---|---|---|
+| `pre-commit` | Before each `git commit` | Biome lint with auto-fix on staged `.ts/.js/.sh` files + full `tsc --noEmit` typecheck |
+| `pre-push` | Before each `git push` | `npm test` (full test suite) |
+
+**Install:** `bash scripts/setup-git-hooks.sh` (run once after clone)
+
+**Skip:** `git commit --no-verify` or `git push --no-verify`
+
+The hooks live in `scripts/git-hooks/` and are copied to `.git/hooks/` during setup. Since `.git/hooks/` is not version-controlled, the setup script ensures new clones can enable them with one command.
+
 ## Pull Request Workflow
 
 1. **Branch:** Create a feature branch from `main`.
 2. **Commits:** Use [Conventional Commits](https://www.conventionalcommits.org/) style:
    - `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
-3. **Pre-commit:** Ensure `npm run typecheck`, `npm run lint`, and `npm test` pass (Windows schedule flakiness excepted).
+3. **Pre-commit:** Ensure `npm run typecheck`, `npm run lint`, and `npm test` pass (Windows schedule flakiness excepted). Git hooks handle this automatically if installed.
 4. **PR description:** Reference any related issues or VERVOLG_PLAN items.
 5. **Review:** All PRs require at least one review before merge.
 
