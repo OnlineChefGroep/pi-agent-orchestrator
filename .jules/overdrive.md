@@ -54,3 +54,11 @@ Preserved from superseded PR branches (merged or closed 2026-06-04). Code change
 **Key Metric Shift:** A 1000-render loop benchmark with 100 mock agents went from ~22,000ms down to ~1,000ms, representing a >20x speedup in raw string processing/layout.
 
 **Actionable Principle:** For TUI rendering or padding operations, avoid applying expensive string transformations (like regex-based truncation) unless a cheap bounds check (like `visibleWidth`) proves it is strictly necessary.
+
+---
+
+## 2026-06-05 — Stale PR branches removed (housekeeping)
+
+Log of PR branches superseded by the optimizations already on `main` and closed/deleted as part of routine cleanup. Code in this section describes *what was removed*, not new performance work.
+
+- `jules-17395782889347801643-1f9e99e5` (PR #89, "⚡ [Optimize Execution Tree Construction from O(N^2) to O(N)]"): the `nodeMap`/`childrenMap` hash-map lookup in `buildExecutionTree` was already merged to `main` in commit `3089a297` (2026-05-29). The branch's only material delta was an `export` keyword (plus JSDoc) on `buildExecutionTree` and a new `test/tree-construction.benchmark.test.ts` that uses `console.log` + `toContain` rather than the project's `toBeLessThan` threshold convention. The `.jules/overdrive.md` addition on the branch duplicated the consolidated notes above. PR closed (not merged) and remote branch deleted.
