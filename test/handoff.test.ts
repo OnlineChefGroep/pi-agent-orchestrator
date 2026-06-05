@@ -190,6 +190,54 @@ describe("buildHandoffPrompt", () => {
     const prompt = buildHandoffPrompt();
     expect(prompt).toContain("```json");
   });
+
+  describe("compression level variants", () => {
+    it("minimal level returns HANDOFF_FULL (verbose, max quality)", () => {
+      const prompt = buildHandoffPrompt("minimal");
+      expect(prompt).toContain("Structured Handoff Protocol");
+      expect(prompt).toContain("Field descriptions");
+      expect(prompt).toContain("At the end of your response, you MUST produce a structured JSON handoff");
+      expect(prompt.length).toBeGreaterThan(500);
+    });
+
+    it("balanced level returns HANDOFF_BALANCED (default)", () => {
+      const prompt = buildHandoffPrompt("balanced");
+      expect(prompt).toContain("Structured Handoff Protocol");
+      expect(prompt).toContain("Fields:");
+      expect(prompt).toContain("```json");
+    });
+
+    it("aggressive level returns HANDOFF_AGGRESSIVE (minimal)", () => {
+      const prompt = buildHandoffPrompt("aggressive");
+      expect(prompt).toContain("Handoff");
+      expect(prompt).toContain("```json");
+      expect(prompt.length).toBeLessThan(200);
+    });
+
+    it("default (no arg) returns balanced", () => {
+      const defaultPrompt = buildHandoffPrompt();
+      const balancedPrompt = buildHandoffPrompt("balanced");
+      expect(defaultPrompt).toBe(balancedPrompt);
+    });
+
+    it("aggressive is shorter than balanced, balanced shorter than minimal", () => {
+      const minimal = buildHandoffPrompt("minimal");
+      const balanced = buildHandoffPrompt("balanced");
+      const aggressive = buildHandoffPrompt("aggressive");
+      expect(aggressive.length).toBeLessThan(balanced.length);
+      expect(balanced.length).toBeLessThan(minimal.length);
+    });
+
+    it("all variants contain the required type and status fields", () => {
+      for (const level of ["minimal", "balanced", "aggressive"] as const) {
+        const prompt = buildHandoffPrompt(level);
+        expect(prompt).toContain("handoff");
+        expect(prompt).toContain("status");
+        expect(prompt).toContain("summary");
+        expect(prompt).toContain("findings");
+      }
+    });
+  });
 });
 
 describe("renderHandoffForParent", () => {
