@@ -8,7 +8,11 @@
  * Combined, these represent the deferred-context build time reported as
  * "Context built after spawn" in agent-runner.ts debug logs.
  */
-import { describe, expect, it } from "vitest";
+
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 import type { AgentConfig, EnvInfo } from "../src/types.js";
 
 // ── Benchmark logging ──────────────────────────────────────────────────────
@@ -403,5 +407,322 @@ describe("Benchmark: deferred context pipeline — buildEffectivePrompt equivale
 
     benchmarkLog("deferred context 200 compacted", perCall, 2);
     expect(perCall).toBeLessThan(2);
+  });
+});
+
+// ── 4. preloadSkills — Skill Loading Overhead ──────────────────────────
+
+describe("Benchmark: preloadSkills — skill loading from disk", () => {
+  const tempDirs: string[] = [];
+
+  afterAll(() => {
+    for (const dir of tempDirs) {
+      try { rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it("0 skills (empty array) under 100\u00b5s", async () => {
+    const { preloadSkills } = await import("../src/skill-loader.js");
+    const dir = mkdtempSync(join(tmpdir(), "skill-bench-0-"));
+    tempDirs.push(dir);
+
+    const start = performance.now();
+    for (let i = 0; i < 1000; i++) {
+      preloadSkills([], dir);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 1000;
+
+    benchmarkLog("preloadSkills 0 skills", perCall, 0.1, "\u00b5s");
+    expect(perCall).toBeLessThan(0.1);
+  });
+
+  it("5 skills (not found) under 100ms (includes BFS scan of system skill dirs)", async () => {
+    const { preloadSkills } = await import("../src/skill-loader.js");
+    const dir = mkdtempSync(join(tmpdir(), "skill-bench-5m-"));
+    tempDirs.push(dir);
+
+    const names = Array.from({ length: 5 }, (_, i) => `bench-skill-missing-${i}`);
+
+    const start = performance.now();
+    for (let i = 0; i < 50; i++) {
+      preloadSkills(names, dir);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 50;
+
+    benchmarkLog("preloadSkills 5 missing", perCall, 100);
+    expect(perCall).toBeLessThan(100);
+  });
+
+  it("10 skills (not found) under 200ms (includes BFS scan)", async () => {
+    const { preloadSkills } = await import("../src/skill-loader.js");
+    const dir = mkdtempSync(join(tmpdir(), "skill-bench-10m-"));
+    tempDirs.push(dir);
+
+    const names = Array.from({ length: 10 }, (_, i) => `bench-skill-missing-${i}`);
+
+    const start = performance.now();
+    for (let i = 0; i < 30; i++) {
+      preloadSkills(names, dir);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 30;
+
+    benchmarkLog("preloadSkills 10 missing", perCall, 200);
+    expect(perCall).toBeLessThan(200);
+  });
+
+  it("5 skills (found on disk) under 5ms", async () => {
+    const { preloadSkills } = await import("../src/skill-loader.js");
+    const dir = mkdtempSync(join(tmpdir(), "skill-bench-5f-"));
+    tempDirs.push(dir);
+
+    const skillsDir = join(dir, ".pi", "skills");
+    mkdirSync(skillsDir, { recursive: true });
+    const names: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const name = `bench-skill-found-${i}`;
+      names.push(name);
+      writeFileSync(join(skillsDir, `${name}.md`), `# Skill ${i}\n\nThis is content for benchmark skill ${i}.\nIt has realistic content that an agent skill would have.`);
+    }
+
+    const start = performance.now();
+    for (let i = 0; i < 200; i++) {
+      preloadSkills(names, dir);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 200;
+
+    benchmarkLog("preloadSkills 5 found", perCall, 5);
+    expect(perCall).toBeLessThan(5);
+  });
+
+  it("10 skills (found on disk) under 10ms", async () => {
+    const { preloadSkills } = await import("../src/skill-loader.js");
+    const dir = mkdtempSync(join(tmpdir(), "skill-bench-10f-"));
+    tempDirs.push(dir);
+
+    const skillsDir = join(dir, ".pi", "skills");
+    mkdirSync(skillsDir, { recursive: true });
+    const names: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const name = `bench-skill-found-${i}`;
+      names.push(name);
+      writeFileSync(join(skillsDir, `${name}.md`), `# Skill ${i}\n\nThis is content for benchmark skill ${i}.\nIt has realistic content that an agent skill would have.\nWith multiple lines and some code examples.`);
+    }
+
+    const start = performance.now();
+    for (let i = 0; i < 100; i++) {
+      preloadSkills(names, dir);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 100;
+
+    benchmarkLog("preloadSkills 10 found", perCall, 10);
+    expect(perCall).toBeLessThan(10);
+  });
+
+  // ── Directory-style (SKILL.md in subdir) vs flat file ─────────────────
+
+  it("5 skills (found via directory/SKILL.md, 10 distractors) under 10ms", async () => {
+    const { preloadSkills } = await import("../src/skill-loader.js");
+    const dir = mkdtempSync(join(tmpdir(), "skill-bench-5d-"));
+    tempDirs.push(dir);
+
+    const skillsDir = join(dir, ".pi", "skills");
+    mkdirSync(skillsDir, { recursive: true });
+
+    // Create 10 distractor subdirectories (no SKILL.md — BFS must descend into them)
+    for (let d = 0; d < 10; d++) {
+      mkdirSync(join(skillsDir, `distractor-${d}`), { recursive: true });
+      // Add a nested file inside each distractor to force deeper BFS traversal
+      mkdirSync(join(skillsDir, `distractor-${d}`, "nested", "deep"), { recursive: true });
+      writeFileSync(
+        join(skillsDir, `distractor-${d}`, "nested", "deep", "some-file.txt"),
+        "irrelevant content",
+      );
+    }
+
+    // Create 5 skill subdirectories, each with SKILL.md
+    const names: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const name = `bench-dir-skill-${i}`;
+      names.push(name);
+      const skillDir = join(skillsDir, name);
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(
+        join(skillDir, "SKILL.md"),
+        `# Directory Skill ${i}\n\nContent for benchmark directory skill ${i}.`,
+      );
+    }
+
+    const start = performance.now();
+    for (let i = 0; i < 100; i++) {
+      preloadSkills(names, dir);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 100;
+
+    benchmarkLog("preloadSkills 5 dir-skill found", perCall, 10);
+    expect(perCall).toBeLessThan(10);
+  });
+
+  it("10 skills (found via directory/SKILL.md, 20 distractors) under 20ms", async () => {
+    const { preloadSkills } = await import("../src/skill-loader.js");
+    const dir = mkdtempSync(join(tmpdir(), "skill-bench-10d-"));
+    tempDirs.push(dir);
+
+    const skillsDir = join(dir, ".pi", "skills");
+    mkdirSync(skillsDir, { recursive: true });
+
+    for (let d = 0; d < 20; d++) {
+      mkdirSync(join(skillsDir, `distractor-${d}`), { recursive: true });
+    }
+
+    const names: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const name = `bench-dir-skill-${i}`;
+      names.push(name);
+      const skillDir = join(skillsDir, name);
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(join(skillDir, "SKILL.md"), `# Skill ${i}\n\nContent.`);
+    }
+
+    const start = performance.now();
+    for (let i = 0; i < 50; i++) {
+      preloadSkills(names, dir);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 50;
+
+    benchmarkLog("preloadSkills 10 dir-skill found", perCall, 20);
+    expect(perCall).toBeLessThan(20);
+  });
+
+  it("5 skills missing with 50 distractor dirs (BFS worst case) under 200ms", async () => {
+    const { preloadSkills } = await import("../src/skill-loader.js");
+    const dir = mkdtempSync(join(tmpdir(), "skill-bench-wc-"));
+    tempDirs.push(dir);
+
+    const skillsDir = join(dir, ".pi", "skills");
+    mkdirSync(skillsDir, { recursive: true });
+
+    // Create 50 subdirectories — none match the skill names
+    for (let d = 0; d < 50; d++) {
+      mkdirSync(join(skillsDir, `some-lib-v${d}`), { recursive: true });
+    }
+
+    const names = Array.from({ length: 5 }, (_, i) => `nonexistent-skill-${i}`);
+
+    const start = performance.now();
+    for (let i = 0; i < 20; i++) {
+      preloadSkills(names, dir);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 20;
+
+    benchmarkLog("preloadSkills 5 missing w/ 50 dirs", perCall, 200);
+    expect(perCall).toBeLessThan(200);
+  });
+
+  it("deeply nested directory skill (depth 5) under 10ms", async () => {
+    const { preloadSkills } = await import("../src/skill-loader.js");
+    const dir = mkdtempSync(join(tmpdir(), "skill-bench-deep-"));
+    tempDirs.push(dir);
+
+    const skillsDir = join(dir, ".pi", "skills");
+    mkdirSync(skillsDir, { recursive: true });
+
+    // Create a deeply nested path: .pi/skills/a/b/c/d/e/deep-skill/SKILL.md
+    // Also add some distractor branches at each level
+    for (const branch of ["a", "b", "c", "d", "e"]) {
+      mkdirSync(join(skillsDir, "dev", "tools", branch), { recursive: true });
+    }
+
+    const deepPath = join(skillsDir, "dev", "tools", "a", "b", "c", "d", "e", "deep-skill");
+    mkdirSync(deepPath, { recursive: true });
+    writeFileSync(join(deepPath, "SKILL.md"), "# Deeply nested skill\n\nFound at depth 5.");
+
+    const start = performance.now();
+    for (let i = 0; i < 100; i++) {
+      preloadSkills(["deep-skill"], dir);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 100;
+
+    benchmarkLog("preloadSkills nested depth-5 found", perCall, 10);
+    expect(perCall).toBeLessThan(10);
+  });
+
+  // ── Worst-case BFS ordering (distractors alphabetically FIRST) ────────
+
+  it("5 dir-skill found REVERSED order (distractors first, 10 distractor dirs) under 25ms", async () => {
+    const { preloadSkills } = await import("../src/skill-loader.js");
+    const dir = mkdtempSync(join(tmpdir(), "skill-bench-5r-"));
+    tempDirs.push(dir);
+
+    const skillsDir = join(dir, ".pi", "skills");
+    mkdirSync(skillsDir, { recursive: true });
+
+    // Distractors named with 'a' prefix — alphabetically FIRST
+    // Skills named with 'z' prefix — alphabetically LAST
+    // BFS must scan ALL distractors before finding the matching skill
+    for (let d = 0; d < 10; d++) {
+      mkdirSync(join(skillsDir, `alpha-lib-${d}`), { recursive: true });
+      mkdirSync(join(skillsDir, `alpha-lib-${d}`, "nested", "sub"), { recursive: true });
+      writeFileSync(join(skillsDir, `alpha-lib-${d}`, "nested", "sub", "module.js"), "// distractor");
+    }
+
+    const names: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const name = `zeta-skill-${i}`;
+      names.push(name);
+      const skillDir = join(skillsDir, name);
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(join(skillDir, "SKILL.md"), `# Zeta Skill ${i}\n\nContent.`);
+    }
+
+    const start = performance.now();
+    for (let i = 0; i < 50; i++) {
+      preloadSkills(names, dir);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 50;
+
+    benchmarkLog("preloadSkills 5 dir-skill reversed-order", perCall, 25);
+    expect(perCall).toBeLessThan(25);
+  });
+
+  it("10 dir-skill found REVERSED order (20 distractor dirs) under 50ms", async () => {
+    const { preloadSkills } = await import("../src/skill-loader.js");
+    const dir = mkdtempSync(join(tmpdir(), "skill-bench-10r-"));
+    tempDirs.push(dir);
+
+    const skillsDir = join(dir, ".pi", "skills");
+    mkdirSync(skillsDir, { recursive: true });
+
+    for (let d = 0; d < 20; d++) {
+      mkdirSync(join(skillsDir, `alpha-lib-${d}`), { recursive: true });
+    }
+
+    const names: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const name = `zeta-skill-${i}`;
+      names.push(name);
+      const skillDir = join(skillsDir, name);
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(join(skillDir, "SKILL.md"), `# Zeta Skill ${i}\n\nContent.`);
+    }
+
+    const start = performance.now();
+    for (let i = 0; i < 25; i++) {
+      preloadSkills(names, dir);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 25;
+
+    benchmarkLog("preloadSkills 10 dir-skill reversed-order", perCall, 50);
+    expect(perCall).toBeLessThan(50);
   });
 });
