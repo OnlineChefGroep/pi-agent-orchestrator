@@ -30,49 +30,139 @@ export interface PreloadedSkill {
   content: string;
 }
 
-export function preloadSkills(skillNames: string[], cwd: string): PreloadedSkill[] {
-  return skillNames.map((name) => ({ name, content: loadSkillContent(name, cwd) }));
+/**
+ * Pre-built index of root-level skill directories, shared across all skill
+ * name lookups to avoid redundant readdirSync calls.
+ */
+interface RootSkillIndex {
+  /** Root-level skill directories: Map<dirname, abspath> for O(1) lookup. */
+  skillDirs: Map<string, string>;
+  /** Root-level non-skill directories, seeded as the BFS queue start. */
+  nonSkillDirs: string[];
 }
 
-function loadSkillContent(name: string, cwd: string): string {
-  if (isUnsafeName(name)) {
-    return `(Skill "${name}" skipped: name contains path traversal characters)`;
+/**
+ * Shared context for a single preloadSkills() call, holding all caches
+ * that are built lazily and reused across skill name lookups.
+ */
+interface SkillLoaderContext {
+  /** Root-level directory indices, lazily built and cached per root path. */
+  rootIndices: Map<string, RootSkillIndex>;
+  /** Directory listings cached across BFS traversals. Map<dirPath, Dirent[]>. */
+  dirEntries: Map<string, Dirent<string>[]>;
+}
+
+/** Build a RootSkillIndex for the given root directory (one-time I/O). */
+function buildRootIndex(root: string): RootSkillIndex | undefined {
+  if (isSymlink(root)) return undefined; // reject symlinked roots (security)
+  if (!existsSync(root)) return undefined;
+
+  let entries: Dirent<string>[];
+  try {
+    entries = readdirSync(root, { withFileTypes: true });
+  } catch {
+    return undefined;
   }
-  const roots = [
+
+  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+
+  const skillDirs = new Map<string, string>();
+  const nonSkillDirs: string[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+
+    const path = join(root, entry.name);
+    const skillMd = join(path, "SKILL.md");
+
+    if (existsSync(skillMd)) {
+      skillDirs.set(entry.name, path);
+    } else {
+      nonSkillDirs.push(path);
+    }
+  }
+
+  return { skillDirs, nonSkillDirs };
+}
+
+export function preloadSkills(skillNames: string[], cwd: string): PreloadedSkill[] {
+  // Shared context: caches are lazily built on first access and reused
+  // across all skill names, eliminating redundant readdirSync calls while
+  // preserving early-exit (roots beyond the first match are never visited).
+  const ctx: SkillLoaderContext = {
+    rootIndices: new Map(),
+    dirEntries: new Map(),
+  };
+
+  return skillNames.map((name) => ({
+    name,
+    content: loadSkillContent(name, cwd, ctx),
+  }));
+}
+
+function getSkillRoots(cwd: string): string[] {
+  return [
     join(cwd, ".pi", "skills"), // project — Pi standard
     join(cwd, ".agents", "skills"), // project — Agent Skills spec
     join(getAgentDir(), "skills"), // user — Pi standard
     join(homedir(), ".agents", "skills"), // user — Agent Skills spec
     join(homedir(), ".pi", "skills"), // legacy global, pre-Pi
   ];
-  for (const root of roots) {
-    const content = findInRoot(root, name);
+}
+
+function loadSkillContent(
+  name: string,
+  cwd: string,
+  ctx: SkillLoaderContext,
+): string {
+  if (isUnsafeName(name)) {
+    return `(Skill "${name}" skipped: name contains path traversal characters)`;
+  }
+  for (const root of getSkillRoots(cwd)) {
+    const content = findInRoot(root, name, ctx);
     if (content !== undefined) return content;
   }
   return `(Skill "${name}" not found in .pi/skills/, .agents/skills/, or global skill locations)`;
 }
 
-function findInRoot(root: string, name: string): string | undefined {
+function findInRoot(
+  root: string,
+  name: string,
+  ctx: SkillLoaderContext,
+): string | undefined {
   if (isSymlink(root)) return undefined; // reject symlinked roots entirely
   const flat = safeReadFile(join(root, `${name}.md`))?.trim();
   if (flat !== undefined) return flat;
-  return findSkillDirectory(root, name);
+  return findSkillDirectory(root, name, ctx);
 }
 
-/** BFS under `root` for a directory named `name` containing `SKILL.md`. Pi-conforming filters. */
-function findSkillDirectory(root: string, name: string): string | undefined {
-  if (!existsSync(root)) return undefined;
-  const queue: string[] = [root];
+/**
+ * Core BFS loop: traverse `initialQueue` directories looking for a dir
+ * named `name` that contains SKILL.md. Pi-conforming filters.
+ *
+ * Uses ctx.dirEntries to cache readdirSync results across BFS traversals,
+ * so subsequent skill names skip redundant I/O on already-scanned dirs.
+ */
+function bfsForSkill(
+  name: string,
+  initialQueue: string[],
+  ctx: SkillLoaderContext,
+): string | undefined {
+  const queue = [...initialQueue];
 
   while (queue.length > 0) {
-    const current = queue.shift();
-    if (current === undefined) continue;
+    const current = queue.shift()!;
 
-    let entries: Dirent<string>[];
-    try {
-      entries = readdirSync(current, { withFileTypes: true });
-    } catch {
-      continue;
+    // Check readdir cache before issuing I/O
+    let entries = ctx.dirEntries.get(current);
+    if (!entries) {
+      try {
+        entries = readdirSync(current, { withFileTypes: true });
+        ctx.dirEntries.set(current, entries);
+      } catch {
+        continue;
+      }
     }
 
     // Deterministic byte-order traversal — locale-independent.
@@ -85,9 +175,8 @@ function findSkillDirectory(root: string, name: string): string | undefined {
       // Symlinked dirs already filtered by entry.isDirectory() — Dirent uses lstat semantics.
       const path = join(current, entry.name);
       const skillMd = join(path, "SKILL.md");
-      const isSkillDir = existsSync(skillMd);
 
-      if (isSkillDir) {
+      if (existsSync(skillMd)) {
         if (entry.name === name) {
           const content = safeReadFile(skillMd)?.trim();
           if (content !== undefined) return content;
@@ -98,5 +187,43 @@ function findSkillDirectory(root: string, name: string): string | undefined {
       queue.push(path);
     }
   }
+
   return undefined;
+}
+
+/**
+ * Find a skill directory named `name` under `root` containing SKILL.md.
+ *
+ * Lazily builds + caches a RootSkillIndex on first per-root access, then
+ * shares it across subsequent skill name lookups via ctx.rootIndices.
+ * BFS readdirSync results are cached in ctx.dirEntries.
+ *
+ * Strategy:
+ *   1. O(1) Map lookup for root-level skill directories (no readdirSync)
+ *   2. Falls back to BFS only for nested skills (cached directory listings)
+ *   3. Both caches are populated lazily, reused by later names
+ */
+function findSkillDirectory(
+  root: string,
+  name: string,
+  ctx: SkillLoaderContext,
+): string | undefined {
+  // Get or lazily build the root-level index
+  let index = ctx.rootIndices.get(root);
+  if (!index) {
+    const built = buildRootIndex(root);
+    if (!built) return undefined; // root doesn't exist or can't be read
+    ctx.rootIndices.set(root, built);
+    index = built;
+  }
+
+  // O(1) root-level lookup — no readdirSync needed
+  const candidate = index.skillDirs.get(name);
+  if (candidate) {
+    const content = safeReadFile(join(candidate, "SKILL.md"))?.trim();
+    if (content !== undefined) return content;
+  }
+
+  // BFS for nested skills, seeded with pre-scanned non-skill dirs
+  return bfsForSkill(name, index.nonSkillDirs, ctx);
 }
