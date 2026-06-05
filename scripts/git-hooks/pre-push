@@ -18,5 +18,5 @@ if ! npm test; then
 	exit 1
 fi
 
-ELAPSED=$(( $(date +%s) - START ))
+ELAPSED=$(($(date +%s) - START))
 echo "pre-push: ✅ all tests passed (${ELAPSED}s). Pushing."
