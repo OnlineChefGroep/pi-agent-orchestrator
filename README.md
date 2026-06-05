@@ -84,6 +84,35 @@ You are a security auditor. Review the provided code for:
 Output findings as a markdown list with severity (Critical / High / Medium / Low) and suggested fix.
 ```
 
+### Example: Token-Optimized Agent
+
+Use `prompt_compression` to control prompt verbosity per agent. Set to `aggressive` for background agents where token savings matter more than detailed instructions:
+
+```markdown
+---
+display_name: "Quick Scanner"
+description: "Fast read-only scan with minimal prompt overhead"
+tools: read, grep, find
+prompt_compression: aggressive
+run_in_background: true
+---
+Scan the codebase for TODO comments and report a summary.
+```
+
+Or set to `minimal` when maximum instruction quality is critical:
+
+```markdown
+---
+display_name: "Code Reviewer"
+description: "Thorough code review with detailed instructions"
+tools: read, grep, find
+prompt_compression: minimal
+---
+Perform a thorough code review of the provided diff.
+```
+
+Per-agent `prompt_compression` overrides the global `subagents.promptCompressionLevel` setting. See [docs/api-reference.md](docs/api-reference.md) for the full level comparison table.
+
 ### Frontmatter Schema
 
 | Directive | Type | Default | Operational Definition |
