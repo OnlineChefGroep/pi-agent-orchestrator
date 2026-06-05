@@ -3,14 +3,15 @@ import type { AgentManager } from "../agent-manager.js";
 import {
   getAnimationStyle,
   getDashboardRefreshInterval,
-  getOrchestrationMode,
+  getOrchestrationMode,getPromptCompressionLevel, 
   getUiStyle,
   setAnimationStyle,
   setDashboardRefreshInterval,
-  setOrchestrationMode,
-  setUiStyle,
+  setOrchestrationMode,setPromptCompressionLevel, 
+  setUiStyle
 } from "../agent-registry.js";
 import type { SubagentScheduler } from "../schedule.js";
+import type { PromptCompressionLevel } from "../settings.js";
 import { saveAndEmitChanged } from "../settings.js";
 import type { JoinMode } from "../types.js";
 import { buildSettingsSnapshot } from "./settings-snapshot.js";
@@ -42,6 +43,7 @@ export async function showSettings(
     `Dashboard refresh interval (current: ${getDashboardRefreshInterval()}ms)`,
     `Session spawn limit (current: ${manager.getSessionMaxSpawns()})`,
     `Session turn limit (current: ${manager.getSessionMaxTurns()})`,
+    `Prompt compression (current: ${getPromptCompressionLevel()})`,
   ]);
   if (!choice) return;
 
@@ -208,6 +210,17 @@ export async function showSettings(
       } else {
         ctx.ui.notify("Must be a positive integer.", "warning");
       }
+    }
+  } else if (choice.startsWith("Prompt compression")) {
+    const val = await ctx.ui.select("Prompt compression level", [
+      "minimal — full prompts with all examples (max quality)",
+      "balanced — concise with realistic examples (default)",
+      "aggressive — minimal prompts, max token savings",
+    ]);
+    if (val) {
+      const level = val.split(" ")[0] as PromptCompressionLevel;
+      setPromptCompressionLevel(level);
+      notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Prompt compression set to ${level}`);
     }
   }
 }
