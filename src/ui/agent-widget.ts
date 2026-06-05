@@ -12,6 +12,7 @@
  * UI styles: premium (default), retro, plain
  */
 
+import type { TUI } from "@earendil-works/pi-tui";
 import type { AgentManager } from "../agent-manager.js";
 import type { AgentRecord } from "../types.js";
 import type { AgentActivity, UICtx } from "./agent-ui-types.js";
@@ -52,7 +53,7 @@ export class AgentWidget {
   /** Whether the widget callback is currently registered with the TUI. */
   private widgetRegistered = false;
   /** Cached TUI reference from widget factory callback, used for requestRender(). */
-  private tui: any | undefined;
+  private tui: TUI | undefined;
   /** Last status bar text, used to avoid redundant setStatus calls. */
   private lastStatusText: string | undefined;
 
@@ -253,7 +254,7 @@ export class AgentWidget {
     return this.renderMetrics.snapshot();
   }
 
-private renderWidget(tui: any, theme: Theme): string[] {
+private renderWidget(tui: TUI, theme: Theme): string[] {
     const renderStart = performance.now();
     const allAgents = this.manager.listAgents();
     try {

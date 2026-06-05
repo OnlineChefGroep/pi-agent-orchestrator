@@ -311,6 +311,11 @@ export default async function (pi: ExtensionAPI) {
     listAgentIds: (type: string) => manager.listAgents().filter(a => a.type === type).map(a => a.id),
   };
 
+  // Expose widget render metrics via Symbol.for() global registry for dashboard access.
+  // The dashboard reads this lazily via (globalThis as any)[Symbol.for("pi-subagents:widget-metrics")],
+  // so the symbol must be declared before any closure that references it (e.g. session_shutdown).
+  const WIDGET_KEY = Symbol.for("pi-subagents:widget-metrics");
+
   // --- Cross-extension RPC via pi.events ---
   let currentCtx: ExtensionContext | undefined;
 
@@ -393,8 +398,6 @@ export default async function (pi: ExtensionAPI) {
   // Live widget: show running agents above editor
   const widget = new AgentWidget(manager, agentActivity);
 
-  // Expose widget render metrics via Symbol.for() global registry for dashboard access.
-  const WIDGET_KEY = Symbol.for("pi-subagents:widget-metrics");
   (globalThis as any)[WIDGET_KEY] = {
     getSnapshot: () => widget.getRenderMetrics(),
   };

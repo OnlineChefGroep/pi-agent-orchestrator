@@ -26,7 +26,7 @@
 - Added real TUI showcase media (GIF + MP4) generated from dist renderers: dashboard, top view, widget heatmap (`scripts/render-showcase-assets.sh`).
 
 ### Metrics
-- 976 tests, 55 test files.
+- 989 tests, 56 test files.
 
 ---
 

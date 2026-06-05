@@ -230,7 +230,7 @@ export function renderDashboardPerf(
     key("request/actual ratio", `${metrics.requestToActualRatio}x`),
     "",
     section("Agent Context"),
-    key("current agents", `${metrics.activeAgentCount}`),
+    key("agent samples", `${metrics.activeAgentCount}`),
     key("mean agents/render", `${fmt(metrics.activeAgentMean)}`),
     key("min agents", `${metrics.activeAgentMin}`),
     key("max agents", `${metrics.activeAgentMax}`),

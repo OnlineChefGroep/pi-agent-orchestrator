@@ -439,7 +439,31 @@ export class AgentDashboard implements Component {
         this.requestRender();
         return;
       }
-      // Forward other keys to normal handling (navigate behind perf overlay)
+      // While the perf overlay covers the agent list, only allow safe navigation
+      // and view-only keys to pass through. Destructive/action keys (enter, space,
+      // shift+k, s/p/r/t/w, etc.) are swallowed to prevent aborting agents or
+      // mutating state behind a panel the user can no longer see.
+      const isPerfSafeKey =
+        matchesKey(data, "up") ||
+        matchesKey(data, "down") ||
+        matchesKey(data, "k") ||
+        matchesKey(data, "j") ||
+        matchesKey(data, "pageUp") ||
+        matchesKey(data, "pageDown") ||
+        matchesKey(data, "shift+up") ||
+        matchesKey(data, "shift+down") ||
+        matchesKey(data, "left") ||
+        matchesKey(data, "right") ||
+        matchesKey(data, "shift+left") ||
+        matchesKey(data, "shift+right") ||
+        matchesKey(data, "home") ||
+        matchesKey(data, "end");
+      if (!isPerfSafeKey) {
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      // Safe navigation keys fall through to the normal handler below.
     }
 
     // ── Enter command mode from normal mode ──
