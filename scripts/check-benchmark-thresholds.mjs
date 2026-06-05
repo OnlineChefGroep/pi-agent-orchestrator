@@ -16,7 +16,7 @@
 
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -39,27 +39,33 @@ function color(status, text) {
 async function main() {
   console.log(`\n${BOLD}═══ Render Benchmark Threshold Check ═══${RESET}\n`);
 
-  // Run the benchmark test file with vitest, capturing stdout+stderr
-  const testFile = resolve(ROOT, "test/widget-render-perf.test.ts");
+  const testFiles = [
+    "test/widget-render-perf.test.ts",
+    "test/dashboard-render-perf.test.ts",
+    "test/spawn-latency-bench.test.ts",
+    "test/spawn-latency-e2e-bench.test.ts",
+  ]
+    .map((f) => resolve(ROOT, f))
+    .filter((f) => existsSync(f));
 
-  if (!existsSync(testFile)) {
-    console.error(`${RED}ERROR:${RESET} Test file not found: ${testFile}`);
+  if (testFiles.length === 0) {
+    console.error(`${RED}ERROR:${RESET} No benchmark test files found`);
     process.exit(1);
   }
 
+  const paths = testFiles.map((f) => `"${f}"`).join(" ");
   let rawOutput;
   try {
     rawOutput = execSync(
-      `npx vitest run "${testFile}" --reporter=verbose 2>&1`,
+      `npx vitest run ${paths} --reporter=verbose 2>&1`,
       {
         cwd: ROOT,
         encoding: "utf-8",
-        timeout: 120_000,
-        maxBuffer: 10 * 1024 * 1024,
+        timeout: 300_000,
+        maxBuffer: 20 * 1024 * 1024,
       },
     );
   } catch (err) {
-    // vitest exits non-zero on any assertion failure — that's expected
     rawOutput = err.stderr
       ? `${err.stdout || ""}\n${err.stderr}`
       : err.stdout || String(err);

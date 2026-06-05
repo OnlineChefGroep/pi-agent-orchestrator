@@ -12,7 +12,7 @@ if ! command -v vhs >/dev/null 2>&1; then
   if command -v go >/dev/null 2>&1; then
     echo "Installing vhs..."
     go install github.com/charmbracelet/vhs@latest
-    export PATH="${PATH}:${HOME}/go/bin:${HOME}/.local/go/bin}"
+    export PATH="${PATH}:${HOME}/go/bin:${HOME}/.local/go/bin"
   fi
 fi
 

@@ -155,7 +155,7 @@ function screenToOutput(lines) {
   };
   const rows = lines.slice(0, HEIGHT).map(pad);
   while (rows.length < HEIGHT) rows.push(" ".repeat(WIDTH));
-  return CLEAR + rows.join("\r\n") + "\r\n";
+  return `${CLEAR + rows.join("\r\n")}\r\n`;
 }
 
 function writeCast(outPath, frameSpecs) {
@@ -176,7 +176,7 @@ function writeCast(outPath, frameSpecs) {
     }
   }
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, lines.join("\n") + "\n");
+  fs.writeFileSync(outPath, `${lines.join("\n")}\n`);
   console.log(`Wrote ${outPath} (${frameSpecs.length} frames)`);
 }
 

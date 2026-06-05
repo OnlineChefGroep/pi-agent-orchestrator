@@ -173,6 +173,27 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     const agents = buildAgentList(SMALL, { running: 40, queued: 20, finished: 40 });
 
     const start = performance.now();
+    for (let i = 0; i < 500; i++) {
+      renderAgentWidget({
+        agents,
+        agentActivity: new Map(),
+        frame: i,
+        shouldShowFinished: alwaysShowFinished,
+        theme: testTheme as any,
+        tui: testTui as any,
+      });
+    }
+    const elapsed = performance.now() - start;
+    const perRender = elapsed / 500;
+
+    benchmarkLog(`renderAgentWidget ${SMALL} mixed`, perRender, 0.6);
+    expect(perRender).toBeLessThan(0.6);
+  });
+
+  it(`renders ${MEDIUM} agents (mixed) under 3ms`, () => {
+    const agents = buildAgentList(MEDIUM, { running: 40, queued: 20, finished: 40 });
+
+    const start = performance.now();
     for (let i = 0; i < 100; i++) {
       renderAgentWidget({
         agents,
@@ -185,27 +206,6 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     }
     const elapsed = performance.now() - start;
     const perRender = elapsed / 100;
-
-    benchmarkLog(`renderAgentWidget ${SMALL} mixed`, perRender, 0.6);
-    expect(perRender).toBeLessThan(0.6);
-  });
-
-  it(`renders ${MEDIUM} agents (mixed) under 3ms`, () => {
-    const agents = buildAgentList(MEDIUM, { running: 40, queued: 20, finished: 40 });
-
-    const start = performance.now();
-    for (let i = 0; i < 50; i++) {
-      renderAgentWidget({
-        agents,
-        agentActivity: new Map(),
-        frame: i,
-        shouldShowFinished: alwaysShowFinished,
-        theme: testTheme as any,
-        tui: testTui as any,
-      });
-    }
-    const elapsed = performance.now() - start;
-    const perRender = elapsed / 50;
 
     benchmarkLog(`renderAgentWidget ${MEDIUM} mixed`, perRender, 3);
     expect(perRender).toBeLessThan(3);
@@ -236,7 +236,7 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     const agents = buildAgentList(MEDIUM, { running: 100, queued: 0, finished: 0 });
 
     const start = performance.now();
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 100; i++) {
       renderAgentWidget({
         agents,
         agentActivity: new Map(),
@@ -247,7 +247,7 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
       });
     }
     const elapsed = performance.now() - start;
-    const perRender = elapsed / 50;
+    const perRender = elapsed / 100;
 
     benchmarkLog(`renderAgentWidget ${MEDIUM} all-running`, perRender, 5);
     expect(perRender).toBeLessThan(5);

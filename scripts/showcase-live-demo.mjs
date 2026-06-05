@@ -153,7 +153,7 @@ function renderWidgetScreen(frame, hint) {
 }
 
 async function show(lines, ms = 400) {
-  process.stdout.write(CLEAR + lines.join("\r\n") + "\r\n");
+  process.stdout.write(`${CLEAR + lines.join("\r\n")}\r\n`);
   if (AUTO) await sleep(ms);
 }
 
