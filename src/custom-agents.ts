@@ -160,6 +160,7 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
       isolated: fm.isolated == null ? undefined : fm.isolated === true,
       memory: parseMemory(fm.memory),
       isolation: fm.isolation === "worktree" ? "worktree" : undefined,
+      handoff: fm.handoff == null ? undefined : fm.handoff === true,
       promptCompressionLevel: parseCompressionLevel(fm.prompt_compression),
       enabled: fm.enabled !== false,  // default true; explicitly false disables
       source,

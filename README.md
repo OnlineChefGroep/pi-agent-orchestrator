@@ -132,6 +132,7 @@ Per-agent `prompt_compression` overrides the global `subagents.promptCompression
 | `isolated` | boolean | null | Strict context isolation |
 | `memory` | `user` / `project` / `local` | null | State persistence scope |
 | `isolation` | `worktree` | null | Physical directory isolation |
+| `handoff` | boolean | null | Produce structured JSON handoff at end of response |
 | `prompt_compression` | `minimal` / `balanced` / `aggressive` | (global setting) | Per-agent prompt compression override |
 | `enabled` | boolean | `true` | Profile activation state |
 
