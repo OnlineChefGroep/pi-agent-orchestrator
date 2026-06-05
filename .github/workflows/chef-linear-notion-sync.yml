@@ -1,5 +1,5 @@
-# On PR events: sync this repo's open PRs → Linear CHEF child issues + Notion tech doc.
-# Requires org/repo secrets: LINEAR_API_KEY, NOTION_API_KEY (or NOTION_TOKEN).
+# On PR events: sync this repo → Linear CHEF child issues (+ Notion when configured).
+# Copy to product repos via scripts/deploy_chef_pr_workflows.sh
 
 name: CHEF Linear + Notion Sync
 
@@ -20,4 +20,4 @@ jobs:
       NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
       NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
     with:
-      repo: pi-agent-orchestrator
+      repo: ${{ github.event.repository.name }}
