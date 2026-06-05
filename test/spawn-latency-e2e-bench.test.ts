@@ -26,12 +26,18 @@ const {
   getAgentDir,
   sessionManagerInMemory,
   settingsManagerCreate,
+  mockCreateWorktree,
+  mockCleanupWorktree,
+  mockPruneWorktrees,
 } = vi.hoisted(() => ({
   createAgentSession: vi.fn(),
   defaultResourceLoaderCtor: vi.fn(),
   getAgentDir: vi.fn(() => "/mock/agent-dir"),
   sessionManagerInMemory: vi.fn(() => ({ kind: "memory-session-manager" })),
   settingsManagerCreate: vi.fn(() => ({ kind: "settings-manager" })),
+  mockCreateWorktree: vi.fn(async () => ({ path: "/tmp/pi-bench-worktree", branch: "bench-branch" })),
+  mockCleanupWorktree: vi.fn(() => ({ hasChanges: false })),
+  mockPruneWorktrees: vi.fn(),
 }));
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
@@ -88,6 +94,12 @@ vi.mock("../src/memory.js", () => ({
 
 vi.mock("../src/skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
+}));
+
+vi.mock("../src/worktree.js", () => ({
+  createWorktree: mockCreateWorktree,
+  cleanupWorktree: mockCleanupWorktree,
+  pruneWorktrees: mockPruneWorktrees,
 }));
 
 // NOTE: context.js is intentionally NOT mocked so buildParentContext uses
@@ -215,10 +227,8 @@ describe("Benchmark: spawn latency — minimal (no inherit, no context)", () => 
 
     // Register telemetry handler to capture agent:spawned events
     let telemetryPayload: any = null;
-    let telemetryTimestamp = 0;
     const unsubscribe = onTelemetry("agent:spawned", (payload) => {
       telemetryPayload = payload;
-      telemetryTimestamp = performance.now();
     });
 
     try {
@@ -320,3 +330,332 @@ describe("Benchmark: spawn latency — agent-manager pipeline", () => {
     expect(elapsed).toBeLessThan(100);
   });
 });
+
+// ============================================================================
+// Setup pipeline breakdown — measures each phase of the pre-model overhead
+// Uses performance.now() timestamps from inside mocked createAgentSession and
+// session.prompt so we get sub-ms precision for the setup phases.
+// ============================================================================
+
+describe("Benchmark: setup pipeline breakdown (performance.now() precision)", () => {
+  let runAgent: typeof import("../src/agent-runner.js").runAgent;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    createAgentSession.mockReset();
+    const mod = await import("../src/agent-runner.js");
+    runAgent = mod.runAgent;
+  });
+
+  it("measures setup→session and session→prompt breakdown", async () => {
+    let sessionCreatedAt = 0;
+    let promptCalledAt = 0;
+
+    createAgentSession.mockImplementation(async () => {
+      sessionCreatedAt = performance.now();
+      const { session, listeners } = createRawSession();
+      session.prompt = vi.fn(async () => {
+        promptCalledAt = performance.now();
+        for (const l of listeners) l({ type: "message_start" });
+        for (const l of listeners) l({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Hello!" } });
+        session.messages.push({ role: "assistant", content: [{ type: "text", text: "Hello!" }] });
+        for (const l of listeners) l({ type: "turn_end" });
+      });
+      return { session };
+    });
+    const ctx = buildCtx(0);
+    const pi = {} as any;
+
+    const setupTimes: number[] = [];
+    const wireupTimes: number[] = [];
+    const totalTimes: number[] = [];
+
+    for (let i = 0; i < 3; i++) {
+      sessionCreatedAt = 0;
+      promptCalledAt = 0;
+      const start = performance.now();
+      await runAgent(ctx, "Explore", "Hello!", { pi });
+      const total = performance.now() - start;
+      const toSession = sessionCreatedAt - start;
+      const sessionToPrompt = promptCalledAt - sessionCreatedAt;
+      setupTimes.push(toSession);
+      wireupTimes.push(sessionToPrompt);
+      totalTimes.push(total);
+    }
+
+    const medianSetup = [...setupTimes].sort((a, b) => a - b)[1];
+    const medianWireup = [...wireupTimes].sort((a, b) => a - b)[1];
+    const medianTotal = [...totalTimes].sort((a, b) => a - b)[1];
+
+    benchmarkLog("setup→session-creation", medianSetup, 10);
+    benchmarkLog("session→prompt (wireup)", medianWireup, 10);
+    benchmarkLog("total setup overhead", medianTotal, 20);
+
+    expect(medianSetup).toBeLessThan(10);
+    expect(medianWireup).toBeLessThan(10);
+    expect(medianTotal).toBeLessThan(20);
+  });
+
+  it("inherit-context 200 adds overhead to setup→session", async () => {
+    let sessionCreatedAt = 0;
+
+    createAgentSession.mockImplementation(async () => {
+      sessionCreatedAt = performance.now();
+      const { session, listeners } = createRawSession();
+      session.prompt = vi.fn(async () => {
+        for (const l of listeners) l({ type: "message_start" });
+        for (const l of listeners) l({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Hello!" } });
+        session.messages.push({ role: "assistant", content: [{ type: "text", text: "Hello!" }] });
+        for (const l of listeners) l({ type: "turn_end" });
+      });
+      return { session };
+    });
+
+    const ctx = buildCtx(200);
+    const pi = {} as any;
+
+    const start = performance.now();
+    await runAgent(ctx, "Explore", "Hello!", { pi, inheritContext: true });
+    const total = performance.now() - start;
+    const toSession = sessionCreatedAt - start;
+
+    benchmarkLog("setup→session w/ inherit 200", toSession, 15);
+    benchmarkLog("total setup w/ inherit 200", total, 25);
+
+    expect(toSession).toBeLessThan(15);
+    expect(total).toBeLessThan(25);
+  });
+});
+
+// ============================================================================
+// Benchmark: AgentManager queueing pipeline
+// ============================================================================
+
+describe("Benchmark: AgentManager queueing pipeline", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    createAgentSession.mockReset();
+  });
+
+  it("queues background agents when maxConcurrent=1 and drains on completion", async () => {
+    // Create sessions with a small delay on the first so queue timing is observable
+    let sessionCount = 0;
+    createAgentSession.mockImplementation(async () => {
+      sessionCount++;
+      const current = sessionCount;
+      const { session, listeners } = createRawSession();
+      session.prompt = vi.fn(async () => {
+        // First agent's prompt takes ~5ms so queue fills up before it completes
+        if (current === 1) {
+          await new Promise((r) => setTimeout(r, 5));
+        }
+        for (const l of listeners) l({ type: "message_start" });
+        for (const l of listeners)
+          l({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "done" } });
+        session.messages.push({ role: "assistant", content: [{ type: "text", text: "done" }] });
+        for (const l of listeners) l({ type: "turn_end" });
+      });
+      return { session };
+    });
+
+    const { AgentManager } = await import("../src/agent-manager.js");
+    const manager = new AgentManager(() => {}, 1); // maxConcurrent = 1
+    const ctx = buildCtx(0);
+    const pi = {} as any;
+
+    const t0 = performance.now();
+
+    // Spawn 3 background agents — only 1 runs, the rest are queued
+    const id1 = manager.spawn(pi, ctx, "Explore", "task1", {
+      description: "queue test 1",
+      isBackground: true,
+    });
+    const id2 = manager.spawn(pi, ctx, "Explore", "task2", {
+      description: "queue test 2",
+      isBackground: true,
+    });
+    const id3 = manager.spawn(pi, ctx, "Explore", "task3", {
+      description: "queue test 3",
+      isBackground: true,
+    });
+
+    const t1 = performance.now();
+    const spawnOverhead = t1 - t0;
+
+    // Synchronous spawns — queued agents should have status "queued" immediately
+    expect(manager.getRecord(id1)!.status).toBe("running");
+    expect(manager.getRecord(id2)!.status).toBe("queued");
+    expect(manager.getRecord(id3)!.status).toBe("queued");
+
+    // Wait for all to complete (drainQueue fires after each completion)
+    await manager.waitForAll();
+    const t2 = performance.now();
+    const drainTotal = t2 - t0;
+
+    // All should now be completed
+    expect(manager.getRecord(id1)!.status).toBe("completed");
+    expect(manager.getRecord(id2)!.status).toBe("completed");
+    expect(manager.getRecord(id3)!.status).toBe("completed");
+
+    benchmarkLog("queue-spawn overhead (3 bg, maxConcurrent=1)", spawnOverhead, 10);
+    benchmarkLog("queue-drain total (3 bg, maxConcurrent=1)", drainTotal, 100);
+
+    expect(spawnOverhead).toBeLessThan(10);
+    expect(drainTotal).toBeLessThan(100);
+
+    manager.dispose();
+  });
+});
+
+// ============================================================================
+// Benchmark: AgentManager worktree isolation
+// ============================================================================
+
+describe("Benchmark: AgentManager worktree isolation", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    createAgentSession.mockReset();
+    mockCreateWorktree.mockReset();
+    mockCreateWorktree.mockResolvedValue({ path: "/tmp/pi-bench-worktree", branch: "bench-branch" });
+    const { session } = createSession();
+    createAgentSession.mockResolvedValue({ session });
+  });
+
+  it("foreground spawn with isolation:worktree adds worktree creation overhead", async () => {
+    const { AgentManager } = await import("../src/agent-manager.js");
+    const manager = new AgentManager();
+    const ctx = buildCtx(0);
+    const pi = {} as any;
+
+    const start = performance.now();
+    // Use spawn() + manual await because spawnAndWait() expects record.promise
+    // to be set synchronously, but worktree creation is async inside startAgent.
+    const id = manager.spawn(pi, ctx, "Explore", "Hello!", {
+      description: "worktree benchmark",
+      isolation: "worktree",
+    });
+    const record = manager.getRecord(id)!;
+    // Flush microtasks so the mock createWorktree resolve sets record.promise
+    await new Promise((r) => setTimeout(r, 0));
+    await record.promise;
+    const elapsed = performance.now() - start;
+
+    benchmarkLog("spawn-manager worktree isolation", elapsed, 150);
+    expect(elapsed).toBeLessThan(150);
+    expect(mockCreateWorktree).toHaveBeenCalled();
+    expect(record.status).toBe("completed");
+
+    manager.dispose();
+  });
+
+  it("normal spawn (no isolation) is faster than worktree spawn", async () => {
+    const { AgentManager } = await import("../src/agent-manager.js");
+    const manager = new AgentManager();
+    const ctx = buildCtx(0);
+    const pi = {} as any;
+
+    const start = performance.now();
+    await manager.spawnAndWait(pi, ctx, "Explore", "Hello!", {
+      description: "normal benchmark",
+    });
+    const elapsed = performance.now() - start;
+
+    benchmarkLog("spawn-manager normal (vs worktree)", elapsed, 100);
+    expect(elapsed).toBeLessThan(100);
+
+    // worktree should NOT be called for non-isolation spawns
+    expect(mockCreateWorktree).not.toHaveBeenCalled();
+
+    manager.dispose();
+  });
+});
+
+// ============================================================================
+// Benchmark: AgentManager permission inheritance
+// ============================================================================
+
+describe("Benchmark: AgentManager permission inheritance", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    createAgentSession.mockReset();
+    const { session } = createSession();
+    createAgentSession.mockResolvedValue({ session });
+  });
+
+  it("full pipeline with parent on active stack triggers parentConfig lookup", async () => {
+    const { AgentManager } = await import("../src/agent-manager.js");
+    const manager = new AgentManager();
+    const ctx = buildCtx(0);
+    const pi = {} as any;
+
+    // Push a synthetic parent record onto the active stack so startAgent
+    // finds it and computes parentConfig via getConfig(parentRecord.type).
+    const parentId = "parent-bench";
+    (manager as any).activeAgentIdStack.push(parentId);
+    (manager as any).agents.set(parentId, {
+      id: parentId,
+      type: "Explore",
+      status: "running",
+    });
+
+    const start = performance.now();
+    const _record = await manager.spawnAndWait(pi, ctx, "general-purpose", "Hello!", {
+      description: "child with permission inheritance",
+      inheritContext: false,
+    });
+    const elapsed = performance.now() - start;
+
+    benchmarkLog("spawn-manager permission inheritance", elapsed, 100);
+    expect(elapsed).toBeLessThan(100);
+
+    // Clean up synthetic parent
+    (manager as any).activeAgentIdStack.pop();
+    (manager as any).agents.delete(parentId);
+
+    manager.dispose();
+  });
+
+  it("permission intersection cost (getConfig with parentConfig applied)", async () => {
+    const { getConfig } = await import("../src/agent-types.js");
+
+    // Parent is Explore (RO) — this config will be used to restrict the child
+    const parentConfig = getConfig("Explore");
+
+    const runs: number[] = [];
+    for (let i = 0; i < 1000; i++) {
+      const start = performance.now();
+      getConfig("general-purpose", {
+        builtinToolNames: [...parentConfig.builtinToolNames],
+        extensions: parentConfig.extensions as any,
+        skills: parentConfig.skills as any,
+      });
+      runs.push(performance.now() - start);
+    }
+    const median = [...runs].sort((a, b) => a - b)[500];
+    const medianUs = median * 1000; // convert ms → µs
+
+    benchmarkLog("mocked-getConfig call (1000×)", medianUs, 5, "\u00b5s");
+    expect(medianUs).toBeLessThan(5);
+  });
+});
+
+/** Create a raw session (same as createSession) without instrumented prompt. */
+function createRawSession() {
+  const listeners: Array<(event: any) => void> = [];
+  const session = {
+    messages: [] as any[],
+    subscribe: vi.fn((listener: (event: any) => void) => {
+      listeners.push(listener);
+      return () => {};
+    }),
+    prompt: vi.fn(async () => {}),
+    abort: vi.fn(),
+    steer: vi.fn(),
+    getActiveToolNames: vi.fn(() => ["read", "write"]),
+    setActiveToolsByName: vi.fn(),
+    setSessionName: vi.fn(),
+    bindExtensions: vi.fn(async () => {}),
+    dispose: vi.fn(),
+  };
+  return { session, listeners };
+}
