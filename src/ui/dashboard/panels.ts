@@ -178,6 +178,8 @@ export function renderDashboardHelp(
     section("General"),
     key("r", "Force refresh"),
     key("?:/perf", "Toggle help / perf panel"),
+    key("/perf widget", "Show widget render metrics"),
+    key("/perf dashboard", "Show dashboard render metrics"),
     key("/perf reset", "Reset performance counters"),
     key("q / Esc", "Close dashboard"),
   ];
@@ -191,6 +193,7 @@ export function renderDashboardPerf(
   th: DashboardTheme,
   box: BoxChars,
   metrics: import("../render-metrics.js").RenderMetricsSnapshot,
+  source: "dashboard" | "widget" = "dashboard",
 ): string[] {
   const key = (k: string, v: string) => {
     const pad = " ".repeat(Math.max(1, 24 - k.length));
@@ -206,7 +209,14 @@ export function renderDashboardPerf(
     ? `${elapsedMins}m ${elapsedSecs}s`
     : `${elapsedSecs}s`;
 
+  const sourceLabel = source === "widget" ? `${th.highlight}⌂ widget${th.reset}` : `${th.accent}⬡ dashboard${th.reset}`;
+  const switchHint = source === "widget"
+    ? `${th.dim}[${th.highlight}/perf${th.reset}${th.dim}] dashboard${th.reset}`
+    : `${th.dim}[${th.highlight}/perf widget${th.reset}${th.dim}] widget metrics${th.reset}`;
+
   const lines = [
+    `  ${th.title}◈ Render Metrics ▸ ${sourceLabel}${th.reset}`,
+    "",
     section("Render Duration"),
     key("last", `${fmt(metrics.lastMs, "ms")}`),
     key("mean", `${fmt(metrics.meanMs, "ms")}`),
@@ -233,7 +243,7 @@ export function renderDashboardPerf(
     key("renders/min", `${fmt(metrics.rendersPerMinute)}`),
     key("elapsed", elapsedStr),
     "",
-    `  ${th.dim}[${th.highlight}/perf reset${th.reset}${th.dim}] ${th.reset}${th.dim}[${th.highlight}q/esc${th.reset}${th.dim}] close perf panel${th.reset}`,
+    `  ${th.dim}[${th.highlight}/perf reset${th.reset}${th.dim}] ${th.reset}${switchHint}  ${th.dim}[${th.highlight}q/esc${th.reset}${th.dim}] close${th.reset}`,
   ];
   return lines.map(h => framedRow(h ? h : "", innerW, th, box));
 }

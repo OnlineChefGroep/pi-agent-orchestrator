@@ -381,6 +381,7 @@ export default async function (pi: ExtensionAPI) {
     currentCtx = undefined;
     delete (globalThis as any)[MANAGER_KEY];
     delete (globalThis as any)[HOOKS_KEY];
+    delete (globalThis as any)[WIDGET_KEY];
     scheduler.stop();
     manager.abortAll();
     for (const timer of pendingNudges.values()) clearTimeout(timer);
@@ -391,6 +392,12 @@ export default async function (pi: ExtensionAPI) {
 
   // Live widget: show running agents above editor
   const widget = new AgentWidget(manager, agentActivity);
+
+  // Expose widget render metrics via Symbol.for() global registry for dashboard access.
+  const WIDGET_KEY = Symbol.for("pi-subagents:widget-metrics");
+  (globalThis as any)[WIDGET_KEY] = {
+    getSnapshot: () => widget.getRenderMetrics(),
+  };
 
   // ---- Batch orchestrator for smart/group/swarm join modes ----
   const batchOrchestrator = new BatchOrchestrator({

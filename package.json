@@ -54,7 +54,11 @@
     "typecheck": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit",
     "lint": "biome check src/ test/",
     "lint:fix": "biome check --fix src/ test/",
-    "showcase": "bash scripts/render-showcase-assets.sh"
+    "showcase": "bash scripts/showcase-all.sh",
+    "showcase:ci": "bash scripts/render-showcase-assets.sh --fidelity inspect",
+    "showcase:live": "bash scripts/capture-live-showcase.sh",
+    "showcase:remotion": "bash scripts/render-showcase-remotion.sh",
+    "showcase:vhs": "bash scripts/render-showcase-vhs.sh"
   },
   "type": "module",
   "engines": {

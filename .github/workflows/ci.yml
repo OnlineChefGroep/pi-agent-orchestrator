@@ -55,3 +55,11 @@ jobs:
         run: npx vitest run --retry=2
         # Lowest peer deps may have breaking runtime changes; don't fail the build.
         continue-on-error: ${{ matrix.peer-deps == 'lowest' }}
+
+      - name: Render benchmark threshold check
+        if: always() && matrix.peer-deps == 'latest'
+        continue-on-error: true
+        run: node scripts/check-benchmark-thresholds.mjs
+        # Always runs (even if previous steps failed) so benchmark results are
+        # visible regardless of other test failures. Uses continue-on-error so
+        # warnings/soft-failures don't block the build.

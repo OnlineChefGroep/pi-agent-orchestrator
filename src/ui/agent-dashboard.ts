@@ -32,7 +32,7 @@ import {
 } from "./agent-dashboard-renderer.js";
 import { getAgentTopEntries, renderTopTable, type SortKey, sortEntries } from "./agent-top-renderer.js";
 import type { AgentActivity } from "./agent-ui-types.js";
-import { RenderMetrics } from "./render-metrics.js";
+import { RenderMetrics, type RenderMetricsSnapshot } from "./render-metrics.js";
 import {
   type BoxChars,
   borderLine,
@@ -80,6 +80,8 @@ export class AgentDashboard implements Component {
   private selectedIds = new Set<string>();
   private showHelp = false;
   private showPerf = false;
+  /** Which metrics view to show: dashboard or widget. */
+  private perfView: "dashboard" | "widget" = "dashboard";
   private inCommandMode = false;
   private commandBuffer = "";
   private topViewMode = false;
@@ -337,15 +339,37 @@ export class AgentDashboard implements Component {
   // Command Mode
   // ════════════════════════════════════════════════════════════════
 
+  private getWidgetMetrics(): RenderMetricsSnapshot | undefined {
+    const wm = (globalThis as any)[Symbol.for("pi-subagents:widget-metrics")];
+    if (wm?.getSnapshot) {
+      try { return wm.getSnapshot(); } catch { /* ignore */ }
+    }
+    return undefined;
+  }
+
   private executeCommand(buffer: string): void {
     const cmd = buffer.toLowerCase().trim();
     if (cmd === "/perf") {
       this.showPerf = !this.showPerf;
       if (this.showPerf) {
+        this.perfView = "dashboard";
         this.showHelp = false;
       }
+    } else if (cmd === "/perf widget") {
+      this.showPerf = true;
+      this.perfView = "widget";
+      this.showHelp = false;
+    } else if (cmd === "/perf dashboard") {
+      this.showPerf = true;
+      this.perfView = "dashboard";
+      this.showHelp = false;
     } else if (cmd === "/perf reset") {
-      this.renderMetrics.reset();
+      if (this.perfView === "widget") {
+        // Widget metrics reset is handled by widget itself — no-op in dashboard
+        this.showPerf = true;
+      } else {
+        this.renderMetrics.reset();
+      }
     }
   }
 
@@ -661,8 +685,16 @@ export class AgentDashboard implements Component {
     if (this.showHelp) {
       lines.push(...renderDashboardHelp(innerW, th, box));
     } else if (this.showPerf) {
-      const metrics = this.renderMetrics.snapshot();
-      lines.push(...renderDashboardPerf(innerW, th, box, metrics));
+      if (this.perfView === "widget") {
+        const widgetMetrics = this.getWidgetMetrics();
+        if (widgetMetrics) {
+          lines.push(...renderDashboardPerf(innerW, th, box, widgetMetrics, "widget"));
+        } else {
+          lines.push(...renderDashboardPerf(innerW, th, box, this.renderMetrics.snapshot(), "widget"));
+        }
+      } else {
+        lines.push(...renderDashboardPerf(innerW, th, box, this.renderMetrics.snapshot(), "dashboard"));
+      }
     } else if (this.agents.length === 0) {
       lines.push(...renderDashboardEmpty(innerW, th, box));
     } else if (this.topViewMode) {

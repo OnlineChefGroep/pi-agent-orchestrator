@@ -20,6 +20,7 @@ const {
   buildDashboardBodyLines,
   renderDashboardHeader,
   renderDashboardFooter,
+  renderDashboardHelp,
 } = await import(path.join(root, "dist/ui/dashboard/index.js"));
 const {
   getAgentTopEntries,
@@ -179,16 +180,32 @@ function writeCast(outPath, frameSpecs) {
   console.log(`Wrote ${outPath} (${frameSpecs.length} frames)`);
 }
 
-// ── Dashboard list: selection moves, spinners animate ──
+function renderDashboardHelpScreen(frame) {
+  const agents = mockAgents(frame);
+  const activity = mockActivity(agents, frame);
+  const state = dashboardState(agents, activity, frame, 1);
+  const safeWidth = WIDTH;
+  const innerW = Math.max(1, safeWidth - 4);
+  const lines = renderDashboardHeader(safeWidth, th, box, state);
+  lines.push(...renderDashboardHelp(innerW, th, box));
+  lines.push(...renderDashboardFooter(safeWidth, th, box, activity));
+  return lines;
+}
+
+// ── Dashboard list: selection moves, spinners animate, help overlay ──
 {
   const specs = [];
-  for (let f = 0; f < 24; f++) {
+  for (let f = 0; f < 32; f++) {
     const sel = f % 6;
     specs.push({
-      dt: f === 0 ? 0.3 : 0.22,
+      dt: f === 0 ? 0.35 : 0.2,
       lines: renderDashboardList(f, sel),
       cursor: `${CSI}${4 + sel * 3};3H`,
     });
+  }
+  specs.push({ dt: 0.6, lines: renderDashboardHelpScreen(8) });
+  for (let f = 32; f < 36; f++) {
+    specs.push({ dt: 0.2, lines: renderDashboardList(f, f % 4) });
   }
   writeCast("/tmp/showcase-dashboard.cast", specs);
 }
@@ -196,11 +213,14 @@ function writeCast(outPath, frameSpecs) {
 // ── Top view: sort by tokens → last seen, page flip ──
 {
   const specs = [];
-  for (let f = 0; f < 8; f++) {
-    specs.push({ dt: f === 0 ? 0.4 : 0.35, lines: renderDashboardTop(f, "tokens", false, 0) });
+  for (let f = 0; f < 10; f++) {
+    specs.push({ dt: f === 0 ? 0.45 : 0.32, lines: renderDashboardTop(f, "tokens", false, 0) });
   }
-  for (let f = 0; f < 8; f++) {
-    specs.push({ dt: 0.35, lines: renderDashboardTop(f, "lastSeen", false, 0) });
+  for (let f = 0; f < 10; f++) {
+    specs.push({ dt: 0.32, lines: renderDashboardTop(f, "lastSeen", false, 0) });
+  }
+  for (let f = 0; f < 4; f++) {
+    specs.push({ dt: 0.35, lines: renderDashboardTop(f, "toolUses", false, 0) });
   }
   specs.push({ dt: 0.5, lines: renderDashboardTop(0, "lastSeen", false, 1) });
   writeCast("/tmp/showcase-top.cast", specs);
@@ -209,8 +229,8 @@ function writeCast(outPath, frameSpecs) {
 // ── Widget: heatmap + running agents ──
 {
   const specs = [];
-  for (let f = 0; f < 20; f++) {
-    specs.push({ dt: f === 0 ? 0.3 : 0.18, lines: renderWidget(f) });
+  for (let f = 0; f < 28; f++) {
+    specs.push({ dt: f === 0 ? 0.35 : 0.16, lines: renderWidget(f) });
   }
   writeCast("/tmp/showcase-widget.cast", specs);
 }
@@ -218,15 +238,16 @@ function writeCast(outPath, frameSpecs) {
 // Combined hero cast (dashboard → top → widget sequence)
 {
   const specs = [];
-  for (let f = 0; f < 12; f++) {
-    specs.push({ dt: f === 0 ? 0.5 : 0.2, lines: renderDashboardList(f, f % 4) });
+  for (let f = 0; f < 14; f++) {
+    specs.push({ dt: f === 0 ? 0.55 : 0.22, lines: renderDashboardList(f, f % 4) });
   }
-  for (let f = 0; f < 6; f++) {
-    specs.push({ dt: 0.3, lines: renderDashboardTop(f, "tokens", false, 0) });
+  specs.push({ dt: 0.55, lines: renderDashboardHelpScreen(6) });
+  for (let f = 0; f < 8; f++) {
+    specs.push({ dt: 0.28, lines: renderDashboardTop(f, "tokens", false, 0) });
   }
   specs.push({ dt: 0.4, lines: renderDashboardTop(0, "lastSeen", false, 0) });
-  for (let f = 0; f < 10; f++) {
-    specs.push({ dt: 0.15, lines: renderWidget(f) });
+  for (let f = 0; f < 14; f++) {
+    specs.push({ dt: 0.14, lines: renderWidget(f) });
   }
   writeCast("/tmp/showcase.cast", specs);
 }

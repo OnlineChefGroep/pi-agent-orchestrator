@@ -109,21 +109,25 @@ Output findings as a markdown list with severity (Critical / High / Medium / Low
 
 ## // SHOWCASE (v0.11.0 TUI)
 
-Recorded from the real TypeScript renderers (`npm run build` + `scripts/render-showcase-assets.sh`). Not mock artwork.
+Four pipelines (programmatic, live asciinema, Remotion hero, VHS). See [docs/SHOWCASE.md](docs/SHOWCASE.md).
 
 | View | Demo |
 |------|------|
-| **Dashboard** (swarms, running cards, vim nav) | ![Dashboard](docs/images/showcase_dashboard.gif) |
-| **Top view** (`t` — sort tokens / last seen) | ![Top view](docs/images/showcase_top_view.gif) |
-| **Agent widget** (heatmap + live agents) | ![Widget](docs/images/showcase_widget.gif) |
+| **Dashboard** (swarms, running cards, `?` help) | ![Dashboard](docs/images/showcase_dashboard.gif) |
+| **Top view** (`t` / `l` sort) | ![Top view](docs/images/showcase_top_view.gif) |
+| **Agent widget** (heatmap) | ![Widget](docs/images/showcase_widget.gif) |
+| **Live terminal** (asciinema capture) | ![Live](docs/images/showcase_live.gif) |
+| **VHS** (install + demo tape) | ![VHS](docs/images/showcase_vhs.gif) |
 
-**Full walkthrough (combined clip):**
-
-![Hero preview](docs/images/dashboard_preview.gif)
+**Hero video (Remotion when available, else programmatic):**
 
 <video src="docs/images/dashboard_preview.mp4" controls width="100%"></video>
 
-Regenerate locally: `bash scripts/render-showcase-assets.sh`
+```bash
+npm run showcase              # all four: C + A + B + D
+npm run showcase:ci           # CI-safe only
+SKIP_REMOTION=1 npm run showcase   # skip Remotion render
+```
 
 ---
 
