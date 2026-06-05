@@ -473,7 +473,7 @@ Bad isolation.`);
   });
 
   it("handoff: \"true\" (string) parses as false - only boolean true enables", async () => {
-    writeAgent("string-true", `---\nhandoff: \"true\"\n---\n\nString true.`);
+    writeAgent("string-true", `---\nhandoff: "true"\n---\n\nString true.`);
 
     const result = await loadCustomAgents(tmpDir);
     expect(result.get("string-true")!.handoff).toBe(false);
