@@ -282,7 +282,300 @@ debouncedUpdate(): void {
 
 ---
 
-## 10. Aanbevolen Benchmarks
+## 10. Render Metrics Architecture (Phase 3.3)
+
+### Overzicht
+
+Sinds Phase 3.3 beschikt de gehele UI over een **unified render performance tracking system** via de `RenderMetrics` class. Deze class wordt geïnstantieerd door zowel de `AgentWidget` als de `AgentDashboard` en trackt real-time metrics over hoe lang renders duren, hoe effectief de debounce is, en hoeveel agents er gemiddeld per render worden verwerkt.
+
+De data is live te bekijken via de `/perf` command in de dashboard.
+
+---
+
+### 10.1 RenderMetrics Class (`src/ui/render-metrics.ts`)
+
+```typescript
+const metrics = new RenderMetrics(label: string, slowThresholdMs?: number);
+```
+
+#### Publieke API
+
+| Methode | Beschrijving |
+|---|---|
+| `record(durationMs, activeAgents?)` | Registreer een render execution. Optioneel aantal agents. Returnt `true` als de render langzamer was dan `slowThresholdMs`. |
+| `recordRequested()` | Registreer een _request_ om te renderen (vóór debounce/dirty filtering). Returnt het netto requested count. |
+| `setFirstSpawnTimestamp(ts)` | Zet de timestamp van de eerste agent spawn (earliest wint). |
+| `reset()` | Reset alle counters. |
+| `snapshot()` | Returnt een `RenderMetricsSnapshot` met alle huidige waarden. |
+
+#### Volledige Snapshot Velden
+
+```typescript
+interface RenderMetricsSnapshot {
+  label: string;                          // "widget-update" of "dashboard-render"
+
+  // ── Render duration stats ──
+  renderCount: number;                    // Hoe vaak record() is aangeroepen
+  meanMs: number;                         // Gemiddelde render duur
+  minMs: number;                          // Snelste render
+  maxMs: number;                          // Langzaamste render
+  lastMs: number;                         // Laatste render duur
+
+  // ── Request vs actual (debounce effectiveness) ──
+  requestedRenderCount: number;           // Hoe vaak render is gevraagd
+  skippedRenderCount: number;             // request - actual (gedebounced)
+  requestToActualRatio: number;           // Verhouding (bv. 2.5x)
+
+  // ── Agent context ──
+  activeAgentCount: number;               // Hoe vaak activeAgents is meegegeven
+  activeAgentMin: number;                 // Minimum agents tijdens een render
+  activeAgentMax: number;                 // Maximum agents tijdens een render
+  activeAgentMean: number;                // Gemiddeld aantal agents per render
+
+  // ── Time to first visible ──
+  firstRenderTimestamp: number;           // Timestamp van eerste render
+  firstSpawnTimestamp: number;            // Timestamp van eerste spawn
+  timeToFirstVisibleMs: number;           // Verschil (perceived lag)
+
+  // ── Render rate ──
+  startedAt: number;                      // Timestamp van start/laatste reset
+  elapsedMs: number;                      // Verstreken tijd sinds startedAt
+  rendersPerSecond: number;               // Huidige render frequentie
+  rendersPerMinute: number;               // Huidige render frequentie (minuut)
+}
+```
+
+---
+
+### 10.2 Instrumentatie Punten
+
+#### AgentWidget — `renderWidget()` (src/ui/agent-widget.ts)
+
+- **Label**: `"widget-update"`
+- **Slow threshold**: 16ms (~60fps budget)
+- **Wat er wordt gemeten**: de daadwerkelijke line-building tijd in `renderWidget()`
+- **Wanneer `record()` wordt aangeroepen**: in de `finally` van `renderWidget()`, zodat de timing altijd wordt geregistreerd, zelfs bij fouten
+- **activeAgents**: `allAgents.filter(a => a.status === "running" || a.status === "queued").length`
+- **recordRequested()**: wordt aangeroepen in `update()` wanneer de dirty-skip path (snapshot is unchanged) wordt genomen — dit zijn de renders die door debounce zijn overgeslagen
+- **setFirstSpawnTimestamp()**: wordt aangeroepen in `update()` bij de eerste actieve agent
+
+**Flow:**
+```
+update()
+  ├─ snapshot changed? ─► set dirty = true
+  ├─ first spawn? ──────► setFirstSpawnTimestamp()
+  ├─ dirty + registered? ─► requestRender()
+  └─ NOT dirty + registered? ─► recordRequested()  ← skipped render
+
+renderWidget()
+  ├─ performance.now() start
+  ├─ build lines (renderAgentWidget)
+  └─ finally: performance.now() - start → record(duration, activeAgents)
+```
+
+#### AgentDashboard — `render()` (src/ui/agent-dashboard.ts)
+
+- **Label**: `"dashboard-render"`
+- **Slow threshold**: 50ms (dashboard heeft meer werk dan widget)
+- **Wat er wordt gemeten**: de volledige `render()` methode (header + body + detail panel + footer)
+- **Wanneer `record()` wordt aangeroepen**: aan het einde van `render()`, vlak voor return
+- **recordRequested()**: wordt aangeroepen in `requestRender()` vóór de debounce/rate-limit checks — telt ALLE requests, ook rate-limited
+- **setFirstSpawnTimestamp()**: wordt aangeroepen in `render()` bij de eerste agent
+
+**Flow:**
+```
+requestRender()
+  ├─ recordRequested()                    ← telt alle requests
+  ├─ rate limit check?
+  │   ├─ nog in window? ─► coalesce via setTimeout
+  │   └─ window verlopen? ─► queueMicrotask → tui.requestRender()
+  └─ renderPending guard
+
+render(width)
+  ├─ performance.now() start
+  ├─ renderDashboardHeader()
+  ├─ body / help / perf / top view
+  ├─ renderDashboardDetailPanel()
+  ├─ renderDashboardFooter()
+  └─ performance.now() - start → record(duration, activeAgents)
+```
+
+---
+
+### 10.3 `/perf` Debug Command
+
+Sinds de implementatie van command mode is de `/perf` command beschikbaar in de agent dashboard.
+
+#### Gebruik
+
+| Actie | Toets |
+|---|---|
+| Open command mode | `/` |
+| Toggle perf panel | `/perf` + Enter |
+| Reset counters | `/perf reset` + Enter |
+| Annuleer command | Esc |
+| Sluit perf panel | `q` of Esc |
+
+#### Wat de perf panel toont
+
+```
+▸ Render Duration
+  last                   2.34ms
+  mean                   1.87ms
+  min                    0.52ms
+  max                    15.20ms
+
+▸ Debounce Effectiveness
+  requested renders      245
+  actual renders         89
+  skipped (debounced)    156
+  request/actual ratio   2.75x
+
+▸ Agent Context
+  current agents         89
+  mean agents/render     8.30
+  min agents             0
+  max agents             48
+
+▸ Timing
+  time to first visible  320.00ms
+  renders/sec            2.40
+  renders/min            144.00
+  elapsed                2m 34s
+
+  [/perf reset]          [q/esc] close perf panel
+```
+
+#### Hoe te interpreteren
+
+| Metric | Gezond | Waarschuwing | Actie |
+|---|---|---|---|
+| **lastMs / meanMs** | < 16ms (widget), < 50ms (dashboard) | > 50ms (widget), > 100ms (dashboard) | Verminder aantal agents, optimaliseer render code |
+| **maxMs** | < 50ms | > 200ms | Zoek de outlier: welke agent/config veroorzaakt de piek? |
+| **requestToActualRatio** | 1.0–3.0x | > 10x | Debounce is te agressief of er worden te veel onnodige requests gedaan |
+| **skippedRenderCount** | ≈ request - actual | Zeer hoog t.o.v. actual | Check of dirty detection goed werkt (snapshot hash collision?) |
+| **timeToFirstVisibleMs** | < 500ms | > 2000ms | Dashboard/widget wordt te langzaam zichtbaar — check init code |
+| **rendersPerSecond** | 3–10 (dashboard), 1–5 (widget) | > 60 | Rate limit wordt omzeild — check debounce logic |
+| **activeAgentMax vs mean** | Max ≈ 2× mean | Grote spreiding | Sommige renders verwerken veel meer agents dan gemiddeld — check virtual scrolling |
+
+---
+
+### 10.4 Debug Logging
+
+Render metrics logt op `debug` level via de bestaande `logger` utility. Dit is standaard **uitgeschakeld** en moet worden geactiveerd:
+
+```bash
+# Activeer debug logging voor render metrics
+PI_SUBAGENTS_LOG_LEVEL=debug npm start
+```
+
+Wanneer `record()` detecteert dat de render duur de `slowThresholdMs` overschrijdt, wordt een gestructureerd log bericht uitgezonden:
+
+```json
+{
+  "level": "debug",
+  "msg": "render-metrics: slow dashboard-render",
+  "durationMs": 67.32,
+  "thresholdMs": 50,
+  "renderCount": 42,
+  "requested": 156,
+  "skipped": 114,
+  "activeAgents": 12,
+  "meanMs": 23.45
+}
+```
+
+Dit is nuttig voor:
+- **Performance regression hunting**: vergelijk meanMs over tijd
+- **CI monitoring**: detecteer of een code change renders significant vertraagt
+- **User reports**: vraag een `PI_SUBAGENTS_LOG_LEVEL=debug` log bij klachten over trage UI
+
+---
+
+### 10.5 Render Rate en Elapsed Time
+
+- `startedAt` wordt gezet bij constructie of na `reset()`
+- `elapsedMs` = `Date.now() - startedAt`
+- `rendersPerSecond` = `renderCount / (elapsedMs / 1000)`
+- `rendersPerMinute` = `renderCount / (elapsedMs / 60000)`
+
+De rates zijn **instantaneous**: ze reflecteren de gemiddelde frequentie sinds de laatste reset. Bij een lange sessie met veel idle tijd zullen de rates laag zijn, ook als de renders zelf snel waren. Reset de counters met `/perf reset` voor een frisse meting tijdens een specifieke workload.
+
+---
+
+### 10.6 Time to First Visible
+
+`timeToFirstVisibleMs` meet de tijd tussen de eerste `setFirstSpawnTimestamp()` call (meestal in `update()` of `render()` bij detectie van de eerste agent) en de eerste `record()` call (de eerste daadwerkelijke render).
+
+Dit is een proxy voor **perceived startup lag**: hoelang duurt het voordat een gebruiker de eerste agent ziet in de UI na spawn?
+
+**Noot**: dit is geen exacte meting van spawn-to-display latency, omdat:
+- De spawn timestamp wordt gezet in de eerstvolgende `update()` of `render()` cyclus, niet op het exacte moment van spawn
+- De TUI framework heeft zijn eigen render scheduling die niet in deze meting zit
+- Het is desondanks een goede indicator voor regressies in perceived performance
+
+---
+
+### 10.7 Widget Render Metrics
+
+Naast de dashboard metrics heeft de `AgentWidget` ook zijn eigen `RenderMetrics` instantie, toegankelijk via `getRenderMetrics()`.
+
+**Verschillen met dashboard metrics:**
+
+| Aspect | Widget | Dashboard |
+|---|---|---|
+| Threshold | 16ms | 50ms |
+| Wat wordt gemeten | Alleen line-building in `renderWidget()` | Volledige `render()` (incl. header, footer, detail panel) |
+| `recordRequested()` | Alleen in dirty-skip path (snapshot unchanged) | In `requestRender()` vóór alle debounce checks |
+| `activeAgents` | Alle agents (`this.manager.listAgents()` gefilterd op running/queued) | Alle agents (dashboard toont alles) |
+| Rate limiting | Via timer interval (200ms actief / 1000ms idle) | Via debounce in `requestRender()` + microtask |
+
+---
+
+### 10.8 Benchmark Tests
+
+Er zijn **14 render performance benchmarks** in `test/widget-render-perf.test.ts`:
+
+| Groep | Tests | Wat wordt gemeten |
+|---|---|---|
+| renderAgentWidget pure throughput | 4 | 10/50/200/all-running agents render tijd |
+| renderAgentWidget met activity data | 2 | 50/200 agents + activity heatmap entries |
+| buildSnapshot dirty checking | 3 | 10/50/200 agents snapshot hash snelheid |
+| getVisibleWindow virtual scrolling | 3 | 200/1000 agents, scroll latency |
+| debouncedUpdate coalescing | 1 | 100 rapid calls → 1 immediate + 1 timer |
+| Sustained update throughput | 1 | 50 ticks × 20 agents < 2ms per tick |
+
+Daarnaast zijn er **11 RenderMetrics unit tests** in `test/render-metrics.test.ts`:
+
+| Groep | Tests | Wat wordt getest |
+|---|---|---|
+| Basic tracking | 4 | Zero state, single record, min/mean/max, reset |
+| Requested vs actual | 6 | recordRequested, skippedCount, ratio, edge cases |
+| Active agents tracking | 2 | Agents per render, zonder agent data |
+| Time to first visible | 4 | Zonder spawn, met spawn, earliest timestamp, ignore later |
+| Render rate | 3 | Zero state, elapsed time, increasing time |
+| Getters | 3 | count, requestedCount, mean/min/max/last |
+
+```bash
+# Run all render metrics + widget tests
+npx vitest run test/render-metrics.test.ts test/agent-widget.test.ts test/widget-render-perf.test.ts
+
+# Expected: 64 tests passing
+```
+
+---
+
+### 10.9 Best Practices
+
+1. **Reset voor metingen**: gebruik `/perf reset` voordat je een specifieke workload test, zodat de rates en averages alleen die workload reflecteren
+2. **Kijk naar mean, niet max**: de max kan een eenmalige JIT-compilatie of GC-pauze zijn. De mean is representatiever voor steady-state performance
+3. **Debounce ratio > 10x is verdacht**: als er 10+ requests per daadwerkelijke render zijn, check of er ergens een render request storm is zonder rate limiting
+4. **Time to first visible > 2s**: dit wijst op een startup bottleneck. Check de init code van dashboard en widget
+5. **Renders/sec > 60**: de MIN_RENDER_GAP_MS (16ms) wordt omzeild. Check of `requestRender()` direct wordt aangeroepen in plaats van via de debounce
+
+---
+
+## 11. Aanbevolen Benchmarks
 
 Voor het valideren van performance veranderingen:
 
@@ -293,6 +586,9 @@ npm run typecheck && npm run lint && npm test
 # Dashboard rendering performance (bestaande test)
 npm test -- test/dashboard-components.test.ts
 
+# Render metrics + widget + benchmark tests
+npx vitest run test/render-metrics.test.ts test/agent-widget.test.ts test/widget-render-perf.test.ts
+
 # Compaction benchmarks
 node --experimental-specifier-resolution=node test/compaction.benchmark.ts
 ```
@@ -301,4 +597,6 @@ node --experimental-specifier-resolution=node test/compaction.benchmark.ts
 - **`listAgents()` tijd**: zou < 1ms moeten zijn voor < 500 agents
 - **`buildSnapshot()` tijd**: zou < 0.1ms moeten zijn voor < 100 agents
 - **`requestRender()` calls per seconde**: dashboard max 5-10fps, max 60fps met debounce
+- **Widget render mean**: < 5ms voor < 50 agents
+- **Dashboard render mean**: < 50ms voor < 200 agents
 - **Geheugen per `AgentRecord`**: ~2-5KB (excl. session messages)
