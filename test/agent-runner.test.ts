@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   createAgentSession,
@@ -72,6 +72,8 @@ vi.mock("../src/skill-loader.js", () => ({
 }));
 
 import { resumeAgent, runAgent } from "../src/agent-runner.js";
+import { buildAgentPrompt } from "../src/prompts.js";
+import { setPromptCompressionLevel } from "../src/agent-registry.js";
 
 function createSession(finalText: string) {
   const listeners: Array<(event: any) => void> = [];
@@ -113,6 +115,12 @@ beforeEach(() => {
   getAgentDir.mockClear();
   sessionManagerInMemory.mockClear();
   settingsManagerCreate.mockClear();
+  (buildAgentPrompt as ReturnType<typeof vi.fn>).mockClear();
+});
+
+afterEach(() => {
+  // Defensive cleanup: reset global compression level even if a test throws
+  setPromptCompressionLevel("balanced");
 });
 
 describe("agent-runner final output capture", () => {
@@ -213,6 +221,69 @@ describe("agent-runner final output capture", () => {
 // Both runAgent and resumeAgent dispatch usage to the caller via this
 // callback. The callback feeds the AgentRecord lifetime accumulator, which
 // is the source of truth for total tokens (survives compaction).
+describe("agent-runner compression level precedence", () => {
+  it("uses global registry level when agentConfig has no promptCompressionLevel", async () => {
+    const { session } = createSession("OK");
+    createAgentSession.mockResolvedValue({ session });
+
+    // getAgentConfig mock returns config WITHOUT promptCompressionLevel
+    setPromptCompressionLevel("aggressive");
+
+    await runAgent(ctx, "Explore", "go", { pi });
+
+    // buildAgentPrompt is called with compressionLevel as 6th arg
+    const spy = buildAgentPrompt as ReturnType<typeof vi.fn>;
+    expect(spy).toHaveBeenCalledTimes(1);
+    const compressionArg = spy.mock.calls[0][5];
+    expect(compressionArg).toBe("aggressive");
+  });
+
+  it("per-agent promptCompressionLevel overrides global setting", async () => {
+    const { session } = createSession("OK");
+    createAgentSession.mockResolvedValue({ session });
+
+    // Override getAgentConfig to return a config WITH promptCompressionLevel
+    const { getAgentConfig } = await import("../src/agent-types.js");
+    (getAgentConfig as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      name: "Explore",
+      description: "Explore",
+      builtinToolNames: ["read"],
+      extensions: false,
+      skills: false,
+      systemPrompt: "You are Explore.",
+      promptMode: "replace",
+      inheritContext: false,
+      runInBackground: false,
+      isolated: false,
+      promptCompressionLevel: "minimal",
+    });
+
+    setPromptCompressionLevel("aggressive");
+
+    await runAgent(ctx, "Explore", "go", { pi });
+
+    const spy = buildAgentPrompt as ReturnType<typeof vi.fn>;
+    expect(spy).toHaveBeenCalledTimes(1);
+    const compressionArg = spy.mock.calls[0][5];
+    // Per-agent "minimal" should win over global "aggressive"
+    expect(compressionArg).toBe("minimal");
+  });
+
+  it("falls back to global balanced when neither source sets compression level", async () => {
+    const { session } = createSession("OK");
+    createAgentSession.mockResolvedValue({ session });
+
+    // Default: getPromptCompressionLevel() returns "balanced"
+    // getAgentConfig returns config without promptCompressionLevel
+    await runAgent(ctx, "Explore", "go", { pi });
+
+    const spy = buildAgentPrompt as ReturnType<typeof vi.fn>;
+    expect(spy).toHaveBeenCalledTimes(1);
+    const compressionArg = spy.mock.calls[0][5];
+    expect(compressionArg).toBe("balanced");
+  });
+});
+
 describe("agent-runner usage callback wiring", () => {
   function emitMessageEnd(listeners: Array<(e: any) => void>, usage: any) {
     const event = { type: "message_end", message: { role: "assistant", usage } };
