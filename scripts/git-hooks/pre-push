@@ -9,13 +9,14 @@
 set -e
 
 echo "pre-push: running full test suite..."
-SECONDS=0
+START=$(date +%s)
 
-if ! npm test 2>/dev/null; then
-  echo ""
-  echo "pre-push: ❌ tests failed. Fix failures before pushing."
-  echo "  (Tip: git push --no-verify to bypass)"
-  exit 1
+if ! npm test; then
+	echo ""
+	echo "pre-push: ❌ tests failed. Fix failures before pushing."
+	echo "  (Tip: git push --no-verify to bypass)"
+	exit 1
 fi
 
-echo "pre-push: ✅ all tests passed ($((SECONDS * 1000))ms). Pushing."
+ELAPSED=$(( $(date +%s) - START ))
+echo "pre-push: ✅ all tests passed (${ELAPSED}s). Pushing."

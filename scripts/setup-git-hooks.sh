@@ -16,10 +16,15 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOOK_SOURCE="${PROJECT_ROOT}/scripts/git-hooks"
 HOOK_TARGET="${PROJECT_ROOT}/.git/hooks"
 
+if [ ! -d "${HOOK_TARGET}" ]; then
+	echo "Skipping hook installation: not a git repository (no .git/hooks/ directory)"
+	exit 0
+fi
+
 if [ ! -f "${HOOK_SOURCE}/pre-commit" ] || [ ! -f "${HOOK_SOURCE}/pre-push" ]; then
-  echo "Error: hooks not found in ${HOOK_SOURCE}"
-  echo "Expected: pre-commit and pre-push"
-  exit 1
+	echo "Error: hooks not found in ${HOOK_SOURCE}"
+	echo "Expected: pre-commit and pre-push"
+	exit 1
 fi
 
 echo "Installing hooks to ${HOOK_TARGET}..."

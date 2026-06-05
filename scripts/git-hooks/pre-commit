@@ -12,8 +12,8 @@ set -e
 STAGED_FILES=$(git diff --cached --name-only -z --diff-filter=ACMR | tr '\0' '\n' | grep -E '\.(ts|js|mjs)$' || true)
 
 if [ -z "$STAGED_FILES" ]; then
-  echo "pre-commit: no .ts/.js files staged — skipping."
-  exit 0
+	echo "pre-commit: no .ts/.js files staged — skipping."
+	exit 0
 fi
 
 COUNT=$(echo "$STAGED_FILES" | wc -l | tr -d ' ')
@@ -22,10 +22,10 @@ echo "pre-commit: checking ${COUNT} staged file(s)..."
 # --- 1. Biome lint + auto-fix ---
 echo "  → biome check --write --no-errors-on-unmatched"
 if ! echo "$STAGED_FILES" | tr '\n' '\0' | xargs -0 npx biome check --write --no-errors-on-unmatched; then
-  EXIT_CODE=$?
-  echo ""
-  echo "pre-commit: ❌ biome check exited with code ${EXIT_CODE}. Review and re-stage fixes."
-  exit "${EXIT_CODE}"
+	EXIT_CODE=$?
+	echo ""
+	echo "pre-commit: ❌ biome check exited with code ${EXIT_CODE}. Review and re-stage fixes."
+	exit "${EXIT_CODE}"
 fi
 
 # Re-stage auto-fixed files (handles both new and modified files)
@@ -34,10 +34,10 @@ echo "$STAGED_FILES" | tr '\n' '\0' | xargs -0 git add -- 2>/dev/null || true
 # --- 2. Typecheck (full project) ---
 echo "  → tsc --noEmit"
 if ! npx tsc --noEmit 2>&1; then
-  echo ""
-  echo "pre-commit: ❌ typecheck failed. Fix type errors and re-commit."
-  echo "  (Tip: git commit --no-verify to bypass)"
-  exit 1
+	echo ""
+	echo "pre-commit: ❌ typecheck failed. Fix type errors and re-commit."
+	echo "  (Tip: git commit --no-verify to bypass)"
+	exit 1
 fi
 
 echo "pre-commit: ✅ all checks passed."
