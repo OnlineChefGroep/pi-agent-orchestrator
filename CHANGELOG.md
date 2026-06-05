@@ -17,6 +17,8 @@
   - **CVE-003**: Fully authenticated cross-extension RPC endpoints with custom rate limiters.
   - **CVE-005**: Bound schedule intervals and update caps.
 
+- **Handoff Frontmatter Directive**: Custom agents can now set `handoff: true` in their `.md` frontmatter to enable structured JSON handoff at end of response, enabling chain-of-agents workflows. Parsing follows the same boolean pattern as `inheritContext`, `runInBackground`, and `isolated`. Added 6 unit tests covering true, omitted, false, string "true", coexistence with other booleans, and sensible defaults consistency. Updated README with chain-of-agents workflow example and Code Reviewer frontmatter example. Updated `docs/api-reference.md` with handoff usage example and complete `AgentConfig` interface.
+
 ### Performance & Cleanup
 
 - **Configurable TTL & sweeps**: Reduced idle agent TTL (60s default) and shortened GC sweeps to 30s intervals.
