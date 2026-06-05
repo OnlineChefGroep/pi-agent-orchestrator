@@ -10,19 +10,19 @@ RENDER_SH="$DROID_PLUGIN_ROOT/scripts/render-showcase.sh"
 # Prefer live cast, then programmatic hero
 CLIP_CAST="${1:-}"
 if [[ -z "$CLIP_CAST" ]]; then
-  if [[ -f /tmp/showcase-live.cast ]]; then
-    CLIP_CAST=/tmp/showcase-live.cast
-  else
-    CLIP_CAST=/tmp/showcase.cast
-  fi
+	if [[ -f /tmp/showcase-live.cast ]]; then
+		CLIP_CAST=/tmp/showcase-live.cast
+	else
+		CLIP_CAST=/tmp/showcase.cast
+	fi
 fi
 
 [[ -x "$RENDER_SH" ]] || {
-  echo "skip remotion: $RENDER_SH not found (set DROID_PLUGIN_ROOT)"
-  exit 0
+	echo "skip remotion: $RENDER_SH not found (set DROID_PLUGIN_ROOT)"
+	exit 0
 }
 
-cat > /tmp/showcase-remotion-props.json <<'EOF'
+cat >/tmp/showcase-remotion-props.json <<'EOF'
 {
   "preset": "warm-hero",
   "title": "Pi Agent Orchestrator",
@@ -50,10 +50,10 @@ cat > /tmp/showcase-remotion-props.json <<'EOF'
 EOF
 
 bash "$RENDER_SH" \
-  --props /tmp/showcase-remotion-props.json \
-  --fidelity inspect \
-  --output "$OUT_DIR/dashboard_preview_remotion.mp4" \
-  "$CLIP_CAST"
+	--props /tmp/showcase-remotion-props.json \
+	--fidelity inspect \
+	--output "$OUT_DIR/dashboard_preview_remotion.mp4" \
+	"$CLIP_CAST"
 
 # Hero slot: remotion version when available
 cp "$OUT_DIR/dashboard_preview_remotion.mp4" "$OUT_DIR/dashboard_preview.mp4"

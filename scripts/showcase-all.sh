@@ -14,24 +14,24 @@ echo "═══ C) Programmatic (CI-safe, inspect fidelity) ═══"
 bash "$ROOT/scripts/render-showcase-assets.sh" --fidelity "$SHOWCASE_FIDELITY"
 
 if [[ -z "$SKIP_LIVE" ]]; then
-  echo "═══ A) Live asciinema capture ═══"
-  bash "$ROOT/scripts/capture-live-showcase.sh" || true
+	echo "═══ A) Live asciinema capture ═══"
+	bash "$ROOT/scripts/capture-live-showcase.sh" || true
 else
-  echo "═══ A) Live capture skipped (SKIP_LIVE=1) ═══"
+	echo "═══ A) Live capture skipped (SKIP_LIVE=1) ═══"
 fi
 
 if [[ -z "$SKIP_REMOTION" ]]; then
-  echo "═══ B) Remotion hero ═══"
-  bash "$ROOT/scripts/render-showcase-remotion.sh" || true
+	echo "═══ B) Remotion hero ═══"
+	bash "$ROOT/scripts/render-showcase-remotion.sh" || true
 else
-  echo "═══ B) Remotion skipped (SKIP_REMOTION=1) ═══"
+	echo "═══ B) Remotion skipped (SKIP_REMOTION=1) ═══"
 fi
 
 if [[ -z "$SKIP_VHS" ]]; then
-  echo "═══ D) VHS tape ═══"
-  bash "$ROOT/scripts/render-showcase-vhs.sh" || true
+	echo "═══ D) VHS tape ═══"
+	bash "$ROOT/scripts/render-showcase-vhs.sh" || true
 else
-  echo "═══ D) VHS skipped (SKIP_VHS=1) ═══"
+	echo "═══ D) VHS skipped (SKIP_VHS=1) ═══"
 fi
 
 echo ""
