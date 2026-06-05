@@ -7,6 +7,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { BUILTIN_TOOL_NAMES, getDefaultAgentNames } from "./agent-types.js";
+import type { PromptCompressionLevel } from "./settings.js";
 import { emitTelemetry, hashContentSync } from "./telemetry.js";
 import type { AgentConfig, MemoryScope, ThinkingLevel } from "./types.js";
 
@@ -159,6 +160,7 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
       isolated: fm.isolated == null ? undefined : fm.isolated === true,
       memory: parseMemory(fm.memory),
       isolation: fm.isolation === "worktree" ? "worktree" : undefined,
+      promptCompressionLevel: parseCompressionLevel(fm.prompt_compression),
       enabled: fm.enabled !== false,  // default true; explicitly false disables
       source,
     };
@@ -222,4 +224,11 @@ function parseInheritField(val: unknown): true | string[] | false {
   if (val === false || val === "none") return false;
   const items = parseCsvList(val, []);
   return items.length > 0 ? items : false;
+}
+
+const VALID_COMPRESSION_LEVELS = new Set(["minimal", "balanced", "aggressive"]);
+
+function parseCompressionLevel(val: unknown): PromptCompressionLevel | undefined {
+  if (typeof val === "string" && VALID_COMPRESSION_LEVELS.has(val)) return val as PromptCompressionLevel;
+  return undefined;
 }
