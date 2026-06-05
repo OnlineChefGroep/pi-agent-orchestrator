@@ -106,6 +106,7 @@ Or set to `minimal` when maximum instruction quality is critical:
 display_name: "Code Reviewer"
 description: "Thorough code review with detailed instructions"
 tools: read, grep, find
+handoff: true
 prompt_compression: minimal
 ---
 Perform a thorough code review of the provided diff.
