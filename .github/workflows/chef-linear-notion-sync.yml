@@ -1,0 +1,23 @@
+# On PR events: sync this repo's open PRs → Linear CHEF child issues + Notion tech doc.
+# Requires org/repo secrets: LINEAR_API_KEY, NOTION_API_KEY (or NOTION_TOKEN).
+
+name: CHEF Linear + Notion Sync
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+
+concurrency:
+  group: chef-linear-notion-${{ github.event.pull_request.number || 'manual' }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    uses: OnlineChefGroep/OrgBeheer/.github/workflows/chef-dev-sync-reusable.yml@main
+    secrets:
+      LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+    with:
+      repo: pi-agent-orchestrator
