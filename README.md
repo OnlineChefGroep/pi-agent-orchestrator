@@ -114,6 +114,46 @@ Perform a thorough code review of the provided diff.
 
 Per-agent `prompt_compression` overrides the global `subagents.promptCompressionLevel` setting. See [docs/api-reference.md](docs/api-reference.md) for the full level comparison table.
 
+### Example: Chain-of-Agents Workflow
+
+Use `handoff: true` to create agent chains where one agent's structured output feeds into the next. Here's a researcher → implementer pipeline:
+
+**Step 1 — Research Agent** (produces handoff JSON):
+
+```markdown
+---
+display_name: "Researcher"
+description: "Read-only researcher that produces structured handoff"
+tools: read, grep, find
+handoff: true
+---
+
+Investigate the codebase and produce a structured handoff JSON with:
+- "task": what needs to be done
+- "files": affected file paths
+- "approach": recommended implementation strategy
+- "evidence": code snippets supporting the approach
+
+End your response with the handoff JSON as the last message.
+```
+
+**Step 2 — Implementer Agent** (consumes handoff):
+
+```markdown
+---
+display_name: "Implementer"
+description: "Implements changes from researcher handoff"
+tools: read, write, edit, bash
+inherit_context: true
+---
+
+You receive a structured handoff from a researcher. Implement the changes described in the handoff's "task" field, following the "approach" strategy. Use the "files" list to locate code. Validate your implementation compiles.
+```
+
+Spawn the chain: `@Researcher investigate the auth middleware` → researcher produces handoff → `@Implementer` receives it and executes.
+
+See [`examples/agents/handoff-chain-researcher.md`](examples/agents/handoff-chain-researcher.md) and [`examples/agents/handoff-chain-implementer.md`](examples/agents/handoff-chain-implementer.md) for complete working examples.
+
 ### Frontmatter Schema
 
 | Directive | Type | Default | Operational Definition |
