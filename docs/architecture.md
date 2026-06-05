@@ -191,7 +191,7 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/agent-manager.ts` | Abstraction envelope for host AgentManager |
 | `src/agent-registry.ts` | Definition ingestion, memory lookup |
 | `src/custom-agents.ts` | Markdown frontmatter extraction and validation |
-| `src/default-agents.ts` | Built-in primitive definitions |
+| `src/default-agents.ts` | Built-in primitive definitions + lazy prompt regeneration via READONLY_PROMPT_PARAMS (compression levels) |
 | `src/compaction.ts` | Aggressive context window compression |
 | `src/context.ts` | Vector stack payload creation |
 | `src/context-mode-bridge.ts` | Sandbox execution primitives |

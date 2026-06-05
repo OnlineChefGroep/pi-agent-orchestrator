@@ -4,6 +4,8 @@
 
 ### Features
 
+- **Prompt Compression Levels**: New `promptCompressionLevel` setting (`minimal` | `balanced` | `aggressive`) controls system prompt verbosity per agent. Affects read-only warnings, tool usage instructions, and handoff templates. Aggressive mode saves ~44% tokens on prompt components; minimal mode provides maximum instruction quality (+70% tokens). Supports per-agent override via `prompt_compression` frontmatter directive. Lazy runtime regeneration ensures the setting takes effect for all built-in agents at spawn time.
+
 - **Interactive Top View (`/agents top`)**: Switch views with `t` in the dashboard to access a real-time table of active and completed agents sorted by resource usage metrics (Turns, Tokens, Tool Uses, Duration, Name, and Activity recency `LAST` column). Columns are sortable via keys: `t` (tokens), `r` (turns), `d` (duration), `u` (tool uses), `l` (last seen recency), `n` (name). Pagination supported with `left` / `right` arrow keys.
 - **Activity Heatmap Indicator**: Shows a visual heatmap representation of active subagent concurrency directly in the widget header.
 - **Virtual Scrolling**: Added virtual scrolling window calculations for the agent widget, with scroll hints and scroll boundaries to handle large lists gracefully.
@@ -26,7 +28,7 @@
 - Added real TUI showcase media (GIF + MP4) generated from dist renderers: dashboard, top view, widget heatmap (`scripts/render-showcase-assets.sh`).
 
 ### Metrics
-- 989 tests, 56 test files.
+- 1020 tests, 56 test files.
 
 ---
 

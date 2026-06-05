@@ -575,7 +575,63 @@ npx vitest run test/render-metrics.test.ts test/agent-widget.test.ts test/widget
 
 ---
 
-## 11. Aanbevolen Benchmarks
+## 11. Prompt Compression Token Savings
+
+### Overzicht
+
+De `promptCompressionLevel` setting beïnvloedt de grootte van drie prompt-componenten die runtime worden gegenereerd:
+
+1. **Read-only warning** (READ_ONLY_WARNING): waarschuwing dat de agent geen bestanden mag aanpassen
+2. **Tool usage instructions** (TOOL_USAGE): instructies welke tools te gebruiken
+3. **Handoff prompt** (HANDOFF): het JSON handoff protocol dat agents aan het einde van hun response produceren
+
+### Benchmark Resultaten
+
+Gemeten via `.agents/autoresearch/measure-tokens.mjs` (self-contained, geen host dependencies):
+
+| Component | Minimal | Balanced | Aggressive | Aggressive vs Balanced |
+|---|---|---|---|---|
+| **Handoff prompt** | 2,334 chars / 584 tok | 971 chars / 243 tok | 118 chars / 30 tok | **−87.8%** |
+| **Explore readonly** | 1,159 chars / 290 tok | 802 chars / 201 tok | 571 chars / 143 tok | **−28.8%** |
+| **Plan readonly** | 1,188 chars / 297 tok | 831 chars / 208 tok | 600 chars / 150 tok | **−27.8%** |
+| **Analysis readonly** | 1,244 chars / 311 tok | 887 chars / 222 tok | 656 chars / 164 tok | **−26.0%** |
+| **Gecombineerd** | 5,925 chars / 1,482 tok | 3,491 chars / 873 tok | 1,945 chars / 487 tok | **−44.3%** |
+
+### Architectuur
+
+De compressie werkt via **lazy runtime regeneration**:
+
+1. `DEFAULT_AGENTS` bakt "balanced" prompts in op module-load tijd (backward compat)
+2. `READONLY_PROMPT_PARAMS` slaat de ruwe parameters op per built-in agent (Explore, Plan, Analysis)
+3. `buildAgentPrompt()` controleert bij elke agent spawn of:
+   - De agent `isDefault` is
+   - Er params beschikbaar zijn in `READONLY_PROMPT_PARAMS`
+   - Het compression level verschilt van "balanced"
+4. Zo ja → `createReadOnlyPrompt(params, level)` wordt aangeroepen met het actieve level
+5. Custom agents met `prompt_compression` frontmatter overschrijven de globale setting via `agentConfig.promptCompressionLevel ?? getPromptCompressionLevel()`
+
+### Performance Impact
+
+- **Token besparing per agent spawn**: 487 tokens (aggressive) vs 873 tokens (balanced) = **386 tokens minder per agent**
+- **Overhead van lazy regeneration**: ~0.01ms per agent (string concatenatie, geen I/O)
+- **Geen extra geheugen**: prompts worden niet gecached, opnieuw gegenereerd per spawn
+
+### Wanneer aggressive gebruiken
+
+- Achtergrond agents die niet door mensen worden gelezen
+- Bulk spawns (>10 agents tegelijk)
+- Sessies met beperkte token budgetten
+- Agents met eenvoudige taken (zoeken, tellen)
+
+### Wanneer minimal gebruiken
+
+- Agents die complexe beslissingen moeten nemen
+- Eerste keer dat een nieuwe agent type wordt gebruikt
+- Debugging sessies waar instructie-kwaliteit kritiek is
+
+---
+
+## 12. Aanbevolen Benchmarks
 
 Voor het valideren van performance veranderingen:
 

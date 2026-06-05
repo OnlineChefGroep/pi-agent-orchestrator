@@ -98,6 +98,10 @@ examples/agents/        Example agent definition files
 - **No `any` suppression needed** — `noExplicitAny` is off in Biome config
 - **Memory heap**: `NODE_OPTIONS='--max-old-space-size=4096'` set on build/test/typecheck scripts
 
+## Prompt Compression
+
+The `promptCompressionLevel` setting (`minimal` | `balanced` | `aggressive`) controls system prompt verbosity. Affects read-only warnings, tool usage instructions, and handoff templates. Per-agent override via `prompt_compression` frontmatter directive. Lazy runtime regeneration via `READONLY_PROMPT_PARAMS` in `default-agents.ts`. Precedence: per-agent frontmatter > global setting > default `"balanced"`.
+
 ## Common Pitfalls
 
 1. **Peer deps not installed.** This extension cannot run without the Pi host packages. For local development, link them via `npm link` or ensure they're in the GitHub Packages registry.
