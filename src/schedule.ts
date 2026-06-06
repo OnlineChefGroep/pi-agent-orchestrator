@@ -134,6 +134,7 @@ export class SubagentScheduler {
           }
         }
       } catch (err) {
+        // CVE-005 FIX: Validate input before building
         errors.push(err instanceof Error ? err.message : String(err));
       }
     }
@@ -206,13 +207,13 @@ export class SubagentScheduler {
   /** Toggle / mutate a job. Re-arms based on the new `enabled` state. */
   async updateJob(id: string, patch: Partial<ScheduledSubagent>): Promise<ScheduledSubagent | undefined> {
     // CVE-005 FIX: Enforce bounds on updates to prevent bypassing size limits
-    if (patch.name !== undefined && patch.name.length > MAX_NAME_LENGTH) {
+    if (patch.name !== undefined && (typeof patch.name !== 'string' || patch.name.length > MAX_NAME_LENGTH)) {
       throw new Error(`Schedule name must be <= ${MAX_NAME_LENGTH} characters`);
     }
-    if (patch.description !== undefined && patch.description.length > MAX_DESCRIPTION_LENGTH) {
+    if (patch.description !== undefined && (typeof patch.description !== 'string' || patch.description.length > MAX_DESCRIPTION_LENGTH)) {
       throw new Error(`Description must be <= ${MAX_DESCRIPTION_LENGTH} characters`);
     }
-    if (patch.prompt !== undefined && patch.prompt.length > MAX_PROMPT_SIZE) {
+    if (patch.prompt !== undefined && (typeof patch.prompt !== 'string' || patch.prompt.length > MAX_PROMPT_SIZE)) {
       throw new Error(`Prompt must be <= ${MAX_PROMPT_SIZE} characters`);
     }
 
