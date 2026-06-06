@@ -172,9 +172,15 @@ export class AgentWidget {
   /** Get the agents for the current scroll page. */
   private getVisibleWindow(agents: AgentRecord[]): AgentRecord[] {
     // Categorize agents by display priority: running first, then queued, then finished.
-    const running = agents.filter(a => a.status === "running");
-    const queued = agents.filter(a => a.status === "queued");
-    const finished = agents.filter(a => a.status !== "running" && a.status !== "queued");
+    const running: AgentRecord[] = [];
+    const queued: AgentRecord[] = [];
+    const finished: AgentRecord[] = [];
+    for (let i = 0; i < agents.length; i++) {
+      const a = agents[i];
+      if (a.status === "running") running.push(a);
+      else if (a.status === "queued") queued.push(a);
+      else finished.push(a);
+    }
 
     // Estimate lines per agent: running=2, queued=1, finished=1.
     // Build flat line estimate array.
@@ -271,7 +277,11 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
         pageCount: this.maxPages,
       });
     } finally {
-      const activeAgents = allAgents.filter(a => a.status === "running" || a.status === "queued").length;
+      let activeAgents = 0;
+      for (let i = 0; i < allAgents.length; i++) {
+        const a = allAgents[i];
+        if (a.status === "running" || a.status === "queued") activeAgents++;
+      }
       this.renderMetrics.record(performance.now() - renderStart, activeAgents);
     }
   }

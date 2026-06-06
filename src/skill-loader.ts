@@ -87,6 +87,7 @@ function buildRootIndex(root: string): RootSkillIndex | undefined {
 }
 
 export function preloadSkills(skillNames: string[], cwd: string): PreloadedSkill[] {
+  if (skillNames.length === 0) return [];
   // Shared context: caches are lazily built on first access and reused
   // across all skill names, eliminating redundant readdirSync calls while
   // preserving early-exit (roots beyond the first match are never visited).
@@ -95,10 +96,12 @@ export function preloadSkills(skillNames: string[], cwd: string): PreloadedSkill
     dirEntries: new Map(),
   };
 
-  return skillNames.map((name) => ({
-    name,
-    content: loadSkillContent(name, cwd, ctx),
-  }));
+  const results: PreloadedSkill[] = [];
+  for (let i = 0; i < skillNames.length; i++) {
+    const name = skillNames[i];
+    results.push({ name, content: loadSkillContent(name, cwd, ctx) });
+  }
+  return results;
 }
 
 function getSkillRoots(cwd: string): string[] {

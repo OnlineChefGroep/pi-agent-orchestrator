@@ -568,7 +568,13 @@ export class AgentDashboard implements Component {
       this.requestRender();
     } else if (matchesKey(data, "w") || matchesKey(data, "shift+w")) {
       const targets = this.selectedIds.size > 0
-        ? this.agents.filter((a) => this.selectedIds.has(a.id))
+        ? (() => {
+            const res: import("../types.js").AgentRecord[] = [];
+            for (let i = 0; i < this.agents.length; i++) {
+              if (this.selectedIds.has(this.agents[i].id)) res.push(this.agents[i]);
+            }
+            return res;
+          })()
         : rec ? [rec] : [];
 
       if (targets.length > 0 && this.options.onSwarmAction) {
@@ -768,7 +774,11 @@ export class AgentDashboard implements Component {
     this.dirty = false;
 
     // Record render timing with active agent context.
-    const activeAgents = this.agents.filter(a => a.status === "running" || a.status === "queued").length;
+    let activeAgents = 0;
+    for (let i = 0; i < this.agents.length; i++) {
+      const a = this.agents[i];
+      if (a.status === "running" || a.status === "queued") activeAgents++;
+    }
     this.renderMetrics.record(performance.now() - renderStart, activeAgents);
 
     return lines;

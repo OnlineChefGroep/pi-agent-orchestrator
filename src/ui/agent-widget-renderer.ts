@@ -153,12 +153,15 @@ function renderFinishedLine(a: AgentRecord, activity: AgentActivity | undefined,
 }
 
 export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
-  const running = options.agents.filter(a => a.status === "running");
-  const queued = options.agents.filter(a => a.status === "queued");
-  const finished = options.agents.filter(a =>
-    a.status !== "running" && a.status !== "queued" && a.completedAt
-    && options.shouldShowFinished(a.id, a.status),
-  );
+  const running: AgentRecord[] = [];
+  const queued: AgentRecord[] = [];
+  const finished: AgentRecord[] = [];
+  for (let i = 0; i < options.agents.length; i++) {
+    const a = options.agents[i];
+    if (a.status === "running") running.push(a);
+    else if (a.status === "queued") queued.push(a);
+    else if (a.completedAt && options.shouldShowFinished(a.id, a.status)) finished.push(a);
+  }
 
   const hasActive = running.length > 0 || queued.length > 0;
   const hasFinished = finished.length > 0;
@@ -218,7 +221,9 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
       );
     } else {
       // Individual lines for small batches
-      for (const a of queued.filter((q) => q.type === key)) {
+      for (let i = 0; i < queued.length; i++) {
+        const a = queued[i];
+        if (a.type !== key) continue;
         queuedLines.push(
           truncate(`${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("dim", group.name)}  ${theme.fg("muted", a.description)}`),
         );
