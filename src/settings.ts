@@ -97,6 +97,7 @@ export interface SettingsAppliers {
   setDashboardRefreshInterval: (interval: number) => void;
   setSessionMaxSpawns: (n: number) => void;
   setSessionMaxTurns: (n: number) => void;
+  setPromptCompressionLevel: (level: PromptCompressionLevel) => void;
 }
 
 /** Emit callback — a subset of `pi.events.emit` to keep helpers testable. */
@@ -247,6 +248,7 @@ export function applySettings(s: SubagentsSettings, appliers: SettingsAppliers):
   if (typeof s.dashboardRefreshInterval === "number") appliers.setDashboardRefreshInterval(s.dashboardRefreshInterval);
   if (typeof s.sessionMaxSpawns === "number") appliers.setSessionMaxSpawns(s.sessionMaxSpawns);
   if (typeof s.sessionMaxTurns === "number") appliers.setSessionMaxTurns(s.sessionMaxTurns);
+  if (s.promptCompressionLevel) appliers.setPromptCompressionLevel(s.promptCompressionLevel);
 }
 
 /**
