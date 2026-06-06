@@ -5,9 +5,13 @@
 - Top findings (bloat / completeness / duplicates / gaps)
   - `showcase/SKILL.md`: Missing explicit `trigger` in frontmatter.
   - `testing/SKILL.md`: Missing explicit `trigger` in frontmatter.
+  - Showcase execution documentation indicated `showcase:tmux` functionality was not correctly wired into `package.json` or `showcase-all.sh`.
 - Actions taken (with connector commit/PR links)
   - Added `trigger: /showcase` to `.agents/skills/showcase/SKILL.md`.
   - Added `trigger: /test` to `.agents/skills/testing/SKILL.md`.
+  - Exposed `showcase:tmux` in `package.json` pointing to `scripts/showcase-tmux-recorder.sh`.
+  - Added Tmux recording execution as the "T" step in `scripts/showcase-all.sh` (skipping by default with `SKIP_TMUX=1`).
+  - Fixed a Biome template literal violation in `test/test-prompt-compression-programmatic.ts`.
 - Proposed next optimizations (prioritized, with impact)
   - Standardize all SKILL.md frontmatters to require `name`, `trigger`, and `description` to improve deterministic tool routing.
   - Add a skill for explicitly analyzing Pi Orchestra health metrics.
@@ -22,10 +26,12 @@
   - None at this time.
 - Integration wins with skill portfolio
   - The addition of standard triggers will make it easier for Orchestra UI/TUI commands to unambiguously map `/test` and `/showcase` invocations to the respective agents.
+  - Restoring the Tmux pipeline allows developers to seamlessly generate realistic hero videos as documented in `showcase/SKILL.md`.
 
 ### Cross Insights & Trends
 - Patterns noticed over last days/weeks
   - Previous optimizations (from `.jules/overdrive.md`) show a heavy focus on TUI rendering performance and eliminating O(N^2) loops.
+  - Showcase scripts are very feature-rich but heavily bash-based and require manual string manipulation to configure correctly across multiple files.
 - High-leverage opportunities connecting both systems
   - Connecting the `vitest` benchmark outputs to an agent-memory graphify component could allow long-term tracking of Pi Orchestra degradation over time.
 - Self-reflection on Jules effectiveness
@@ -46,3 +52,5 @@
 
 ### Commit / PR Summary
 - `update-skill-triggers`: Added missing `trigger` attributes to showcase and testing skills for robust Orchestra routing.
+- `chore(scripts): add showcase:tmux npm script`: Addressed missing `showcase:tmux` pipeline scripts in `package.json` and `showcase-all.sh`.
+- `lint`: Fixed biome template literal formatting warning.
