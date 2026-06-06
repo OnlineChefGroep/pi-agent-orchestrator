@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#
+# pre-push — runs the full test suite before pushing.
+# 100% local, no external dependencies.
+#
+# Skip: git push --no-verify
+#
+
+set -e
+
+echo "pre-push: running full test suite..."
+START=$(date +%s)
+
+if ! npm test; then
+	echo ""
+	echo "pre-push: ❌ tests failed. Fix failures before pushing."
+	echo "  (Tip: git push --no-verify to bypass)"
+	exit 1
+fi
+
+ELAPSED=$(($(date +%s) - START))
+echo "pre-push: ✅ all tests passed (${ELAPSED}s). Pushing."

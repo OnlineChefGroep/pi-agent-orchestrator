@@ -7,10 +7,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { OrchestrationMode } from "./agent-registry.js";
-import type { JoinMode } from "./types.js";
+import type { JoinMode, PromptCompressionLevel } from "./types.js";
 
 /** Prompt compression level: controls verbosity of system prompts. */
-export type PromptCompressionLevel = "minimal" | "balanced" | "aggressive";
+export type { PromptCompressionLevel } from "./types.js";
 
 export interface SubagentsSettings {
   maxConcurrent?: number;

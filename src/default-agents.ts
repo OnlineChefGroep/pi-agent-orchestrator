@@ -5,8 +5,7 @@
  */
 
 import { READ_ONLY_TOOLS } from "./readonly-helpers.js";
-import type { PromptCompressionLevel } from "./settings.js";
-import type { AgentConfig } from "./types.js";
+import type { AgentConfig, PromptCompressionLevel } from "./types.js";
 
 /** Raw params stored for lazy read-only prompt regeneration at runtime. */
 export interface ReadOnlyPromptParams {

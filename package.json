@@ -55,6 +55,7 @@
     "bench:all": "NODE_OPTIONS='--max-old-space-size=4096' vitest run test/widget-render-perf.test.ts test/dashboard-render-perf.test.ts test/spawn-latency-bench.test.ts test/spawn-latency-e2e-bench.test.ts --reporter=verbose",
     "lint": "biome check src/ test/ scripts/",
     "lint:fix": "biome check --write --unsafe src/ test/ scripts/",
+    "setup:hooks": "bash scripts/setup-git-hooks.sh",
     "showcase": "bash scripts/showcase-all.sh",
     "showcase:ci": "bash scripts/render-showcase-assets.sh --fidelity inspect",
     "showcase:live": "bash scripts/capture-live-showcase.sh",

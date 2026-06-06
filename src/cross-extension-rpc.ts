@@ -146,12 +146,20 @@ export function configureRateLimit(config: RateLimitConfig): void {
   }
 }
 
+const MAX_RATE_LIMIT_ENTRIES = 1000;
+
 function checkRateLimit(extensionId: string, operation: string): boolean {
+  if (typeof extensionId !== "string" || extensionId.length > 200) return false;
+
   const now = Date.now();
   const key = `${extensionId}:${operation}`;
   const entry = rateLimitMap.get(key);
 
   if (!entry || now > entry.resetAt) {
+    if (rateLimitMap.size >= MAX_RATE_LIMIT_ENTRIES) {
+      const oldestKey = rateLimitMap.keys().next().value;
+      if (oldestKey) rateLimitMap.delete(oldestKey);
+    }
     rateLimitMap.set(key, { count: 1, resetAt: now + rateLimitWindow });
     return true;
   }

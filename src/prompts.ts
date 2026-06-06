@@ -4,8 +4,7 @@
 
 import { createReadOnlyPrompt, READONLY_PROMPT_PARAMS } from "./default-agents.js";
 import { buildHandoffPrompt } from "./handoff.js";
-import type { PromptCompressionLevel } from "./settings.js";
-import type { AgentConfig, EnvInfo } from "./types.js";
+import type { AgentConfig, EnvInfo, PromptCompressionLevel } from "./types.js";
 
 /** Extra sections to inject into the system prompt (memory, skills, etc.). */
 export interface PromptExtras {

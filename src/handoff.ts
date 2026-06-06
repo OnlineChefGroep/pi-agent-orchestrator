@@ -1,5 +1,5 @@
 import { logger } from "./logger.js";
-import type { PromptCompressionLevel } from "./settings.js";
+import type { PromptCompressionLevel } from "./types.js";
 /**
  * handoff.ts — Structured handoff protocol for chain-of-agents.
  *
@@ -243,7 +243,6 @@ export function parseHandoff(text: string): AgentHandoff | null {
   }
 
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    // Replace console.warn with central logger
     logger.warn("Parsed JSON is not an object");
     return null;
   }

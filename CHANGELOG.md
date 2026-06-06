@@ -9,6 +9,7 @@
 - **README badges**: npm version badge, CI status badge, license badge. Dual install instructions (pi extension + standalone npm).
 - **License audit**: Verified MIT license consistency across all source files. No proprietary markings found.
 - **Verification tests**: Added `test/release-verification.test.ts` covering npm pack output, license headers, and registry URL correctness.
+- **Docs structure**: Moved HOWTO-perf.md, PERFORMANCE.md, VERVOLG_PLAN.md to docs/. Created docs/index.md master documentation index. Added 18 missing module descriptions to docs/architecture.md.
 
 ## v0.11.0 (2026-06-06)
 
@@ -50,15 +51,6 @@
 - **docs/api-reference.md** documents the new `PromptCompressionLevel` type and `handoff` / `prompt_compression` frontmatter directives.
 - **docs/architecture.md** updated with the new compression flow in the module map.
 - Added real TUI showcase media (GIF + MP4) generated from dist renderers: dashboard, top view, widget heatmap (`scripts/render-showcase-assets.sh`).
-
-### Showcase
-- **Tmux-based showcase pipeline**: New `scripts/showcase-tmux-recorder.sh` orchestrates a full tmux session with `asciinema rec`, 7-scene choreography (`showcase-tmux-scenes.mjs`), per-character typing, ANSI crossfade transitions, and calm pacing. ffmpeg compresses ~133s recording to ~60s with `setpts=0.45*PTS`. Optional drawtext title card + scene labels (auto-detected; `--no-titles` to skip).
-- **Showcase skill**: New `.agents/skills/showcase/SKILL.md` documents all 5 showcase pipelines (programmatic, tmux, live, remotion, vhs) with asset map, env vars, and troubleshooting.
-- **README cleanup**: Stripped showcase section to image table only — removed all npm commands and pipeline explanations. Showcase is now documented exclusively in the skill.
-- **Removed `docs/SHOWCASE.md`**: Fully replaced by the showcase skill.
-
-### Fixes
-- **env.test.ts**: Fixed pre-existing test failure caused by herd worktree setup (bare repo). The `detects git repo in current project` test now creates a temp git repo instead of relying on `process.cwd()`, following the same pattern as the existing `returns branch name` test.
 
 ### Tests
 - **1006 tests** across **57 test files** (up from 989 / 56). Added 16 new edge-case tests for boolean parsing in custom-agents.

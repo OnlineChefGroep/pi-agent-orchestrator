@@ -10,8 +10,7 @@
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getAgentConfig, getDefaultAgentNames, getUserAgentNames, registerAgents } from "./agent-types.js";
 import { loadCustomAgents } from "./custom-agents.js";
-import type { PromptCompressionLevel } from "./settings.js";
-import type { JoinMode } from "./types.js";
+import type { JoinMode, PromptCompressionLevel } from "./types.js";
 
 // ---- Join mode configuration ----
 
