@@ -15,7 +15,6 @@ const UNSAFE_NAME_PATTERN = /[/\\]|\.\.|[\x00-\x1F]/;
 const MAX_NAME_LENGTH = 100;
 const MAX_PROMPT_LENGTH = 100000;  // 100KB
 const MAX_TOOLS_COUNT = 100;
-
 /**
  * Validate an agent config for security issues.
  * Returns array of error messages (empty if valid).
@@ -26,48 +25,38 @@ const MAX_TOOLS_COUNT = 100;
  */
 function validateAgentConfig(name: string, config: Partial<AgentConfig>): string[] {
   const errors: string[] = [];
-  
   // Validate name
   if (!name || typeof name !== 'string') {
     errors.push('Agent name is required');
   } else if (name.length > MAX_NAME_LENGTH) {
     errors.push(`Agent name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
-  } else if (UNSAFE_NAME_PATTERN.test(name)) {
-    errors.push(`Agent name contains unsafe characters: ${name}`);
-  }
-  
+} else if (UNSAFE_NAME_PATTERN.test(name)) errors.push(`Agent name contains unsafe characters: ${name}`);
   // Prevent overriding built-in agents with wildcard tools
   const builtinNames = new Set(getDefaultAgentNames());
   if (builtinNames.has(name) && config.builtinToolNames?.includes('*')) {
     errors.push(`Cannot override built-in agent "${name}" with wildcard (*) tools`);
   }
-  
   // Validate system prompt length only (no injection pattern check)
   if (config.systemPrompt && config.systemPrompt.length > MAX_PROMPT_LENGTH) {
     errors.push(`System prompt exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
   }
-
   // Validate description length
   if (config.description && config.description.length > MAX_PROMPT_LENGTH) {
     errors.push(`Description exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
   }
-
   // Validate display name length
   if (config.displayName && config.displayName.length > MAX_NAME_LENGTH) {
     errors.push(`Display name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
   }
-  
   // Validate tool names
   if (config.builtinToolNames) {
     if (config.builtinToolNames.length > MAX_TOOLS_COUNT) {
       errors.push(`Too many tools specified (max ${MAX_TOOLS_COUNT})`);
     }
-
     const hasLongTool = config.builtinToolNames.some(t => t.length > MAX_NAME_LENGTH);
     if (hasLongTool) {
       errors.push(`Tool name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
     }
-    
     // CVE-011 FIX: Emit telemetry for unknown tool names (don't block, just log)
     const knownTools = new Set([...BUILTIN_TOOL_NAMES, '*']);
     const unknownTools = config.builtinToolNames.filter(t => !knownTools.has(t));
@@ -75,21 +64,17 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
       emitTelemetry("agent:unknown-tools", { name, tools: unknownTools });
     }
   }
-  
   if (config.disallowedTools) {
     if (config.disallowedTools.length > MAX_TOOLS_COUNT) {
       errors.push(`Too many disallowed tools specified (max ${MAX_TOOLS_COUNT})`);
     }
-
     const hasLongDisallowedTool = config.disallowedTools.some(t => t.length > MAX_NAME_LENGTH);
     if (hasLongDisallowedTool) {
       errors.push(`Disallowed tool name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
     }
   }
-
   return errors;
 }
-
 /**
  * Scan for custom agent .md files from multiple locations.
  *
@@ -108,17 +93,14 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
 export async function loadCustomAgents(cwd: string): Promise<Map<string, AgentConfig>> {
   const globalDir = join(getAgentDir(), "agents");
   const projectDir = join(cwd, ".pi", "agents");
-
   const agents = new Map<string, AgentConfig>();
   await loadFromDir(globalDir, agents, "global");   // lower priority
   await loadFromDir(projectDir, agents, "project");  // higher priority (overwrites)
   return agents;
 }
-
 /** Load agent configs from a directory into the map. */
 async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source: "project" | "global"): Promise<void> {
   if (!existsSync(dir)) return;
-
   let files: string[];
   try {
     const dirents = await readdir(dir, { withFileTypes: true });
@@ -128,19 +110,15 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
   } catch {
     return;
   }
-
   await Promise.all(files.map(async (file) => {
     const name = basename(file, ".md");
-
     let content: string;
     try {
       content = await readFile(join(dir, file), "utf-8");
     } catch {
       return;
     }
-
     const { frontmatter: fm, body } = parseFrontmatter<Record<string, unknown>>(content);
-
     const config: AgentConfig = {
       name,
       displayName: parseString(fm.display_name),
@@ -162,7 +140,6 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
       enabled: fm.enabled !== false,  // default true; explicitly false disables
       source,
     };
-
     // CVE-002 FIX: Validate agent config before adding
     const validationErrors = validateAgentConfig(name, config);
     if (validationErrors.length > 0) {
