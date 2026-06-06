@@ -2,6 +2,20 @@
 
 Thank you for contributing. This document covers build, test, lint, and PR workflow.
 
+This project is a **pi extension** — it runs inside a [pi coding agent](https://github.com/OnlineChefGroep) host, not standalone. The three `@earendil-works/pi-*` packages are the host platform and are never direct dependencies. See the [README](README.md) for installation options.
+
+Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
+
+---
+
+## First-Time Contributors
+
+New to the project? Start here:
+
+1. Read [AGENTS.md](AGENTS.md) for architecture, common mistakes, and conventions.
+2. Look for issues labeled **good first issue** in the [issue tracker](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues).
+3. Run `npm run setup:hooks` after clone to enable pre-commit checks.
+
 ---
 
 ## Development Environment
@@ -16,6 +30,9 @@ Thank you for contributing. This document covers build, test, lint, and PR workf
 ```bash
 # Install dependencies
 npm install
+
+# Optional: install local git hooks (biome + tsc on commit, full tests on push)
+npm run setup:hooks
 
 # TypeScript typecheck
 npm run typecheck
@@ -105,9 +122,40 @@ npm test -- --coverage
 1. **Branch:** Create a feature branch from `main`.
 2. **Commits:** Use [Conventional Commits](https://www.conventionalcommits.org/) style:
    - `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
-3. **Pre-commit:** Ensure `npm run typecheck`, `npm run lint`, and `npm test` pass (Windows schedule flakiness excepted).
+3. **Pre-commit:** Ensure `npm run typecheck`, `npm run lint`, and `npm test` pass (Windows schedule flakiness excepted). Git hooks handle this automatically if installed.
 4. **PR description:** Reference any related issues or VERVOLG_PLAN items.
 5. **Review:** All PRs require at least one review before merge.
+
+---
+
+## Git Hooks (Optional)
+
+The project includes local git hooks that run checks automatically:
+
+| Hook | When | What it runs |
+|---|---|---|
+| `pre-commit` | Before each `git commit` | Biome lint with auto-fix on staged `.ts/.js/.sh` files + full `tsc --noEmit` typecheck |
+| `pre-push` | Before each `git push` | `npm test` (full test suite) |
+
+**Install:** `bash scripts/setup-git-hooks.sh` or `npm run setup:hooks` (run once after clone)
+
+**Skip:** `git commit --no-verify` or `git push --no-verify`
+
+The hooks live in `scripts/git-hooks/` and are copied to `.git/hooks/` during setup. Since `.git/hooks/` is not version-controlled, the setup script ensures new clones can enable them with one command.
+
+---
+
+## Common Pitfalls
+
+Before contributing, read [AGENTS.md → Common Mistakes](AGENTS.md#common-mistakes) for the 15-item checklist of patterns that have caused bugs or wasted review cycles in this codebase. Highlights:
+
+- YAML booleans from `js-yaml` are strings — use the parsing helpers in `src/custom-agents.ts`
+- ESM imports need `.js` extensions even in TypeScript
+- Tests live in `test/`, not `tests/`
+- The `pi-*` peer packages are never direct dependencies
+- Biome uses double quotes; formatter is disabled
+
+---
 
 ---
 
@@ -126,6 +174,10 @@ If you add new settings, update:
 - `docs/api-reference.md` — add to the public API settings documentation
 
 ---
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
 
 ## Questions?
 

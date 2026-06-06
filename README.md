@@ -9,6 +9,10 @@
 
 Bring autonomous sub-agents to Pi. Spawn specialized agents, enforce strict budgets, execute structured handoffs, and manage agent swarms. All monitored through a high-density, interactive TUI dashboard. 
 
+[![npm version](https://img.shields.io/npm/v/@onlinechefgroep/pi-agent-orchestrator)](https://www.npmjs.com/package/@onlinechefgroep/pi-agent-orchestrator)
+[![CI](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **STATUS:** ACTIVE
 **VERSION:** 0.11.0
 **RUNTIME:** Node.js >= 22
@@ -19,10 +23,16 @@ Bring autonomous sub-agents to Pi. Spawn specialized agents, enforce strict budg
 
 ## // INSTALLATION
 
-Execute the following command to install the extension into the Pi environment:
+### Pi Extension (recommended)
 
 ```bash
 pi install npm:@onlinechefgroep/pi-agent-orchestrator
+```
+
+### npm (standalone)
+
+```bash
+npm install @onlinechefgroep/pi-agent-orchestrator
 ```
 
 ---
@@ -422,8 +432,11 @@ The parent spawns the three analysts in parallel (via the swarm `w` hotkey or th
 ## // REFERENCE MATERIAL
 
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md)
-- **Security Audit**: [SECURITY_AUDIT_REPORT.md](docs/SECURITY_AUDIT_REPORT.md)
-- **Mitigation Verification**: [SECURITY_AUDIT_VERIFICATION_2026-05-23.md](docs/SECURITY_AUDIT_VERIFICATION_2026-05-23.md)
+- **Roadmap**: [ROADMAP.md](ROADMAP.md)
+- **Security Policy**: [SECURITY.md](SECURITY.md)
+- **Security Audit**: [docs/SECURITY_AUDIT_REPORT.md](docs/SECURITY_AUDIT_REPORT.md)
+- **Mitigation Verification**: [docs/SECURITY_AUDIT_VERIFICATION_2026-05-23.md](docs/SECURITY_AUDIT_VERIFICATION_2026-05-23.md)
+- **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 **LICENSE:** MIT — OnlineChef
 
