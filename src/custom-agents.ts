@@ -61,7 +61,13 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
     const knownTools = new Set([...BUILTIN_TOOL_NAMES, '*']);
     const unknownTools = config.builtinToolNames.filter(t => !knownTools.has(t));
     if (unknownTools.length > 0) {
-      emitTelemetry("agent:unknown-tools", { name, tools: unknownTools });
+      // Redact potentially sensitive tool names to prevent logging secrets
+      // We limit to 50 characters to prevent DOS, and use a safe substring approach
+      const sanitizedTools = unknownTools.map(t =>
+        typeof t === 'string' ? (t.length > 50 ? `${Array.from(t).slice(0, 50).join('')}...` : t) : '[INVALID_TYPE]'
+      );
+      const safeName = typeof name === 'string' ? Array.from(name).slice(0, MAX_NAME_LENGTH).join('') : String(name);
+      emitTelemetry("agent:unknown-tools", { name: safeName, tools: sanitizedTools });
     }
   }
   if (config.disallowedTools) {
@@ -145,15 +151,27 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
     // CVE-002 FIX: Validate agent config before adding
     const validationErrors = validateAgentConfig(name, config);
     if (validationErrors.length > 0) {
-      emitTelemetry("agent:validation-failed", { name, errors: validationErrors });
+      const safeName = typeof name === 'string' ? Array.from(name).slice(0, MAX_NAME_LENGTH).join('') : String(name);
+      // Redact sensitive payload content from error messages
+      // We log the type of error, but redact any appended untrusted data
+      const redactedErrors = validationErrors.map(e => {
+        // Strip out the user data which is typically appended after a colon
+        const colonIndex = e.indexOf(': ');
+        if (colonIndex !== -1) {
+          return `${e.substring(0, colonIndex)}: [REDACTED]`;
+        }
+        return e;
+      });
+      emitTelemetry("agent:validation-failed", { name: safeName, errors: redactedErrors });
       // Disable agent with validation errors (don't skip entirely - let user see it)
       config.enabled = false;
     }
 
     // Emit telemetry for every loaded agent with content hash
     const contentHash = hashContentSync(content);
+    const safeNameLoaded = typeof name === 'string' ? Array.from(name).slice(0, MAX_NAME_LENGTH).join('') : String(name);
     emitTelemetry("agent:loaded", { 
-      name, 
+      name: safeNameLoaded,
       source, 
       hash: contentHash, 
       enabled: config.enabled ?? true 
