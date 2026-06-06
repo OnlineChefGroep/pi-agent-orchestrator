@@ -203,36 +203,6 @@ export class SubagentScheduler {
     return ok;
   }
 
-  /** Toggle / mutate a job. Re-arms based on the new `enabled` state. */
-  async updateJob(id: string, patch: Partial<ScheduledSubagent>): Promise<ScheduledSubagent | undefined> {
-    // CVE-005 FIX: Enforce bounds on updates to prevent bypassing size limits
-    if (patch.name !== undefined && patch.name.length > MAX_NAME_LENGTH) {
-      throw new Error(`Schedule name must be <= ${MAX_NAME_LENGTH} characters`);
-    }
-    if (patch.description !== undefined && patch.description.length > MAX_DESCRIPTION_LENGTH) {
-      throw new Error(`Description must be <= ${MAX_DESCRIPTION_LENGTH} characters`);
-    }
-    if (patch.prompt !== undefined && patch.prompt.length > MAX_PROMPT_SIZE) {
-      throw new Error(`Prompt must be <= ${MAX_PROMPT_SIZE} characters`);
-    }
-
-    const store = this.requireStore();
-    const existing = store.get(id);
-    if (existing) {
-      // Validate bounds on the merged object to ensure updates don't bypass limits
-      const merged: NewJobInput = { ...existing, ...patch } as any;
-      const errors = this.validateScheduleInput(merged);
-      if (errors.length > 0) {
-        throw new Error(`Invalid schedule update: ${errors.join(', ')}`);
-      }
-    }
-    const updated = await store.update(id, patch);
-    if (!updated) return undefined;
-    this.unscheduleJob(id);
-    if (updated.enabled) await this.scheduleJob(updated);
-    this.emit({ type: "updated", job: updated });
-    return updated;
-  }
 
   /** Next-run time as ISO, or undefined if not currently armed. */
   getNextRun(jobId: string): string | undefined {
@@ -250,9 +220,7 @@ export class SubagentScheduler {
     }
     return undefined;
   }
-
   // ── Scheduling primitives ────────────────────────────────────────────
-
   private async scheduleJob(job: ScheduledSubagent): Promise<void> {
     const store = this.store;
     if (!store) return;
@@ -260,7 +228,7 @@ export class SubagentScheduler {
       if (job.scheduleType === "interval" && job.intervalMs) {
         // CVE-005 FIX: Cap interval at max 24 days to avoid setTimeout limits
         if (job.intervalMs > MAX_INTERVAL) {
-          logger.warn(`Interval ${job.intervalMs}ms exceeds max ${MAX_INTERVAL}ms; capping to ${MAX_INTERVAL}ms`);
+          console.warn(`[pi-subagents] Interval ${job.intervalMs}ms exceeds max ${MAX_INTERVAL}ms; capping to ${MAX_INTERVAL}ms`);
         }
         const interval = Math.min(job.intervalMs, MAX_INTERVAL);
         const t = setInterval(() => this.executeJob(job.id), interval);
@@ -473,4 +441,35 @@ export class SubagentScheduler {
     if (m[2] === "ms") return parseInt(m[1], 10);
     return parseInt(m[1], 10) * { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[m[2] as "s" | "m" | "h" | "d"];
   }
+  /** Toggle / mutate a job. Re-arms based on the new `enabled` state. */
+  async updateJob(id: string, patch: Partial<ScheduledSubagent>): Promise<ScheduledSubagent | undefined> {
+    // CVE-005 FIX: Enforce bounds on updates to prevent bypassing size limits
+    if (patch.name !== undefined && patch.name.length > MAX_NAME_LENGTH) {
+      throw new Error(`Schedule name must be <= ${MAX_NAME_LENGTH} characters`);
+    }
+    if (patch.description !== undefined && patch.description.length > MAX_DESCRIPTION_LENGTH) {
+      throw new Error(`Description must be <= ${MAX_DESCRIPTION_LENGTH} characters`);
+    }
+    if (patch.prompt !== undefined && patch.prompt.length > MAX_PROMPT_SIZE) {
+      throw new Error(`Prompt must be <= ${MAX_PROMPT_SIZE} characters`);
+    }
+
+    const store = this.requireStore();
+    const existing = store.get(id);
+    if (existing) {
+      // Validate bounds on the merged object to ensure updates don't bypass limits
+      const merged: NewJobInput = { ...existing, ...patch } as any;
+      const errors = this.validateScheduleInput(merged);
+      if (errors.length > 0) {
+        throw new Error(`Invalid schedule update: ${errors.join(', ')}`);
+      }
+    }
+    const updated = await store.update(id, patch);
+    if (!updated) return undefined;
+    this.unscheduleJob(id);
+    if (updated.enabled) await this.scheduleJob(updated);
+    this.emit({ type: "updated", job: updated });
+    return updated;
+  }
+
 }
