@@ -101,40 +101,66 @@ export class SubagentScheduler {
    * CVE-005 FIX: Validate schedule input bounds.
    * Returns array of error messages (empty if valid).
    */
-  private validateScheduleInput(input: NewJobInput): string[] {
+  private validateScheduleInput(input: Partial<NewJobInput> | NewJobInput, isUpdate: boolean = false): string[] {
     const errors: string[] = [];
     
     // Validate name
-    if (!input.name || typeof input.name !== 'string' || input.name.length > MAX_NAME_LENGTH) {
-      errors.push(`Schedule name is required and must be a string <= ${MAX_NAME_LENGTH} characters`);
+    if (input.name !== undefined) {
+      if (typeof input.name !== 'string' || input.name.length > MAX_NAME_LENGTH) {
+        errors.push(`Schedule name must be a string <= ${MAX_NAME_LENGTH} characters`);
+      }
+    } else if (!isUpdate) {
+      errors.push(`Schedule name is required`);
     }
     
     // Validate description
-    if (input.description !== undefined && (typeof input.description !== 'string' || input.description.length > MAX_DESCRIPTION_LENGTH)) {
-      errors.push(`Description must be a string <= ${MAX_DESCRIPTION_LENGTH} characters`);
+    if (input.description !== undefined) {
+      if (typeof input.description !== 'string' || input.description.length > MAX_DESCRIPTION_LENGTH) {
+        errors.push(`Description must be a string <= ${MAX_DESCRIPTION_LENGTH} characters`);
+      }
     }
     
     // Validate prompt size
-    if (!input.prompt || typeof input.prompt !== 'string' || input.prompt.length > MAX_PROMPT_SIZE) {
-      errors.push(`Prompt is required and must be a string <= ${MAX_PROMPT_SIZE} characters`);
+    if (input.prompt !== undefined) {
+      if (typeof input.prompt !== 'string' || input.prompt.length > MAX_PROMPT_SIZE) {
+        errors.push(`Prompt must be a string <= ${MAX_PROMPT_SIZE} characters`);
+      }
+    } else if (!isUpdate) {
+      errors.push(`Prompt is required`);
     }
     
     // Validate schedule format and bounds
-    if (typeof input.schedule !== 'string') {
-      errors.push('Schedule must be a string');
-    } else {
-      try {
-        const detected = SubagentScheduler.detectSchedule(input.schedule);
-        if (detected.type === 'interval' && detected.intervalMs) {
-          if (detected.intervalMs < MIN_INTERVAL) {
-            errors.push(`Interval ${detected.intervalMs}ms is below minimum ${MIN_INTERVAL}ms (1 minute)`);
+    if (input.schedule !== undefined) {
+      if (typeof input.schedule !== 'string') {
+        errors.push('Schedule must be a string');
+      } else {
+        try {
+          const detected = SubagentScheduler.detectSchedule(input.schedule);
+          if (detected.type === 'interval' && detected.intervalMs) {
+            if (detected.intervalMs < MIN_INTERVAL) {
+              errors.push(`Interval ${detected.intervalMs}ms is below minimum ${MIN_INTERVAL}ms (1 minute)`);
+            }
+            if (detected.intervalMs > MAX_INTERVAL) {
+              errors.push(`Interval ${detected.intervalMs}ms exceeds maximum ${MAX_INTERVAL}ms (~24.8 days)`);
+            }
           }
-          if (detected.intervalMs > MAX_INTERVAL) {
-            errors.push(`Interval ${detected.intervalMs}ms exceeds maximum ${MAX_INTERVAL}ms (~24.8 days)`);
-          }
+        } catch (err) {
+          errors.push(err instanceof Error ? err.message : String(err));
         }
-      } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err));
+      }
+    } else if (!isUpdate) {
+      errors.push(`Schedule is required`);
+    }
+
+    // Validate direct intervalMs bypass (e.g. from updates)
+    const intervalMs = (input as any).intervalMs;
+    if (intervalMs !== undefined) {
+      if (typeof intervalMs !== 'number') {
+        errors.push('Interval must be a number');
+      } else if (intervalMs < MIN_INTERVAL) {
+        errors.push(`Interval ${intervalMs}ms is below minimum ${MIN_INTERVAL}ms (1 minute)`);
+      } else if (intervalMs > MAX_INTERVAL) {
+        errors.push(`Interval ${intervalMs}ms exceeds maximum ${MAX_INTERVAL}ms (~24.8 days)`);
       }
     }
     
@@ -206,14 +232,9 @@ export class SubagentScheduler {
   /** Toggle / mutate a job. Re-arms based on the new `enabled` state. */
   async updateJob(id: string, patch: Partial<ScheduledSubagent>): Promise<ScheduledSubagent | undefined> {
     // CVE-005 FIX: Enforce bounds on updates to prevent bypassing size limits
-    if (patch.name !== undefined && patch.name.length > MAX_NAME_LENGTH) {
-      throw new Error(`Schedule name must be <= ${MAX_NAME_LENGTH} characters`);
-    }
-    if (patch.description !== undefined && patch.description.length > MAX_DESCRIPTION_LENGTH) {
-      throw new Error(`Description must be <= ${MAX_DESCRIPTION_LENGTH} characters`);
-    }
-    if (patch.prompt !== undefined && patch.prompt.length > MAX_PROMPT_SIZE) {
-      throw new Error(`Prompt must be <= ${MAX_PROMPT_SIZE} characters`);
+    const patchErrors = this.validateScheduleInput(patch, true);
+    if (patchErrors.length > 0) {
+      throw new Error(`Invalid schedule update: ${patchErrors.join(', ')}`);
     }
 
     const store = this.requireStore();
@@ -221,7 +242,7 @@ export class SubagentScheduler {
     if (existing) {
       // Validate bounds on the merged object to ensure updates don't bypass limits
       const merged: NewJobInput = { ...existing, ...patch } as any;
-      const errors = this.validateScheduleInput(merged);
+      const errors = this.validateScheduleInput(merged, false);
       if (errors.length > 0) {
         throw new Error(`Invalid schedule update: ${errors.join(', ')}`);
       }

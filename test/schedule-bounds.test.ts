@@ -41,7 +41,7 @@ describe("SubagentScheduler Bounds Checks", () => {
 
     await expect(
       scheduler.updateJob(job.id, { prompt: hugePrompt })
-    ).rejects.toThrow(/Prompt must be <= 50000 characters/);
+    ).rejects.toThrow(/Prompt must be a string <= 50000 characters/);
   });
 
   it("prevents updating a job with a name exceeding MAX_NAME_LENGTH", async () => {
@@ -57,6 +57,6 @@ describe("SubagentScheduler Bounds Checks", () => {
 
     await expect(
       scheduler.updateJob(job.id, { name: hugeName })
-    ).rejects.toThrow(/Schedule name must be <= 100 characters/);
+    ).rejects.toThrow(/Schedule name must be a string <= 100 characters/);
   });
 });
