@@ -75,7 +75,7 @@ function buildAgentList(
 
   for (let i = 0; i < count; i++) {
     const rand = Math.random();
-    let status: string;
+    let status: "running" | "queued" | "completed";
     if (rand < runPct) {
       status = "running";
     } else if (rand < runPct + queuedPct) {

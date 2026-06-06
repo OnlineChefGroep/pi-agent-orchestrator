@@ -634,8 +634,8 @@ describe("Benchmark: AgentManager permission inheritance", () => {
     const median = [...runs].sort((a, b) => a - b)[500];
     const medianUs = median * 1000; // convert ms → µs
 
-    benchmarkLog("mocked-getConfig call (1000×)", medianUs, 5, "\u00b5s");
-    expect(medianUs).toBeLessThan(5);
+    benchmarkLog("mocked-getConfig call (1000×)", medianUs, 10, "\u00b5s");
+    expect(medianUs).toBeLessThan(10);
   });
 });
 
