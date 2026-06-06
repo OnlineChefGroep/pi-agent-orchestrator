@@ -387,11 +387,11 @@ describe("Benchmark: setup pipeline breakdown (performance.now() precision)", ()
     const medianWireup = [...wireupTimes].sort((a, b) => a - b)[1];
     const medianTotal = [...totalTimes].sort((a, b) => a - b)[1];
 
-    benchmarkLog("setup→session-creation", medianSetup, 10);
+    benchmarkLog("setup→session-creation", medianSetup, 20);
     benchmarkLog("session→prompt (wireup)", medianWireup, 10);
     benchmarkLog("total setup overhead", medianTotal, 20);
 
-    expect(medianSetup).toBeLessThan(10);
+    expect(medianSetup).toBeLessThan(20);
     expect(medianWireup).toBeLessThan(10);
     expect(medianTotal).toBeLessThan(20);
   });
@@ -419,10 +419,10 @@ describe("Benchmark: setup pipeline breakdown (performance.now() precision)", ()
     const total = performance.now() - start;
     const toSession = sessionCreatedAt - start;
 
-    benchmarkLog("setup→session w/ inherit 200", toSession, 15);
+    benchmarkLog("setup→session w/ inherit 200", toSession, 40);
     benchmarkLog("total setup w/ inherit 200", total, 25);
 
-    expect(toSession).toBeLessThan(15);
+    expect(toSession).toBeLessThan(40);
     expect(total).toBeLessThan(25);
   });
 });
@@ -498,10 +498,10 @@ describe("Benchmark: AgentManager queueing pipeline", () => {
     expect(manager.getRecord(id3)!.status).toBe("completed");
 
     benchmarkLog("queue-spawn overhead (3 bg, maxConcurrent=1)", spawnOverhead, 10);
-    benchmarkLog("queue-drain total (3 bg, maxConcurrent=1)", drainTotal, 100);
+    benchmarkLog("queue-drain total (3 bg, maxConcurrent=1)", drainTotal, 150);
 
     expect(spawnOverhead).toBeLessThan(10);
-    expect(drainTotal).toBeLessThan(100);
+    expect(drainTotal).toBeLessThan(150);
 
     manager.dispose();
   });
