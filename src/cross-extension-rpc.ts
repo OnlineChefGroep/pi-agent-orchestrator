@@ -340,8 +340,7 @@ function auditedRpc<P extends { requestId: string }>(
     try {
       const out = fn(params);
       auth = out.auth;
-      const result = await out.result;
-      return result;
+      return await out.result;
     } catch (err: unknown) {
       if (err instanceof RpcError) {
         outcome = err.code === "RATE_LIMITED"

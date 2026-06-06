@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* jshint esversion: 11 */
 /**
  * Live terminal playback of dashboard / top / widget (dist renderers).
  * Record with: asciinema rec -c "node scripts/showcase-live-demo.mjs --auto"

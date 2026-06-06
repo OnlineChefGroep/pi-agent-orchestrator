@@ -47,7 +47,7 @@ When reading frontmatter via `js-yaml`, `handoff: true` is parsed as a JS string
 if (frontmatter.handoff) { /* runs for "false" string */ }
 
 // Do this — explicit parse with strict semantics
-handoff: parseBooleanWithDefault(fm.handoff, false),
+const handoff = parseBooleanWithDefault(fm.handoff, false);
 ```
 
 ### 2. ESM imports need explicit `.js` extensions
@@ -80,10 +80,10 @@ When mocking `AgentRecord` or similar types, include ALL required fields. `as an
 
 ```ts
 // Don't do this
-const mock = { id: "x" } as any;
+const badMock = { id: "x" } as any;
 
 // Do this
-const mock: AgentRecord = { id: "x", /* all required fields */ };
+const goodMock: AgentRecord = { id: "x", /* all required fields */ };
 ```
 
 ### 9. Benchmark tests use `toBeLessThan` thresholds, not `console.log`

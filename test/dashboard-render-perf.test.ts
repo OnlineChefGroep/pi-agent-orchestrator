@@ -243,12 +243,11 @@ describe("Benchmark: AgentDashboard.render() — normal view", () => {
     const manager = new MockManager();
     manager.agents = agents;
     const done = () => {};
-    const dash = new AgentDashboardClass(
+    return new AgentDashboardClass(
       tui,
       { manager, agentActivity: activity },
       done,
     );
-    return dash;
   }
 
   it("empty dashboard under 0.5ms", () => {

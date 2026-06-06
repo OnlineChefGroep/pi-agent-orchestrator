@@ -26,16 +26,18 @@ Dit document beschrijft de belangrijkste performance-architectuur beslissingen i
 ### Key code
 ```typescript
 // src/agent-manager.ts
-constructor(
-  onComplete?: OnAgentComplete,
-  maxConcurrent = DEFAULT_MAX_CONCURRENT,
-  onStart?: OnAgentStart,
-  onCompact?: OnAgentCompact,
-  cleanupTtlMs = 60_000, // ← default 60s
-) { ... }
+class AgentManager {
+  constructor(
+    onComplete?: OnAgentComplete,
+    maxConcurrent = DEFAULT_MAX_CONCURRENT,
+    onStart?: OnAgentStart,
+    onCompact?: OnAgentCompact,
+    cleanupTtlMs = 60_000, // ← default 60s
+  ) { /* ... */ }
 
-setCleanupTtl(ms: number): void {
-  this.cleanupTtlMs = Math.max(10_000, ms); // ← minimum floor
+  setCleanupTtl(ms: number): void {
+    this.cleanupTtlMs = Math.max(10_000, ms); // ← minimum floor
+  }
 }
 ```
 
@@ -130,27 +132,29 @@ De TUI is terminal-gebaseerd en heeft geen `requestAnimationFrame`. `queueMicrot
 
 ### Pattern (ook gebruikt in dashboard)
 ```typescript
-private requestRender(): void {
-  // 1. Rate limit
-  if (lastRenderTime > 0 && elapsed < MIN_RENDER_GAP_MS) {
-    if (!this.coalesceTimer && !this.renderPending) {
-      this.coalesceTimer = setTimeout(() => {
-        this.coalesceTimer = null;
-        this.lastRenderTime = 0;
-        this.requestRender(); // retry na window
-      }, MIN_RENDER_GAP_MS - elapsed);
+class Renderer {
+  private requestRender(): void {
+    // 1. Rate limit
+    if (lastRenderTime > 0 && elapsed < MIN_RENDER_GAP_MS) {
+      if (!this.coalesceTimer && !this.renderPending) {
+        this.coalesceTimer = setTimeout(() => {
+          this.coalesceTimer = null;
+          this.lastRenderTime = 0;
+          this.requestRender(); // retry na window
+        }, MIN_RENDER_GAP_MS - elapsed);
+      }
+      return;
     }
-    return;
+    // 2. Pending guard
+    if (this.renderPending) return;
+    this.renderPending = true;
+    // 3. Microtask
+    queueMicrotask(() => {
+      this.renderPending = false;
+      this.lastRenderTime = Date.now();
+      this.tui.requestRender();
+    });
   }
-  // 2. Pending guard
-  if (this.renderPending) return;
-  this.renderPending = true;
-  // 3. Microtask
-  queueMicrotask(() => {
-    this.renderPending = false;
-    this.lastRenderTime = Date.now();
-    this.tui.requestRender();
-  });
 }
 ```
 
@@ -165,14 +169,16 @@ Dashboard theme (colors + box chars) wordt gecached en alleen herberekend als de
 `getThemeColors()` en `getBoxChars()` doen ANSI-string constructie. Voor elke render (elke 200ms) zou dit overhead geven. Met caching is het O(1) lookup.
 
 ```typescript
-private getTheme(): DashboardTheme {
-  const currentStyle = getUiStyle();
-  if (this.cachedTheme && this.lastUiStyle === currentStyle) {
+class Dashboard {
+  private getTheme(): DashboardTheme {
+    const currentStyle = getUiStyle();
+    if (this.cachedTheme && this.lastUiStyle === currentStyle) {
+      return this.cachedTheme;
+    }
+    this.cachedTheme = getThemeColors();
+    this.lastUiStyle = currentStyle;
     return this.cachedTheme;
   }
-  this.cachedTheme = getThemeColors();
-  this.lastUiStyle = currentStyle;
-  return this.cachedTheme;
 }
 ```
 
@@ -265,13 +271,15 @@ De debounce in `debouncedUpdate()` voorkomt alleen dat `widget.update()` 20x wor
 ### Key code
 ```typescript
 // src/ui/agent-widget.ts
-debouncedUpdate(): void {
-  if (this.updateTimer) return;          // timer pending → skip
-  this.update();                          // immediate: eerste spawn
-  this.updateTimer = setTimeout(() => {    // coalesce volgende spawns
-    this.updateTimer = undefined;
-    this.update();
-  }, AgentWidget.SPAWN_BATCH_MS);          // 16ms
+class AgentWidget {
+  debouncedUpdate(): void {
+    if (this.updateTimer) return;          // timer pending → skip
+    this.update();                          // immediate: eerste spawn
+    this.updateTimer = setTimeout(() => {    // coalesce volgende spawns
+      this.updateTimer = undefined;
+      this.update();
+    }, AgentWidget.SPAWN_BATCH_MS);          // 16ms
+  }
 }
 ```
 
@@ -295,7 +303,7 @@ De data is live te bekijken via de `/perf` command in de dashboard.
 ### 10.1 RenderMetrics Class (`src/ui/render-metrics.ts`)
 
 ```typescript
-const metrics = new RenderMetrics(label: string, slowThresholdMs?: number);
+const metrics = new RenderMetrics("widget", 50);
 ```
 
 #### Publieke API

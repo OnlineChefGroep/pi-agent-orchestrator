@@ -32,8 +32,8 @@ async function removeLegacyFileLock(lockPath: string): Promise<void> {
 }
 
 export class ScheduleStore {
-  private filePath: string;
-  private lockPath: string;
+  private readonly filePath: string;
+  private readonly lockPath: string;
 
   private jobs = new Map<string, ScheduledSubagent>();
 

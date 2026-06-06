@@ -149,9 +149,9 @@ const RATE_LIMIT_WINDOW_MS = 1_000;
 export class SwarmCoordinator {
   private swarms = new Map<string, SwarmInternal>();
   private agentToSwarm = new Map<string, string>();
-  private deliverCb: SwarmDeliveryCallback;
-  private messageCb?: SwarmMessageCallback;
-  private defaultSwarmTimeout: number;
+  private readonly deliverCb: SwarmDeliveryCallback;
+  private readonly messageCb?: SwarmMessageCallback;
+  private readonly defaultSwarmTimeout: number;
 
   /** Global metrics aggregator. */
   private metrics: SwarmMetricsCollector;

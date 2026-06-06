@@ -30,7 +30,7 @@ function relTime(iso: string | undefined, now = Date.now()): string {
   const abs = Math.abs(diff);
   const future = diff > 0;
   
-  let timeStr = "";
+  let timeStr: string;
   if (abs < 60_000) timeStr = future ? "in <1m" : "<1m ago";
   else {
     const m = Math.round(abs / 60_000);
@@ -239,7 +239,7 @@ export async function showSchedulesMenu(
     padVisible("NEXT RUN", 18),
   ];
   
-  let headers = "";
+  let headers: string;
   if (uiStyle === "plain") {
     headers = headersList.join("   ");
   } else if (uiStyle === "retro") {

@@ -74,8 +74,8 @@ const RETRY_BASE_DELAY_MS = 500;
 export class GroupJoinManager {
   private groups = new Map<string, AgentGroup>();
   private agentToGroup = new Map<string, string>();
-  private deliverCb: DeliveryCallback;
-  private defaultGroupTimeout?: number;
+  private readonly deliverCb: DeliveryCallback;
+  private readonly defaultGroupTimeout?: number;
 
   constructor(
     deliverCb: DeliveryCallback,

@@ -231,13 +231,9 @@ function sanitizeForPrompt(text: string): string {
     .slice(0, 10000);
 }
 
-export function buildValidatorPrompt(...) {
+export function buildValidatorPrompt(agentOutput: string) {
   const safeOutput = sanitizeForPrompt(agentOutput);
-  return `Review the following agent output...
-...
-AGENT OUTPUT (sanitized):
-${safeOutput}
-...`;
+  return `Review the following agent output...\n...\nAGENT OUTPUT (sanitized):\n${safeOutput}\n...`;
 }
 ```
 
@@ -254,7 +250,7 @@ Schedule intervals and prompts have no upper bounds. Prompts are stored in plain
 **Vulnerable Code:**
 ```typescript
 // No validation of interval bounds
-const job = croner CronJob(expression, () => { ... });
+const job = new CronJob(expression, () => { /* ... */ });
 
 // Prompts stored in plain JSON
 await fs.writeFile(this.filePath, JSON.stringify(data, null, 2));
@@ -337,8 +333,11 @@ No session-level limits on total agent spawns, total turns across all agents, or
 let maxTurns = normalizeMaxTurns(options.maxTurns ?? agentConfig?.maxTurns ?? defaultMaxTurns);
 
 // No session spawn limit
-spawn(pi, ctx, type, prompt, options): string {
-  // No check: if (this.totalSessionSpawns > MAX_SPAWNS_PER_SESSION)
+class AgentManager {
+  spawn(pi: unknown, ctx: unknown, type: string, prompt: string, options: unknown): string {
+    // No check: if (this.totalSessionSpawns > MAX_SPAWNS_PER_SESSION)
+    return "id";
+  }
 }
 ```
 
@@ -351,7 +350,7 @@ class AgentManager {
   private totalSessionSpawns = 0;
   private totalSessionTurns = 0;
   
-  spawn(...) {
+  spawn(pi: unknown, ctx: unknown, type: string, prompt: string, options: unknown) {
     if (this.totalSessionSpawns >= MAX_SPAWNS_PER_SESSION) {
       throw new Error(`Session spawn limit reached (${MAX_SPAWNS_PER_SESSION})`);
     }
@@ -432,16 +431,19 @@ PID-based file locking is vulnerable to PID recycling attacks. If a process exit
 **Vulnerable Code:**
 ```typescript
 async function acquireLock(lockPath: string): Promise<void> {
-  try {
-    await fs.writeFile(lockPath, `${process.pid}`, { flag: "wx" });
-    return;
-  } catch (e: any) {
-    if (e.code === "EEXIST") {
-      const pid = parseInt(await fs.readFile(lockPath, "utf-8"), 10);
-      if (pid && !isProcessRunning(pid)) {
-        await fs.unlink(lockPath); // Race window here
-        continue;
+  while (true) {
+    try {
+      await fs.writeFile(lockPath, `${process.pid}`, { flag: "wx" });
+      return;
+    } catch (e: any) {
+      if (e.code === "EEXIST") {
+        const pid = parseInt(await fs.readFile(lockPath, "utf-8"), 10);
+        if (pid && !isProcessRunning(pid)) {
+          await fs.unlink(lockPath); // Race window here
+          continue;
+        }
       }
+      throw e;
     }
   }
 }

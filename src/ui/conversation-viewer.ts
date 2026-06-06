@@ -146,9 +146,9 @@ export class ConversationViewer implements Component {
       return `${th.fg("border", box.l)} ${body} ${th.fg("border", box.r)}`;
     };
 
-    let hrTop = "";
-    let hrBot = "";
-    let hrMid = "";
+    let hrTop: string;
+    let hrBot: string;
+    let hrMid: string;
     if (activeUiStyle === "plain") {
       hrTop = "-".repeat(width);
       hrBot = "-".repeat(width);

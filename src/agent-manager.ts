@@ -83,10 +83,10 @@ interface SpawnOptions {
 
 export class AgentManager {
   private agents = new Map<string, AgentRecord>();
-  private cleanupInterval: ReturnType<typeof setInterval>;
-  private onComplete?: OnAgentComplete;
-  private onStart?: OnAgentStart;
-  private onCompact?: OnAgentCompact;
+  private readonly cleanupInterval: ReturnType<typeof setInterval>;
+  private readonly onComplete?: OnAgentComplete;
+  private readonly onStart?: OnAgentStart;
+  private readonly onCompact?: OnAgentCompact;
   private maxConcurrent: number;
   private sessionLimits: SessionLimits = {};
   private sessionUsage = { spawnedAgents: 0, totalTurns: 0 };

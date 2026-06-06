@@ -404,7 +404,7 @@ it("passes through unknown tool names", () => {
 
 **Remediation Required:**
 ```typescript
-const KNOWN_TOOLS = new Set(['read', 'write', 'edit', 'bash', 'Agent', ...]);
+const KNOWN_TOOLS = new Set(["read", "write", "edit", "bash", "Agent", /* ... */]);
 
 function validateToolNames(tools: string[]): string[] {
   return tools.filter(tool => {

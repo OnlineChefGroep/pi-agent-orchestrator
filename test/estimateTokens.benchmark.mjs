@@ -1,3 +1,4 @@
+/* jshint esversion: 11 */
 import { estimateReduction } from "../src/compaction.js";
 
 const toolResult = (contentLength = 1000, toolName = "read") => ({

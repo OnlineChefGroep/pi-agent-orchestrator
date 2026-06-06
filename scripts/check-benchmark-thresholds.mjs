@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* jshint esversion: 11 */
 /**
  * check-benchmark-thresholds.mjs — CI threshold checker for render benchmarks.
  *

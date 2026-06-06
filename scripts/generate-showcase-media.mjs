@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* jshint esversion: 11 */
 /**
  * Generate asciicast recordings from real dashboard / top-view / widget renderers.
  * Output: $TMPDIR/showcase-*.cast — convert with agg + ffmpeg (see create_showcase.sh).

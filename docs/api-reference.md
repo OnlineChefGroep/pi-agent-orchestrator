@@ -409,7 +409,7 @@ Fork detached process from alternate module.
 
 **REQUEST:**
 ```ts
-{
+interface SpawnRequest {
   requestId: string;
   type: string;
   prompt: string;

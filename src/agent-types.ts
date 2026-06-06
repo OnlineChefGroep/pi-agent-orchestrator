@@ -96,7 +96,7 @@ const SAFE_FALLBACK_TOOL_NAMES: readonly string[] = READ_ONLY_TOOLS;
  * array is never mutated — a fresh array is always returned.
  *
  * Choice: normalization is applied at read-time in this module rather than at
- * load-time in {@link custom-agents.ts}. Reasons:
+ * load-time in `custom-agents.ts`. Reasons:
  *   1. The source AgentConfig keeps the user's literal request intact, which
  *      keeps frontmatter round-tripping honest and makes the wildcard a pure
  *      resolution-layer concern.
@@ -230,10 +230,9 @@ export function getToolNamesForType(type: string): string[] {
   const config = raw?.enabled === false ? undefined : raw;
   // Expand `*` to the full built-in list (audit A1). Falls back to a fresh
   // copy of BUILTIN_TOOL_NAMES when the agent omits the field entirely.
-  const names = config?.builtinToolNames?.length
+  return config?.builtinToolNames?.length
     ? normalizeBuiltinToolNames(config.builtinToolNames) ?? [...BUILTIN_TOOL_NAMES]
     : [...BUILTIN_TOOL_NAMES];
-  return names;
 }
 
 /**
@@ -310,7 +309,7 @@ function applyPartitionFilter(
  *
  * This is the main entry point for agent config resolution. It performs:
  * 1. Lookup of the agent config (custom agents override defaults)
- * 2. Parent permission inheritance via {@link PermissionUtils.applyParentRestrictions}
+ * 2. Parent permission inheritance via {@link applyParentRestrictions}
  * 3. Context-mode tool injection (if `useContextMode` is true and ctx module available)
  * 4. Partition-based tool filtering via {@link applyPartitionFilter}
  *
