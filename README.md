@@ -107,27 +107,20 @@ Output findings as a markdown list with severity (Critical / High / Medium / Low
 
 ---
 
-## // SHOWCASE (v0.11.0 TUI)
-
-Four pipelines (programmatic, live asciinema, Remotion hero, VHS). See [docs/SHOWCASE.md](docs/SHOWCASE.md).
+## // SHOWCASE
 
 | View | Demo |
 |------|------|
 | **Dashboard** (swarms, running cards, `?` help) | ![Dashboard](docs/images/showcase_dashboard.gif) |
 | **Top view** (`t` / `l` sort) | ![Top view](docs/images/showcase_top_view.gif) |
 | **Agent widget** (heatmap) | ![Widget](docs/images/showcase_widget.gif) |
+| **Terminal recording** (tmux + asciinema) | ![Tmux](docs/images/showcase_tmux.gif) |
 | **Live terminal** (asciinema capture) | ![Live](docs/images/showcase_live.gif) |
 | **VHS** (install + demo tape) | ![VHS](docs/images/showcase_vhs.gif) |
 
-**Hero video (Remotion when available, else programmatic):**
+**Hero video:**
 
 <video src="docs/images/dashboard_preview.mp4" controls width="100%"></video>
-
-```bash
-npm run showcase              # all four: C + A + B + D
-npm run showcase:ci           # CI-safe only
-SKIP_REMOTION=1 npm run showcase   # skip Remotion render
-```
 
 ---
 
@@ -225,6 +218,204 @@ npm run lint    # Code style enforcement
 | `w` | Inspect swarm topology |
 | `?` | Show overlay documentation |
 | `q` | Exit interface |
+
+---
+
+## // CHAIN OF AGENTS
+
+Compose multi-agent pipelines where one agent's structured output feeds the next. Each chain below lives in `.pi/agents/` as plain Markdown — no glue code, no orchestration scripts.
+
+### Example 1 — Research → Write → Review
+
+A three-step content pipeline: a read-only researcher hands off findings, a writer drafts the deliverable, and a reviewer validates the result.
+
+**Step 1 — Researcher** (read-only, handoff: true):
+
+```markdown
+---
+display_name: "Researcher"
+description: "Read-only research producing structured handoff"
+tools: read, grep, find
+handoff: true
+prompt_compression: balanced
+---
+
+Investigate the codebase and emit a structured handoff JSON with:
+- "task": what needs to be done
+- "files": affected file paths
+- "approach": recommended implementation strategy
+- "evidence": supporting code snippets
+
+End your response with the handoff JSON as the LAST thing in your response.
+```
+
+**Step 2 — Writer** (write-enabled, inherits researcher's context):
+
+```markdown
+---
+display_name: "Writer"
+description: "Implements the changes from researcher's handoff"
+tools: read, write, edit, bash
+inherit_context: true
+prompt_compression: minimal
+---
+
+You receive a structured handoff from a researcher. Implement the changes
+described in the handoff's "task" field, following the "approach" strategy.
+Use the "files" list to locate code. Validate your implementation compiles.
+```
+
+**Step 3 — Reviewer** (read-only, handoff: true):
+
+```markdown
+---
+display_name: "Reviewer"
+description: "Reviews implementation, produces sign-off handoff"
+tools: read, grep, find
+handoff: true
+prompt_compression: minimal
+---
+
+Review the implementation produced by the Writer agent. Emit a structured
+handoff with:
+- "verdict": "approve" | "request_changes"
+- "findings": issues found, if any
+- "evidence": file paths and line numbers
+- "nextSteps": remediation tasks for the Writer
+```
+
+**Spawn order:** `@Researcher investigate the auth middleware` → reviewer-style handoff → `@Writer` (receives handoff via context) → `@Reviewer`.
+
+### Example 2 — Test → Fix → Verify (CI Repair Loop)
+
+A bounded repair loop where the same fix attempts cycle until tests pass or the turn budget is exhausted. Compression levels matter here: tests need full context (minimal), the fix can be terse (balanced).
+
+**Step 1 — Test Runner** (read-only, minimal compression for full diagnostic detail):
+
+```markdown
+---
+display_name: "Test Runner"
+description: "Runs the test suite, reports failures"
+tools: read, bash
+prompt_compression: minimal
+---
+
+Run `npm test` and parse the output. For each failing test, capture:
+- test name and file path
+- expected vs actual
+- stack trace summary
+- any related source files (use grep)
+
+Return your findings as a regular assistant message. Do NOT attempt to fix.
+```
+
+**Step 2 — Fixer** (write-enabled, balanced compression for terse patching):
+
+```markdown
+---
+display_name: "Fixer"
+description: "Applies minimal patch based on test failures"
+tools: read, write, edit, bash
+inherit_context: true
+prompt_compression: balanced
+max_turns: 8
+---
+
+You receive a test failure report from Test Runner. Apply the smallest
+change that makes the failing test pass. Re-run only the affected test
+file to verify. Do not refactor unrelated code.
+```
+
+**Step 3 — Verifier** (read-only, balanced):
+
+```markdown
+---
+display_name: "Verifier"
+description: "Confirms the fix is correct, no regressions"
+tools: read, bash
+prompt_compression: balanced
+---
+
+Re-run the full test suite. Confirm:
+1. Originally failing test now passes
+2. No previously-passing test now fails
+
+Report `pass` or `regression: <details>`.
+```
+
+The parent orchestrator runs the loop with a turn budget — typically 3-5 fix attempts before escalating.
+
+### Example 3 — Multi-perspective Analysis (3 Parallel → Synthesizer)
+
+Spawn three analysts with different perspectives in parallel, then synthesize their findings. This is the "swarm" pattern with a deterministic aggregation step.
+
+**Analyst 1 — Performance** (read-only, aggressive compression for speed):
+
+```markdown
+---
+display_name: "Performance Analyst"
+description: "Analyzes performance characteristics"
+tools: read, grep, find
+handoff: true
+prompt_compression: aggressive
+---
+
+Find performance hotspots: O(n²) loops, redundant I/O, blocking calls,
+missing memoization. Return a structured handoff with "findings" array.
+```
+
+**Analyst 2 — Security** (read-only, minimal for thoroughness):
+
+```markdown
+---
+display_name: "Security Analyst"
+description: "Identifies security vulnerabilities"
+tools: read, grep, find
+handoff: true
+prompt_compression: minimal
+---
+
+Find injection sinks (SQL, shell, eval), unvalidated input paths, auth
+bypass opportunities, hardcoded secrets. Return a structured handoff.
+```
+
+**Analyst 3 — Maintainability** (read-only, balanced):
+
+```markdown
+---
+display_name: "Maintainability Analyst"
+description: "Evaluates code health"
+tools: read, grep, find
+handoff: true
+prompt_compression: balanced
+---
+
+Find code smells: long functions, deep nesting, duplicated logic, missing
+tests, undocumented public APIs. Return a structured handoff.
+```
+
+**Synthesizer** (write-enabled, balanced):
+
+```markdown
+---
+display_name: "Synthesizer"
+description: "Combines analyst handoffs into prioritized report"
+tools: read, write
+inherit_context: true
+prompt_compression: balanced
+---
+
+You receive three handoffs (Performance, Security, Maintainability).
+Cross-reference findings. Identify:
+1. Critical issues (must-fix blockers)
+2. High-priority issues (security, performance regressions)
+3. Quality issues (maintainability, tech debt)
+
+Write a markdown report grouped by severity. Cite file paths from
+the handoffs' "evidence" arrays. Do not duplicate findings.
+```
+
+The parent spawns the three analysts in parallel (via the swarm `w` hotkey or the `JoinMode: "group"` setting), waits for all handoffs, then spawns the Synthesizer with the unioned context.
 
 ---
 
