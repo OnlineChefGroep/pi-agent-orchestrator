@@ -86,7 +86,7 @@ Just a prompt.`);
     expect(agent.inheritContext).toBeUndefined();
     expect(agent.runInBackground).toBeUndefined();
     expect(agent.isolated).toBeUndefined();
-    expect(agent.handoff).toBeUndefined();
+    expect(agent.handoff).toBe(false);
     expect(agent.systemPrompt).toBe("Just a prompt.");
   });
 
@@ -458,11 +458,11 @@ Bad isolation.`);
     expect(result.get("chain-agent")!.handoff).toBe(true);
   });
 
-  it("handoff defaults to undefined when omitted", async () => {
+  it("handoff defaults to false when omitted", async () => {
     writeAgent("no-handoff", `---\ndescription: No handoff\n---\n\nStandard agent.`);
 
     const result = await loadCustomAgents(tmpDir);
-    expect(result.get("no-handoff")!.handoff).toBeUndefined();
+    expect(result.get("no-handoff")!.handoff).toBe(false);
   });
 
   it("handoff: false parses as false (explicitly disabled)", async () => {
@@ -472,11 +472,11 @@ Bad isolation.`);
     expect(result.get("explicit-false")!.handoff).toBe(false);
   });
 
-  it("handoff: \"true\" (string) parses as false - only boolean true enables", async () => {
+  it("handoff: \"true\" (string) parses as true", async () => {
     writeAgent("string-true", `---\nhandoff: "true"\n---\n\nString true.`);
 
     const result = await loadCustomAgents(tmpDir);
-    expect(result.get("string-true")!.handoff).toBe(false);
+    expect(result.get("string-true")!.handoff).toBe(true);
   });
 
   it("parses handoff: true alongside other boolean fields", async () => {

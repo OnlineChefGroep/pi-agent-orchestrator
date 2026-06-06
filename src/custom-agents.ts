@@ -155,14 +155,14 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
       maxTurns: parseNonNegativeInt(fm.max_turns),
       systemPrompt: body.trim(),
       promptMode: fm.prompt_mode === "append" ? "append" : "replace",
-      inheritContext: fm.inherit_context == null ? undefined : fm.inherit_context === true,
-      runInBackground: fm.run_in_background == null ? undefined : fm.run_in_background === true,
-      isolated: fm.isolated == null ? undefined : fm.isolated === true,
+      inheritContext: parseBooleanOptional(fm.inherit_context),
+      runInBackground: parseBooleanOptional(fm.run_in_background),
+      isolated: parseBooleanOptional(fm.isolated),
       memory: parseMemory(fm.memory),
       isolation: fm.isolation === "worktree" ? "worktree" : undefined,
-      handoff: fm.handoff == null ? undefined : fm.handoff === true,
+      handoff: parseBooleanWithDefault(fm.handoff, false),
       promptCompressionLevel: parseCompressionLevel(fm.prompt_compression),
-      enabled: fm.enabled !== false,  // default true; explicitly false disables
+      enabled: parseBooleanWithDefault(fm.enabled, true),
       source,
     };
 
@@ -188,6 +188,28 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
 }
 
 // ---- Field Parsers ----
+
+/**
+ * Parse a boolean from frontmatter that may be a boolean or string.
+ * Returns undefined if the value is null/undefined (caller decides default).
+ * Handles: true, false, "true", "false" — anything else returns undefined.
+ */
+function parseBooleanOptional(val: unknown): boolean | undefined {
+  if (val === undefined || val === null) return undefined;
+  if (val === true || val === "true") return true;
+  if (val === false || val === "false") return false;
+  return undefined;
+}
+
+/**
+ * Parse a boolean from frontmatter with an explicit default.
+ * Handles: true, false, "true", "false" — null/undefined returns the default.
+ */
+function parseBooleanWithDefault(val: unknown, defaultValue: boolean): boolean {
+  const parsed = parseBooleanOptional(val);
+  return parsed ?? defaultValue;
+}
+
 /**
  * Parse a CSV field value from frontmatter.
  */
