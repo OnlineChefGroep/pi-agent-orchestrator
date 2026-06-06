@@ -149,16 +149,16 @@ if $HAS_DRAWTEXT; then
   echo "Using font: $FONT_BOLD"
 
   # Title card + scene labels (timing windows in INPUT seconds)
-  VFILTER+=",drawtext=fontfile=${FONT_BOLD}:text='Pi Agent Orchestrator':fontsize=48:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2-40:enable='between(t,0.5,3.5)':alpha='if(between(t,0.5,1.2),(t-0.5)/0.7,if(between(t,2.8,3.5),1-(t-2.8)/0.7,1))'"
-  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='v0.11.0 — Sub-agents, Swarms & Live Dashboard':fontsize=20:fontcolor=0xcccccc:x=(w-text_w)/2:y=(h-text_h)/2+30:enable='between(t,0.8,3.5)':alpha='if(between(t,0.8,1.5),(t-0.8)/0.7,if(between(t,2.8,3.5),1-(t-2.8)/0.7,1))'"
-  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Dashboard':fontsize=16:fontcolor=0x9ece6a:x=40:y=20:enable='between(t,5,18)':alpha='if(between(t,5,5.7),(t-5)/0.7,if(between(t,17.3,18),1-(t-17.3)/0.7,1))'"
-  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Help':fontsize=16:fontcolor=0xe0af68:x=40:y=20:enable='between(t,19,25)':alpha='if(between(t,19,19.7),(t-19)/0.7,if(between(t,24.3,25),1-(t-24.3)/0.7,1))'"
-  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Top View':fontsize=16:fontcolor=0x7aa2f7:x=40:y=20:enable='between(t,26,42)':alpha='if(between(t,26,26.7),(t-26)/0.7,if(between(t,41.3,42),1-(t-41.3)/0.7,1))'"
-  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Widget':fontsize=16:fontcolor=0xbb9af7:x=40:y=20:enable='between(t,42,50)':alpha='if(between(t,42,42.7),(t-42)/0.7,if(between(t,49.3,50),1-(t-49.3)/0.7,1))'"
-  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Agent Spawn':fontsize=16:fontcolor=0xf7768e:x=40:y=20:enable='between(t,50,65)':alpha='if(between(t,50,50.7),(t-50)/0.7,if(between(t,64.3,65),1-(t-64.3)/0.7,1))'"
-  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Settings':fontsize=16:fontcolor=0x9ece6a:x=40:y=20:enable='between(t,65,82)':alpha='if(between(t,65,65.7),(t-65)/0.7,if(between(t,81.3,82),1-(t-81.3)/0.7,1))'"
-  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Swarm':fontsize=16:fontcolor=0x7dcfff:x=40:y=20:enable='between(t,82,95)':alpha='if(between(t,82,82.7),(t-82)/0.7,if(between(t,94.3,95),1-(t-94.3)/0.7,1))'"
-  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Overview':fontsize=16:fontcolor=0x9ece6a:x=40:y=20:enable='between(t,95,115)':alpha='if(between(t,95,95.7),(t-95)/0.7,if(between(t,114.3,115),1-(t-114.3)/0.7,1))'"
+  VFILTER+=",drawtext=fontfile=${FONT_BOLD}:text='Pi Agent Orchestrator':fontsize=72:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2-40:enable='between(t,0.5,3.5)':alpha='if(between(t,0.5,1.2),(t-0.5)/0.7,if(between(t,2.8,3.5),1-(t-2.8)/0.7,1))'"
+  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='v0.11.0 — Sub-agents, Swarms & Live Dashboard':fontsize=36:fontcolor=0xcccccc:x=(w-text_w)/2:y=(h-text_h)/2+30:enable='between(t,0.8,3.5)':alpha='if(between(t,0.8,1.5),(t-0.8)/0.7,if(between(t,2.8,3.5),1-(t-2.8)/0.7,1))'"
+  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Dashboard':fontsize=32:fontcolor=0x9ece6a:x=40:y=20:enable='between(t,5,18)':alpha='if(between(t,5,5.7),(t-5)/0.7,if(between(t,17.3,18),1-(t-17.3)/0.7,1))'"
+  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Help':fontsize=32:fontcolor=0xe0af68:x=40:y=20:enable='between(t,19,25)':alpha='if(between(t,19,19.7),(t-19)/0.7,if(between(t,24.3,25),1-(t-24.3)/0.7,1))'"
+  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Top View':fontsize=32:fontcolor=0x7aa2f7:x=40:y=20:enable='between(t,26,42)':alpha='if(between(t,26,26.7),(t-26)/0.7,if(between(t,41.3,42),1-(t-41.3)/0.7,1))'"
+  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Widget':fontsize=32:fontcolor=0xbb9af7:x=40:y=20:enable='between(t,42,50)':alpha='if(between(t,42,42.7),(t-42)/0.7,if(between(t,49.3,50),1-(t-49.3)/0.7,1))'"
+  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Agent Spawn':fontsize=32:fontcolor=0xf7768e:x=40:y=20:enable='between(t,50,65)':alpha='if(between(t,50,50.7),(t-50)/0.7,if(between(t,64.3,65),1-(t-64.3)/0.7,1))'"
+  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Settings':fontsize=32:fontcolor=0x9ece6a:x=40:y=20:enable='between(t,65,82)':alpha='if(between(t,65,65.7),(t-65)/0.7,if(between(t,81.3,82),1-(t-81.3)/0.7,1))'"
+  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Swarm':fontsize=32:fontcolor=0x7dcfff:x=40:y=20:enable='between(t,82,95)':alpha='if(between(t,82,82.7),(t-82)/0.7,if(between(t,94.3,95),1-(t-94.3)/0.7,1))'"
+  VFILTER+=",drawtext=fontfile=${FONT_REG}:text='Overview':fontsize=32:fontcolor=0x9ece6a:x=40:y=20:enable='between(t,95,115)':alpha='if(between(t,95,95.7),(t-95)/0.7,if(between(t,114.3,115),1-(t-114.3)/0.7,1))'"
 fi
 
 VFILTER+=",setpts=0.45*PTS"

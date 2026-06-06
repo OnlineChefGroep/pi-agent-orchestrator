@@ -52,5 +52,5 @@
 
 ### Commit / PR Summary
 - `update-skill-triggers`: Added missing `trigger` attributes to showcase and testing skills for robust Orchestra routing.
-- `chore(scripts): add showcase:tmux npm script`: Addressed missing `showcase:tmux` pipeline scripts in `package.json` and `showcase-all.sh`.
+- `chore(scripts): complete showcase tmux pipeline integration`: Addressed missing `showcase:tmux` pipeline scripts in `package.json` and `showcase-all.sh`, and increased the font sizes of the text labels overlaid on the Tmux recordings as per user instruction "groter".
 - `lint`: Fixed biome template literal formatting warning.
