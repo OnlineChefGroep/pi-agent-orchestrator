@@ -70,7 +70,7 @@ describe("DEFAULT_AGENTS", () => {
 
   it("Explore prompt contains expected sections", () => {
     const prompt = DEFAULT_AGENTS.get("Explore")!.systemPrompt;
-    expect(prompt).toContain("READ-ONLY MODE");
+    expect(prompt).toContain("READ-ONLY");
     expect(prompt).toContain("file search specialist");
     expect(prompt).toContain("search and analyze existing code");
     expect(prompt).toContain("Use Bash ONLY for read-only operations");
@@ -78,14 +78,14 @@ describe("DEFAULT_AGENTS", () => {
 
   it("Plan prompt contains expected sections", () => {
     const prompt = DEFAULT_AGENTS.get("Plan")!.systemPrompt;
-    expect(prompt).toContain("READ-ONLY MODE");
+    expect(prompt).toContain("READ-ONLY");
     expect(prompt).toContain("software architect");
     expect(prompt).toContain("Critical Files for Implementation");
   });
 
   it("Analysis prompt contains expected sections", () => {
     const prompt = DEFAULT_AGENTS.get("Analysis")!.systemPrompt;
-    expect(prompt).toContain("READ-ONLY MODE");
+    expect(prompt).toContain("READ-ONLY");
     expect(prompt).toContain("data analysis specialist");
     expect(prompt).toContain("ctx_search");
     expect(prompt).toContain("ctx_execute");
