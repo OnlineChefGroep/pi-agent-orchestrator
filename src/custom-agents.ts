@@ -33,7 +33,7 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
   } else if (name.length > MAX_NAME_LENGTH) {
     errors.push(`Agent name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
   } else if (UNSAFE_NAME_PATTERN.test(name)) {
-    errors.push(`Agent name contains unsafe characters: ${name}`);
+    errors.push('Agent name contains unsafe characters: [REDACTED]');
   }
   
   // Prevent overriding built-in agents with wildcard tools
@@ -166,7 +166,7 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
     // CVE-002 FIX: Validate agent config before adding
     const validationErrors = validateAgentConfig(name, config);
     if (validationErrors.length > 0) {
-      emitTelemetry("agent:validation-failed", { name, errors: validationErrors });
+      emitTelemetry("agent:validation-failed", { name: UNSAFE_NAME_PATTERN.test(name) ? "[REDACTED]" : name, errors: validationErrors });
       // Disable agent with validation errors (don't skip entirely - let user see it)
       config.enabled = false;
     }
