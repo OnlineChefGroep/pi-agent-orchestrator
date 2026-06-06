@@ -207,7 +207,7 @@ describe("SubagentScheduler — lifecycle", () => {
       });
 
       await expect(scheduler.updateJob(job.id, { prompt: "c".repeat(50001) }))
-        .rejects.toThrow(/Prompt must be <= 50000 characters/);
+        .rejects.toThrow(/Prompt must be <= 10000 characters/);
 
       await expect(scheduler.updateJob(job.id, { name: "n".repeat(101) }))
         .rejects.toThrow(/Schedule name must be <= 100 characters/);

@@ -37,11 +37,11 @@ describe("SubagentScheduler Bounds Checks", () => {
       prompt: "short prompt",
     });
 
-    const hugePrompt = "a".repeat(50001); // MAX_PROMPT_SIZE is 50000
+    const hugePrompt = "a".repeat(10001); // MAX_PROMPT_SIZE is 10000
 
     await expect(
       scheduler.updateJob(job.id, { prompt: hugePrompt })
-    ).rejects.toThrow(/Prompt must be <= 50000 characters/);
+    ).rejects.toThrow(/Prompt must be <= 10000 characters/);
   });
 
   it("prevents updating a job with a name exceeding MAX_NAME_LENGTH", async () => {

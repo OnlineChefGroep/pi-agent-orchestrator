@@ -30,7 +30,7 @@ import type { IsolationMode, ScheduledSubagent, SubagentType, ThinkingLevel } fr
 const MAX_INTERVAL = 2147483647;   // ~24.8 days (setTimeout limit)
 const MIN_INTERVAL = (process.env.NODE_ENV === "test" || process.env.VITEST === "true") ? 10 : 60000;        // 1 minute minimum
 const MAX_SCHEDULES = 100;         // Per session limit
-const MAX_PROMPT_SIZE = 50000;     // 50KB max prompt
+const MAX_PROMPT_SIZE = 10000;     // 10KB max prompt
 const MAX_NAME_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 500;
 
@@ -256,6 +256,11 @@ export class SubagentScheduler {
   private async scheduleJob(job: ScheduledSubagent): Promise<void> {
     const store = this.store;
     if (!store) return;
+    // CVE-005 FIX: Enforce MAX_SCHEDULES before pushing to jobs
+    if (this.jobs.size + this.intervals.size >= MAX_SCHEDULES) {
+      logger.warn(`Maximum active schedules (${MAX_SCHEDULES}) reached. Ignoring new schedule job ${job.id}`);
+      return;
+    }
     try {
       if (job.scheduleType === "interval" && job.intervalMs) {
         // CVE-005 FIX: Cap interval at max 24 days to avoid setTimeout limits
