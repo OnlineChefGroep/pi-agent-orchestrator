@@ -357,7 +357,7 @@ describe("SubagentScheduler — fire path", () => {
   });
 
   it("one-shot fires once and auto-disables", async () => {
-    const future = new Date(Date.now() + 100).toISOString();
+    const future = "+1s";
     const job = await scheduler.addJob({
       name: "soon", description: "once", schedule: future,
       subagent_type: "general-purpose", prompt: "once",
@@ -391,7 +391,7 @@ describe("SubagentScheduler — fire path", () => {
   });
 
   it("disabled jobs do not fire", async () => {
-    const future = new Date(Date.now() + 100).toISOString();
+    const future = "+1s";
     const job = await scheduler.addJob({
       name: "off", description: "x", schedule: future,
       subagent_type: "general-purpose", prompt: "x",
@@ -402,7 +402,7 @@ describe("SubagentScheduler — fire path", () => {
   });
 
   it("emits fired event with agentId on successful spawn", async () => {
-    const future = new Date(Date.now() + 100).toISOString();
+    const future = "+1s";
     await scheduler.addJob({
       name: "fire-once", description: "x", schedule: future,
       subagent_type: "general-purpose", prompt: "x",
@@ -415,9 +415,9 @@ describe("SubagentScheduler — fire path", () => {
 
   it("records lastStatus error and emits when manager.spawn throws", async () => {
     manager.spawn.mockImplementationOnce(() => { throw new Error("no slots"); });
-    const future = new Date(Date.now() + 100).toISOString();
+    // Use +1s relative format so we don't depend on Date.now() evaluation races across CI
     const job = await scheduler.addJob({
-      name: "boom", description: "x", schedule: future,
+      name: "boom", description: "x", schedule: "+1s",
       subagent_type: "general-purpose", prompt: "x",
     });
 
@@ -450,7 +450,7 @@ describe("SubagentScheduler — fire path", () => {
 
     it("records lastStatus 'error' when the agent terminates with status='error'", async () => {
       const records = installFaithfulMock();
-      const future = new Date(Date.now() + 100).toISOString();
+      const future = "+1s";
       const job = await scheduler.addJob({
         name: "fail-job", description: "x", schedule: future,
         subagent_type: "general-purpose", prompt: "x",
@@ -469,7 +469,7 @@ describe("SubagentScheduler — fire path", () => {
 
     it("records lastStatus 'success' when the agent terminates with status='completed'", async () => {
       const records = installFaithfulMock();
-      const future = new Date(Date.now() + 100).toISOString();
+      const future = "+1s";
       const job = await scheduler.addJob({
         name: "ok-job", description: "x", schedule: future,
         subagent_type: "general-purpose", prompt: "x",
@@ -485,8 +485,8 @@ describe("SubagentScheduler — fire path", () => {
 
     it("treats aborted and stopped as errors (terminal failure states)", async () => {
       const records = installFaithfulMock();
-      const futureA = new Date(Date.now() + 100).toISOString();
-      const futureB = new Date(Date.now() + 200).toISOString();
+      const futureA = "+1s";
+      const futureB = "+1s";
       const a = await scheduler.addJob({
         name: "abort-job", description: "x", schedule: futureA,
         subagent_type: "general-purpose", prompt: "x",
