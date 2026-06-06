@@ -26,6 +26,13 @@ export type MemoryScope = "user" | "project" | "local";
 /** Isolation mode for agent execution. */
 export type IsolationMode = "worktree";
 
+/**
+ * Prompt compression level for system prompts.
+ * Controls verbosity: `minimal` (full verbose, max quality),
+ * `balanced` (concise, default), `aggressive` (ultra-short, max token savings).
+ */
+export type PromptCompressionLevel = "minimal" | "balanced" | "aggressive";
+
 /** Unified agent configuration — used for both default and user-defined agents. */
 export interface AgentConfig {
     name: string;
@@ -76,6 +83,8 @@ export interface AgentConfig {
     partitionMembership?: Record<string, readonly string[]>;
     /** Enable @onlinechef/context-mode ctx_* tools for sandboxed code execution and search. */
     useContextMode?: boolean;
+    /** Per-agent prompt compression override. Falls back to global setting. */
+    promptCompressionLevel?: PromptCompressionLevel;
 }
 
 export type JoinMode = "async" | "group" | "smart" | "swarm";

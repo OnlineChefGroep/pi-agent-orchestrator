@@ -192,8 +192,31 @@ interface SubagentsSettings {
   dashboardRefreshInterval?: number;   // Dashboard refresh interval in ms (default: 750, min: 100, max: 60000)
   sessionMaxSpawns?: number;           // Guardrail: max agents spawned per session
   sessionMaxTurns?: number;            // Guardrail: max cumulative turns per session
+  promptCompressionLevel?: PromptCompressionLevel;  // "minimal" | "balanced" | "aggressive" (default: "balanced")
 }
 ```
+
+### `PromptCompressionLevel`
+
+**FILE:** `src/types.ts`
+
+Controls the verbosity of system prompts injected into agents. Lower compression yields higher-quality instructions at the cost of more tokens; higher compression saves tokens at the cost of instruction detail.
+
+| Level | Behavior | Token Impact |
+|---|---|---|
+| `"minimal"` | Full verbose prompts with CAPS emphasis, per-tool bash equivalents, two handoff examples. Maximum instruction quality. | +70% vs balanced |
+| `"balanced"` | Concise prompts with realistic examples (default). Good trade-off between quality and token usage. | Baseline |
+| `"aggressive"` | Ultra-short one-liners for read-only warnings, tool usage, and handoff. Maximum token savings. | −44% vs balanced |
+
+**SCOPE:**
+- Affects all `replace`-mode built-in agents (Explore, Plan, Analysis) via lazy runtime regeneration.
+- Affects handoff prompt injection for all agents with `handoff: true`.
+- Custom agents (`.pi/agents/*.md`) can override per-agent via the `prompt_compression` frontmatter directive.
+- Append-mode agents (e.g. `general-purpose`) — only the handoff block varies; the inherited system prompt and bridge are unaffected.
+
+**PRECEDENCE:** Per-agent frontmatter `prompt_compression` > global `promptCompressionLevel` setting > default `"balanced"`.
+
+**PERSISTENCE:** Stored in `.pi/subagents.json` and managed via `SettingsAppliers.setPromptCompressionLevel`.
 
 ### `saveAndEmitChanged(settings: SubagentsSettings): void`
 
@@ -222,6 +245,10 @@ interface AgentConfig {
   model?: string;
   temperature?: number;
   parentType?: string;
+  handoff?: boolean;          // Produce structured JSON handoff at end of response
+  promptCompressionLevel?: PromptCompressionLevel;  // Per-agent compression override
+  memory?: "user" | "project" | "local";       // State persistence scope
+  isolation?: "worktree";    // Isolation mode
 }
 ```
 
@@ -263,6 +290,52 @@ interface AgentRecord {
 **FILE:** `src/custom-agents.ts`
 
 Ingests markdown definitions, parsing YAML frontmatter into memory constraints. Validates identifiers and nullifies injection primitives.
+
+**FRONTMATTER DIRECTIVES** (parsed in `src/custom-agents.ts`):
+
+| Directive | Type | Default | Effect |
+|---|---|---|---|
+| `display_name` | string | filename | UI label override |
+| `description` | string | filename | Telemetry description |
+| `tools` | CSV / `none` | all built-in tools | Authorized tool subset |
+| `disallowed_tools` | CSV | none | Explicit denylist (partition floor) |
+| `extensions` | bool / CSV | `true` | Extension module access |
+| `skills` | bool / CSV | `true` | Skill module access |
+| `model` | string | host default | Model override (e.g. `anthropic/claude-sonnet-4-5`) |
+| `thinking` | string | null | Inference effort: `low` / `medium` / `high` |
+| `max_turns` | number | null | Hard execution turn limit |
+| `prompt_mode` | `replace` / `append` | `replace` | System prompt integration strategy |
+| `inherit_context` | bool (or string `"true"`/`"false"`) | null | Parent conversation context |
+| `run_in_background` | bool (or string) | null | Non-blocking execution |
+| `isolated` | bool (or string) | null | Strict context isolation |
+| `memory` | `user` / `project` / `local` | null | State persistence scope |
+| `isolation` | `worktree` | null | Physical directory isolation |
+| `handoff` | bool (or string) | `false` | Produce structured JSON handoff at end of response |
+| `prompt_compression` | `minimal` / `balanced` / `aggressive` | inherits global | Per-agent compression override |
+| `enabled` | bool (or string) | `true` | Profile activation state |
+
+All boolean fields accept either native YAML booleans or string-encoded booleans
+(`"true"` / `"false"`, case-insensitive). They are parsed via `parseBooleanOptional`
+and `parseBooleanWithDefault` in `src/custom-agents.ts`, which throw on any
+unrecognised input (numbers, arbitrary strings) so YAML schema errors surface
+at load time rather than being silently coerced.
+
+**FRONTMATTER EXAMPLE (handoff):**
+
+```markdown
+---
+display_name: "Chain Reviewer"
+description: "Code review that hands off structured findings"
+tools: read, grep, find
+handoff: true
+prompt_compression: minimal
+---
+
+Perform a thorough code review and produce a structured handoff JSON
+with your findings for downstream agents.
+```
+
+When `handoff: true` is set, the agent produces a structured JSON handoff at the end of its response, enabling chain-of-agents workflows where one agent's output feeds directly into the next.
 
 **SECURITY DIRECTIVE:** Symlinks are explicitly ignored to prevent LFI vulnerabilities.
 

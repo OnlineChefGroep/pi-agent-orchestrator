@@ -2,8 +2,9 @@
  * prompts.ts — System prompt builder for agents.
  */
 
+import { createReadOnlyPrompt, READONLY_PROMPT_PARAMS } from "./default-agents.js";
 import { buildHandoffPrompt } from "./handoff.js";
-import type { AgentConfig, EnvInfo } from "./types.js";
+import type { AgentConfig, EnvInfo, PromptCompressionLevel } from "./types.js";
 
 /** Extra sections to inject into the system prompt (memory, skills, etc.). */
 export interface PromptExtras {
@@ -33,6 +34,7 @@ export function buildAgentPrompt(
   env: EnvInfo,
   parentSystemPrompt?: string,
   extras?: PromptExtras,
+  compressionLevel?: PromptCompressionLevel,
 ): string {
   const activeAgentTag = `<active_agent name="${config.name}"/>\n\n`;
 
@@ -54,7 +56,8 @@ Platform: ${env.platform}`;
   const extrasSuffix = extraSections.length > 0 ? `\n\n${extraSections.join("\n")}` : "";
 
   // Build handoff block — injected after tool description, before custom instructions
-  const handoffBlock = config.handoff ? `\n\n${buildHandoffPrompt()}` : "";
+  const level = compressionLevel ?? "balanced";
+  const handoffBlock = config.handoff ? `\n\n${buildHandoffPrompt(level)}` : "";
 
   if (config.promptMode === "append") {
     const identity = parentSystemPrompt || genericBase;
@@ -80,12 +83,19 @@ You are operating as a sub-agent invoked to handle a specific task.
   }
 
   // "replace" mode — env header + the config's full system prompt
+  // For read-only default agents, regenerate systemPrompt at runtime with
+  // the active compression level so the setting actually takes effect.
+  const roParams = READONLY_PROMPT_PARAMS.get(config.name);
+  const effectiveSystemPrompt = roParams && config.isDefault && level !== "balanced"
+    ? createReadOnlyPrompt({ ...roParams, compressionLevel: level })
+    : config.systemPrompt;
+
   const replaceHeader = `You are a pi coding agent sub-agent.
 You have been invoked to handle a specific task autonomously.
 
 ${envBlock}`;
 
-  return `${activeAgentTag + replaceHeader + handoffBlock}\n\n${config.systemPrompt}${extrasSuffix}`;
+  return `${activeAgentTag + replaceHeader + handoffBlock}\n\n${effectiveSystemPrompt}${extrasSuffix}`;
 }
 
 /** Fallback base prompt when parent system prompt is unavailable in append mode. */

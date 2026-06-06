@@ -189,13 +189,13 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/agent-types.ts` | Matrix resolution, capability scaling, partitioning |
 | `src/agent-runner.ts` | Process instantiation, lifecycle loop |
 | `src/agent-manager.ts` | Abstraction envelope for host AgentManager |
-| `src/agent-registry.ts` | Definition ingestion, memory lookup |
+| `src/agent-registry.ts` | Definition ingestion, memory lookup, in-memory settings state (incl. `getPromptCompressionLevel` / `setPromptCompressionLevel`) |
 | `src/custom-agents.ts` | Markdown frontmatter extraction and validation |
-| `src/default-agents.ts` | Built-in primitive definitions |
+| `src/default-agents.ts` | Built-in primitive definitions + lazy prompt regeneration via `READONLY_PROMPT_PARAMS` (compression levels) |
 | `src/compaction.ts` | Aggressive context window compression |
 | `src/context.ts` | Vector stack payload creation |
 | `src/context-mode-bridge.ts` | Sandbox execution primitives |
-| `src/handoff.ts` | Unstructured data to JSON state boundary |
+| `src/handoff.ts` | Unstructured data to JSON state boundary; `buildHandoffPrompt(level)` selects one of 3 prompt variants (full/balanced/aggressive) matching the compression level |
 | `src/hooks.ts` | Execution interrupt bus |
 | `src/memory.ts` | Physical boundary isolation definitions |
 | `src/model-resolver.ts` | Identifier normalization layer |
@@ -213,7 +213,7 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/group-join.ts` | Batch synchronization protocol |
 | `src/invocation-config.ts` | Override context definition |
 | `src/output-file.ts` | Physical report generation |
-| `src/prompts.ts` | Template block constants |
+| `src/prompts.ts` | Template block constants, prompt assembly with `compressionLevel` parameter (handoff variant + lazy read-only regen for default agents) |
 | `src/skill-loader.ts` | External module ingestion |
 | `src/telemetry.ts` | Activity datalogging pipeline |
 | `src/batch-orchestrator.ts` | Manages smart/group/swarm batch finalization and update debouncing |

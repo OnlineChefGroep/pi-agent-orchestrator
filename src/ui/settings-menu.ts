@@ -1,18 +1,22 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+
 import type { AgentManager } from "../agent-manager.js";
+
+type Ctx = ExtensionCommandContext;
+
 import {
   getAnimationStyle,
   getDashboardRefreshInterval,
-  getOrchestrationMode,
+  getOrchestrationMode, getPromptCompressionLevel,
   getUiStyle,
   setAnimationStyle,
   setDashboardRefreshInterval,
-  setOrchestrationMode,
-  setUiStyle,
+  setOrchestrationMode, setPromptCompressionLevel,
+  setUiStyle
 } from "../agent-registry.js";
 import type { SubagentScheduler } from "../schedule.js";
 import { saveAndEmitChanged } from "../settings.js";
-import type { JoinMode } from "../types.js";
+import type { JoinMode, PromptCompressionLevel } from "../types.js";
 import { buildSettingsSnapshot } from "./settings-snapshot.js";
 
 export async function showSettings(
@@ -42,6 +46,7 @@ export async function showSettings(
     `Dashboard refresh interval (current: ${getDashboardRefreshInterval()}ms)`,
     `Session spawn limit (current: ${manager.getSessionMaxSpawns()})`,
     `Session turn limit (current: ${manager.getSessionMaxTurns()})`,
+    `Prompt compression (current: ${getPromptCompressionLevel()})`,
   ]);
   if (!choice) return;
 
@@ -209,7 +214,79 @@ export async function showSettings(
         ctx.ui.notify("Must be a positive integer.", "warning");
       }
     }
+  } else if (choice.startsWith("Prompt compression")) {
+    // Interactive submenu: shows token previews inline and allows level-by-level
+    // comparison. Uses a while loop so that after "📊 Compare" the user returns
+    // directly to the compression level selection rather than the full Settings menu.
+    while (true) {
+      const currentLevel = getPromptCompressionLevel();
+      const currentMark = (lvl: string) => lvl === currentLevel ? " ◀ current" : "";
+      const val = await ctx.ui.select("Prompt compression level", [
+        `minimal — full prompts (~1482 tok, +70%) — max quality${currentMark("minimal")}`,
+        `balanced — concise prompts (~873 tok, baseline) — default${currentMark("balanced")}`,
+        `aggressive — ultra-short (~487 tok, ~44% less) — max savings${currentMark("aggressive")}`,
+        "📊 Compare compression levels — side-by-side token breakdown",
+      ]);
+      if (!val) return;
+
+      if (val.startsWith("📊")) {
+        await showCompressionComparison(ctx);
+        continue;  // re-show compression menu
+      }
+
+      const level = val.split(" ")[0] as PromptCompressionLevel;
+      if (level === currentLevel) {
+        ctx.ui.notify(`Prompt compression already set to ${level}.`, "info");
+        continue;  // re-show menu
+      }
+      setPromptCompressionLevel(level);
+      const savingsLabel = level === "aggressive" ? " (~386 tok less across all prompt components vs balanced)" : level === "minimal" ? " (~609 more tok across all prompt components vs balanced)" : "";
+      notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Prompt compression set to ${level}${savingsLabel}`);
+      return;
+    }
   }
+}
+
+/**
+ * Show a detailed side-by-side comparison of all three compression levels
+ * with token estimates per prompt component.
+ */
+async function showCompressionComparison(ctx: Ctx): Promise<void> {
+  const table = `# Prompt Compression — Token Comparison
+
+Estimates based on combined handoff + read-only prompt components.
+Env block, bridge section, and agent identity are identical across levels.
+
+${'─'.repeat(80)}
+| Component            | Minimal         | Balanced        | Aggressive         | Savings (agg vs bal) |
+|──────────────────────|─────────────────|─────────────────|────────────────────|───────────────────────|
+| Handoff prompt       | 2,334 / 584 tok |   971 / 243 tok |    118 /  30 tok  | −87.8% (−213 tok)     |
+| Explore readonly     | 1,159 / 290 tok |   802 / 201 tok |    571 / 143 tok  | −28.8% (−58 tok)      |
+| Plan readonly        | 1,188 / 297 tok |   831 / 208 tok |    600 / 150 tok  | −27.8% (−58 tok)      |
+| Analysis readonly    | 1,244 / 311 tok |   887 / 222 tok |    656 / 164 tok  | −26.0% (−58 tok)      |
+|──────────────────────|─────────────────|─────────────────|────────────────────|───────────────────────|
+| COMBINED             | 5,925 / 1482 tok| 3,491 / 873 tok |  1,945 / 487 tok  | ~44% (−386 tok)       |
+${'─'.repeat(80)}
+
+SCOPE: Affects replace-mode built-in agents (Explore, Plan, Analysis)
+       and handoff prompts for all agents with handoff: true.
+       Append-mode agents (e.g. general-purpose) only vary in handoff.
+
+PRECEDENCE: Per-agent prompt_compression frontmatter > global setting > balanced
+
+USAGE:
+  • aggressive — background/ bulk agents, limited token budgets
+  • balanced   — default, good quality/token trade-off
+  • minimal    — complex decisions, first-time agent types, debugging
+
+Each aggressive agent spawn saves ~386 tokens vs balanced
+across all 4 prompt components (handoff + 3 agent types combined).
+
+Per-agent example: a single Explore at aggressive saves ~271 tokens
+(readonly warning: 201→143 tok, handoff: 243→30 tok).
+10 Explore agents ≈ ~2,710 tokens saved.
+`;
+  await ctx.ui.editor("Compression Level Comparison", table);
 }
 
 // Persist the current snapshot, emit `subagents:settings_changed`, and surface
