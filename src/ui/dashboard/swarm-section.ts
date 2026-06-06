@@ -21,8 +21,8 @@ export function renderSwarmSection(
     if (!rec.swarmId) continue;
     let list = grouped.get(rec.swarmId);
     if (!list) {
-        list = [];
-        grouped.set(rec.swarmId, list);
+      list = [];
+      grouped.set(rec.swarmId, list);
     }
     list.push(rec);
     total++;

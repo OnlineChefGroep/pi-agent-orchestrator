@@ -20,7 +20,7 @@ function renderAgentSections(
   focus: Map<string, number>,
   baseLine = 0,
 ): string[] {
-    const solo: AgentRecord[] = [];
+  const solo: AgentRecord[] = [];
   const running: AgentRecord[] = [];
   const queued: AgentRecord[] = [];
   const done: AgentRecord[] = [];
@@ -114,7 +114,7 @@ function buildVirtualBodyLines(
   const windowStart = Math.max(0, selectedIndex - halfWindow);
   const windowEnd = Math.min(total, selectedIndex + halfWindow);
 
-    // Separate sections in a single pass to avoid O(N) filtering multiple times
+  // Separate sections in a single pass to avoid O(N) filtering multiple times
   const solo: AgentRecord[] = [];
   const running: AgentRecord[] = [];
   const queued: AgentRecord[] = [];
@@ -165,7 +165,6 @@ function buildVirtualBodyLines(
   }
 
   // Running section with virtual window
-
   if (running.length > 0) {
     lines.push("");
     lines.push(renderSectionTitle("▶ RUNNING", `${running.length} active`, innerW, th, box));
@@ -186,7 +185,6 @@ function buildVirtualBodyLines(
   }
 
   // Queued section
-
   if (queued.length > 0) {
     lines.push("");
     lines.push(renderSectionTitle("◔ QUEUED", `${queued.length} queued`, innerW, th, box));
@@ -206,7 +204,6 @@ function buildVirtualBodyLines(
   }
 
   // Done section — most relevant for inspection, show in chunks
-
   if (done.length > 0) {
     lines.push("");
     lines.push(renderSectionTitle("✓ DONE", `${done.length} finished`, innerW, th, box));
