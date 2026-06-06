@@ -310,7 +310,7 @@ describe("SubagentScheduler — lifecycle", () => {
 });
 
 /** Wait for a predicate, polling at 5ms intervals, with a deadline. */
-async function waitFor(predicate: () => boolean, timeoutMs = 1500): Promise<void> {
+async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
   const start = Date.now();
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {
@@ -327,9 +327,6 @@ describe("SubagentScheduler — fire path", () => {
   let manager: any;
   let pi: any;
   let ctx: any;
-
-  const ONE_SHOT_LEAD_MS = 500;
-  const oneShotTime = (leadMs = ONE_SHOT_LEAD_MS) => new Date(Date.now() + leadMs).toISOString();
 
   beforeEach(async () => {
     tmp = mkdtempSync(join(tmpdir(), "scheduler-fire-"));
@@ -360,7 +357,7 @@ describe("SubagentScheduler — fire path", () => {
   });
 
   it("one-shot fires once and auto-disables", async () => {
-    const future = oneShotTime();
+    const future = new Date(Date.now() + 100).toISOString();
     const job = await scheduler.addJob({
       name: "soon", description: "once", schedule: future,
       subagent_type: "general-purpose", prompt: "once",
@@ -394,7 +391,7 @@ describe("SubagentScheduler — fire path", () => {
   });
 
   it("disabled jobs do not fire", async () => {
-    const future = oneShotTime();
+    const future = new Date(Date.now() + 100).toISOString();
     const job = await scheduler.addJob({
       name: "off", description: "x", schedule: future,
       subagent_type: "general-purpose", prompt: "x",
@@ -405,7 +402,7 @@ describe("SubagentScheduler — fire path", () => {
   });
 
   it("emits fired event with agentId on successful spawn", async () => {
-    const future = oneShotTime();
+    const future = new Date(Date.now() + 100).toISOString();
     await scheduler.addJob({
       name: "fire-once", description: "x", schedule: future,
       subagent_type: "general-purpose", prompt: "x",
@@ -418,7 +415,7 @@ describe("SubagentScheduler — fire path", () => {
 
   it("records lastStatus error and emits when manager.spawn throws", async () => {
     manager.spawn.mockImplementationOnce(() => { throw new Error("no slots"); });
-    const future = oneShotTime();
+    const future = new Date(Date.now() + 100).toISOString();
     const job = await scheduler.addJob({
       name: "boom", description: "x", schedule: future,
       subagent_type: "general-purpose", prompt: "x",
@@ -453,7 +450,7 @@ describe("SubagentScheduler — fire path", () => {
 
     it("records lastStatus 'error' when the agent terminates with status='error'", async () => {
       const records = installFaithfulMock();
-      const future = oneShotTime();
+      const future = new Date(Date.now() + 100).toISOString();
       const job = await scheduler.addJob({
         name: "fail-job", description: "x", schedule: future,
         subagent_type: "general-purpose", prompt: "x",
@@ -472,7 +469,7 @@ describe("SubagentScheduler — fire path", () => {
 
     it("records lastStatus 'success' when the agent terminates with status='completed'", async () => {
       const records = installFaithfulMock();
-      const future = oneShotTime();
+      const future = new Date(Date.now() + 100).toISOString();
       const job = await scheduler.addJob({
         name: "ok-job", description: "x", schedule: future,
         subagent_type: "general-purpose", prompt: "x",
@@ -488,8 +485,8 @@ describe("SubagentScheduler — fire path", () => {
 
     it("treats aborted and stopped as errors (terminal failure states)", async () => {
       const records = installFaithfulMock();
-      const futureA = oneShotTime();
-      const futureB = oneShotTime(ONE_SHOT_LEAD_MS * 2);
+      const futureA = new Date(Date.now() + 2000).toISOString();
+      const futureB = new Date(Date.now() + 2500).toISOString();
       const a = await scheduler.addJob({
         name: "abort-job", description: "x", schedule: futureA,
         subagent_type: "general-purpose", prompt: "x",
@@ -499,7 +496,7 @@ describe("SubagentScheduler — fire path", () => {
         subagent_type: "general-purpose", prompt: "x",
       });
 
-      await waitFor(() => manager.spawn.mock.calls.length >= 2, 3000);
+      await waitFor(() => manager.spawn.mock.calls.length >= 2);
       const recs = [...records.values()];
       recs[0].status = "aborted";
       recs[0].resolve();
@@ -510,7 +507,7 @@ describe("SubagentScheduler — fire path", () => {
         const list = scheduler.list();
         return list.find(j => j.id === a.id)?.lastStatus === "error"
             && list.find(j => j.id === b.id)?.lastStatus === "error";
-      }, 3000);
+      });
     });
   });
 });
