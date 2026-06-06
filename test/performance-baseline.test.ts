@@ -711,3 +711,45 @@ describe("Performance: memory stability", () => {
     },
   );
 });
+
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+// ── 10. loadCustomAgents Overhead ───────────────────────────────────────────────
+import { loadCustomAgents } from "../src/custom-agents.js";
+import { onTelemetry } from "../src/telemetry.js";
+
+describe("Performance: loadCustomAgents overhead", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "pi-test-perf-load-"));
+    const agentsDir = join(tmpDir, ".pi", "agents");
+    mkdirSync(agentsDir, { recursive: true });
+
+    // suppress logs
+    onTelemetry("agent:loaded", () => {});
+    onTelemetry("agent:validation-failed", () => {});
+    onTelemetry("agent:unknown-tools", () => {});
+
+    // Create 1000 agent files
+    for (let i = 0; i < 1000; i++) {
+        writeFileSync(join(agentsDir, `agent${i}.md`), `---\ndisplay_name: Agent ${i}\n---\nSystem prompt ${i}`);
+    }
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("loads 1000 custom agents quickly", async () => {
+    // Warmup
+    await loadCustomAgents(tmpDir);
+
+    const start = performance.now();
+    await loadCustomAgents(tmpDir);
+    const elapsed = performance.now() - start;
+
+    expect(elapsed).toBeLessThan(1000);
+  });
+});
