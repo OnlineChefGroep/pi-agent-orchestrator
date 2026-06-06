@@ -10,6 +10,25 @@ import { BUILTIN_TOOL_NAMES, getDefaultAgentNames } from "./agent-types.js";
 import { emitTelemetry, hashContentSync } from "./telemetry.js";
 import type { AgentConfig, MemoryScope, ThinkingLevel } from "./types.js";
 
+/**
+ * Safely redact sensitive information and truncate to prevent DoS/terminal injection.
+ * Uses Array.from for Unicode safety.
+ */
+function redactSensitive(input: string): string {
+  if (typeof input !== 'string') return String(input);
+  // Redact potential secrets (e.g., common API key formats or passwords)
+  let redacted = input.replace(/(key|token|password|secret)["']?\s*[:=]\s*["']?([^"']{8,})["']?/gi, '$1: [REDACTED]');
+  // Replace control characters to prevent terminal injection
+  redacted = redacted.replace(/[\x00-\x1F\x7F]/g, '?');
+  // Safely truncate to 200 chars using Unicode-safe Array.from
+  const arr = Array.from(redacted);
+  if (arr.length > 200) {
+    return `${arr.slice(0, 197).join('')}...`;
+  }
+  return redacted;
+}
+
+
 // CVE-002 FIX: Validation patterns for agent configs
 const UNSAFE_NAME_PATTERN = /[/\\]|\.\.|[\x00-\x1F]/;
 const MAX_NAME_LENGTH = 100;
@@ -166,7 +185,11 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
     // CVE-002 FIX: Validate agent config before adding
     const validationErrors = validateAgentConfig(name, config);
     if (validationErrors.length > 0) {
-      emitTelemetry("agent:validation-failed", { name, errors: validationErrors });
+      // CVE-FIX: Redact sensitive info in telemetry
+      emitTelemetry("agent:validation-failed", {
+        name: redactSensitive(name),
+        errors: validationErrors.map(e => redactSensitive(e))
+      });
       // Disable agent with validation errors (don't skip entirely - let user see it)
       config.enabled = false;
     }
