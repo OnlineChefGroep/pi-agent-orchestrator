@@ -95,10 +95,7 @@
             }
           ],
           "language": "en-US",
-          "contents": [
-            "localizedData",
-            "nonLocalizedData"
-          ],
+          "contents": ["localizedData", "nonLocalizedData"],
           "isComprehensive": false
         }
       },
@@ -43485,10 +43482,7 @@
           ]
         }
       ],
-      "newlineSequences": [
-        "\r\n",
-        "\n"
-      ]
+      "newlineSequences": ["\r\n", "\n"]
     }
   ]
 }
