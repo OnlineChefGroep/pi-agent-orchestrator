@@ -74,3 +74,15 @@ Preserved from superseded PR branches (merged or closed 2026-06-04). Code change
 Log of PR branches superseded by the optimizations already on `main` and closed/deleted as part of routine cleanup. Code in this section describes *what was removed*, not new performance work.
 
 - `jules-17395782889347801643-1f9e99e5` (PR #89, "⚡ [Optimize Execution Tree Construction from O(N^2) to O(N)]"): the `nodeMap`/`childrenMap` hash-map lookup in `buildExecutionTree` was already merged to `main` in commit `3089a297` (2026-05-29). The branch's only material delta was an `export` keyword (plus JSDoc) on `buildExecutionTree` and a new `test/tree-construction.benchmark.test.ts` that uses `console.log` + `toContain` rather than the project's `toBeLessThan` threshold convention. The `.jules/overdrive.md` addition on the branch duplicated the consolidated notes above. PR closed (not merged) and remote branch deleted.
+## 2026-06-06 — Swarm mode resolution benchmark
+
+**Systemic Bottleneck:** Inefficient linear search using `.find()` inside a loop over grouped swarms to determine the uniform `joinMode`.
+
+**Refactor Strategy:** A user requested this optimization, but it was already implemented on `main` (see 2026-06-04 note above). To prevent regressions, added a strict vitest benchmark to `test/swarm-section.benchmark.test.ts`.
+
+**Key Metric Shift:**
+- Old (.find()): ~136.12ms
+- New ([0]): ~17.80ms
+- Improvement: ~86.9%
+
+**Actionable Principle:** Formalize isolated performance improvements as benchmark tests to mathematically prevent regressions of known bottlenecks.
