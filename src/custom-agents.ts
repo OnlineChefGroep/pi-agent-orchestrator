@@ -185,6 +185,38 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
 }
 
 // ---- Field Parsers ----
+
+/**
+ * Parse a boolean from frontmatter that may be a native boolean OR a string.
+ * Returns `undefined` for "no value" (null / undefined / empty string).
+ * Returns the parsed boolean for: `true`, `false`, `"true"`, `"false"` (case-insensitive).
+ * Throws on any other input (numbers, unrecognised strings, objects) —
+ * YAML schema must be one of the accepted forms, otherwise it's a parse error
+ * that the user should see at load time, not a silent fallback.
+ */
+export function parseBooleanOptional(val: unknown): boolean | undefined {
+  if (val === undefined || val === null || val === "") return undefined;
+  if (val === true) return true;
+  if (val === false) return false;
+  if (typeof val === "string") {
+    const lower = val.toLowerCase();
+    if (lower === "true") return true;
+    if (lower === "false") return false;
+  }
+  throw new Error(
+    `Invalid boolean value for frontmatter field: ${JSON.stringify(val)}. Expected boolean or "true"/"false" string.`,
+  );
+}
+
+/**
+ * Parse a boolean with an explicit default for missing values.
+ * null / undefined / empty string → defaultValue.
+ * Throws on any other unparseable input (numbers, unrecognised strings, objects).
+ */
+export function parseBooleanWithDefault(val: unknown, defaultValue: boolean): boolean {
+  return parseBooleanOptional(val) ?? defaultValue;
+}
+
 /**
  * Parse a CSV field value from frontmatter.
  */
