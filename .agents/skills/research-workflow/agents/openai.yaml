@@ -1,0 +1,6 @@
+interface:
+  display_name: "Research Workflow"
+  short_description: "Systematic research, experiments, and optimization"
+  brand_color: "#8B5CF6"
+  policy:
+    allow_implicit_invocation: true

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Agent Orchestration"
+  short_description: "Design multi-agent workflows, swarms, schedules, and handoffs"
+  brand_color: "#8B5CF6"
+  policy:
+    allow_implicit_invocation: true

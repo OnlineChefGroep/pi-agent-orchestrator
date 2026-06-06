@@ -1,0 +1,6 @@
+interface:
+  display_name: "TypeScript Quality"
+  short_description: "TypeScript and React code quality improvements"
+  brand_color: "#3178C6"
+  policy:
+    allow_implicit_invocation: true

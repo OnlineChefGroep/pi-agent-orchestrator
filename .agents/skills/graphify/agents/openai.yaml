@@ -1,0 +1,6 @@
+interface:
+  display_name: "Graphify"
+  short_description: "Knowledge graph generation and codebase analysis"
+  brand_color: "#EF4444"
+  policy:
+    allow_implicit_invocation: true

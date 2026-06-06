@@ -1,0 +1,6 @@
+interface:
+  display_name: "Showcase"
+  short_description: "Generate README and PR showcase media"
+  brand_color: "#F59E0B"
+  policy:
+    allow_implicit_invocation: true

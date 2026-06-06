@@ -1,6 +1,6 @@
 ---
 name: showcase
-description: "Generate README and PR showcase visuals for pi-agent-orchestrator. Use when the user asks to create, update, or regenerate showcase GIFs, MP4s, hero videos, or terminal recordings. Examples: \"run the showcase\", \"regenerate the dashboard GIF\", \"create a new hero video\", \"update showcase assets\"."
+description: "Generate README and PR showcase visuals for pi-agent-orchestrator. Use when the user asks to create, update, or regenerate showcase GIFs, MP4s, hero videos, or terminal recordings. Examples: \"run the showcase\", \"regenerate the dashboard GIF\", \"create a new hero video\", \"update showcase assets\", \"generate demo media\"."
 ---
 
 # Showcase Media Pipeline
@@ -19,74 +19,291 @@ Generate polished terminal recordings and hero videos for README, PR description
 
 **Run all:** `npm run showcase` (set `SKIP_LIVE=1` / `SKIP_REMOTION=1` / `SKIP_VHS=1` / `SKIP_TMUX=1` to skip steps).
 
+## Script Reference
+
+| Script | Pipeline | Purpose |
+|--------|----------|---------|
+| `scripts/showcase-all.sh` | All | Orchestrates all pipelines with skip flags |
+| `scripts/render-showcase-assets.sh` | C | Programmatic: build → generate → agg → GIF |
+| `scripts/generate-showcase-media.mjs` | C | Builds asciicast from real `dist/` renderers |
+| `scripts/lib/showcase-agg.sh` | C, A, T | Shared agg → GIF/MP4 conversion library |
+| `scripts/showcase-live-demo.mjs` | A | Live terminal playback with real renderers |
+| `scripts/capture-live-showcase.sh` | A | Records live demo with asciinema |
+| `scripts/showcase-tmux-recorder.sh` | T | Full tmux session orchestration |
+| `scripts/showcase-tmux-scenes.mjs` | T | Generates scene choreography bash script |
+| `scripts/showcase-tmux-recorder.sh --no-titles` | T | Skip drawtext title card |
+| `scripts/render-showcase-remotion.sh` | B | Remotion post-production wrapper |
+| `scripts/render-showcase-vhs.sh` | D | VHS tape recording wrapper |
+
 ## Pipeline Details
 
 ### C — Programmatic (CI-safe, no external deps beyond agg/ffmpeg)
 
-1. `scripts/generate-showcase-media.mjs` builds asciicast from real `dist/` dashboard, top table, widget code.
-2. `scripts/lib/showcase-agg.sh` converts casts with **inspect** fidelity (Pi CLI theme, fontdue renderer).
-3. Output: `docs/images/showcase_dashboard.gif`, `showcase_top_view.gif`, `showcase_widget.gif`, `dashboard_preview_programmatic.gif`.
+**Script:** `scripts/render-showcase-assets.sh`
+
+```bash
+# Build project first
+npm run build
+
+# Generate asciicast from real dist/ renderers
+node scripts/generate-showcase-media.mjs
+
+# Convert casts with agg + ffmpeg
+# Output: docs/images/
+#   showcase_dashboard.gif      (from showcase-dashboard.cast)
+#   showcase_top_view.gif     (from showcase-top.cast)
+#   showcase_widget.gif       (from showcase-widget.cast)
+#   dashboard_preview_programmatic.gif  (combined hero cast)
+```
+
+**Mock agent data** in `generate-showcase-media.mjs`:
+- Frame-based animation (agents progress through states)
+- Real theme colors from `dist/ui/theme.js`
+- Real renderers from `dist/ui/dashboard/index.js`, `agent-top-renderer.js`, `agent-widget-renderer.js`
+- Dimensions: 110x34 cols/rows
+
+**Fidelity profiles** (via `scripts/lib/showcase-agg.sh`):
+
+| Profile | FPS Cap | Idle Limit | Use Case |
+|---------|---------|------------|----------|
+| `compact` | 24 | 3s | Small file size |
+| `standard` | 30 | 5s | Balanced |
+| `inspect` | 30 | 8s | Maximum detail (default) |
 
 ### T — Tmux Recording (recommended for polished output)
 
-1. `scripts/showcase-tmux-recorder.sh` orchestrates a full tmux session:
-   - Builds the project, launches tmux, runs `asciinema rec`
-   - `scripts/showcase-tmux-scenes.mjs` choreographs 7 scenes with calm pacing and ANSI crossfade transitions
-   - Per-character typing with realistic delays
-   - Scenes: Dashboard → Help → Top View → Widget → Agent Spawn → Settings → Swarm
-2. ffmpeg compresses the ~133s recording to ~60s with `setpts=0.45*PTS`
-3. Optional drawtext title card + scene labels (auto-detected; `--no-titles` to skip)
-4. Output: `docs/images/showcase_tmux.gif`, `showcase_tmux.mp4`
+**Script:** `scripts/showcase-tmux-recorder.sh`
+
+**Full workflow:**
+
+```bash
+# 1. Preflight checks (tmux, node, asciinema, agg, ffmpeg, pi CLI)
+# 2. Build project
+npm run build
+
+# 3. Start tmux session (110x34)
+tmux new-session -d -s "showcase-tmux-$$" -c "$PWD" -x 110 -y 34
+
+# 4. Generate scene choreography
+node scripts/showcase-tmux-scenes.mjs --session "showcase-tmux-$$"
+
+# 5. Record with asciinema inside tmux
+asciinema rec --overwrite --cols 110 --rows 34 /tmp/showcase.cast
+
+# 6. Launch pi CLI and run choreography
+tmux send-keys "pi -e ./src/index.ts" Enter
+bash /tmp/showcase-tmux-choreography.sh
+
+# 7. Convert to GIF (calm speed 0.85x)
+agg --speed 0.85 --renderer fontdue --fps-cap 30 --idle-time-limit 8 \
+  --theme "$PI_CLI_THEME" /tmp/showcase.cast docs/images/showcase_tmux.gif
+
+# 8. Convert to MP4 with compression and title card
+ffmpeg -i showcase_tmux.gif -vf "scale=1280:720,pad=1280:720,setpts=0.45*PTS,drawtext=..." \
+  -preset slow -crf 18 showcase_tmux.mp4
+```
+
+**Scene choreography** (generated by `showcase-tmux-scenes.mjs`):
+
+| Scene | Duration | Actions |
+|-------|----------|---------|
+| 1. Dashboard | ~13s | Open dashboard, navigate agent list |
+| 2. Help | ~6s | Press `?` for hotkey overlay |
+| 3. Top View | ~16s | Press `t` for resource usage table |
+| 4. Widget | ~8s | Press `w` for running agents widget |
+| 5. Agent Spawn | ~15s | Spawn agent, watch lifecycle |
+| 6. Settings | ~17s | Navigate settings menu |
+| 7. Swarm | ~13s | Show swarm topology |
+| 8. Overview | ~20s | Final dashboard overview |
+
+**Total:** ~133s raw → ~60s compressed (setpts=0.45*PTS)
+
+**ANSI crossfade transition** (between scenes):
+
+```bash
+# 1. Close any overlay
+Escape
+# 2. Dim text
+$'\x1b[2m'
+# 3. Clear screen (black moment)
+$'\x1b[2J\x1b[H'
+# 4. Reset brightness
+$'\x1b[0m'
+```
+
+**Title card** (first 3.5s of MP4):
+- "Pi Agent Orchestrator" (48pt, white)
+- "v0.11.0 — Sub-agents, Swarms & Live Dashboard" (20pt, #cccccc)
+- Scene labels at bottom (colored by scene)
+
+**Scene label colors:**
+- Dashboard: #9ece6a (green)
+- Help: #e0af68 (yellow)
+- Top View: #7aa2f7 (blue)
+- Widget: #bb9af7 (purple)
+- Agent Spawn: #f7768e (red)
+- Settings: #9ece6a (green)
+- Swarm: #7dcfff (cyan)
+- Overview: #9ece6a (green)
 
 ### A — Live Terminal Playback
 
-1. `scripts/showcase-live-demo.mjs --auto` plays a scripted session on stdout (real renderers, timed "hotkey" hints).
-2. `asciinema rec` captures → `/tmp/showcase-live.cast`.
-3. Same agg pipeline → `docs/images/showcase_live.gif`.
+**Script:** `scripts/showcase-live-demo.mjs`
+
+```bash
+# Play scripted session on stdout (real renderers, timed "hotkey" hints)
+node scripts/showcase-live-demo.mjs --auto
+
+# Or record with asciinema
+asciinema rec -c "node scripts/showcase-live-demo.mjs --auto" /tmp/showcase-live.cast
+```
+
+**Mock data** includes agents with statuses: running, queued, completed, error.
+Timed hints appear on screen: "Press j/k to navigate", "Press Enter to intervene", etc.
 
 ### B — Remotion Post-Production
 
-Uses `pi-agent-control-extension/scripts/render-showcase.sh`:
-- Title / outro, window chrome, keystroke overlays
-- Prefers **live** cast, falls back to programmatic hero cast
-- Preset: `warm-hero`, fidelity: `inspect`
+**Script:** `scripts/render-showcase-remotion.sh`
 
 ```bash
 export DROID_PLUGIN_ROOT=/path/to/pi-agent-control-extension
 npm run showcase:live && npm run showcase:remotion
 ```
 
+**Features:**
+- Title / outro cards
+- Window chrome (fake terminal frame)
+- Keystroke overlays
+- Prefers live cast, falls back to programmatic hero
+- Preset: `warm-hero`
+- Fidelity: `inspect`
+
 ### D — VHS Declarative Tape
 
-`showcase/install-and-agents.tape` — types `npm run build` + live demo in a fresh terminal.
+**Script:** `scripts/render-showcase-vhs.sh`
 
 ```bash
+# Install VHS (Go tool)
 go install github.com/charmbracelet/vhs@latest
+
+# Run tape
 npm run showcase:vhs
 ```
 
+**Example tape file** (see `references/vhs-example.tape`):
+
+```tape
+Output docs/images/showcase_vhs.gif
+Set FontSize 17
+Set Width 110
+Set Height 34
+Set Theme "Dracula"
+Set TypingSpeed 80ms
+
+Type "npm run build"
+Sleep 500ms
+Enter
+Sleep 3s
+```
+
+## Color Palette
+
+The Pi CLI theme used by agg renderer:
+
+```bash
+PI_CLI_THEME="181818,e0d0c0,15161e,f7768e,9ece6a,e0af68,7aa2f7,bb9af7,7dcfff,a9b1d6,414868,f7768e,9ece6a,e0af68,7aa2f7,bb9af7,7dcfff,c0caf5"
+```
+
+**Named colors** (Tokyo Night inspired):
+- Background: #181818
+- Foreground: #e0d0c0
+- Cursor: #15161e
+- Red: #f7768e
+- Green: #9ece6a
+- Yellow: #e0af68
+- Blue: #7aa2f7
+- Purple: #bb9af7
+- Cyan: #7dcfff
+- White: #a9b1d6
+- Bright black: #414868
+
 ## Asset Map
 
-| File | Pipeline |
-|------|----------|
-| `showcase_dashboard.gif` | C |
-| `showcase_top_view.gif` | C |
-| `showcase_widget.gif` | C |
-| `showcase_live.gif` | A |
-| `showcase_tmux.gif` / `.mp4` | T |
-| `showcase_vhs.gif` | D |
-| `dashboard_preview.mp4` | B (or C fallback) |
-| `dashboard_preview_programmatic.gif` | C combined cast |
+| File | Pipeline | Dimensions | Format |
+|------|----------|------------|--------|
+| `showcase_dashboard.gif` | C | 110x34 | GIF |
+| `showcase_top_view.gif` | C | 110x34 | GIF |
+| `showcase_widget.gif` | C | 110x34 | GIF |
+| `showcase_live.gif` | A | 110x32 | GIF |
+| `showcase_tmux.gif` | T | 110x34 | GIF |
+| `showcase_tmux.mp4` | T | 1280x720 | MP4 |
+| `showcase_vhs.gif` | D | 110x34 | GIF |
+| `dashboard_preview.mp4` | B | 1280x720 | MP4 |
+| `dashboard_preview_programmatic.gif` | C | 110x34 | GIF |
 
 All assets live in `docs/images/`.
 
 ## Environment Variables
 
 ```bash
+# Fidelity profile for agg rendering
 export SHOWCASE_FIDELITY=inspect   # compact | standard | inspect
+
+# Path to pi-agent-control-extension (for Remotion)
 export DROID_PLUGIN_ROOT=~/OrgChefgroep/pi-agent-control-extension
-export SHOWCASE_FONT=/path/to/font.ttf   # override auto-detected font
-export SHOWCASE_NO_TITLES=1              # skip drawtext overlays (CI)
+
+# Override auto-detected font (for drawtext)
+export SHOWCASE_FONT=/path/to/font.ttf
+
+# Skip drawtext title card (CI mode)
+export SHOWCASE_NO_TITLES=1
+
+# Override agg font size
+export AGG_FONT_SIZE=17
+
+# Force programmatic hero fallback
+export FORCE_PROGRAMMATIC_HERO=1
+```
+
+## Quick Start Examples
+
+### Generate CI-safe GIFs only
+
+```bash
+npm run showcase:ci
+# → docs/images/showcase_dashboard.gif
+# → docs/images/showcase_top_view.gif
+# → docs/images/showcase_widget.gif
+```
+
+### Record polished tmux demo
+
+```bash
+# Ensure dependencies: tmux, asciinema, agg, ffmpeg, pi CLI
+npm run showcase:tmux
+# → docs/images/showcase_tmux.gif
+# → docs/images/showcase_tmux.mp4
+```
+
+### Skip slow steps in full pipeline
+
+```bash
+SKIP_LIVE=1 SKIP_REMOTION=1 SKIP_VHS=1 npm run showcase
+# Only runs C (programmatic) + T (tmux)
+```
+
+### Custom fidelity for smaller GIFs
+
+```bash
+SHOWCASE_FIDELITY=compact npm run showcase:ci
+# Lower FPS cap (24), shorter idle limit (3s)
+```
+
+### No title card for CI
+
+```bash
+SHOWCASE_NO_TITLES=1 npm run showcase:tmux
+# Skips ffmpeg drawtext (requires libfreetype)
 ```
 
 ## When To Use Each Pipeline
@@ -96,20 +313,438 @@ export SHOWCASE_NO_TITLES=1              # skip drawtext overlays (CI)
 - **Quick demo GIF:** Programmatic — smallest files, CI-safe
 - **Full terminal recording:** Tmux — realistic typing, ANSI transitions, ~60s compressed output
 - **Social media / docs:** VHS — stylized terminal aesthetic
+- **Release video:** Remotion — highest production value with title/keystroke overlays
 
 ## Updating Showcase Assets
 
 After any UI changes to the dashboard, top view, or widget:
 
-1. Run `npm run showcase:ci` to regenerate programmatic GIFs (fastest)
-2. Run `npm run showcase:tmux` for a polished terminal recording (recommended)
-3. Run `npm run showcase` for all pipelines (slowest, most comprehensive)
-4. Verify output in `docs/images/` — check file sizes and durations with `ffprobe`
-5. Commit the updated GIFs alongside the code changes
+1. Run `npm run showcase:ci` to regenerate programmatic GIFs (fastest, ~30s)
+2. Run `npm run showcase:tmux` for a polished terminal recording (recommended, ~3min)
+3. Run `npm run showcase` for all pipelines (slowest, most comprehensive, ~10min)
+4. Verify output in `docs/images/`:
+   ```bash
+   ls -lh docs/images/showcase*.gif docs/images/dashboard_preview*.mp4
+   ffprobe -v error -select_streams v:0 -show_entries stream=width,height,duration \
+     -of csv=s=x:p=0 docs/images/showcase_tmux.mp4
+   ```
+5. Preview GIFs in browser to verify animation loops correctly
+6. Commit the updated GIFs alongside the code changes
+
+## File Size Guidelines
+
+| Asset | Target Size | Max Size |
+|-------|-------------|----------|
+| showcase_dashboard.gif | 1-2 MB | 3 MB |
+| showcase_tmux.gif | 3-5 MB | 8 MB |
+| showcase_tmux.mp4 | 2-4 MB | 6 MB |
+| dashboard_preview.mp4 | 1-2 MB | 3 MB |
+
+If files exceed max size:
+- Reduce `SHOWCASE_FIDELITY` to `compact`
+- Shorten choreography duration in scene scripts
+- Increase compression in `showcase-agg.sh`
+- Lower MP4 CRF value (higher = more compression)
 
 ## Troubleshooting
 
-- **`drawtext` not available:** ffmpeg was compiled without libfreetype. Use `--no-titles` or install a full ffmpeg (`apt install ffmpeg` on Debian/Ubuntu).
-- **Font not found:** Set `SHOWCASE_FONT=/path/to/font.ttf` or install `fonts-dejavu-core`.
-- **GIF too large:** Reduce choreography duration or increase compression in `showcase-agg.sh`.
-- **Tmux recording fails:** Ensure `tmux` and `asciinema` are installed. Check `showcase-tmux-scenes.mjs` for syntax errors.
+### `drawtext` not available
+
+ffmpeg was compiled without libfreetype.
+
+**Fix:**
+```bash
+# Option 1: Use --no-titles
+npm run showcase:tmux -- --no-titles
+
+# Option 2: Install full ffmpeg
+sudo apt install ffmpeg  # Debian/Ubuntu
+brew install ffmpeg      # macOS
+```
+
+### Font not found
+
+DejaVu Sans not detected in standard paths.
+
+**Fix:**
+```bash
+# Option 1: Set custom font
+export SHOWCASE_FONT=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+
+# Option 2: Install DejaVu
+sudo apt install fonts-dejavu-core
+```
+
+### GIF too large
+
+**Fix:**
+```bash
+# Reduce fidelity
+SHOWCASE_FIDELITY=compact npm run showcase:ci
+
+# Or reduce duration in scene choreography
+# Edit scripts/showcase-tmux-scenes.mjs: shorten scene durations
+```
+
+### Tmux recording fails
+
+**Fix:**
+```bash
+# Check prerequisites
+which tmux && which asciinema && which node
+
+# Ensure pi CLI is on PATH
+which pi
+
+# Check syntax of scene script
+node scripts/showcase-tmux-scenes.mjs --session test
+```
+
+### Build artifacts missing
+
+**Fix:**
+```bash
+npm run build
+# Then re-run showcase
+```
+
+### agg not installed
+
+**Fix:**
+```bash
+# Install agg (asciinema GIF generator)
+pip install asciinema-agg
+# or
+cargo install agg
+```
+
+## References
+
+### Internal Reference Files
+
+- **Example VHS tape:** `references/vhs-example.tape` — Complete VHS tape example with commands
+- **Tmux scene reference:** `references/tmux-scenes-reference.md` — Scene timing, label colors, ANSI transitions
+- **FFmpeg filters:** `references/ffmpeg-filters.md` — Scale, pad, drawtext, setpts, CRF values, presets
+- **Asciicast format:** `references/asciicast-format.md` — JSON structure, ANSI codes, time compression
+- **Custom scene example:** `references/custom-scene-example.md` — How to add new scenes to tmux choreography
+- **Dependency installation:** `references/dependency-installation.md` — Full installation guide for all tools
+
+### External Resources
+
+- **Agg renderer:** https://github.com/asciinema/agg
+- **VHS tool:** https://github.com/charmbracelet/vhs
+- **asciinema:** https://asciinema.org/
+- **FFmpeg documentation:** https://ffmpeg.org/documentation.html
+- **tmux manual:** https://github.com/tmux/tmux/wiki
+- **Pi CLI theme:** Tokyo Night inspired palette (see Color Palette section)
+
+## Best Practices
+
+### File Organization
+
+Keep showcase assets organized in `docs/images/`:
+
+```bash
+docs/images/
+├── showcase_dashboard.gif           # Programmatic dashboard
+├── showcase_top_view.gif            # Programmatic top view
+├── showcase_widget.gif              # Programmatic widget
+├── showcase_live.gif                # Live terminal recording
+├── showcase_tmux.gif                # Tmux polished GIF
+├── showcase_tmux.mp4                # Tmux compressed MP4
+├── showcase_vhs.gif                 # VHS stylized GIF
+├── dashboard_preview.mp4            # Hero video (Remotion)
+└── dashboard_preview_programmatic.gif  # Fallback hero
+```
+
+### Version Control
+
+- Commit GIFs alongside code changes (they're binary but small enough)
+- Use `git lfs` if files exceed 10 MB
+- Add `.gitattributes` to mark GIFs as binary:
+  ```
+  *.gif binary
+  *.mp4 binary
+  ```
+
+### CI Integration
+
+```yaml
+# .github/workflows/showcase.yml
+- name: Generate showcase
+  run: npm run showcase:ci
+  env:
+    SHOWCASE_FIDELITY: compact
+    SHOWCASE_NO_TITLES: 1
+```
+
+### Naming Conventions
+
+- Use lowercase with underscores: `showcase_dashboard.gif`
+- Include pipeline suffix: `_tmux`, `_live`, `_vhs`
+- Hero video: `dashboard_preview.mp4`
+
+## Performance Tips
+
+### Reduce Render Time
+
+1. **Use compact fidelity for CI:**
+   ```bash
+   SHOWCASE_FIDELITY=compact npm run showcase:ci
+   ```
+
+2. **Skip slow pipelines:**
+   ```bash
+   SKIP_LIVE=1 SKIP_REMOTION=1 SKIP_VHS=1 npm run showcase
+   ```
+
+3. **Cache build artifacts:**
+   ```bash
+   npm run build  # Run once, reuse dist/
+   ```
+
+4. **Use parallel conversion:**
+   ```bash
+   # Convert multiple GIFs in parallel
+   agg cast1.gif out1.gif &
+   agg cast2.gif out2.gif &
+   agg cast3.gif out3.gif &
+   wait
+   ```
+
+### Reduce File Size
+
+1. **Lower fidelity:**
+   ```bash
+   SHOWCASE_FIDELITY=compact npm run showcase:ci
+   ```
+
+2. **Reduce fps cap:**
+   Edit `scripts/lib/showcase-agg.sh`:
+   ```bash
+   agg_fps_cap=24  # Down from 30
+   ```
+
+3. **Shorten idle limit:**
+   ```bash
+   agg_idle_limit=2  # Down from 8
+   ```
+
+4. **Increase MP4 compression:**
+   ```bash
+   ffmpeg -crf 23  # Up from 18
+   ```
+
+5. **Reduce scene duration:**
+   Edit `scripts/showcase-tmux-scenes.mjs` to shorten sleep times
+
+### Optimize Tmux Recording
+
+1. **Reduce scene count:** Remove non-essential scenes
+2. **Faster typing:** Reduce `charDelayMs` from 80ms to 60ms
+3. **Shorter pauses:** Reduce `waitAfterMs` from 1200ms to 800ms
+4. **Skip title card:** Use `--no-titles` flag
+
+## Advanced Usage
+
+### Custom Theme
+
+Create a custom agg theme:
+
+```bash
+# Tokyo Night theme
+export PI_CLI_THEME="181818,e0d0c0,15161e,f7768e,9ece6a,e0af68,7aa2f7,bb9af7,7dcfff,a9b1d6,414868,f7768e,9ece6a,e0af68,7aa2f7,bb9af7,7dcfff,c0caf5"
+
+# Dracula theme
+export PI_CLI_THEME="282a36,f8f8f2,44475a,ff5555,50fa7b,f1fa8c,8be9fd,bd93f9,ff79c6,6272a4,44475a,ff5555,50fa7b,f1fa8c,8be9fd,bd93f9,ff79c6,f8f8f2"
+
+# Gruvbox Dark
+export PI_CLI_THEME="282826,ebdbb2,3c3836,cc241d,98971a,d79921,458588,b16286,689d6a,a89984,928374,fb4934,b8bb26,fabd2f,83a598,d3869b,8ec07c,ebdbb2"
+```
+
+### Custom Dimensions
+
+Edit scripts to change terminal size:
+
+```bash
+# In generate-showcase-media.mjs
+const WIDTH = 120;  # Up from 110
+const HEIGHT = 40;  # Up from 34
+
+# In showcase-tmux-recorder.sh
+COLS=120
+ROWS=40
+```
+
+### Multi-Resolution Output
+
+Generate multiple resolutions:
+
+```bash
+# 720p
+agg --cols 110 --rows 34 input.cast output_720p.gif
+
+# 1080p
+agg --cols 160 --rows 45 input.cast output_1080p.gif
+
+# 4K
+agg --cols 320 --rows 90 input.cast output_4k.gif
+```
+
+### Batch Processing
+
+Process multiple recordings:
+
+```bash
+#!/bin/bash
+for cast in /tmp/showcase-*.cast; do
+  name=$(basename "$cast" .cast)
+  agg "$cast" "docs/images/${name}.gif"
+  ffmpeg -i "docs/images/${name}.gif" \
+    -vf "scale=1280:720,pad=1280:720" \
+    -preset slow -crf 18 \
+    "docs/images/${name}.mp4"
+done
+```
+
+### Automated Testing
+
+Verify showcase assets:
+
+```bash
+#!/bin/bash
+# test-showcase.sh
+
+check_file() {
+  local file="$1"
+  local min_size="$2"
+  local max_size="$3"
+
+  if [[ ! -f "$file" ]]; then
+    echo "FAIL: $file not found"
+    return 1
+  fi
+
+  local size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null)
+
+  if (( size < min_size )); then
+    echo "FAIL: $file too small (${size} < ${min_size})"
+    return 1
+  fi
+
+  if (( size > max_size )); then
+    echo "FAIL: $file too large (${size} > ${max_size})"
+    return 1
+  fi
+
+  echo "PASS: $file (${size} bytes)"
+  return 0
+}
+
+check_file "docs/images/showcase_dashboard.gif" 500000 3000000
+check_file "docs/images/showcase_tmux.gif" 1000000 8000000
+check_file "docs/images/showcase_tmux.mp4" 1000000 6000000
+```
+
+## Integration with Documentation
+
+### README.md
+
+```markdown
+## Demo
+
+![Dashboard](docs/images/showcase_dashboard.gif)
+
+![Full Demo](docs/images/showcase_tmux.mp4)
+```
+
+### PR Description
+
+```markdown
+## Changes
+
+- Updated dashboard UI with new color scheme
+
+## Demo
+
+![Before](docs/images/showcase_dashboard_old.gif)
+![After](docs/images/showcase_dashboard.gif)
+```
+
+### GitHub Release Notes
+
+```markdown
+## v0.11.0
+
+### New Features
+
+- Swarm topology view
+- Live agent dashboard
+
+### Demo
+
+![Dashboard](docs/images/showcase_tmux.mp4)
+```
+
+## Monitoring and Metrics
+
+### Track Asset Sizes
+
+```bash
+# Log asset sizes over time
+echo "$(date),$(stat -f%z docs/images/showcase_dashboard.gif)" >> showcase_sizes.log
+```
+
+### Track Render Times
+
+```bash
+# Time the render
+time npm run showcase:ci
+```
+
+### Automated Size Alerts
+
+```yaml
+# GitHub Action
+- name: Check asset sizes
+  run: |
+    size=$(stat -c%s docs/images/showcase_dashboard.gif)
+    if (( size > 3000000 )); then
+      echo "ERROR: showcase_dashboard.gif too large (${size} bytes)"
+      exit 1
+    fi
+```
+
+## Common Workflows
+
+### Quick Preview After UI Change
+
+```bash
+npm run build
+node scripts/generate-showcase-media.mjs
+agg /tmp/showcase-dashboard.cast preview.gif
+```
+
+### Full Regeneration for Release
+
+```bash
+npm run showcase
+# Review assets
+ls -lh docs/images/showcase*.gif docs/images/dashboard_preview*.mp4
+```
+
+### CI-Only Regeneration
+
+```bash
+SHOWCASE_FIDELITY=compact SHOWCASE_NO_TITLES=1 npm run showcase:ci
+```
+
+### Debug Tmux Recording
+
+```bash
+# Run choreography without recording
+node scripts/showcase-tmux-scenes.mjs --session debug > /tmp/debug.sh
+tmux new-session -d -s debug -x 110 -y 34
+bash /tmp/debug.sh
+tmux attach -t debug
+```
