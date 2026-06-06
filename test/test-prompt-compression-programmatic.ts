@@ -5,10 +5,9 @@
  * and that per-agent override works correctly.
  */
 
-import { setPromptCompressionLevel, getPromptCompressionLevel } from "./src/agent-registry.js";
+import { getPromptCompressionLevel, setPromptCompressionLevel } from "./src/agent-registry.js";
+import { READONLY_PROMPT_PARAMS } from "./src/default-agents.js";
 import { buildAgentPrompt } from "./src/prompts.js";
-import { DEFAULT_AGENTS, READONLY_PROMPT_PARAMS, createReadOnlyPrompt } from "./src/default-agents.js";
-import { getAgentConfig } from "./src/agent-types.js";
 import type { PromptCompressionLevel } from "./src/settings.js";
 import type { AgentConfig, EnvInfo } from "./src/types.js";
 
@@ -104,8 +103,6 @@ const customReadOnlyAgentConfig: AgentConfig = {
   promptCompressionLevel: "minimal", // Override to minimal
 };
 
-// Register the params for lazy regeneration (simulating a built-in agent)
-import { READONLY_PROMPT_PARAMS } from "./src/default-agents.js";
 READONLY_PROMPT_PARAMS.set("test-readonly-agent", {
   role: "a test specialist",
   task: "test things",
