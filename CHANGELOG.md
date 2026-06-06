@@ -1,9 +1,14 @@
 # Changelog
 
-## v0.11.0 (2026-06-04)
+## v0.11.0 (2026-06-06)
 
 ### Features
 
+- **Prompt Compression Levels**: New `promptCompressionLevel` setting (`minimal` | `balanced` | `aggressive`) controls system prompt verbosity per agent. Affects read-only warnings, tool usage instructions, and handoff templates. Aggressive mode saves ~44% tokens on prompt components; minimal mode provides maximum instruction quality (+70% tokens). Supports per-agent override via `prompt_compression` frontmatter directive. Lazy runtime regeneration ensures the setting takes effect for all built-in agents at spawn time.
+- **Handoff Frontmatter Directive**: Custom agents can now set `handoff: true` in their `.md` frontmatter to enable structured JSON handoff at end of response, enabling chain-of-agents workflows. Parsing follows the same boolean pattern as `inheritContext`, `runInBackground`, and `isolated`. Three handoff prompt variants (full/balanced/aggressive) match the compression level setting.
+- **Interactive Compression Submenu**: New `Prompt compression` entry in `/agents → Settings` with live token-count preview, 3-level picker (minimal/balanced/aggressive), and side-by-side comparison breakdown.
+- **Boolean Parsing Helpers**: New exported `parseBooleanOptional` and `parseBooleanWithDefault` in `src/custom-agents.ts` for safe YAML frontmatter consumption. Case-insensitive string match (`"TRUE"`, `"False"`), throws on invalid types (numbers, unrecognised strings).
+- **Chain-of-Agents Workflow Examples**: New "Chain of Agents" section in README documenting three pattern templates: Research→Write→Review, Test→Fix→Verify (CI repair loop), and Multi-perspective Analysis (3 parallel → synthesizer).
 - **Interactive Top View (`/agents top`)**: Switch views with `t` in the dashboard to access a real-time table of active and completed agents sorted by resource usage metrics (Turns, Tokens, Tool Uses, Duration, Name, and Activity recency `LAST` column). Columns are sortable via keys: `t` (tokens), `r` (turns), `d` (duration), `u` (tool uses), `l` (last seen recency), `n` (name). Pagination supported with `left` / `right` arrow keys.
 - **Activity Heatmap Indicator**: Shows a visual heatmap representation of active subagent concurrency directly in the widget header.
 - **Virtual Scrolling**: Added virtual scrolling window calculations for the agent widget, with scroll hints and scroll boundaries to handle large lists gracefully.
@@ -15,18 +20,38 @@
   - **CVE-003**: Fully authenticated cross-extension RPC endpoints with custom rate limiters.
   - **CVE-005**: Bound schedule intervals and update caps.
 
+### Changed
+
+- **Git hooks are now opt-in**: removed `postinstall` auto-install. Run `npm run setup:hooks` after `npm install` to enable biome + tsc on commit and full test suite on push. Hooks are no longer installed by default for users who don't need them.
+
 ### Performance & Cleanup
 
+- **Dashboard Body Rendering — Single-pass O(N) bucketing**: The agent dashboard's body now performs a single O(N) pass over the agent list, replacing the previous 4× `.filter()` cascade. Yields ~50% speedup on 50k agents (674ms → 337ms per 100 render frames). (#94)
 - **Configurable TTL & sweeps**: Reduced idle agent TTL (60s default) and shortened GC sweeps to 30s intervals.
 - **Adaptive Refresh Intervals**: Dynamically switches UI tick rates between 100ms (100+ agents), 150ms (50-99 agents), 200ms (active execution), and 750ms (idle) to conserve host CPU.
 - **Widget Dirty Snapshotting**: Saves cycles by skipping expensive UI buffer paints when no structural status or agent state has modified.
 - **SwarmHealth Consolidation**: RPC checks consolidated to avoid chatty inter-process handshakes.
 
 ### Documentation
+
+- **AGENTS.md** expanded with 15-item "Common Mistakes" section covering YAML booleans, ESM imports, Biome conventions, peer-dep safety, Windows test flakiness, benchmark patterns, and more.
+- **CONTRIBUTING.md** updated with `npm run setup:hooks` opt-in workflow and link to AGENTS Common Mistakes.
+- **README.md** — new "Chain of Agents" section with three example workflows.
+- **docs/api-reference.md** documents the new `PromptCompressionLevel` type and `handoff` / `prompt_compression` frontmatter directives.
+- **docs/architecture.md** updated with the new compression flow in the module map.
 - Added real TUI showcase media (GIF + MP4) generated from dist renderers: dashboard, top view, widget heatmap (`scripts/render-showcase-assets.sh`).
 
-### Metrics
-- 989 tests, 56 test files.
+### Showcase
+- **Tmux-based showcase pipeline**: New `scripts/showcase-tmux-recorder.sh` orchestrates a full tmux session with `asciinema rec`, 7-scene choreography (`showcase-tmux-scenes.mjs`), per-character typing, ANSI crossfade transitions, and calm pacing. ffmpeg compresses ~133s recording to ~60s with `setpts=0.45*PTS`. Optional drawtext title card + scene labels (auto-detected; `--no-titles` to skip).
+- **Showcase skill**: New `.agents/skills/showcase/SKILL.md` documents all 5 showcase pipelines (programmatic, tmux, live, remotion, vhs) with asset map, env vars, and troubleshooting.
+- **README cleanup**: Stripped showcase section to image table only — removed all npm commands and pipeline explanations. Showcase is now documented exclusively in the skill.
+- **Removed `docs/SHOWCASE.md`**: Fully replaced by the showcase skill.
+
+### Fixes
+- **env.test.ts**: Fixed pre-existing test failure caused by herd worktree setup (bare repo). The `detects git repo in current project` test now creates a temp git repo instead of relying on `process.cwd()`, following the same pattern as the existing `returns branch name` test.
+
+### Tests
+- **1006 tests** across **57 test files** (up from 989 / 56). Added 16 new edge-case tests for boolean parsing in custom-agents.
 
 ---
 
