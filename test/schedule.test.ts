@@ -207,13 +207,13 @@ describe("SubagentScheduler — lifecycle", () => {
       });
 
       await expect(scheduler.updateJob(job.id, { prompt: "c".repeat(50001) }))
-        .rejects.toThrow(/Prompt must be <= 50000 characters/);
+        .rejects.toThrow(/Prompt must be a string <= 50000 characters/);
 
       await expect(scheduler.updateJob(job.id, { name: "n".repeat(101) }))
-        .rejects.toThrow(/Schedule name must be <= 100 characters/);
+        .rejects.toThrow(/Schedule name must be a string <= 100 characters/);
 
       await expect(scheduler.updateJob(job.id, { description: "d".repeat(501) }))
-        .rejects.toThrow(/Description must be <= 500 characters/);
+        .rejects.toThrow(/Description must be a string <= 500 characters/);
     });
 
     it("enforces MAX_SCHEDULES concurrently (TOCTOU protection)", { timeout: 15000 }, async () => {
