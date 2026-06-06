@@ -431,16 +431,23 @@ export class AgentManager {
 
           // Append validation feedback when validators fail
           if (!validated) {
-            const failedFeedback = validationResults
-              .filter((r) => !r.passed)
-              .map((r) => {
-                const failedCriteria = r.criteria.filter((c) => !c.passed);
-                const details = failedCriteria.length > 0
-                  ? `\n${failedCriteria.map((c) => `  - ${c.criterion}: ${c.feedback}`).join("\n")}`
-                  : "";
-                return `[${r.agentId}] ${r.summary}${details}`;
-              })
-              .join("\n\n");
+            let failedFeedback = "";
+            for (let i = 0; i < validationResults.length; i++) {
+              const r = validationResults[i];
+              if (r.passed) continue;
+              if (failedFeedback.length > 0) failedFeedback += "\n\n";
+              failedFeedback += `[${r.agentId}] ${r.summary}`;
+              if (r.criteria && r.criteria.length > 0) {
+                let details = "";
+                for (let j = 0; j < r.criteria.length; j++) {
+                  const c = r.criteria[j];
+                  if (!c.passed) {
+                    details += `\n  - ${c.criterion}: ${c.feedback}`;
+                  }
+                }
+                failedFeedback += details;
+              }
+            }
             record.result = (record.result ?? "") +
               `\n\n---\n## Validation Feedback (FAILED)\n${failedFeedback}`;
           }
