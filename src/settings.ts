@@ -9,6 +9,9 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { OrchestrationMode } from "./agent-registry.js";
 import type { JoinMode, PromptCompressionLevel } from "./types.js";
 
+/** Prompt compression level: controls verbosity of system prompts. */
+export type { PromptCompressionLevel } from "./types.js";
+
 export interface SubagentsSettings {
   maxConcurrent?: number;
   /** Optional hard cap for all agents spawned during one pi session. Omit for unlimited. */

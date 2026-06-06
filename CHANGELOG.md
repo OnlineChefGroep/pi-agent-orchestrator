@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.12.0 (2026-06-06)
+
+### MIT Open-Source Release
+
+- **Dual publishing**: Now published to both npmjs.org (`npm install @onlinechefgroep/pi-agent-orchestrator`) and GitHub Packages. Added `publish-npm.yml` CI workflow alongside existing `publish.yml`.
+- **Public documentation**: Added `SECURITY.md` (vulnerability reporting), `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1), and `ROADMAP.md` (public feature roadmap replacing internal ENTERPRISE_READINESS.md).
+- **README badges**: npm version badge, CI status badge, license badge. Dual install instructions (pi extension + standalone npm).
+- **License audit**: Verified MIT license consistency across all source files. No proprietary markings found.
+- **Verification tests**: Added `test/release-verification.test.ts` covering npm pack output, license headers, and registry URL correctness.
+- **Docs structure**: Moved HOWTO-perf.md, PERFORMANCE.md, VERVOLG_PLAN.md to docs/. Created docs/index.md master documentation index. Added 18 missing module descriptions to docs/architecture.md.
+
 ## v0.11.0 (2026-06-06)
 
 ### Features

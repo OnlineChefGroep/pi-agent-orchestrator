@@ -27,9 +27,18 @@ function mockPi(): ExtensionAPI {
 
 describe("detectEnv", () => {
   it("detects git repo in current project", async () => {
-    const env = await detectEnv(mockPi(), process.cwd());
-    expect(env.isGitRepo).toBe(true);
-    expect(env.platform).toBe(process.platform);
+    // Create a temp git repo to avoid issues with bare repos or worktree setups
+    const tmpDir = mkdtempSync(join(tmpdir(), "pi-env-git-"));
+    try {
+      execSync("git init && git config user.email test@test.com && git config user.name Test && git commit --allow-empty -m init", {
+        cwd: tmpDir, stdio: "pipe",
+      });
+      const env = await detectEnv(mockPi(), tmpDir);
+      expect(env.isGitRepo).toBe(true);
+      expect(env.platform).toBe(process.platform);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
   it("returns branch name when on a branch", async () => {

@@ -217,6 +217,28 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/skill-loader.ts` | External module ingestion |
 | `src/telemetry.ts` | Activity datalogging pipeline |
 | `src/batch-orchestrator.ts` | Manages smart/group/swarm batch finalization and update debouncing |
+| `src/agent-tree.ts` | Mermaid chart and JSON tree visualization for agent swarms |
+| `src/audit-logger.ts` | Structured RPC audit logging with in-memory ring buffer and telemetry emission |
+| `src/estimate.ts` | Token estimation for agent prompts (char/4 heuristic) |
+| `src/globals.ts` | Typed `Symbol.for()` contracts for cross-extension `globalThis` access (hooks, manager, widget metrics, telemetry) |
+| `src/logger.ts` | Structured logging with configurable levels via `PI_SUBAGENTS_LOG_LEVEL` env var |
+| `src/readonly-helpers.ts` | Consolidated read-only tool constants (`READ_ONLY_TOOLS`, `READONLY_MEMORY_TOOL_NAMES`) |
+| `src/template-registry.ts` | Agent template indexing, filtering, and search over loaded custom agents |
+| `src/tool-result-helpers.ts` | Shared tool result formatting and notification helpers used by `/agents` commands |
+| `src/events.ts` | Typed event catalog for `pi.events` lifecycle contracts (started, completed, failed, compacted, budget_warning, scheduler_ready) |
+| `src/commands/agents.ts` | `/agents` command registration and argument parsing |
+| `src/commands/hooks.ts` | `/hooks` command registration and argument parsing |
+| `src/tools/agent.ts` | Sub-agent tool implementations (spawn, get result, steer, list, history) |
+| `src/tools/context.ts` | Context mode sandbox tools (`ctx_read`, `ctx_write`, `ctx_list`) |
+| `src/tools/get-result.ts` | Sub-agent result retrieval with telemetry cancellation |
+| `src/tools/steer.ts` | Agent steering tool — send messages to running sub-agents |
+| `src/ui/agent-actions.ts` | Action button handlers for agent lifecycle operations |
+| `src/ui/agent-detail.ts` | Individual agent detail view with status, tokens, and duration |
+| `src/ui/agent-file-helpers.ts` | File operation helpers for agent outputs and logs |
+| `src/ui/agent-list-views.ts` | List view rendering variants (compact, expanded, sorted) |
+| `src/ui/agent-viewer.ts` | Agent details viewer with full metadata display |
+| `src/ui/agent-wizards.ts` | Agent creation wizard UI with step-by-step configuration |
+| `src/ui/settings-snapshot.ts` | Settings snapshot builder for UI rendering and persistence |
 | `src/ui/agent-dashboard.ts` | Primary interactive telemetry view with list and top modes |
 | `src/ui/agent-top-renderer.ts` | Columns rendering, sorting, and pagination logic for resource top view |
 | `src/ui/agent-widget.ts` | Running subagents widget overlay above the editor |

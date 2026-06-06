@@ -71,9 +71,11 @@ Subdirectories are explicitly ignored. Symlink references are skipped.
 | `isolated` | boolean | caller defined | Sandbox topology switch. |
 | `memory` | `user` / `project` / `local` | none | State persistence storage volume. |
 | `isolation` | `worktree` | none | Git worktree detachment mode. |
+| `handoff` | boolean / string | `false` | Produce structured JSON handoff at end of response. Enables chain-of-agents workflows. |
+| `prompt_compression` | `minimal` / `balanced` / `aggressive` | inherits global | Per-agent compression override. `minimal` = full verbose prompts (+70% tokens), `balanced` = concise (default), `aggressive` = ultra-short (−44% tokens). |
 | `enabled` | boolean | `true` | Binary load toggle. |
 
-Non-schema fields are silently dropped. Loader explicitly ignores `name`, `systemPrompt`, `builtinToolNames`, `disallowedTools`, `validators`, `handoff` within the YAML block.
+Non-schema fields are silently dropped. Loader explicitly ignores `name`, `systemPrompt`, `builtinToolNames`, `disallowedTools`, `validators` within the YAML block.
 
 ---
 
@@ -169,6 +171,41 @@ Reference material located at `examples/agents/`:
 | `worktree-isolated-editor.md` | Physical detachment editing block. |
 
 Copy target specimen to `.pi/agents/` to activate inside scope.
+
+---
+
+## // HANDOFF WORKFLOWS
+
+When `handoff: true` is set, the agent produces a structured JSON handoff at the end of its response. This enables chain-of-agents pipelines where one agent's output feeds directly into the next.
+
+### Handoff + Compression
+
+Compression levels affect the handoff prompt injected into the agent:
+
+| Level | Handoff Prompt Style |
+|---|---|
+| `minimal` | Full verbose instructions with two examples |
+| `balanced` | Concise instructions with one example (default) |
+| `aggressive` | One-liner instruction |
+
+```markdown
+---
+display_name: "Researcher"
+tools: read, grep, find
+handoff: true
+prompt_compression: minimal
+---
+
+Investigate the codebase and emit a structured handoff JSON with:
+- "task": what needs to be done
+- "files": affected file paths
+- "approach": recommended implementation strategy
+- "evidence": supporting code snippets
+```
+
+### Three-Example Pipeline
+
+See README.md "Chain of Agents" section for complete Research→Write→Review, Test→Fix→Verify, and Multi-perspective Analysis examples.
 
 ---
 

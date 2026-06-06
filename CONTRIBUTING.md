@@ -2,6 +2,20 @@
 
 Thank you for contributing. This document covers build, test, lint, and PR workflow.
 
+This project is a **pi extension** — it runs inside a [pi coding agent](https://github.com/OnlineChefGroep) host, not standalone. The three `@earendil-works/pi-*` packages are the host platform and are never direct dependencies. See the [README](README.md) for installation options.
+
+Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
+
+---
+
+## First-Time Contributors
+
+New to the project? Start here:
+
+1. Read [AGENTS.md](AGENTS.md) for architecture, common mistakes, and conventions.
+2. Look for issues labeled **good first issue** in the [issue tracker](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues).
+3. Run `npm run setup:hooks` after clone to enable pre-commit checks.
+
 ---
 
 ## Development Environment
@@ -160,6 +174,10 @@ If you add new settings, update:
 - `docs/api-reference.md` — add to the public API settings documentation
 
 ---
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
 
 ## Questions?
 
