@@ -577,6 +577,20 @@ export class AgentManager {
           record.compactionCount++;
           this.onCompact?.(record, info);
         },
+        onTurnEnd: (turnCount) => {
+          const previous = this.lastTurnCounts.get(id) ?? 0;
+          const delta = Math.max(0, turnCount - previous);
+          this.lastTurnCounts.set(id, turnCount);
+          if (delta > 0) {
+            this.sessionUsage.totalTurns += delta;
+          }
+          const maxTurns = this.sessionLimits.maxTotalTurnsPerSession;
+          if (maxTurns !== undefined && this.sessionUsage.totalTurns >= maxTurns) {
+            record.abortController?.abort();
+            record.error = `Session turn limit reached (${this.sessionUsage.totalTurns}/${maxTurns})`;
+          }
+          this.checkBudgetWarning();
+        },
         signal,
       });
       record.status = "completed";

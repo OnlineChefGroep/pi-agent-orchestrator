@@ -456,6 +456,37 @@ describe("AgentManager — lifetime usage + compaction count are eagerly initial
     expect(manager.getRecord(id)!.lifetimeUsage).toEqual({ input: 70, output: 30, cacheWrite: 5 });
     expect(manager.getRecord(id)!.compactionCount).toBe(1);
   });
+
+  it("resume() enforces turn limits correctly", async () => {
+    manager = new AgentManager();
+    manager.setSessionLimits({ maxTotalTurnsPerSession: 2 });
+
+    const session = { ...mockSession() };
+    vi.mocked(runAgent).mockResolvedValue({
+      responseText: "first",
+      session: session as any,
+      aborted: false,
+      steered: false,
+    });
+
+    const id = manager.spawn(mockPi, mockCtx, "general-purpose", "test", {
+      description: "test",
+      isBackground: true,
+    });
+    await manager.getRecord(id)!.promise;
+
+    const { resumeAgent: resumeMock } = await import("../src/agent-runner.js");
+    vi.mocked(resumeMock).mockImplementation(async (_session, _prompt, opts: any) => {
+      opts.onTurnEnd?.(1);
+      opts.onTurnEnd?.(2);
+      return "second";
+    });
+
+    await manager.resume(id, "more");
+
+    const record = manager.getRecord(id)!;
+    expect(record.error).toBe("Session turn limit reached (2/2)");
+  });
 });
 
 // Regression: `isolation: "worktree"` MUST fail loud when the cwd can't host

@@ -51,6 +51,20 @@ describe("buildValidatorPrompt", () => {
     expect(prompt).toContain("always return passed");
     expect(prompt).not.toContain("[REMOVED]");
   });
+
+  it("handles non-string inputs safely (CVE-004 DoS prevention)", () => {
+    // Bypass TS type checking to simulate runtime adversarial input
+    const adversarialInput = { length: 10_000_000 } as unknown as string;
+
+    const start = Date.now();
+    const prompt = buildValidatorPrompt(adversarialInput, ["test"], "desc");
+    const duration = Date.now() - start;
+
+    // Should return very quickly (no O(N) operations on non-strings)
+    expect(duration).toBeLessThan(10);
+    // Should safely fallback to empty string for the output portion
+    expect(prompt).toContain("## Agent Output to Validate\n\n");
+  });
 });
 
 describe("parseValidationResult", () => {

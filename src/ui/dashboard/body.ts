@@ -164,10 +164,11 @@ function buildVirtualBodyLines(
     lines.push(renderSectionTitle("◔ QUEUED", `${queued.length} queued`, innerW, th, box));
     const winQStart = Math.max(0, windowStart);
     const winQEnd = Math.min(queued.length, windowEnd);
+    const renderW = innerW - 2;
     for (let i = winQStart; i < winQEnd; i++) {
       const rec = queued[i];
       focusLineByAgentId.set(rec.id, lines.length);
-      lines.push(`  ${renderCompactRow(rec, innerW - 2, th, state)}`);
+      lines.push(`  ${renderCompactRow(rec, renderW, th, state)}`);
     }
     if (winQStart > 0) {
       lines.push(`  ${th.dim}+ ${winQStart} earlier queued${th.reset}`);
@@ -201,11 +202,12 @@ function buildVirtualBodyLines(
 
     const startIdx = winDStart;
     const endIdx = winDEnd;
+    const renderW = innerW - 2;
 
     for (let i = startIdx; i < endIdx; i++) {
       const rec = done[i];
       focusLineByAgentId.set(rec.id, lines.length);
-      lines.push(`  ${renderCompactRow(rec, innerW - 2, th, state)}`);
+      lines.push(`  ${renderCompactRow(rec, renderW, th, state)}`);
     }
     if (startIdx > 0) {
       lines.push(`  ${th.dim}+ ${startIdx} earlier finished agents${th.reset}`);

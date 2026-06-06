@@ -49,15 +49,29 @@ export class ScheduleStore {
     await fs.mkdir(dirname(this.filePath), { recursive: true });
   }
 
+  /**
+   * Helper to safely parse JSON and validate its basic shape.
+   */
+  private safeParseData(content: string): ScheduleStoreData {
+    // Basic protection against extremely large JSON payloads
+    if (content.length > 5 * 1024 * 1024) {
+      throw new Error("Schedule store file too large");
+    }
+    const parsed = JSON.parse(content);
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.jobs)) {
+      throw new Error("Invalid schedule store format");
+    }
+    return parsed as ScheduleStoreData;
+  }
+
   /** Synchronous initial load from disk for the constructor. */
   private loadSync(): void {
     if (!existsSync(this.filePath)) return;
     try {
-      const data: ScheduleStoreData = JSON.parse(
-        readFileSync(this.filePath, "utf-8"),
-      );
+      const content = readFileSync(this.filePath, "utf-8");
+      const data = this.safeParseData(content);
       this.jobs.clear();
-      for (const j of data.jobs ?? []) this.jobs.set(j.id, j);
+      for (const j of data.jobs) this.jobs.set(j.id, j);
     } catch {
       /* corrupt — start fresh, next save rewrites */
     }
@@ -66,11 +80,10 @@ export class ScheduleStore {
   /** Reload from disk into the in-memory cache (async). */
   private async load(): Promise<void> {
     try {
-      const data: ScheduleStoreData = JSON.parse(
-        await fs.readFile(this.filePath, "utf-8"),
-      );
+      const content = await fs.readFile(this.filePath, "utf-8");
+      const data = this.safeParseData(content);
       this.jobs.clear();
-      for (const j of data.jobs ?? []) this.jobs.set(j.id, j);
+      for (const j of data.jobs) this.jobs.set(j.id, j);
     } catch {
       /* corrupt — start fresh, next save rewrites */
     }

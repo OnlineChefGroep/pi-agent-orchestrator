@@ -26,9 +26,14 @@ export function renderSwarmSection(
 
   const total = Array.from(grouped.values()).reduce((sum, list) => sum + list.length, 0);
   const lines = ["", renderSectionTitle("⌬ SWARMS", `${grouped.size} swarms · ${total} agents`, innerW, th, box)];
+
+  // Hoist calculations invariant to the loop
+  const cardW = Math.max(28, innerW - 2);
+  const contentW = Math.max(1, cardW - 4);
+  const actW = Math.max(8, contentW - 38);
+  const bottomDash = box.h.repeat(Math.max(0, cardW - 2));
+
   for (const [swarmId, members] of grouped) {
-    const cardW = Math.max(28, innerW - 2);
-    const contentW = Math.max(1, cardW - 4);
     const mode = members[0]?.joinMode ?? "group";
     const header = ` ${swarmId} · ${mode} · ${members.length} agents `;
     const dash = box.h.repeat(Math.max(2, cardW - visibleWidth(header) - 2));
@@ -41,11 +46,11 @@ export function renderSwarmSection(
       const checked = state.selectedIds.has(member.id) ? `${th.success}✓${th.reset}` : " ";
       const icon = `${statusColor(member, th)}${statusIcon(member, state.frame)}${th.reset}`;
       const name = fastTruncate(getDisplayName(member.type), 16);
-      const act = fastTruncate(activityText(member, activity), Math.max(8, contentW - 38));
+      const act = fastTruncate(activityText(member, activity), actW);
       const stats = agentStats(member, activity);
       lines.push(` ${th.border}${box.l}${th.reset} ${fastTruncate(padVisible(`${prefix}${checked} ${icon} ${th.title}${name}${th.reset}  ${th.muted}${act}${th.reset} ${th.dim}${stats}${th.reset}`, contentW), contentW)} ${th.border}${box.r}${th.reset}`);
     }
-    lines.push(` ${th.border}${box.bl}${box.h.repeat(Math.max(0, cardW - 2))}${box.br}${th.reset}`);
+    lines.push(` ${th.border}${box.bl}${bottomDash}${box.br}${th.reset}`);
   }
   return lines;
 }

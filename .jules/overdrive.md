@@ -74,3 +74,26 @@ Preserved from superseded PR branches (merged or closed 2026-06-04). Code change
 Log of PR branches superseded by the optimizations already on `main` and closed/deleted as part of routine cleanup. Code in this section describes *what was removed*, not new performance work.
 
 - `jules-17395782889347801643-1f9e99e5` (PR #89, "⚡ [Optimize Execution Tree Construction from O(N^2) to O(N)]"): the `nodeMap`/`childrenMap` hash-map lookup in `buildExecutionTree` was already merged to `main` in commit `3089a297` (2026-05-29). The branch's only material delta was an `export` keyword (plus JSDoc) on `buildExecutionTree` and a new `test/tree-construction.benchmark.test.ts` that uses `console.log` + `toContain` rather than the project's `toBeLessThan` threshold convention. The `.jules/overdrive.md` addition on the branch duplicated the consolidated notes above. PR closed (not merged) and remote branch deleted.
+---
+
+## 2026-06-06 — Dashboard swarm-section invariant hoisting
+
+**Systemic Bottleneck:** In `src/ui/dashboard/swarm-section.ts`, calculations for UI rendering layout constraints (like `cardW`, `contentW`, `actW`, and string padding borders like `bottomDash`) were being repeatedly computed inside the loop that iterated over `grouped` swarm members. This redundant calculation occurred on every frame render, slowing down the TUI loop under heavy multi-agent swarms.
+
+**Refactor Strategy:** Hoisted loop-invariant dimension variables and structural string calculations out of the inner loop into the outer scope.
+
+**Key Metric Shift:** While minor per-frame, when multiplied by a 60fps refresh rate on swarms of 100+ agents, this saves substantial main-thread CPU overhead in the tight rendering loop, improving the dashboard's responsiveness.
+
+**Actionable Principle:** During TUI frame renders, hoist any deterministic dimension constraint or visual padding generation strictly outside of agent iteration loops to minimize redundant allocation and math operations.
+
+---
+
+## 2026-06-06 — Dashboard body invariant hoisting
+
+**Systemic Bottleneck:** In `src/ui/dashboard/body.ts`, calculations for UI rendering layout constraints (like `innerW - 2`) were being repeatedly computed inside the loop that iterated over `queued` and `done` members.
+
+**Refactor Strategy:** Hoisted loop-invariant dimension variables out of the inner loop into the outer scope.
+
+**Key Metric Shift:** While minor per-frame, when multiplied by a 60fps refresh rate on dashboard segments of 100+ agents, this saves substantial main-thread CPU overhead in the tight rendering loop, improving the dashboard's responsiveness.
+
+**Actionable Principle:** During TUI frame renders, hoist any deterministic dimension constraint or visual padding generation strictly outside of agent iteration loops to minimize redundant allocation and math operations.

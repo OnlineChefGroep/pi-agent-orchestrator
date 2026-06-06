@@ -191,7 +191,12 @@ function projectPath(cwd: string): string {
 function readSettingsFile(path: string): SubagentsSettings {
   if (!existsSync(path)) return {};
   try {
-    return sanitize(JSON.parse(readFileSync(path, "utf-8")));
+    const content = readFileSync(path, "utf-8");
+    if (content.length > 1024 * 1024) { // 1MB limit for settings
+      throw new Error("Settings file too large");
+    }
+    const parsed = JSON.parse(content);
+    return sanitize(parsed);
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     logger.warn(`Ignoring malformed settings at ${path}: ${reason}`);
