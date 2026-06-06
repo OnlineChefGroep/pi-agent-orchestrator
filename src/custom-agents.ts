@@ -8,7 +8,7 @@ import { basename, join } from "node:path";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { BUILTIN_TOOL_NAMES, getDefaultAgentNames } from "./agent-types.js";
 import { emitTelemetry, hashContentSync } from "./telemetry.js";
-import type { AgentConfig, MemoryScope, ThinkingLevel } from "./types.js";
+import type { AgentConfig, MemoryScope, PromptCompressionLevel, ThinkingLevel } from "./types.js";
 
 // CVE-002 FIX: Validation patterns for agent configs
 const UNSAFE_NAME_PATTERN = /[/\\]|\.\.|[\x00-\x1F]/;
@@ -154,12 +154,14 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
       maxTurns: parseNonNegativeInt(fm.max_turns),
       systemPrompt: body.trim(),
       promptMode: fm.prompt_mode === "append" ? "append" : "replace",
-      inheritContext: fm.inherit_context == null ? undefined : fm.inherit_context === true,
-      runInBackground: fm.run_in_background == null ? undefined : fm.run_in_background === true,
-      isolated: fm.isolated == null ? undefined : fm.isolated === true,
+      inheritContext: parseBooleanOptional(fm.inherit_context),
+      runInBackground: parseBooleanOptional(fm.run_in_background),
+      isolated: parseBooleanOptional(fm.isolated),
       memory: parseMemory(fm.memory),
       isolation: fm.isolation === "worktree" ? "worktree" : undefined,
-      enabled: fm.enabled !== false,  // default true; explicitly false disables
+      handoff: parseBooleanWithDefault(fm.handoff, false),
+      promptCompressionLevel: parseCompressionLevel(fm.prompt_compression),
+      enabled: parseBooleanWithDefault(fm.enabled, true),
       source,
     };
 
@@ -254,4 +256,11 @@ function parseInheritField(val: unknown): true | string[] | false {
   if (val === false || val === "none") return false;
   const items = parseCsvList(val, []);
   return items.length > 0 ? items : false;
+}
+
+const VALID_COMPRESSION_LEVELS = new Set(["minimal", "balanced", "aggressive"]);
+
+function parseCompressionLevel(val: unknown): PromptCompressionLevel | undefined {
+  if (typeof val === "string" && VALID_COMPRESSION_LEVELS.has(val)) return val as PromptCompressionLevel;
+  return undefined;
 }
