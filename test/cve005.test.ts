@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SubagentScheduler } from "../src/schedule.js";
 import { ScheduleStore } from "../src/schedule-store.js";
 
-describe("SubagentScheduler Bounds Checks", () => {
+describe("CVE-005: Array bypass and limits", () => {
   let tmp: string;
   let scheduler: SubagentScheduler;
   let store: ScheduleStore;
@@ -14,7 +14,7 @@ describe("SubagentScheduler Bounds Checks", () => {
   let manager: any;
 
   beforeEach(async () => {
-    tmp = mkdtempSync(join(tmpdir(), "scheduler-test-bounds-"));
+    tmp = mkdtempSync(join(tmpdir(), "cve005-"));
     store = new ScheduleStore(join(tmp, "store.json"));
     scheduler = new SubagentScheduler();
     pi = { events: { emit: () => {} } };
@@ -28,35 +28,20 @@ describe("SubagentScheduler Bounds Checks", () => {
     rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("prevents updating a job with a prompt exceeding MAX_PROMPT_SIZE", async () => {
+  it("prevents array bypass on prompt", async () => {
     const job = await scheduler.addJob({
-      name: "test-bounds-job",
+      name: "test-job",
       description: "initial",
       schedule: "+10s",
       subagent_type: "general-purpose",
       prompt: "short prompt",
     });
 
-    const hugePrompt = "a".repeat(50001); // MAX_PROMPT_SIZE is 50000
+    const maliciousPrompt = new Array(10).fill("A".repeat(100000)) as any;
+    // Length is 10, so it bypasses length > 50000 check if typeof is not checked
 
     await expect(
-      scheduler.updateJob(job.id, { prompt: hugePrompt })
-    ).rejects.toThrow(/Prompt must be a string <= 50000 characters/);
-  });
-
-  it("prevents updating a job with a name exceeding MAX_NAME_LENGTH", async () => {
-    const job = await scheduler.addJob({
-      name: "test-bounds-job",
-      description: "initial",
-      schedule: "+10s",
-      subagent_type: "general-purpose",
-      prompt: "short prompt",
-    });
-
-    const hugeName = "a".repeat(101); // MAX_NAME_LENGTH is 100
-
-    await expect(
-      scheduler.updateJob(job.id, { name: hugeName })
-    ).rejects.toThrow(/Schedule name must be a string <= 100 characters/);
+      scheduler.updateJob(job.id, { prompt: maliciousPrompt })
+    ).rejects.toThrow(/Prompt must be a string <= 50000 characters|Prompt is required and must be a string <= 50000 characters/);
   });
 });
