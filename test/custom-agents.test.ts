@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BUILTIN_TOOL_NAMES } from "../src/agent-types.js";
-import { loadCustomAgents } from "../src/custom-agents.js";
+import { loadCustomAgents, parseBooleanOptional, parseBooleanWithDefault } from "../src/custom-agents.js";
 import { onTelemetry } from "../src/telemetry.js";
 
 describe("loadCustomAgents", () => {
@@ -448,6 +448,72 @@ Bad isolation.`);
 
     const result = await loadCustomAgents(tmpDir);
     expect(result.get("bad-isolation")!.isolation).toBeUndefined();
+  });
+
+  it("handoff: \"false\" (string) parses as false (regression — was truthy before strict parsing)", async () => {
+    writeAgent("string-false", `---\nhandoff: "false"\n---\n\nString false.`);
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("string-false")!.handoff).toBe(false);
+  });
+
+  it("handoff: false (boolean) parses as false", async () => {
+    writeAgent("bool-false", `---\nhandoff: false\n---\n\nBoolean false.`);
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("bool-false")!.handoff).toBe(false);
+  });
+
+  it("handoff defaults to false when omitted from frontmatter", async () => {
+    writeAgent("no-handoff-key", `---\ndescription: Missing handoff key\n---\n\nDefault.`);
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("no-handoff-key")!.handoff).toBe(false);
+  });
+
+  it("parses prompt_compression: aggressive into AgentConfig.promptCompressionLevel", async () => {
+    writeAgent("aggressive-agent", `---\nprompt_compression: aggressive\n---\n\nAggressive agent.`);
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("aggressive-agent")!.promptCompressionLevel).toBe("aggressive");
+  });
+
+  describe("parseBooleanOptional", () => {
+    it("returns undefined for null", () => {
+      expect(parseBooleanOptional(null)).toBeUndefined();
+    });
+    it("returns undefined for undefined", () => {
+      expect(parseBooleanOptional(undefined)).toBeUndefined();
+    });
+    it("returns undefined for empty string", () => {
+      expect(parseBooleanOptional("")).toBeUndefined();
+    });
+    it("parses 'TRUE' (uppercase) as true", () => {
+      expect(parseBooleanOptional("TRUE")).toBe(true);
+    });
+    it("parses 'False' (mixed case) as false", () => {
+      expect(parseBooleanOptional("False")).toBe(false);
+    });
+    it("parses native boolean true", () => {
+      expect(parseBooleanOptional(true)).toBe(true);
+    });
+    it("parses native boolean false", () => {
+      expect(parseBooleanOptional(false)).toBe(false);
+    });
+  });
+
+  describe("parseBooleanWithDefault", () => {
+    it("returns default for null", () => {
+      expect(parseBooleanWithDefault(null, true)).toBe(true);
+    });
+    it("returns default for undefined", () => {
+      expect(parseBooleanWithDefault(undefined, false)).toBe(false);
+    });
+    it("returns default for empty string", () => {
+      expect(parseBooleanWithDefault("", false)).toBe(false);
+    });
+    it("throws on number 42 (invalid type)", () => {
+      expect(() => parseBooleanWithDefault(42, false)).toThrow();
+    });
+    it("throws on string 'maybe' (unrecognised)", () => {
+      expect(() => parseBooleanWithDefault("maybe", true)).toThrow();
+    });
   });
 
   it("honors PI_CODING_AGENT_DIR for global custom agent discovery", async () => {
