@@ -7,11 +7,11 @@ type Ctx = ExtensionCommandContext;
 import {
   getAnimationStyle,
   getDashboardRefreshInterval,
-  getOrchestrationMode,getPromptCompressionLevel,
+  getOrchestrationMode, getPromptCompressionLevel,
   getUiStyle,
   setAnimationStyle,
   setDashboardRefreshInterval,
-  setOrchestrationMode,setPromptCompressionLevel,
+  setOrchestrationMode, setPromptCompressionLevel,
   setUiStyle
 } from "../agent-registry.js";
 import type { SubagentScheduler } from "../schedule.js";
