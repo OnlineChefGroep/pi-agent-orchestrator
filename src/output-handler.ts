@@ -301,8 +301,12 @@ export async function showAgentsMenu(
   const options: string[] = [];
 
   if (agents.length > 0) {
-    const running = agents.filter(a => a.status === "running" || a.status === "queued").length;
-    const done = agents.filter(a => a.status === "completed" || a.status === "steered").length;
+    let running = 0;
+    let done = 0;
+    for (const a of agents) {
+      if (a.status === "running" || a.status === "queued") running++;
+      else if (a.status === "completed" || a.status === "steered") done++;
+    }
     options.push(`Running agents (${agents.length}) — ${running} running, ${done} done`);
   }
 
