@@ -139,8 +139,15 @@ if $HAS_DRAWTEXT; then
 
 	if [[ -z "$FONT_BOLD" ]]; then
 		if [[ -n "${SHOWCASE_FONT:-}" ]]; then
-			FONT_BOLD="$SHOWCASE_FONT"
-			FONT_REG="$SHOWCASE_FONT"
+			# Validate SHOWCASE_FONT path exists and is readable
+			if [[ -f "$SHOWCASE_FONT" && -r "$SHOWCASE_FONT" ]]; then
+				FONT_BOLD="$SHOWCASE_FONT"
+				FONT_REG="$SHOWCASE_FONT"
+			else
+				echo "Warning: SHOWCASE_FONT='$SHOWCASE_FONT' is not a readable file, falling back to generic font" >&2
+				FONT_BOLD="Sans"
+				FONT_REG="Sans"
+			fi
 		else
 			FONT_BOLD="Sans"
 			FONT_REG="Sans"

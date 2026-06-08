@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Full showcase pipeline: C (programmatic) + A (live) + B (remotion) + D (vhs) + T (tmux)
+# Full showcase pipeline: C (programmatic) → A (live) → B (remotion) → T (tmux) → D (vhs)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
