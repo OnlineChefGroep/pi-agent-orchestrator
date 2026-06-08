@@ -237,6 +237,6 @@ for (const level of levels) {
   }
 }
 
-console.log("\n" + "=".repeat(60));
+console.log(`\n${"=".repeat(60)}`);
 console.log("ALL TESTS COMPLETED");
 console.log("=".repeat(60));

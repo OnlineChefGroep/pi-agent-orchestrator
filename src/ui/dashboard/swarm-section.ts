@@ -17,7 +17,8 @@ export function renderSwarmSection(
 ): string[] {
   let total = 0;
   const grouped = new Map<string, AgentRecord[]>();
-  for (const rec of state.agents) {
+  for (let i = 0; i < state.agents.length; i++) {
+    const rec = state.agents[i];
     if (!rec.swarmId) continue;
     let list = grouped.get(rec.swarmId);
     if (!list) {
