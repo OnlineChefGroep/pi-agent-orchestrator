@@ -5,11 +5,10 @@
  * and that per-agent override works correctly.
  */
 
-import { getPromptCompressionLevel, setPromptCompressionLevel } from "./src/agent-registry.js";
-import { READONLY_PROMPT_PARAMS } from "./src/default-agents.js";
-import { buildAgentPrompt } from "./src/prompts.js";
-import type { PromptCompressionLevel } from "./src/settings.js";
-import type { AgentConfig, EnvInfo } from "./src/types.js";
+import { getPromptCompressionLevel, setPromptCompressionLevel } from "../src/agent-registry.js";
+import { DEFAULT_AGENTS, READONLY_PROMPT_PARAMS } from "../src/default-agents.js";
+import { buildAgentPrompt } from "../src/prompts.js";
+import type { AgentConfig, EnvInfo, PromptCompressionLevel } from "../src/types.js";
 
 console.log("=".repeat(60));
 console.log("PROMPT COMPRESSION FEATURE TEST");
@@ -223,7 +222,7 @@ if (minimalIncreaseNum > 50 && minimalIncreaseNum < 100) {
 // Test 6: Handoff prompt compression
 console.log("\n--- Test 6: Handoff Prompt Compression ---");
 
-import { buildHandoffPrompt } from "./src/handoff.js";
+import { buildHandoffPrompt } from "../src/handoff.js";
 
 for (const level of levels) {
   const handoff = buildHandoffPrompt(level);
