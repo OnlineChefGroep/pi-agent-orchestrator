@@ -201,29 +201,29 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
 
   // ── Compact batch rendering ──
   // Group queued agents by type for compact display (e.g. "5× Explore agents queued").
-  const queuedByType = new Map<string, { type: string; name: string; count: number }>();
+  // Single-pass O(M) bucketing: collect both counts AND agent references.
+  const queuedByType = new Map<string, { type: string; name: string; count: number; items: AgentRecord[] }>();
   for (const a of queued) {
     const key = a.type;
     const existing = queuedByType.get(key);
     if (existing) {
       existing.count++;
+      existing.items.push(a);
     } else {
-      queuedByType.set(key, { type: key, name: getDisplayName(key), count: 1 });
+      queuedByType.set(key, { type: key, name: getDisplayName(key), count: 1, items: [a] });
     }
   }
 
   // Show compact queued line(s): "5× Explore" for large batches, individual for small.
   const queuedLines: string[] = [];
-  for (const [key, group] of queuedByType) {
+  for (const [, group] of queuedByType) {
     if (group.count >= BATCH_COMPACT_THRESHOLD) {
       queuedLines.push(
         truncate(`${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("accent", `${group.count}× ${group.name}`)} ${theme.fg("dim", "queued")}`),
       );
     } else {
-      // Individual lines for small batches
-      for (let i = 0; i < queued.length; i++) {
-        const a = queued[i];
-        if (a.type !== key) continue;
+      // Individual lines — use pre-bucketed items (no re-filter needed)
+      for (const a of group.items) {
         queuedLines.push(
           truncate(`${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("dim", group.name)}  ${theme.fg("muted", a.description)}`),
         );
