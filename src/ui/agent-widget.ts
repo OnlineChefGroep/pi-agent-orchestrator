@@ -175,8 +175,8 @@ export class AgentWidget {
     const running: AgentRecord[] = [];
     const queued: AgentRecord[] = [];
     const finished: AgentRecord[] = [];
-    for (let i = 0; i < agents.length; i++) {
-      const a = agents[i];
+
+    for (const a of agents) {
       if (a.status === "running") running.push(a);
       else if (a.status === "queued") queued.push(a);
       else finished.push(a);
@@ -278,8 +278,7 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
       });
     } finally {
       let activeAgents = 0;
-      for (let i = 0; i < allAgents.length; i++) {
-        const a = allAgents[i];
+      for (const a of allAgents) {
         if (a.status === "running" || a.status === "queued") activeAgents++;
       }
       this.renderMetrics.record(performance.now() - renderStart, activeAgents);

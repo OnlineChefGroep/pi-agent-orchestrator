@@ -32,11 +32,7 @@ function renderOne(d: NotificationDetails, expanded: boolean, theme: any): strin
   if (d.totalTokens > 0) parts.push(formatTokens(d.totalTokens));
   if (d.durationMs > 0) parts.push(formatMs(d.durationMs));
   if (parts.length) {
-    const styledParts: string[] = [];
-    for (let i = 0; i < parts.length; i++) {
-      styledParts.push(theme.fg("dim", parts[i]));
-    }
-    line += `\n  ${styledParts.join(` ${theme.fg("dim", "·")} `)}`;
+    line += `\n  ${parts.map(p => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `)}`;
   }
 
   // Line 3: result preview (collapsed) or full (expanded)
@@ -64,10 +60,6 @@ export function createNotificationRenderer(theme: any) {
     const d = message.details;
     if (!d) return undefined;
     const all = [d, ...(d.others ?? [])];
-    const lines: string[] = [];
-    for (let i = 0; i < all.length; i++) {
-      lines.push(renderOne(all[i], expanded, theme));
-    }
-    return new Text(lines.join("\n"), 0, 0);
+    return new Text(all.map(item => renderOne(item, expanded, theme)).join("\n"), 0, 0);
   };
 }

@@ -43,8 +43,8 @@ export function renderDashboardDetailPanel(
   if (rec.worktree) details.push(`${th.dim}worktree: ${rec.worktree.branch}${th.reset}`);
   if (rec.swarmId) {
     let count = 0;
-    for (let i = 0; i < state.agents.length; i++) {
-      if (state.agents[i].swarmId === rec.swarmId) count++;
+    for (const a of state.agents) {
+      if (a.swarmId === rec.swarmId) count++;
     }
     details.push(`${th.dim}swarm: ${rec.swarmId} (${count} members)${th.reset}`);
   }

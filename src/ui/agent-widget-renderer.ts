@@ -156,8 +156,8 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
   const running: AgentRecord[] = [];
   const queued: AgentRecord[] = [];
   const finished: AgentRecord[] = [];
-  for (let i = 0; i < options.agents.length; i++) {
-    const a = options.agents[i];
+
+  for (const a of options.agents) {
     if (a.status === "running") running.push(a);
     else if (a.status === "queued") queued.push(a);
     else if (a.completedAt && options.shouldShowFinished(a.id, a.status)) finished.push(a);
@@ -201,7 +201,6 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
 
   // ── Compact batch rendering ──
   // Group queued agents by type for compact display (e.g. "5× Explore agents queued").
-  // Single-pass O(M) bucketing: collect both counts AND agent references.
   const queuedByType = new Map<string, { type: string; name: string; count: number; items: AgentRecord[] }>();
   for (const a of queued) {
     const key = a.type;
