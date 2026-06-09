@@ -57,6 +57,7 @@
     "lint:fix": "biome check --write --unsafe src/ test/ scripts/",
     "setup:hooks": "bash scripts/setup-git-hooks.sh",
     "showcase": "bash scripts/showcase-all.sh",
+    "showcase:tmux": "bash scripts/showcase-tmux-recorder.sh",
     "showcase:ci": "bash scripts/render-showcase-assets.sh --fidelity inspect",
     "showcase:live": "bash scripts/capture-live-showcase.sh",
     "showcase:remotion": "bash scripts/render-showcase-remotion.sh",

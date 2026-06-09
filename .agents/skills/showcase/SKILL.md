@@ -1,5 +1,6 @@
 ---
 name: showcase
+trigger: /showcase
 description: "Generate README and PR showcase visuals for pi-agent-orchestrator. Use when the user asks to create, update, or regenerate showcase GIFs, MP4s, hero videos, or terminal recordings. Examples: \"run the showcase\", \"regenerate the dashboard GIF\", \"create a new hero video\", \"update showcase assets\"."
 ---
 

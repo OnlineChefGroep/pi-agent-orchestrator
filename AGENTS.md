@@ -1,4 +1,69 @@
-# AGENTS.md
+# AGENTS.md — pi-agent-orchestrator
+
+> **Spawn config SSOT** for the Pi agent stack. Sibling repos (`pi-helios-context-extensie`, `Pi-Helios-Memory-Private`, `pi-agent-control-extension`) cross-link here for sub-agent roles, parallel splits, and ecosystem pre-context.
+
+## Pre-context (read first)
+
+Pi extension — runs inside the pi coding agent host, not standalone. Orchestrates autonomous sub-agents: spawn lifecycle, permission inheritance, parent context injection, handoff JSON, cron schedules, swarm join, and TUI dashboard.
+
+| Rule | Detail |
+|------|--------|
+| **Spawn SSOT** | `src/default-agents.ts` (built-ins), `.pi/agents/*.md` (custom overrides), `src/settings.ts` + `.pi/subagent-settings.json` (runtime) |
+| **Never** | Import `@earendil-works/pi-*` as direct deps; treat YAML booleans as truthy strings; sort agent lists (Map insertion order is intentional) |
+| **Peer extensions** | `@onlinechef/context-mode` → `ctx_*` tools; `@onlinechefgroep/pi-subagents-tui` → cinematic sidecar |
+
+## Sub-agent pre-context matrix (Pi stack)
+
+What each layer injects **before** a sub-agent session runs. Parent-only rows affect the host agent, not spawned children.
+
+| Layer | Package / repo | Injected at spawn | Hooks / surface |
+|-------|----------------|-------------------|-----------------|
+| **Orchestrator** | `pi-agent-orchestrator` (this repo) | Parent execution log, permission matrix, handoff payload, prompt compression, optional `ctx_*` bridge | `subagent:start` · `subagent:end` · `subagent:spawn` · `subagent:steer` · RPC `subagents:rpc:spawn` |
+| **Subagent TUI** | `@onlinechefgroep/pi-subagents-tui` | *(parent-only)* JSON heartbeat: agent tree, token/turn metrics, queue state | Vim dashboard `/agents`, bulk-spawn debounce, `steer` / kill from widget |
+| **Memory hooks** | `Pi-Helios-Memory-Private` + `pi-helios-context-extensie` | Timeline `ctx_search`, FTS5 facts, session resume snapshot, failure memories | `PreToolUse` · `PostToolUse` · `PreCompact` · `helios-memory context` |
+| **Control extension** | `pi-agent-control-extension` | Browser/TUI routing (`control_route`), `tctl`, capture drivers, atomized control skills | `/route-control` · `control_browser_command` · WebSocket bridge |
+
+## Skills (install paths)
+
+| Task | Skill path |
+|------|------------|
+| **Codebase graph navigation** | `.agents/skills/graphify/SKILL.md` |
+| **Test / benchmark discipline** | `.agents/skills/testing/SKILL.md` |
+| **Infra / extension packaging** | `.agents/skills/infrastructure/SKILL.md` |
+| **Research loops** | `.agents/skills/autoresearch/SKILL.md` · `.agents/skills/showcase/SKILL.md` (demo video — UI-facing only) |
+| **Global agent patterns** | `~/.agents/skills/agent-explore` · `agent-architect` · `agent-code-reviewer` |
+| **Memory session init** | `~/.agents/skills/agent-memory-hooks` · `../skill-grinder/skills/agent-memory-hooks/SKILL.md` |
+| **Orchestrator dev helper** | `pi-subagents-helper` (see CHANGELOG) |
+
+**Taste:** No `taste-skill` in this repo — backend extension, no marketing copy. `showcase` is Remotion/demo output only.
+
+## Spawn rules
+
+**Config SSOT (edit order):** `src/default-agents.ts` → `.pi/agents/<name>.md` override → `src/custom-agents.ts` frontmatter → `/agents → Settings` (`.pi/subagent-settings.json`).
+
+| Built-in type | Mode | Use when |
+|---------------|------|----------|
+| `Explore` | read-only | Parallel codebase audit, grep/find sweeps, SSOT boundary checks |
+| `Plan` | read-only | Architecture pass before multi-file edits |
+| `Analysis` | read-only + `ctx_*` | Data/compute via sandbox (requires context-mode peer) |
+| `general-purpose` | full tools | Bounded implementation after Plan/Explore land |
+
+**Parallel subagents (this repo):** minimum **4** on cross-module passes (runner + UI + schedule/swarm + custom-agents/handoff). Spawn all in one batch; readonly agents first.
+
+**Site-wide passes (CHEF-98):** when orchestrator work touches public copy or `chefgroep.nl` consumers, follow **minimum 4** parallel subagents per [`chefgroep.nl/AGENTS.md`](../chefgroep.nl/AGENTS.md) — SSOT, pages, chrome/SEO, verify.
+
+## Sub-agents (this repo)
+
+| Role | When | Spawn type | Focus paths |
+|------|------|------------|-------------|
+| **orchestrator-core** | `agent-runner`, permissions, context pipeline | `Explore` | `src/agent-runner.ts` · `src/context.ts` · `src/agent-types.ts` |
+| **orchestrator-ui** | Dashboard, widget, top view | `Explore` | `src/ui/agent-dashboard.ts` · `src/ui/agent-widget.ts` |
+| **orchestrator-schedule** | Cron, swarm, handoff | `Plan` | `src/schedule.ts` · `src/swarm-join.ts` · `src/handoff.ts` |
+| **orchestrator-implement** | After readonly agents report | `general-purpose` | Bounded file set from handoff JSON |
+
+## CHEF
+
+Branch `chore/agent-fleet-a4-pi-stack` or `CHEF-<n>-slug` · PR `Fixes CHEF-<n>` · Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 
 ## Quick commands
 
