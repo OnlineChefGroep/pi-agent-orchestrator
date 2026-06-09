@@ -86,3 +86,13 @@ Log of PR branches superseded by the optimizations already on `main` and closed/
 - The swarm section processing similarly bypassed implicit loops for faster map lookup resolution.
 
 **Actionable Principle:** Avoid multiple sequential array `.filter` iterations on the same source data over the critical rendering path. Instead, perform a single O(N) iteration mapping into distinct category buckets or O(1) dictionaries to ensure layout algorithms remain lightweight.
+
+## 2026-06-09 - TUI Rendering Optimization (Swarm Section)
+
+**Systemic Bottleneck:** In the dashboard rendering loop for the swarm section, the deterministic layout constants `cardW` and `contentW` were recalculated for each swarm group in the loop `for (const [swarmId, members] of grouped)`, which creates unnecessary CPU overhead on the main thread during UI updates.
+
+**Refactor Strategy:** Hoisted the deterministic string calculations and visual padding dimension constraints outside the agent iteration loops to reuse the layout constants across the function call.
+
+**Key Metric Shift:** Bypassed repetitive mathematical operations for deterministic UI constraints inside `src/ui/dashboard/swarm-section.ts`, saving processing time on dashboard render updates.
+
+**Actionable Principle:** In TUI rendering loops, strictly hoist any deterministic dimension constraint, structural string calculation, or visual padding generation outside of agent iteration loops to minimize main-thread CPU overhead and improve responsiveness.
