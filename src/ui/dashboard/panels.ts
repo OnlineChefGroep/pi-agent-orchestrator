@@ -42,7 +42,10 @@ export function renderDashboardDetailPanel(
   if (rec.description) details.push(`${th.muted}${rec.description}${th.reset}`);
   if (rec.worktree) details.push(`${th.dim}worktree: ${rec.worktree.branch}${th.reset}`);
   if (rec.swarmId) {
-    const count = state.agents.filter(a => a.swarmId === rec.swarmId).length;
+    let count = 0;
+    for (const a of state.agents) {
+      if (a.swarmId === rec.swarmId) count++;
+    }
     details.push(`${th.dim}swarm: ${rec.swarmId} (${count} members)${th.reset}`);
   }
   if (rec.groupId) details.push(`${th.dim}group: ${rec.groupId}${th.reset}`);

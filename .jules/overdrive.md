@@ -86,3 +86,13 @@ Log of PR branches superseded by the optimizations already on `main` and closed/
 - The swarm section processing similarly bypassed implicit loops for faster map lookup resolution.
 
 **Actionable Principle:** Avoid multiple sequential array `.filter` iterations on the same source data over the critical rendering path. Instead, perform a single O(N) iteration mapping into distinct category buckets or O(1) dictionaries to ensure layout algorithms remain lightweight.
+
+## 2026-06-10 — Render loop array allocation avoidance
+
+**Systemic Bottleneck:** Multi-dimensional arrays of agents were being processed via sequential `.filter()` operations inside highly frequent UI render loops (e.g. \`header.ts\`, \`agent-widget.ts\`, \`agent-dashboard.ts\`, \`panels.ts\`, \`agent-widget-renderer.ts\`, and \`output-handler.ts\`). Calling \`Array.prototype.filter()\` repeatedly inside the render cycle forces multiple $O(N)$ traversals and instantiates numerous intermediate throwaway arrays, causing massive garbage collection pressure and main thread stalls when displaying a high volume of agents (1000+).
+
+**Refactor Strategy:** Replaced consecutive \`.filter()\` chains with unified, single-pass standard \`for...of\` loops that bucketize objects or increment integer counters simultaneously. This change neutralizes intermediate array creation and slashes the $O(M \\times N)$ iteration complexity to $O(N)$, ensuring rendering layout algorithms remain lightweight.
+
+**Key Metric Shift:** Eliminated thousands of intermediate array allocations per render tick and flattened repeated iterations across active agents. Reduced synchronous block time on the main thread during heavy rendering.
+
+**Actionable Principle:** Avoid multiple sequential array \`.filter()\` iterations on the same source data over the critical rendering path. Instead, perform a single $O(N)$ iteration mapping into distinct category buckets, or simply aggregate integer counters inside a `for` loop, eliminating wasteful memory allocations and mitigating GC bottlenecks.

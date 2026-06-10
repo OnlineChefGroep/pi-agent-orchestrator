@@ -153,12 +153,18 @@ function renderFinishedLine(a: AgentRecord, activity: AgentActivity | undefined,
 }
 
 export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
-  const running = options.agents.filter(a => a.status === "running");
-  const queued = options.agents.filter(a => a.status === "queued");
-  const finished = options.agents.filter(a =>
-    a.status !== "running" && a.status !== "queued" && a.completedAt
-    && options.shouldShowFinished(a.id, a.status),
-  );
+  const running: AgentRecord[] = [];
+  const queued: AgentRecord[] = [];
+  const finished: AgentRecord[] = [];
+  for (const a of options.agents) {
+    if (a.status === "running") {
+      running.push(a);
+    } else if (a.status === "queued") {
+      queued.push(a);
+    } else if (a.completedAt && options.shouldShowFinished(a.id, a.status)) {
+      finished.push(a);
+    }
+  }
 
   const hasActive = running.length > 0 || queued.length > 0;
   const hasFinished = finished.length > 0;

@@ -10,10 +10,13 @@ function dashboardSummaryBar(
   th: DashboardTheme,
   manager?: AgentManager,
 ): string {
-  const running = state.agents.filter(a => a.status === "running").length;
-  const queued = state.agents.filter(a => a.status === "queued").length;
-  const completed = state.agents.filter(a => a.status === "completed" || a.status === "steered").length;
-  const errored = state.agents.filter(a => a.status === "error" || a.status === "aborted").length;
+  let running = 0, queued = 0, completed = 0, errored = 0;
+  for (const a of state.agents) {
+    if (a.status === "running") running++;
+    else if (a.status === "queued") queued++;
+    else if (a.status === "completed" || a.status === "steered") completed++;
+    else if (a.status === "error" || a.status === "aborted") errored++;
+  }
   const selected = state.selectedIds.size > 0
     ? `  ${th.highlight}◆ ${state.selectedIds.size} selected${th.reset}`
     : "";
