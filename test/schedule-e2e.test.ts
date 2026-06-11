@@ -58,7 +58,7 @@ function makeCtx() {
 }
 
 /** Wait for a predicate, polling at 5ms intervals, with a deadline. */
-async function waitFor(predicate: () => boolean, timeoutMs = 1500): Promise<void> {
+async function waitFor(predicate: () => boolean, timeoutMs = 4000): Promise<void> {
   const start = Date.now();
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {

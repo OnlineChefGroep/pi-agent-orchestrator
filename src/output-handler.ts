@@ -288,11 +288,7 @@ async function showAgentsTop(
 }
 
 /**
- * Open the Agents main menu and route the user's selection to the appropriate subviews.
- *
- * Presents options for viewing running agents, an interactive dashboard, execution tree (text/Mermaid/JSON),
- * agent types, scheduled jobs, creating a new agent, settings, and a live top-stats overlay; selected flows
- * may open editors, dialogs, or other UI components and typically return to the menu when finished.
+ * Display the main agents menu with options for dashboard, agent types, scheduling, and settings.
  */
 export async function showAgentsMenu(
   ctx: ExtensionCommandContext,
