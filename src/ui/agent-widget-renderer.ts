@@ -156,10 +156,21 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
   const running: AgentRecord[] = [];
   const queued: AgentRecord[] = [];
   const finished: AgentRecord[] = [];
+  const queuedByType = new Map<string, { type: string; name: string; count: number; items: AgentRecord[] }>();
 
   for (const a of options.agents) {
     if (a.status === "running") running.push(a);
-    else if (a.status === "queued") queued.push(a);
+    else if (a.status === "queued") {
+      queued.push(a);
+      const key = a.type;
+      const existing = queuedByType.get(key);
+      if (existing) {
+        existing.count++;
+        existing.items.push(a);
+      } else {
+        queuedByType.set(key, { type: key, name: getDisplayName(key), count: 1, items: [a] });
+      }
+    }
     else if (a.completedAt && options.shouldShowFinished(a.id, a.status)) finished.push(a);
   }
 
@@ -197,20 +208,6 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
   const finishedLines: string[] = [];
   for (const a of finished) {
     finishedLines.push(truncate(`${theme.fg("dim", c_tree)} ${renderFinishedLine(a, options.agentActivity.get(a.id), theme)}`));
-  }
-
-  // ── Compact batch rendering ──
-  // Group queued agents by type for compact display (e.g. "5× Explore agents queued").
-  const queuedByType = new Map<string, { type: string; name: string; count: number; items: AgentRecord[] }>();
-  for (const a of queued) {
-    const key = a.type;
-    const existing = queuedByType.get(key);
-    if (existing) {
-      existing.count++;
-      existing.items.push(a);
-    } else {
-      queuedByType.set(key, { type: key, name: getDisplayName(key), count: 1, items: [a] });
-    }
   }
 
   // Show compact queued line(s): "5× Explore" for large batches, individual for small.
