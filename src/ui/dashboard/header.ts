@@ -4,6 +4,17 @@ import { getUiStyle } from "../../agent-registry.js";
 import { type BoxChars, borderLine, type DashboardTheme, framedRow, padVisible } from "../theme.js";
 import type { DashboardRenderState } from "./types.js";
 
+/**
+ * Build a horizontal summary bar showing agent counts and optional session meters.
+ *
+ * Constructs a colored, padded summary string that includes counts of agents by status: running, queued, and done (completed or steered). Includes an error segment only when there are errored/aborted agents, and a selected indicator when `state.selectedIds` is non-empty. When `manager` is provided and session limits exist, appends usage meters for spawned agents and total turns formatted as `current/max` with colors chosen by percentage thresholds.
+ *
+ * @param state - Render state containing `agents` and `selectedIds`
+ * @param innerW - Available inner width used to compute padding
+ * @param th - Theme tokens (colors and styling sequences) used for segments
+ * @param manager - Optional AgentManager used to obtain session usage and limits; when omitted, meters are not shown
+ * @returns A single-line summary string, colored and padded to fit the available inner width
+ */
 function dashboardSummaryBar(
   state: DashboardRenderState,
   innerW: number,

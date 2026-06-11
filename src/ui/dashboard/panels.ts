@@ -5,7 +5,20 @@ import { activityText, agentStats, getDisplayName } from "./helpers.js";
 import { renderTurnProgress } from "./progress.js";
 import type { DashboardRenderState } from "./types.js";
 
-// ── Detail Panel ────────────────────────────────────────────────────────────
+/**
+ * Render the "Details" panel for the currently selected agent in the dashboard.
+ *
+ * Produces framed text lines showing the panel title and, when an agent is selected,
+ * the agent's status and stats, optional turn progress, available agent-specific
+ * metadata (description, worktree branch, swarm/group/join info, validation, output),
+ * optional session usage (when `manager` is provided), and a final activity line.
+ *
+ * @param width - Total panel width in characters.
+ * @param th - Theme colors and styling used to format the panel.
+ * @param box - Box-drawing characters used for framing rows.
+ * @param state - Current dashboard render state (agents list and selection index).
+ * @param manager - Optional agent manager used to retrieve session usage and limits; when omitted, session usage is not shown.
+ * @returns An array of framed lines (strings) that make up the detail panel.
 
 export function renderDashboardDetailPanel(
   width: number,

@@ -112,6 +112,14 @@ function renderActivityHeatmap(
   return label;
 }
 
+/**
+ * Render a single formatted line representing a finished agent for the TUI widget.
+ *
+ * @param a - The agent record for the finished agent (metadata, status, times, and validation)
+ * @param activity - Optional activity summary for the agent (turn counts, tool uses, etc.)
+ * @param theme - Theme used to colorize parts of the output
+ * @returns A single colorized string describing the finished agent, including icon, name, description, runtime, activity/tool/duration details, and status suffix when applicable
+ */
 function renderFinishedLine(a: AgentRecord, activity: AgentActivity | undefined, theme: Theme): string {
   const name = getDisplayName(a.type);
   const modeLabel = getPromptModeLabel(a.type);
@@ -152,6 +160,14 @@ function renderFinishedLine(a: AgentRecord, activity: AgentActivity | undefined,
   return `${icon} ${theme.fg("dim", name)}${validationIcon}${modeTag}  ${theme.fg("dim", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusText}`;
 }
 
+/**
+ * Build a compact TUI widget (array of lines) summarizing agents grouped by running, queued, and finished.
+ *
+ * Produces themed, width-truncated lines that may include an activity heatmap, batched queued counts, per-agent running details, finished summaries, pagination indicators, and an overflow summary when the content exceeds the widget's line budget.
+ *
+ * @param options - Rendering options and runtime state (agents, activity map, TUI dimensions, theme, paging, and helpers)
+ * @returns An array of preformatted strings, each string representing a single widget line ready for display in the terminal UI
+ */
 export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
   const running: AgentRecord[] = [];
   const queued: AgentRecord[] = [];
