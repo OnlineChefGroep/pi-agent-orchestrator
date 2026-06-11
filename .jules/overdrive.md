@@ -87,7 +87,7 @@ Log of PR branches superseded by the optimizations already on `main` and closed/
 
 **Actionable Principle:** Avoid multiple sequential array `.filter` iterations on the same source data over the critical rendering path. Instead, perform a single O(N) iteration mapping into distinct category buckets or O(1) dictionaries to ensure layout algorithms remain lightweight.
 
-## 2026-06-10 — Render loop array allocation avoidance
+## 2026-06-11 — Render loop array allocation avoidance
 
 **Systemic Bottleneck:** Multi-dimensional arrays of agents were being processed via sequential `.filter()` operations inside highly frequent UI render loops (e.g. \`header.ts\`, \`agent-widget.ts\`, \`agent-dashboard.ts\`, \`panels.ts\`, \`agent-widget-renderer.ts\`, and \`output-handler.ts\`). Calling \`Array.prototype.filter()\` repeatedly inside the render cycle forces multiple $O(N)$ traversals and instantiates numerous intermediate throwaway arrays, causing massive garbage collection pressure and main thread stalls when displaying a high volume of agents (1000+).
 
