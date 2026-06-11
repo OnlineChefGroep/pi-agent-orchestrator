@@ -1,5 +1,6 @@
 ---
 id: github-activity-digest
+trigger: /github-activity-digest
 purpose: Publish one low-noise daily digest of meaningful GitHub pull request and CI activity.
 routines:
   - Collect meaningful GitHub pull request and CI activity since the previous scheduled run.

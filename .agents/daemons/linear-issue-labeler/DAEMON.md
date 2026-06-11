@@ -1,5 +1,6 @@
 ---
 id: linear-issue-labeler
+trigger: /linear-issue-labeler
 purpose: Keep recently changed Linear issues labeled according to the team's current taxonomy.
 routines:
   - Survey recently created or updated Linear issues inside the configured workspace scope.
