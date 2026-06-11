@@ -97,8 +97,7 @@ export function preloadSkills(skillNames: string[], cwd: string): PreloadedSkill
   };
 
   const results: PreloadedSkill[] = [];
-  for (let i = 0; i < skillNames.length; i++) {
-    const name = skillNames[i];
+  for (const name of skillNames) {
     results.push({ name, content: loadSkillContent(name, cwd, ctx) });
   }
   return results;

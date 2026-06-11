@@ -14,11 +14,10 @@ function dashboardSummaryBar(
   let queued = 0;
   let completed = 0;
   let errored = 0;
-  for (let i = 0; i < state.agents.length; i++) {
-    const a = state.agents[i];
+  for (const a of state.agents) {
     if (a.status === "running") running++;
     else if (a.status === "queued") queued++;
-    else if (a.status === "completed" || a.status === "steered") completed++;
+    else if (a.status === "completed" || a.status === "steered" || a.status === "stopped") completed++;
     else if (a.status === "error" || a.status === "aborted") errored++;
   }
   const selected = state.selectedIds.size > 0
