@@ -19,7 +19,7 @@ import type { DashboardRenderState } from "./types.js";
  * @param state - Current dashboard render state (agents list and selection index).
  * @param manager - Optional agent manager used to retrieve session usage and limits; when omitted, session usage is not shown.
  * @returns An array of framed lines (strings) that make up the detail panel.
-
+ */
 export function renderDashboardDetailPanel(
   width: number,
   th: DashboardTheme,
