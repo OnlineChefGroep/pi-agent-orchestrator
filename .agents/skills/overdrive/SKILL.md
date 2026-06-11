@@ -12,7 +12,7 @@ The `overdrive` skill focuses on analyzing Pi Orchestra's health and rendering p
 
 1. **Profile First:** Run performance verification suite and benchmark scripts to establish a baseline before attempting refactors.
 2. **Review Metrics:** Assess whether current operations fall within acceptable latency thresholds (e.g. single-digit milliseconds for UI renders).
-3. **Analyze Array Traversals:** Specifically target $O(N^2)$ algorithm flaws or extensive nesting when joining relational datasets.
+3. **Analyze Array Traversals:** Specifically target O(N²) (O(N^2)) algorithm flaws or extensive nesting when joining relational datasets.
 4. **Log Key Metric Shifts:** Document before-and-after values for benchmark execution durations.
 5. **Architectural Journaling:** Append discoveries to `.jules/overdrive.md` under specific structured headers (Systemic Bottleneck, Refactor Strategy, Key Metric Shift, Actionable Principle).
 
