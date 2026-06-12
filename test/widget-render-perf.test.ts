@@ -69,6 +69,7 @@ function makeAgent(overrides: Partial<AgentRecord> = {}): AgentRecord {
 function buildAgentList(
   count: number,
   dist: { running?: number; queued?: number; finished?: number },
+  types: readonly string[] = ["Explore", "Plan", "general-purpose"],
 ): AgentRecord[] {
   const agents: AgentRecord[] = [];
   const runPct = (dist.running ?? 0) / 100;
@@ -87,7 +88,7 @@ function buildAgentList(
 
     const a = makeAgent({
       status,
-      type: i % 3 === 0 ? "Explore" : i % 3 === 1 ? "Plan" : "general-purpose",
+      type: types[i % types.length],
       completedAt: status === "completed" ? Date.now() : undefined,
     });
     agents.push(a);
@@ -252,6 +253,51 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
 
     benchmarkLog(`renderAgentWidget ${MEDIUM} all-running`, perRender, 5);
     expect(perRender).toBeLessThan(5);
+  });
+
+  // ── K>>3 bulk-spawn regime ──────────────────────────────────────────────
+  // Exercises the O(K*N) inner loop in the queued-line rendering path that
+  // was the target of the perf(widget) two-pass refactor (PR #147).
+  //
+  // The inner loop only runs for groups with count < BATCH_COMPACT_THRESHOLD
+  // (≈3), so to actually stress the K×N path we keep per-type counts low
+  // (5 each) and let K grow instead. With 10 unique types × 5 queued each,
+  // the old O(K*N) inner loop did 5×50 = 250 type-comparisons per unique
+  // type, totaling 2,500 per render; the O(N+K) two-pass version does
+  // 50+10 = 60 lookups.
+  it("renders 40 queued agents across 20 unique types under 2ms (K>>3 bulk-spawn regime, individual-line path)", () => {
+    const bulkTypes = Array.from({ length: 20 }, (_, i) => `BulkType-${i}`);
+    const agents: AgentRecord[] = [];
+
+    // 500 queued agents across 10 types (50 of each) \u2014 the K>>3 regime
+    for (let i = 0; i < 40; i++) {
+      agents.push(
+        makeAgent({ status: "queued", type: bulkTypes[i % bulkTypes.length] }),
+      );
+    }
+    // 15 running agents mixed in for realism (3 types \u00d7 5 each)
+    for (let i = 0; i < 2; i++) {
+      for (let j = 0; j < 5; j++) {
+        agents.push(makeAgent({ status: "running", type: bulkTypes[i] }));
+      }
+    }
+
+    const start = performance.now();
+    for (let i = 0; i < 50; i++) {
+      renderAgentWidget({
+        agents,
+        agentActivity: new Map(),
+        frame: i,
+        shouldShowFinished: alwaysShowFinished,
+        theme: testTheme as any,
+        tui: testTui as any,
+      });
+    }
+    const elapsed = performance.now() - start;
+    const perRender = elapsed / 50;
+
+    benchmarkLog(`renderAgentWidget 40 queued / 20 types (individual)`, perRender, 2);
+    expect(perRender).toBeLessThan(2);
   });
 });
 
