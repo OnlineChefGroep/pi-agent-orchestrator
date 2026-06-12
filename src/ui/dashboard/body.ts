@@ -115,18 +115,20 @@ function buildVirtualBodyLines(
   const windowStart = Math.max(0, selectedIndex - halfWindow);
   const windowEnd = Math.min(total, selectedIndex + halfWindow);
 
-  // Separate sections in a single pass to avoid O(N) filtering multiple times
-  const solo: AgentRecord[] = [];
+  // Separate sections in a single pass to avoid O(N) filtering multiple times.
+  // The `solo` bucket is intentionally omitted here: in the virtual-scrolling
+  // path agents are rendered by status (running/queued/done) or by swarm, so
+  // tracking a separate solo list is a dead allocation that cost ~5M pushes
+  // across the 50,000-agent × 100-iteration benchmark.
   const running: AgentRecord[] = [];
   const queued: AgentRecord[] = [];
   const done: AgentRecord[] = [];
   const swarmsSet = new Set<string>();
   const firstSwarmAgentMap = new Map<string, AgentRecord>();
 
-  for (let i = 0; i < agents.length; i++) {
+  for (let i = 0; i < total; i++) {
     const a = agents[i];
     if (!a.swarmId) {
-      solo.push(a);
       if (a.status === "running") running.push(a);
       else if (a.status === "queued") queued.push(a);
       else done.push(a);
