@@ -113,3 +113,83 @@ Log of PR branches superseded by the optimizations already on `main` and closed/
 **Key Metric Shift:** Bypassed repetitive mathematical operations for deterministic UI constraints inside `src/ui/dashboard/swarm-section.ts`, saving processing time on dashboard render updates.
 
 **Actionable Principle:** In TUI rendering loops, strictly hoist any deterministic dimension constraint, structural string calculation, or visual padding generation outside of agent iteration loops to minimize main-thread CPU overhead and improve responsiveness.
+
+---
+
+## 2026-06-12 — Dead allocation removal (virtual-scrolling bucketing)
+
+**Systemic Bottleneck:** The `buildVirtualBodyLines` function in `src/ui/dashboard/body.ts` (the virtual-scrolling path used when the agent count exceeds the visible window) allocated a `solo: AgentRecord[]` array and called `solo.push(a)` for every non-swarm agent inside the single-pass bucketing loop. The `solo` array was never read in the virtual-scrolling path — agents are rendered by status (running/queued/done) or by swarm, never by a "solo" bucket. The non-virtual `renderAgentSections` path has its own independent `solo` array and is unaffected. With 50,000 agents × 100 iterations in the benchmark, this cost ~5,000,000 useless pushes (plus periodic array growth reallocations) on a path that should have been a tight per-agent categorize-and-dispatch.
+
+**Refactor Strategy:** Removed the dead `const solo: AgentRecord[] = [];` and `solo.push(a);` lines from the bucketing loop in `buildVirtualBodyLines`. Also dropped a redundant local `const total = agents.length;` (the function already declares `total` at the top of its scope). The non-virtual `renderAgentSections` path was verified to be untouched.
+
+**Key Metric Shift:** `buildDashboardBodyLines` (50,000 agents × 100 iterations, via `test/dashboard.benchmark.test.ts`):
+- Baseline: 621.348ms / 597.417ms / 601.283ms (mean ~606.7ms)
+- Optimized: 542.970ms / 458.876ms / 447.737ms (mean ~483.2ms)
+- **~20.3% faster** on the virtual-scrolling hot path.
+
+**Actionable Principle:** When refactoring a hot loop, grep for any local array variable that is declared inside the loop body but never read after the loop. A `const x: T[] = []; ... x.push(item);` with no `for (const ... of x)` or `x.length` / `x[i]` consumer downstream is dead code masquerading as logic — it allocates, it grows, it pushes, and V8 cannot elide it. A pure dead-code elimination in a hot loop is often the highest-leverage, lowest-risk optimization available (no semantic change, no API change, no test fixtures change, no public-surface change). When measuring render performance, look for *allocate-and-forget* patterns before reaching for algorithmic complexity changes.
+
+---
+
+## 2026-06-12 — Queued-line rendering O(K×N) → O(N+K) (widget bulk-spawn)
+
+**Systemic Bottleneck:** The `renderAgentWidget` queued-line rendering loop in `src/ui/agent-widget-renderer.ts` used an interleaved two-level iteration: for each unique queued type (K), it pushed either a compact summary line (when `group.count >= BATCH_COMPACT_THRESHOLD=3`) or an individual line for each agent of that type via a *nested* `for` loop over the full `queued` array (N), skipping non-matching types via `if (a.type !== key) continue;`. This is an $O(K \times N)$ pattern: with 20 unique types and 40 queued agents the inner loop performed 20 × 40 = 800 type-comparisons per unique type, totaling **1,600 type-comparisons per render**. In real bulk-spawn scenarios where a parent agent fans out into many distinct sub-agent types, K can grow much larger than the existing test fixtures suggested, making the inner loop a real scalability bottleneck rather than a theoretical one.
+
+**Refactor Strategy:** Replaced the interleaved compact/individual loop with two separate passes:
+1. **Pass 1 (O(K)):** iterate the pre-built `queuedByType` map once and push compact summary lines for any group with `count >= BATCH_COMPACT_THRESHOLD`.
+2. **Pass 2 (O(N)):** single pass over the `queued` array; for each agent, do one O(1) map lookup to check whether its group is already handled as compact (`group.count >= threshold`) — if so, skip; otherwise push an individual line.
+
+Output order is preserved (all compact lines appear first in map insertion order, then all individual lines in `queued` array order), which matches the old interleaved pattern because each type's individual lines were already filtered to only that type and appeared in `queued` array order. A `BATCH_COMPACT_THRESHOLD = 3` constant was hoisted at module scope (line 14) for clarity.
+
+**Key Metric Shift:** New K>>3 individual-line benchmark (`test/widget-render-perf.test.ts`, 20 unique types × 2 queued each = 40 total queued, all per-type counts < `BATCH_COMPACT_THRESHOLD=3`):
+- **0.248ms per render** (threshold 2ms, well under).
+- Algorithmic complexity: $O(K \times N) = 1{,}600$ type-comparisons → $O(N + K) = 60$ lookups, a **~27× reduction in the hot loop**.
+- At 3 unique types (the prior test regime), the absolute win is small (K×N = 150 → N+K = 53), which is why the refactor was originally almost invisible to CI — the follow-up K>>3 individual-line test (PR #148) was added specifically to make this win CI-visible for the first time.
+
+**Actionable Principle:** When a loop body contains a *nested* loop that re-iterates an outer collection with a per-element key comparison, you almost certainly have an $O(K \times N)$ hidden in an otherwise-acceptable-looking single-pass function. The fix is mechanical: bucket the outer collection into a `Map<key, group>` in a single pre-pass, then replace the inner loop with one O(1) lookup per outer element. Two-pass code is usually *faster* than "smart" one-pass code because branch predictors love the clean loop and V8 can hoist the map lookup into a hidden class. Also: when you ship an algorithmic-complexity refactor, *write a test that exercises the regime where the win shows up* — without the K>>3 test, this fix was invisible to the CI threshold check and could have been silently reverted.
+
+---
+
+## 2026-06-12 — BFS sort-on-cache-miss + head-index (skill-loader)
+
+**Systemic Bottleneck:** The `bfsForSkill` function in `src/skill-loader.ts` (the core directory-walking loop used to find skill directories by name) had two latent algorithmic issues in its reversed-order hot path (distractors alphabetically first, skills alphabetically last):
+1. `entries.sort()` was called on **every** BFS visit, even when the entries came from the `ctx.dirEntries` cache. The cache made the `readdirSync` I/O free, but the `O(K log K)` sort still ran on every pop. With 5 skills and 10 distractor dirs, the sort ran ~50 times per `preloadSkills` call instead of ~10 times.
+2. `queue.shift()` is `O(N)` — it re-indexes the entire array on every pop. In a BFS with B branches and depth D, this makes the overall traversal `O(B * D^2)` overall — a hidden quadratic that grows with the number of skills and the depth of the directory tree.
+
+**Refactor Strategy:** Two mechanical fixes in `bfsForSkill`:
+1. Moved `entries.sort()` **inside** the cache-miss branch. `readdirSync` returns a fresh array we can mutate in-place and cache; sorting once on miss and reusing the sorted result across subsequent BFS visits is sound and saves an `O(K log K)` sort per visit. The new invariant is "the cache holds sorted entries".
+2. Replaced `queue.shift()!` with an index-based head pointer: `let head = 0; const current = queue[head++];`. The `queue` is now used as a ring/array (items are never removed, just consumed via the head index), giving `O(1)` per pop and making the overall traversal `O(B * D + sort cost)`.
+
+The initial BFS queue from `index.nonSkillDirs` is already in sorted order (built by iterating `buildRootIndex`'s pre-sorted `entries`), so the new "cache holds sorted entries" invariant is consistent with the existing ordering guarantee — the BFS traversal remains deterministic byte-order.
+
+**Key Metric Shift:** `test/spawn-latency-bench.test.ts` reversed-order benchmarks:
+- `preloadSkills 5 dir-skill reversed-order`: 0.691ms → 0.626-0.659ms (~5-10% faster; 40× headroom under the 25ms threshold)
+- `preloadSkills 10 dir-skill reversed-order`: 1.227ms → 1.213-1.344ms (within noise; 37× headroom under the 50ms threshold)
+- **Algorithmic complexity:** `O(B * D^2)` → `O(B * D)` in the BFS traversal (the `shift()` was the hidden quadratic).
+
+**Honest assessment:** unlike the dashboard dead-allocation win (clean ~20% speedup) or even the widget O(K×N)→O(N+K) refactor (clean ~27× hot-loop reduction with a CI-visible test), this BFS fix is primarily an **algorithmic correctness win** — the absolute time savings are modest because the BFS was already fast at the benchmark scale (10-20 dirs doesn't expose the worst case). The real value is the complexity shift and the code clarity: the sort is now co-located with the I/O that produces the entries (not detached and re-applied per visit), and the BFS no longer carries a hidden quadratic from the `shift()`.
+
+**Actionable Principle:** When reviewing a loop that uses `Array.shift()` (or any "remove the first element" pattern), it is almost always wrong — `shift()` is `O(N)` and turns any loop that uses it into at least `O(N^2)`. The fix is mechanical: keep a `head` index, consume via `queue[head++]`, check `head < queue.length` for termination. Same rule for the "sort on every iteration" pattern: if the data you're sorting comes from a cache (or is otherwise deterministic and immutable), sort once when you first acquire the data and cache the sorted result. Two patterns, both mechanical to fix, both hidden until you measure at scale or in the worst case.
+
+---
+
+## 2026-06-12 — Duplicate `isHandoffArtifactV2` call eliminated (handoff parse time)
+
+**Systemic Bottleneck:** The `parseHandoff` function in `src/handoff.ts` (the hot path for structured handoff parsing at the end of every chained-agent response) was calling `isHandoffArtifactV2(value)` **twice per artifact** — once inside `isCoercibleArtifactShape` (called by `validateHandoffShape` during handoff-level validation), and once again in the coercion step (the `.map((a) => isHandoffArtifactV2(a) ? a : coerceLegacyArtifact(a))` line). Each call is non-trivial: it does a type check, an array check, a `switch` on `obj.type` over 4 cases (file/branch/url/note), and per-case field validation (string length checks against `MAX_ARTIFACT_PATH_LENGTH`, `MAX_ARTIFACT_URL_LENGTH`, `MAX_ARTIFACT_TITLE_LENGTH`, `MAX_ARTIFACT_VALUE_LENGTH`, etc.). For a handoff with `MAX_ARTIFACTS_COUNT=50` artifacts, that's **100 wasted `isHandoffArtifactV2` calls per parse** — pure duplicate work in the most common code path (v2-strict artifacts, which are the default for new agents).
+
+**Refactor Strategy:** Removed the explicit `isHandoffArtifactV2(value)` call from `isCoercibleArtifactShape`. The loose check below it (path/url/branch/title+value fields) is a verified **superset** of "is v2-strict + coercible":
+- v2 file `{type: "file", path: "/x.ts"}` → loose check matches `path` is non-empty string → true
+- v2 branch `{type: "branch", branch: "fix/x"}` → loose check matches `branch` is non-empty string → true
+- v2 url `{type: "url", url: "https://x.com"}` → loose check matches `url` is non-empty string → true
+- v2 note `{type: "note", title: "T", value: "V"}` → loose check matches `title + value` both non-empty → true
+
+So every v2-typed artifact passes the loose check, and the strict v2 check then runs **once** in the coercion step (not twice). Net: 1 `isHandoffArtifactV2` call per artifact instead of 2 — 50 saved calls for a 50-artifact handoff. The 27 existing handoff-v2 tests confirm semantic equivalence (all green).
+
+**Key Metric Shift:** New `Benchmark: parseHandoff — parse time` describe block in `test/handoff-v2.test.ts` (5 regimes):
+- `parseHandoff large 50 v2 artifacts` (the K>>3-equivalent for the artifact path): **0.192-0.207ms → 0.130-0.160ms** (~10-30% improvement, well under 2ms threshold)
+- `parseHandoff large 50 legacy artifacts` (exercises the coercion path): **0.243-0.256ms → 0.190-0.220ms** (~10-15% improvement)
+- `parseHandoff over-limit strings` (12000-char summary + 51000-char note value, actually exercises `truncateStrings` slice): 0.035-0.052ms → 0.030-0.045ms (within noise, but the benchmark itself is new — without it the truncation path was invisible to CI)
+
+The over-limit-strings benchmark was deliberately bumped from 2000 chars (which did NOT exercise the truncation path because `MAX_SUMMARY_LENGTH=10000`) to 12000 chars + a 51000-char note value (which DOES exercise the inner `obj.slice(0, MAX_STRING_LENGTH)` call). This makes the `truncateStrings` defense-in-depth path CI-visible for the first time.
+
+**Actionable Principle:** When you see the same function called on the same value in two consecutive phases of a pipeline (validation → coercion, filter → map, check → transform), it's almost always a duplicate. The "is this shape valid?" check and the "can I coerce this shape?" check are often the *same* check expressed at different strictness levels — and the looser check is usually a superset of the stricter one. A quick proof: enumerate the v2-strict types and verify each one passes the loose check on the same fields. If the proof holds, the duplicate call is pure dead work. Same lesson as the dashboard `solo` removal and the widget O(K×N) fix: **measure first, then look for duplicate work in the hot path**. The benchmark suite added in this entry (5 regimes, 100-1000 iterations each) makes the entire `parseHandoff` path CI-visible — without it, the duplicate call would have been invisible to the threshold check and could have been silently reintroduced.
