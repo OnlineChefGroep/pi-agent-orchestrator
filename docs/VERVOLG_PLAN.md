@@ -8,8 +8,8 @@
 
 | Metric | Value |
 |---|---|
-| **Version** | 0.10.3 |
-| **Tests** | 795 passing, 46 test files |
+| **Version** | 0.12.2 |
+| **Tests** | 1390 passing, 58 test files |
 | **Typecheck** | ✅ Pass |
 | **Lint** | ✅ Pass (Biome) |
 | **Branch** | `main` |
@@ -39,10 +39,12 @@
 
 ## In Progress / Near-Term (P1)
 
-- [ ] **Public typed API surface** — Formalize cross-extension contracts (currently behind Symbols + events) — _tracked in [#137](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/137); in-progress on branch `feat/typed-rpc-client` (`src/public-api.ts` scaffolded + tested)_
+- [x] **Public typed API surface** — Formalize cross-extension contracts — _[#137](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/137) closed on `main` (commit `a8de70a5`); `src/public-api.ts` exposes `SubagentsPublicApi` + `SubagentManagerHandle` + `TYPED_HOOK_PAYLOAD_MAP`_
 - [x] **Schedule locking hardening** — `proper-lockfile` is in use (CVE-010 fix, merged); see `src/schedule-store.ts` (`withLock`, `removeLegacyFileLock`) and tests in `test/schedule-store.test.ts` (legacy lock recovery, no-deadlock-after-release)
-- [ ] **Windows CI reliability** — Schedule tests are blocking again; watch for regressions — _tracked in [#138](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/138)_
-- [ ] **Example-agent expansion** — Keep `examples/agents/` current as new patterns stabilize — _tracked in [#139](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/139); in-progress: added `validator-chain-reviewer.md` + wired `validators` frontmatter parsing in `src/custom-agents.ts`_
+- [x] **Windows CI reliability** — Schedule tests no longer race on `rmSync` — _[#138](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/138) closed on `main`; `maxRetries: 5, retryDelay: 50` on all 4 schedule test cleanup paths + bumped e2e timings for Windows headroom_
+- [x] **Example-agent expansion** — Validator chain reviewer published — _[#139](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/139) closed on `main`; `examples/agents/validator-chain-reviewer.md` + `parseValidators` frontmatter wiring in `src/custom-agents.ts`_
+- [x] **Manager symbol hoist** — `pi-subagents:manager` exposed on the typed public surface — _[#140](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/140) closed on `main`; `SubagentManagerHandle` + 200-char description cap + sanitized record_
+- [x] **CI lowest-peer install version** — _[#142](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/142) closed on `main`; lowest-peer install pinned to `0.78.0` (the actual `package.json` floor) instead of the non-existent `0.72.0`_
 
 ---
 

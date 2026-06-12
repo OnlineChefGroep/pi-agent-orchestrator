@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.12.2 (2026-06-12)
+
+### Fixes
+
+- **Windows schedule-test reliability** (#138): `test/schedule.test.ts`, `test/schedule-store.test.ts`, `test/schedule-e2e.test.ts`, and `test/schedule-bounds.test.ts` now pass `maxRetries: 5, retryDelay: 50` to every `rmSync` cleanup. On Windows the `proper-lockfile` lockfile directory is briefly held open after `release()` returns, and the built-in `EBUSY/EPERM` linear-backoff retry clears the race. E2E timings bumped (100→200, 150→300, 300→500ms) to give Windows more headroom on real-timer waits. The Windows schedule tests are no longer known-flaky.
+
+### CI
+
+- **Lowest-peer install version** (#142): `Install dependencies (lowest peer deps)` now installs `@earendil-works/pi-ai@0.78.0`, `@earendil-works/pi-coding-agent@0.78.0`, `@earendil-works/pi-tui@0.78.0` (was the non-existent `0.72.0`). The lowest-peer CI matrix slice now actually runs instead of failing with `ETARGET: No matching version found`.
+
+### Documentation
+
+- `docs/VERVOLG_PLAN.md` status overview updated to v0.12.2 (1390 tests, 58 files). The P1 list now shows #137, #138, #139, #140, #142 as completed.
+
+### Metrics
+
+- 1390 tests across 58 test files. Typecheck + lint green on all OS × Node × peer-deps matrix slices.
+
 ## v0.12.1 (2026-06-12)
 
 ### Features

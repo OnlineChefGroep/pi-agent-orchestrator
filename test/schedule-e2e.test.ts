@@ -81,7 +81,9 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
 
   afterEach(() => {
     scheduler.stop();
-    rmSync(tmp, { recursive: true, force: true });
+    // maxRetries + retryDelay handles Windows file-locking races where the
+    // proper-lockfile lockfile directory is briefly held open after release.
+    rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
 
   it("one-shot job: real setTimeout fires, agent runs, store reflects success", async () => {
@@ -91,7 +93,7 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
 
     // Fire ~100ms in the future. detectSchedule normalizes "+100ms" — but our
     // parser only accepts s/m/h/d, so use a near-future ISO timestamp instead.
-    const future = new Date(Date.now() + 100).toISOString();
+    const future = new Date(Date.now() + 200).toISOString();
     const job = await scheduler.addJob({
       name: "e2e-once",
       description: "test",
@@ -118,7 +120,7 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
     const pi = makePi();
     await scheduler.start(pi, makeCtx(), manager, store);
 
-    const future = new Date(Date.now() + 100).toISOString();
+    const future = new Date(Date.now() + 200).toISOString();
     const job = await scheduler.addJob({
       name: "e2e-fail",
       description: "test",
@@ -139,7 +141,7 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
     const pi = makePi();
     await scheduler.start(pi, makeCtx(), manager, store);
 
-    // 150ms interval — wait for ~3 fires (increased from 100ms for Windows timing)
+    // 300ms interval — wait for ~3 fires (bumped from 150ms for Windows timing)
     const job = await scheduler.addJob({
       name: "e2e-interval",
       description: "test",
@@ -147,9 +149,9 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
       subagent_type: "general-purpose",
       prompt: "tick",
     });
-    // Replace with a literal 150ms interval — easier than crafting a parseable shorthand for ms.
+    // Replace with a literal 300ms interval — easier than crafting a parseable shorthand for ms.
     // (parseInterval doesn't accept "ms"; we patch the persisted job and re-arm.)
-    await scheduler.updateJob(job.id, { intervalMs: 150, schedule: "150ms" });
+    await scheduler.updateJob(job.id, { intervalMs: 300, schedule: "300ms" });
 
     await waitFor(() => scheduler.list().find(j => j.id === job.id)?.runCount >= 3, 5000);
 
@@ -213,7 +215,7 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
     const pi = makePi();
     await scheduler.start(pi, makeCtx(), manager, store);
 
-    const future = new Date(Date.now() + 100).toISOString();
+    const future = new Date(Date.now() + 200).toISOString();
     const job = await scheduler.addJob({
       name: "events", description: "x", schedule: future,
       subagent_type: "general-purpose", prompt: "x",
