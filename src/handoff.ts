@@ -295,7 +295,12 @@ function validateHandoffShape(obj: Record<string, unknown>): string[] {
  */
 function isCoercibleArtifactShape(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  if (isHandoffArtifactV2(value)) return true;
+  // The loose check below is a superset of "is v2-strict + coercible":
+  // every v2-typed artifact (file/branch/url/note) has at least one of the
+  // path/url/branch/title+value fields populated, so it passes the loose
+  // check. The strict v2 check then runs once in the coercion step.
+  // This eliminates a duplicate isHandoffArtifactV2 call per artifact —
+  // ~50 saved calls for a handoff with MAX_ARTIFACTS_COUNT=50 artifacts.
   const obj = value as Record<string, unknown>;
   return (
     (typeof obj.path === "string" && obj.path.length > 0)
