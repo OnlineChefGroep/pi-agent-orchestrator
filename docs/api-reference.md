@@ -461,6 +461,62 @@ The `api.rpc` field is a `SubagentsRpcClient` (same shape as the existing
 The rate-limit, authentication, and audit-trail guarantees documented in
 `// CROSS-EXTENSION RPC` below apply unchanged.
 
+### // MANAGER HANDLE
+
+`api.manager` is a read-only `SubagentManagerHandle` over the orchestrator's
+`AgentManager`. It is also published under `Symbol.for("pi-subagents:manager")`
+and exposed via the safe accessor `getSubagentsManager()`.
+
+The handle exposes four observation methods only — every mutating surface
+(`spawn`, `stop`, `abort`, `clearCompleted`, etc.) is intentionally **not**
+exposed, so peer extensions can monitor agents without gaining the ability
+to create or stop them.
+
+```ts
+import {
+  getSubagentsApi,
+  getSubagentsManager,
+  type SubagentManagerHandle,
+  type SubagentManagerRecord,
+} from "@onlinechefgroep/pi-agent-orchestrator/public-api";
+
+// Via the typed API
+const api = getSubagentsApi();
+if (api) {
+  await api.manager.waitForAll();
+  const rec: SubagentManagerRecord | undefined = api.manager.getRecord("agent-123");
+  const exploreIds: string[] = api.manager.listAgentIds("Explore");
+}
+
+// Or via the safe accessor
+const mgr: SubagentManagerHandle | undefined = getSubagentsManager();
+if (mgr) {
+  const running = mgr.hasRunning();
+}
+```
+
+**METHOD SHAPE (`SubagentManagerHandle`):**
+
+| Method | Returns | Purpose |
+|---|---|---|
+| `waitForAll()` | `Promise<void>` | Resolve when every currently-running agent reaches a terminal state |
+| `hasRunning()` | `boolean` | Whether any agent is currently running |
+| `getRecord(id)` | `SubagentManagerRecord \| undefined` | Sanitized record for an agent, or `undefined` if absent |
+| `listAgentIds(type)` | `string[]` | All known agent ids of the given type |
+
+**SANITIZATION CONTRACT (`SubagentManagerRecord`):**
+
+The record returned by `getRecord(id)` is a *projection* of the internal
+`AgentRecord`. Only `id`, `type`, `status`, and a truncated `description`
+are exposed. Sensitive fields (full prompt, result, error stack, internal
+flags) are intentionally omitted — consumers that need the full record
+should use the `Agent` tool or RPC instead.
+
+The `description` field is truncated to
+`SUBAGENT_MANAGER_MAX_DESCRIPTION_CHARS` (currently `200`) characters
+to avoid leaking long context (full file contents, transcripts, etc.) to
+peer extensions in the process.
+
 ### // RE-EXPORTS
 
 For convenience, the following types and helpers are re-exported from a
@@ -474,10 +530,12 @@ single import path:
   `HookResponse`, `composeHandlers`
 - **This module:** `TYPED_HOOK_PAYLOAD_MAP`, `TypedHookPayload`,
   `TypedHookHandler`, `TypedEventSubscription`, `SubagentsPublicApi`,
-  `SUBAGENTS_API_SYMBOL`, `SUBAGENTS_HOOKS_SYMBOL`, all event-payload
+  `SUBAGENTS_API_SYMBOL`, `SUBAGENTS_HOOKS_SYMBOL`, `SUBAGENTS_MANAGER_SYMBOL`,
+  `SUBAGENT_MANAGER_MAX_DESCRIPTION_CHARS`, all event-payload
   data interfaces (`AgentStartData`, `AgentEndData`, `ToolCallData`, etc.),
   `registerSubagentsApi`, `getSubagentsApi`, `getSubagentsHooks`,
-  `clearSubagentsApi`
+  `getSubagentsManager`, `clearSubagentsApi`, `SubagentManagerHandle`,
+  `SubagentManagerRecord`, `SubagentManagerLike`
 
 ---
 
@@ -558,7 +616,7 @@ const record = manager.getRecord("agent-123");
 const ids = manager.listAgentIds("Explore");
 ```
 
-> **Status:** not yet published — tracked in [#140](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/140). See `// PUBLIC TYPED API` above for the `pi-subagents:api` and `pi-subagents:hooks` symbols that ARE published.
+> **Status:** published via `registerSubagentsApi(...)` (see `// PUBLIC TYPED API` above). Peer extensions should prefer the safe accessor `getSubagentsManager()` or `api.manager` over the raw symbol read.
 
 **SECURITY DIRECTIVE:** Write functions physically detached from registry pointer.
 
