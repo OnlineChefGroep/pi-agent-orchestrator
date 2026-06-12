@@ -39,10 +39,10 @@
 
 ## In Progress / Near-Term (P1)
 
-- [ ] **Public typed API surface** — Formalize cross-extension contracts (currently behind Symbols + events)
-- [ ] **Schedule locking hardening** — `proper-lockfile` is now in use; monitor for edge cases
-- [ ] **Windows CI reliability** — Schedule tests are blocking again; watch for regressions
-- [ ] **Example-agent expansion** — Keep `examples/agents/` current as new patterns stabilize
+- [ ] **Public typed API surface** — Formalize cross-extension contracts (currently behind Symbols + events) — _tracked in [#137](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/137)_
+- [x] **Schedule locking hardening** — `proper-lockfile` is in use (CVE-010 fix, merged); see `src/schedule-store.ts` (`withLock`, `removeLegacyFileLock`) and tests in `test/schedule-store.test.ts` (legacy lock recovery, no-deadlock-after-release)
+- [ ] **Windows CI reliability** — Schedule tests are blocking again; watch for regressions — _tracked in [#138](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/138)_
+- [ ] **Example-agent expansion** — Keep `examples/agents/` current as new patterns stabilize — _tracked in [#139](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/139)_
 
 ---
 
@@ -52,7 +52,7 @@
 - [ ] **Execution tree visualization** — `/agents tree` command with Mermaid/JSON/text export
 - [ ] **Agent templates registry** — Versioned, updatable templates beyond raw `.md` files
 - [ ] **Cost estimation mode** — Dry-run token estimate before launching expensive trees
-- [ ] **Cinematic sidecar robustness** — Version handshake, auto-restart, graceful degradation
+- [ ] **Cinematic sidecar robustness** — Version handshake, auto-restart, graceful degradation — _tracked in [#1](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/1)_
 
 ---
 
@@ -60,7 +60,7 @@
 
 - [ ] **OpenTelemetry span export** — Full agent lifecycle tracing
 - [ ] **Validator composition** — Multiple validators with voting/chaining
-- [ ] **Steer from widget** — Rich live conversation controls in TUI
+- [ ] **Steer from widget** — Rich live conversation controls in TUI — _partially tracked in [#1](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/1) (thinking-level UI)_
 - [ ] **Per-agent persistent memory UI** — Inspection and management commands
 
 ---
