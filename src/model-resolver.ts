@@ -60,18 +60,19 @@ export function resolveModel<T extends ModelEntry>(
   const { set: availableSet, all } = getAvailableSet(registry);
 
   // 1. Exact match: "provider/modelId" — only if available (has auth)
+  const lowercasedInput = input.toLowerCase();
   const slashIdx = input.indexOf("/");
   if (slashIdx !== -1) {
     const provider = input.slice(0, slashIdx);
     const modelId = input.slice(slashIdx + 1);
-    if (availableSet.has(input.toLowerCase())) {
+    if (availableSet.has(lowercasedInput)) {
       const found = registry.find(provider, modelId);
       if (found) return found;
     }
   }
 
   // 2. Fuzzy match against available models
-  const query = input.toLowerCase();
+  const query = lowercasedInput;
 
   // Score each model: prefer exact id match > id contains > name contains > provider+id contains
   let bestMatch: ModelEntry | undefined;

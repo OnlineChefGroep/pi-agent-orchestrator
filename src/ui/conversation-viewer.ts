@@ -422,8 +422,9 @@ export class ConversationViewer implements Component {
           lines.push(`   ${bottomBorder}`);
         } else {
           lines.push(th.fg("accent", `$ ${command}`));
-          if (output.trim()) {
-            for (const line of wrapTextWithAnsi(output.trim(), width)) {
+          const trimmedOutput = output.trim();
+          if (trimmedOutput) {
+            for (const line of wrapTextWithAnsi(trimmedOutput, width)) {
               lines.push(th.fg("dim", line));
             }
           }

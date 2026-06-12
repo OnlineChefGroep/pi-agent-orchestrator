@@ -81,16 +81,17 @@ async function launchAgentDashboard(
       "Continue working on X, but also do Y first. Be careful with Z.",
     );
 
-    if (!message?.trim()) return;
+    const trimmed = message?.trim();
+    if (!trimmed) return;
 
     if (!record.session) {
       if (!record.pendingSteers) record.pendingSteers = [];
-      record.pendingSteers.push(message.trim());
+      record.pendingSteers.push(trimmed);
       ctx.ui.notify(`Steering message queued for ${id}. Will be delivered when session is ready.`, "info");
     } else {
       try {
         const { steerAgent } = await import("./agent-runner.js");
-        await steerAgent(record.session, message.trim());
+        await steerAgent(record.session, trimmed);
         ctx.ui.notify(`Steering message sent to ${id}.`, "info");
       } catch (e: any) {
         ctx.ui.notify(`Steer failed: ${e?.message ?? e}`, "error");

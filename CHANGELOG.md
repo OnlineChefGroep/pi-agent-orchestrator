@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.13.1 (2026-06-12)
+
+### Fixes
+
+- **Double-compute: `input.toLowerCase()` in `model-resolver.ts`**: Cached the result once as `lowercasedInput` and reused for both the exact-match `availableSet.has(...)` check and the fuzzy-match `query` variable. Eliminates the redundant `.toLowerCase()` call in `resolveModel()`.
+- **Double-compute: `message?.trim()` in `output-handler.ts`**: Cached the result once as `trimmed` and reused for both the early-return guard (`if (!trimmed) return;`) and the `record.pendingSteers.push(trimmed)` push, plus the `steerAgent(record.session, trimmed)` call. Eliminates 2 redundant `.trim()` calls per steering flow.
+- **Double-compute: `output.trim()` in `conversation-viewer.ts`**: Cached the result once as `trimmedOutput` and reused for both the truthy guard (`if (trimmedOutput)`) and the `wrapTextWithAnsi(trimmedOutput, width)` call. Eliminates 2 redundant `.trim()` calls per bash command render.
+
+### Notes
+
+- These 3 fixes were found by the new overdrive linter rule `detect-double-compute` (P4 in the overdrive pattern catalogue). See `docs/overdrive-patterns.md` and `scripts/overdrive/detect-double-compute.mjs`.
+- The 7 bounded optimization loops of 2026-06-12 (PRs #146–#152) were already released in **v0.13.0** — dashboard dead-allocation removal (~20% faster), widget O(K×N) → O(N+K) queued rendering (~27× hot-loop reduction), K>>3 benchmark test, skill-loader BFS sort-once + head-index (O(B·D²) → O(B·D)), handoff duplicate `isHandoffArtifactV2` call elimination (~10-30% on 50-v2-artifact), `truncateStrings` micro-opt (code-clarity), and context `extractText` single-pass + `buildParentContext` double-trim cache (~47% on 50-message regime).
+
+### Metrics
+
+- 1410+ tests across 81 test files. Typecheck + lint green. All 65 benchmark thresholds within budget.
+
 ## v0.13.0 (2026-06-12)
 
 ### Features
@@ -122,8 +139,8 @@
 - **AGENTS.md** expanded with 15-item "Common Mistakes" section covering YAML booleans, ESM imports, Biome conventions, peer-dep safety, Windows test flakiness, benchmark patterns, and more.
 - **CONTRIBUTING.md** updated with `npm run setup:hooks` opt-in workflow and link to AGENTS Common Mistakes.
 - **README.md** — new "Chain of Agents" section with three example workflows.
-- **docs/api-reference.md** documents the new `PromptCompressionLevel` type and `handoff` / `prompt_compression` frontmatter directives.
-- **docs/architecture.md** updated with the new compression flow in the module map.
+- `docs/api-reference.md` documents the new `PromptCompressionLevel` type and `handoff` / `prompt_compression` frontmatter directives.
+- `docs/architecture.md` updated with the new compression flow in the module map.
 - Added real TUI showcase media (GIF + MP4) generated from dist renderers: dashboard, top view, widget heatmap (`scripts/render-showcase-assets.sh`).
 
 ### Tests
@@ -141,7 +158,7 @@
 
 ### Documentation
 - Updated README version to 0.10.3 and corrected all settings parameters to match actual codebase defaults.
-- Updated CHANGELOG with v0.10.3 release entry.
+- Updated CHANGELOG with v0.13.3 release entry.
 - Created `VERVOLG_PLAN.md` as living roadmap with accurate completion status.
 - Updated security audit docs with clear deprecation notices (CVEs were fabricated, no action required).
 - Updated `docs/architecture.md` with missing modules (`batch-orchestrator`, `telemetry`, `logger`, etc.).
@@ -243,7 +260,7 @@
 - **CodeRabbit review comments**: Addressed code quality feedback
 
 ### 🔧 CI
-- **Dependabot updates**: actions/checkout@6, setup-node@6, upload-artifact@7, super-linter@7, codeql-action@4
+- **Dependabot updates**: actions/checkout@6, setup-node@6, upload-artifact@7, super-linter@6, codeql-action@4
 - **Super-linter compatibility**: Disabled conflicting prettier/standard checkers
 - **CodeQL**: Disabled auto-triggers (requires GitHub Code Security)
 
@@ -332,7 +349,6 @@
 
 ## 0.7.5
 - Remove tintinweb URLs from package.json
-- Add .npmignore for package-lock.json
 
 ## 0.7.4
 - Publish @onlinechefgroep/pi-agent-orchestrator to GitHub Packages
