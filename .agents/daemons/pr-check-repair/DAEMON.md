@@ -24,6 +24,16 @@ deny:
 
 # PR Check Repair
 
+## Pi Orchestra Integration
+
+This daemon is event-driven — triggered by GitHub check failure webhooks via its `trigger` frontmatter (`/pr-check-repair`) rather than a cron schedule.
+
+- **Trigger:** GitHub check run/check suite/commit status failure on non-draft PRs
+- **Orchestra monitoring:** View active agents in the dashboard; daemon-spawned agents appear with type `pr-check-repair`
+- **Concurrency:** Coordinates with other `pr-check-repair` activations via remote PR head verification before editing and before pushing
+- **No-op behavior:** Silently no-ops on stale triggers, duplicate activations, checks already fixed, or failures owned by another daemon
+- **Comment policy:** Only comments after a pushed fix, flaky rerun, or blocked state requiring human action
+
 ## Repository CI context
 
 This repository uses Node.js 25.9.0 and TypeScript 6.0. CI runs Biome lint (`npm run lint`), vitest tests (`npm test`), and TypeScript compilation (`npm run build`). Workflow files: `ci.yml`, `linter.yml`, `codeql.yml`, `qa.yml` in `.github/workflows/`. The org also has a reusable `workflow_call` CI in the `.github` repository.
