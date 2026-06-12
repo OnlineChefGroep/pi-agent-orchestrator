@@ -129,14 +129,39 @@ describe("parseHandoff", () => {
   "summary": "Completed",
   "findings": ["Something"],
   "files": ["/path/a.ts"],
-  "artifacts": [{"type": "design", "path": "/path/b.md"}]
+  "artifacts": [
+    {"type": "file", "path": "/path/b.md", "title": "Design doc"},
+    {"type": "branch", "branch": "feat/x", "base": "main"}
+  ]
 }
 \`\`\``;
 
     const result = parseHandoff(text);
     expect(result).not.toBeNull();
     expect(result!.files).toEqual(["/path/a.ts"]);
-    expect(result!.artifacts).toEqual([{"type": "design", "path": "/path/b.md"}]);
+    expect(result!.artifacts).toEqual([
+      {"type": "file", "path": "/path/b.md", "title": "Design doc"},
+      {"type": "branch", "branch": "feat/x", "base": "main"},
+    ]);
+  });
+
+  it("coerces legacy loose artifacts (unknown type) into a v2 file artifact when path is present", () => {
+    const text = `\`\`\`json
+{
+  "type": "handoff",
+  "status": "success",
+  "summary": "Completed",
+  "findings": ["x"],
+  "artifacts": [{"type": "design", "path": "/path/b.md", "title": "old-shape"}]
+}
+\`\`\``;
+
+    const result = parseHandoff(text);
+    expect(result).not.toBeNull();
+    // Legacy `type: "design"` + `path` is coerced into a v2 file artifact
+    expect(result!.artifacts).toEqual([
+      { type: "file", path: "/path/b.md", mimeType: undefined, title: "old-shape" },
+    ]);
   });
 
   it("returns null when type is not 'handoff'", () => {
@@ -251,7 +276,12 @@ describe("renderHandoffForParent", () => {
       confidence: 0.85,
       evidence: ["/path/to/file.ts"],
       files: ["/path/to/new_file.ts"],
-      artifacts: [{ type: "design", path: "/path/to/design.md" }],
+      artifacts: [
+        { type: "file" as const, path: "/path/to/design.md", title: "Design doc" },
+        { type: "branch" as const, branch: "feat/x", base: "main", commits: ["abc1234"] },
+        { type: "url" as const, url: "https://example.com", title: "Spec" },
+        { type: "note" as const, title: "Follow-up", value: "Investigate backoff curve", mimeType: "text/markdown" },
+      ],
     };
 
     const rendered = renderHandoffForParent(handoff);
@@ -270,7 +300,10 @@ describe("renderHandoffForParent", () => {
     expect(rendered).toContain("Files:");
     expect(rendered).toContain("  - /path/to/new_file.ts");
     expect(rendered).toContain("Artifacts:");
-    expect(rendered).toContain("  - [design] /path/to/design.md");
+    expect(rendered).toContain("  - [file] Design doc: /path/to/design.md");
+    expect(rendered).toContain("  - [branch] feat/x (from main) +1 commit");
+    expect(rendered).toContain("  - [url] Spec: https://example.com");
+    expect(rendered).toContain("  - [note] Follow-up: Investigate backoff curve (text/markdown)");
   });
 
   it("handles 'partial' and 'failed' statuses", () => {

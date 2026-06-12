@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.13.0 (2026-06-12)
+
+### Features
+
+- **Handoff protocol v2 — typed artifacts**: The `artifacts` field on `AgentHandoff` is now a discriminated union on `type` instead of the previous loose shape. Four v2 artifact types are supported:
+  - `{"type": "file", "path", mimeType?, title?}` — file reference
+  - `{"type": "branch", "branch", base?, commits?: string[], title?}` — git branch reference
+  - `{"type": "url", "url", title?, description?}` — URL reference
+  - `{"type": "note", "title", "value", mimeType?}` — free-form text
+  Each type has its own per-field length limits (path ≤ 4096, url ≤ 2048, title ≤ 200, value ≤ 50000, branch ≤ 256, commits ≤ 100×64, description ≤ 500). `parseHandoff` now returns strictly v2-typed artifacts. The `HANDOFF_BALANCED` and `HANDOFF_FULL` prompt templates document the new shape with file/branch/url/note examples. `renderHandoffForParent` delegates per-artifact rendering to an exhaustive switch over the union.
+
+- **Legacy loose-artifact coercion**: Older agents that still emit loose artifacts (e.g. `{type: "design", path, title, value, mimeType}`) continue to work. `coerceLegacyArtifact` maps first-match-wins into a v2 shape: `{path}` → file, `{title, value}` → note, `{branch}` → branch, `{url}` → url. Unrecognised artifacts are dropped with a `logger.warn`. `HandoffArtifact` is kept as a loose structural alias for source-level backwards compat alongside the new strict `HandoffArtifactV2` union.
+
+### Documentation
+
+- `docs/api-reference.md` — new `// HANDOFF V2 — TYPED ARTIFACTS` section with the union types, JSON example, and legacy coercion rules.
+- `examples/agents/handoff-chain-researcher.md` — Handoff format section updated to the v2 typed shape with all four artifact types.
+
+### Metrics
+
+- New test file `test/handoff-v2.test.ts` with 20+ tests covering per-type validation, length limits, legacy coercion, and exhaustive rendering. Existing `test/handoff.test.ts` updated for the new typed shape plus a legacy-coercion regression test. Total: 1410+ tests passing.
+
 ## v0.12.2 (2026-06-12)
 
 ### Fixes
