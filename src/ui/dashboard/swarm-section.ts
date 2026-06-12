@@ -30,9 +30,9 @@ export function renderSwarmSection(
   }
   if (grouped.size === 0) return [];
   const lines = ["", renderSectionTitle("⌬ SWARMS", `${grouped.size} swarms · ${total} agents`, innerW, th, box)];
+  const cardW = Math.max(28, innerW - 2);
+  const contentW = Math.max(1, cardW - 4);
   for (const [swarmId, members] of grouped) {
-    const cardW = Math.max(28, innerW - 2);
-    const contentW = Math.max(1, cardW - 4);
     const mode = members[0]?.joinMode ?? "group";
     const header = ` ${swarmId} · ${mode} · ${members.length} agents `;
     const dash = box.h.repeat(Math.max(2, cardW - visibleWidth(header) - 2));

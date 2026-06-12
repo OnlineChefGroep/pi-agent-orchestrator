@@ -57,6 +57,7 @@
     "lint:fix": "biome check --write --unsafe src/ test/ scripts/",
     "setup:hooks": "bash scripts/setup-git-hooks.sh",
     "showcase": "bash scripts/showcase-all.sh",
+    "showcase:tmux": "bash scripts/showcase-tmux-recorder.sh",
     "showcase:ci": "bash scripts/render-showcase-assets.sh --fidelity inspect",
     "showcase:live": "bash scripts/capture-live-showcase.sh",
     "showcase:remotion": "bash scripts/render-showcase-remotion.sh",
@@ -68,8 +69,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
-    "@earendil-works/pi-agent-core": "^0.78.0",
-    "@types/node": "^25.5.0",
+    "@earendil-works/pi-agent-core": "^0.79.1",
+    "@types/node": "^25.9.2",
     "@types/proper-lockfile": "^4.1.4",
     "@vitest/coverage-v8": "^4.1.8",
     "typescript": "^6.0.3",

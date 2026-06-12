@@ -1,5 +1,6 @@
 ---
 name: testing-pi-agent-orchestrator
+trigger: /test
 description: Test the pi-agent-orchestrator VS Code extension. Use when verifying code changes, running the test suite, or writing adversarial tests.
 ---
 

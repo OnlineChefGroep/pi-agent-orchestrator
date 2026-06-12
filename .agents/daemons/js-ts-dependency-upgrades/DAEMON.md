@@ -1,5 +1,6 @@
 ---
 id: js-ts-dependency-upgrades
+trigger: /js-ts-dependency-upgrades
 purpose: Keep JavaScript and TypeScript dependencies current with low-noise grouped upgrade pull requests.
 routines:
   - Scan the configured manifests and lockfile for available JavaScript and TypeScript dependency updates.
