@@ -150,23 +150,31 @@ function bfsForSkill(
   ctx: SkillLoaderContext,
 ): string | undefined {
   const queue = [...initialQueue];
+  // Index-based head pointer: O(1) per pop vs Array.shift() which is O(N).
+  // At depth D with B total branches, the old shift() made the BFS O(B*D^2)
+  // — significant in the reversed-order distractor case.
+  let head = 0;
 
-  while (queue.length > 0) {
-    const current = queue.shift()!;
+  while (head < queue.length) {
+    const current = queue[head++];
 
     // Check readdir cache before issuing I/O
     let entries = ctx.dirEntries.get(current);
     if (!entries) {
       try {
         entries = readdirSync(current, { withFileTypes: true });
+        // Deterministic byte-order traversal — locale-independent.
+        // Sort on cache miss only: entries are immutable post-readdirSync,
+        // so caching the sorted result and reusing it across BFS visits
+        // is sound and saves an O(K log K) sort per visit.
+        entries.sort((a, b) =>
+          a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+        );
         ctx.dirEntries.set(current, entries);
       } catch {
         continue;
       }
     }
-
-    // Deterministic byte-order traversal — locale-independent.
-    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
