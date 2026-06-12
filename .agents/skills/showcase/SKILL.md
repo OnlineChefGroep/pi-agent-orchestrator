@@ -114,3 +114,9 @@ After any UI changes to the dashboard, top view, or widget:
 - **Font not found:** Set `SHOWCASE_FONT=/path/to/font.ttf` or install `fonts-dejavu-core`.
 - **GIF too large:** Reduce choreography duration or increase compression in `showcase-agg.sh`.
 - **Tmux recording fails:** Ensure `tmux` and `asciinema` are installed. Check `showcase-tmux-scenes.mjs` for syntax errors.
+
+## Safety
+- Execute safe, verified operations only.
+
+## Integration
+- Integrated with Pi Orchestra and Jules workflow.

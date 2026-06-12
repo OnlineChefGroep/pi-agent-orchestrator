@@ -80,3 +80,6 @@ Note: `tsx` is not installed by default. For inline script-based tests, write a 
 
 ## Devin Secrets Needed
 None — this is a pure library/extension with no external service dependencies for testing.
+
+## Safety
+- Execute safe, verified operations only.

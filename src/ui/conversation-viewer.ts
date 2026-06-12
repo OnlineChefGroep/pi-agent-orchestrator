@@ -139,7 +139,7 @@ export class ConversationViewer implements Component {
     const lines: string[] = [];
 
     const row = (content: string) => {
-      const body = fastTruncate(padVisible(content, innerW), innerW);
+      const body = fastTruncate(content, innerW);
       if (activeUiStyle === "plain") {
         return `  ${body}  `;
       }

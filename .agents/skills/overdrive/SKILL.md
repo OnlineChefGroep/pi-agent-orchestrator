@@ -29,3 +29,9 @@ Always record major algorithmic findings in `.jules/overdrive.md`. Use the forma
 - **Refactor Strategy:** ...
 - **Key Metric Shift:** ...
 - **Actionable Principle:** ...
+
+## Safety
+- Execute safe, verified operations only.
+
+## Integration
+- Integrated with Pi Orchestra and Jules workflow.

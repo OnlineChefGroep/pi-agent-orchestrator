@@ -95,12 +95,14 @@ export function padVisible(content: string, width: number): string {
 
 /** Skip expensive truncateToWidth when the string already fits. */
 export function fastTruncate(str: string, maxWidth: number): string {
-  if (visibleWidth(str) <= maxWidth) return str;
+  const visWidth = visibleWidth(str);
+  if (visWidth === maxWidth) return str;
+  if (visWidth < maxWidth) return str + " ".repeat(maxWidth - visWidth);
   return truncateToWidth(str, maxWidth);
 }
 
 export function framedRow(content: string, innerW: number, th: DashboardTheme, box: BoxChars): string {
-  const body = fastTruncate(padVisible(content, innerW), innerW);
+  const body = fastTruncate(content, innerW);
   return `${th.border}${box.l}${th.reset} ${body} ${th.border}${box.r}${th.reset}`;
 }
 
