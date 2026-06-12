@@ -59,6 +59,9 @@ export const SUBAGENTS_API_SYMBOL = Symbol.for("pi-subagents:api");
 /** Symbol under which the orchestrator publishes its raw `HookRegistry`. */
 export const SUBAGENTS_HOOKS_SYMBOL = Symbol.for("pi-subagents:hooks");
 
+/** Symbol under which the orchestrator publishes its read-only `SubagentManagerHandle`. */
+export const SUBAGENTS_MANAGER_SYMBOL = Symbol.for("pi-subagents:manager");
+
 // ---------------------------------------------------------------------------
 // Typed event payload map.
 //
@@ -204,6 +207,54 @@ export interface SubagentsPublicApi {
   readonly rpc: SubagentsRpcClient;
   /** Typed lifecycle subscription. */
   readonly hooks: TypedEventSubscription;
+  /** Read-only manager handle — `waitForAll` / `hasRunning` / `getRecord` / `listAgentIds`. */
+  readonly manager: SubagentManagerHandle;
+}
+
+/**
+ * Maximum length of the `description` field exposed on the sanitized manager
+ * record. Hardcoded to keep the security contract (don't leak full prompts
+ * / long context to peer extensions) obvious; bump in a follow-up if a
+ * legitimate consumer needs more.
+ */
+export const SUBAGENT_MANAGER_MAX_DESCRIPTION_CHARS = 200;
+
+/**
+ * Sanitized, non-sensitive shape of an agent record that the manager handle
+ * exposes to peer extensions. Sensitive fields (full description, prompt,
+ * result, error, internal flags) are intentionally omitted; consumers that
+ * need the full record should use the `Agent` tool or RPC instead.
+ */
+export interface SubagentManagerRecord {
+  id: string;
+  type: string;
+  status: string;
+  /** Truncated to `SUBAGENT_MANAGER_MAX_DESCRIPTION_CHARS` by the handle builder. */
+  description?: string;
+}
+
+/**
+ * Read-only handle over the orchestrator's `AgentManager`, exposed to peer
+ * extensions so they can observe running agents and read safe metadata
+ * without gaining the ability to spawn, stop, or mutate them.
+ */
+export interface SubagentManagerHandle {
+  /** Wait until every currently-running agent has reached a terminal state. */
+  waitForAll(): Promise<void>;
+  /** Whether any agent is currently running (not yet terminal). */
+  hasRunning(): boolean;
+  /** Look up an agent by id. Returns a sanitized record or `undefined`. */
+  getRecord(id: string): SubagentManagerRecord | undefined;
+  /** List the ids of all known agents of a given type. */
+  listAgentIds(type: string): string[];
+}
+
+/** Structural shape of the manager required by `registerSubagentsApi`. */
+export interface SubagentManagerLike {
+  waitForAll(): Promise<void>;
+  hasRunning(): boolean;
+  getRecord(id: string): { id: string; type: string; status: string; description?: string } | undefined;
+  listAgents(): ReadonlyArray<{ id: string; type: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -256,13 +307,40 @@ function buildTypedSubscription(registry: HookRegistry): TypedEventSubscription 
   };
 }
 
+/**
+ * Wrap a real `AgentManager` in the read-only `SubagentManagerHandle`. The
+ * handle exposes only the four observation methods and intentionally drops
+ * every mutating surface (`spawn`, `stop`, `abort`, `clearCompleted`, etc.).
+ * `getRecord` returns a sanitized projection of the internal `AgentRecord` so
+ * peer extensions cannot see full prompts, results, or error stacks.
+ */
+function buildManagerHandle(manager: SubagentManagerLike): SubagentManagerHandle {
+  return {
+    waitForAll: () => manager.waitForAll(),
+    hasRunning: () => manager.hasRunning(),
+    getRecord: (id: string) => {
+      const r = manager.getRecord(id);
+      if (!r) return undefined;
+      return {
+        id: r.id,
+        type: r.type,
+        status: r.status,
+        description: r.description?.slice(0, SUBAGENT_MANAGER_MAX_DESCRIPTION_CHARS),
+      };
+    },
+    listAgentIds: (type: string) =>
+      manager.listAgents().filter((a) => a.type === type).map((a) => a.id),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Publish / discover
 // ---------------------------------------------------------------------------
 
 /**
- * Publish the orchestrator's typed API on `globalThis[Symbol.for("pi-subagents:api")]`
- * and its raw `HookRegistry` on `globalThis[Symbol.for("pi-subagents:hooks")]`.
+ * Publish the orchestrator's typed API on `globalThis[Symbol.for("pi-subagents:api")]`,
+ * its raw `HookRegistry` on `globalThis[Symbol.for("pi-subagents:hooks")]`, and
+ * its read-only `SubagentManagerHandle` on `globalThis[Symbol.for("pi-subagents:manager")]`.
  *
  * Called once by the extension on load. **Idempotent** — last registration wins,
  * matching the pattern documented for `registerRpcHandlers` in
@@ -271,20 +349,24 @@ function buildTypedSubscription(registry: HookRegistry): TypedEventSubscription 
 export function registerSubagentsApi(
   events: EventBus,
   hooks: HookRegistry,
+  manager: SubagentManagerLike,
   options: { extensionId?: string; timeoutMs?: number } = {},
 ): SubagentsPublicApi {
+  const managerHandle = buildManagerHandle(manager);
   const api: SubagentsPublicApi = {
     protocolVersion: PROTOCOL_VERSION,
     rpc: createSubagentsRpcClient(events, options),
     hooks: buildTypedSubscription(hooks),
+    manager: managerHandle,
   };
   const store = globalThis as unknown as Record<symbol, unknown>;
   store[SUBAGENTS_API_SYMBOL] = api;
   store[SUBAGENTS_HOOKS_SYMBOL] = hooks;
+  store[SUBAGENTS_MANAGER_SYMBOL] = managerHandle;
   return api;
 }
 
-/** Forget the published API. Test-only / opt-in cleanup. */
+/** Forget the published API, hook registry, and manager handle. Test-only / opt-in cleanup. */
 export function clearSubagentsApi(): void {
   const store = globalThis as unknown as Record<symbol, unknown>;
   // Assign `undefined` instead of `delete` — Symbol-keyed globalThis
@@ -292,6 +374,7 @@ export function clearSubagentsApi(): void {
   // treat `=== undefined` as "not registered".
   store[SUBAGENTS_API_SYMBOL] = undefined;
   store[SUBAGENTS_HOOKS_SYMBOL] = undefined;
+  store[SUBAGENTS_MANAGER_SYMBOL] = undefined;
 }
 
 /**
@@ -308,6 +391,13 @@ export function getSubagentsApi(): SubagentsPublicApi | undefined {
 export function getSubagentsHooks(): HookRegistry | undefined {
   return (globalThis as unknown as Record<symbol, unknown>)[SUBAGENTS_HOOKS_SYMBOL] as
     | HookRegistry
+    | undefined;
+}
+
+/** Discover the orchestrator's read-only `SubagentManagerHandle`. Returns `undefined` if not loaded. */
+export function getSubagentsManager(): SubagentManagerHandle | undefined {
+  return (globalThis as unknown as Record<symbol, unknown>)[SUBAGENTS_MANAGER_SYMBOL] as
+    | SubagentManagerHandle
     | undefined;
 }
 

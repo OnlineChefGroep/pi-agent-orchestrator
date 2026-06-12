@@ -289,26 +289,10 @@ export default async function (pi: ExtensionAPI) {
   // Publish the typed public API on `globalThis` so peer extensions and tests
   // can discover and consume it. See `src/public-api.ts` for the contract.
   // This supersedes the old read-only `pi-subagents:hooks` mirror: the new
-  // publication hands out the real `HookRegistry` instance plus a typed RPC
-  // client and the typed event subscription helpers.
-  registerSubagentsApi(pi.events, hookRegistry);
-
-  // Expose manager via Symbol.for() global registry for cross-package access.
-  // Standard Node.js pattern for cross-package singletons (used by OpenTelemetry, etc.).
-  const MANAGER_KEY = Symbol.for("pi-subagents:manager");
-  (globalThis as any)[MANAGER_KEY] = {
-    waitForAll: () => manager.waitForAll(),
-    hasRunning: () => manager.hasRunning(),
-    getRecord: (id: string) => {
-      const r = manager.getRecord(id);
-      if (!r) return undefined;
-      // Only return safe, non-sensitive fields. Truncate description to
-      // avoid leaking sensitive context to other extensions in the process.
-      return { id: r.id, type: r.type, status: r.status, description: r.description?.slice(0, 200) };
-    },
-    // NO spawn, NO listAgents (that goes through the Agent tool or API)
-    listAgentIds: (type: string) => manager.listAgents().filter(a => a.type === type).map(a => a.id),
-  };
+  // publication hands out the real `HookRegistry` instance, a typed RPC
+  // client, the typed event subscription helpers, and a read-only
+  // `SubagentManagerHandle` (published under `pi-subagents:manager`).
+  registerSubagentsApi(pi.events, hookRegistry, manager);
 
   // Expose widget render metrics via Symbol.for() global registry for dashboard access.
   // The dashboard reads this lazily via (globalThis as any)[Symbol.for("pi-subagents:widget-metrics")],
@@ -383,7 +367,6 @@ export default async function (pi: ExtensionAPI) {
     unsubSessionUsageRpc?.();
     unsubSwarmHealthRpc?.();
     currentCtx = undefined;
-    delete (globalThis as any)[MANAGER_KEY];
     clearSubagentsApi();
     delete (globalThis as any)[WIDGET_KEY];
     scheduler.stop();
