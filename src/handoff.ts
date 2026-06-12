@@ -191,15 +191,24 @@ function truncateStrings(obj: any): any {
       return obj.slice(0, MAX_STRING_LENGTH);
     }
     return obj;
-  } else if (Array.isArray(obj)) {
+  }
+  if (Array.isArray(obj)) {
     for (let i = 0; i < obj.length; i++) {
-      obj[i] = truncateStrings(obj[i]);
+      // Skip reassignment when truncateStrings returns the same value
+      // (the common case for nested arrays/objects/primitives — the recursion
+      // mutates in place and returns the same reference).
+      const truncated = truncateStrings(obj[i]);
+      if (truncated !== obj[i]) obj[i] = truncated;
     }
-  } else if (obj !== null && typeof obj === 'object') {
-    for (const key in obj) {
-      if (Object.hasOwn(obj, key)) {
-        obj[key] = truncateStrings(obj[key]);
-      }
+    return obj;
+  }
+  if (obj !== null && typeof obj === 'object') {
+    // Object.keys() vs for...in + Object.hasOwn: the latter walks the
+    // prototype chain and runs a hasOwn check per iteration; Object.keys()
+    // returns own enumerable string-keyed properties in a single array.
+    for (const key of Object.keys(obj)) {
+      const truncated = truncateStrings(obj[key]);
+      if (truncated !== obj[key]) obj[key] = truncated;
     }
   }
   return obj;
