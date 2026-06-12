@@ -75,6 +75,16 @@ vi.mock("../src/commands/hooks.js", () => ({ registerHooksCommand: vi.fn() }));
 
 // Mock cross-extension-rpc
 vi.mock("../src/cross-extension-rpc.js", () => ({
+  PROTOCOL_VERSION: 2,
+  createSubagentsRpcClient: vi.fn(() => ({
+    ping: vi.fn(async () => ({ version: 2 })),
+    spawn: vi.fn(async () => ({ id: "mock-agent" })),
+    stop: vi.fn(async () => undefined),
+    sessionUsage: vi.fn(async () => ({
+      usage: { spawnedAgents: 0, totalTurns: 0 },
+      limits: { maxAgents: 0, maxTurns: 0 },
+    })),
+  })),
   registerRpcHandlers: vi.fn(() => ({
     unsubPing: vi.fn(),
     unsubSpawn: vi.fn(),

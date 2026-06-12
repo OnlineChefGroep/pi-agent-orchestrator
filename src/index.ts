@@ -22,6 +22,7 @@ import { registerHooksCommand } from "./commands/hooks.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
 import { GroupJoinManager } from "./group-join.js";
 import { HookRegistry } from "./hooks.js";
+import { clearSubagentsApi, registerSubagentsApi } from "./public-api.js";
 import { SubagentScheduler } from "./schedule.js";
 import { resolveStorePath, ScheduleStore } from "./schedule-store.js";
 import { applyAndEmitLoaded } from "./settings.js";
@@ -285,14 +286,12 @@ export default async function (pi: ExtensionAPI) {
     pi.sendMessage({ customType: "subagent-notification", content: `${prefix} Session ${threshold}. ${advice}`, display: true });
   });
 
-  // Expose hook registry via Symbol.for() global registry for cross-package access.
-  // Extensions and other packages can discover and register hooks by reading:
-  //   (globalThis as any)[Symbol.for('pi-subagents:hooks')]
-  const HOOKS_KEY = Symbol.for("pi-subagents:hooks");
-  (globalThis as any)[HOOKS_KEY] = {
-    getHandlers: () => hookRegistry.getHandlers(),
-    // NO register, NO unregister, NO dispatch
-  };
+  // Publish the typed public API on `globalThis` so peer extensions and tests
+  // can discover and consume it. See `src/public-api.ts` for the contract.
+  // This supersedes the old read-only `pi-subagents:hooks` mirror: the new
+  // publication hands out the real `HookRegistry` instance plus a typed RPC
+  // client and the typed event subscription helpers.
+  registerSubagentsApi(pi.events, hookRegistry);
 
   // Expose manager via Symbol.for() global registry for cross-package access.
   // Standard Node.js pattern for cross-package singletons (used by OpenTelemetry, etc.).
@@ -385,7 +384,7 @@ export default async function (pi: ExtensionAPI) {
     unsubSwarmHealthRpc?.();
     currentCtx = undefined;
     delete (globalThis as any)[MANAGER_KEY];
-    delete (globalThis as any)[HOOKS_KEY];
+    clearSubagentsApi();
     delete (globalThis as any)[WIDGET_KEY];
     scheduler.stop();
     manager.abortAll();
