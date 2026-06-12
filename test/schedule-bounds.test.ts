@@ -25,7 +25,9 @@ describe("SubagentScheduler Bounds Checks", () => {
 
   afterEach(() => {
     scheduler.stop();
-    rmSync(tmp, { recursive: true, force: true });
+    // maxRetries + retryDelay handles Windows file-locking races where the
+    // proper-lockfile lockfile directory is briefly held open after release.
+    rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
 
   it("prevents updating a job with a prompt exceeding MAX_PROMPT_SIZE", async () => {
