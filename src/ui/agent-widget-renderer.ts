@@ -213,22 +213,22 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
   }
 
   // Show compact queued line(s): "5× Explore" for large batches, individual for small.
+  // Two-pass: first push compact lines for large groups, then a single O(N) pass
+  // for individual lines (was O(K×N) with an inner `for` loop per unique type).
   const queuedLines: string[] = [];
-  for (const [key, group] of queuedByType) {
+  for (const [, group] of queuedByType) {
     if (group.count >= BATCH_COMPACT_THRESHOLD) {
       queuedLines.push(
         truncate(`${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("accent", `${group.count}× ${group.name}`)} ${theme.fg("dim", "queued")}`),
       );
-    } else {
-      // Individual lines for small batches
-      for (let i = 0; i < queued.length; i++) {
-        const a = queued[i];
-        if (a.type !== key) continue;
-        queuedLines.push(
-          truncate(`${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("dim", group.name)}  ${theme.fg("muted", a.description)}`),
-        );
-      }
     }
+  }
+  for (const a of queued) {
+    const group = queuedByType.get(a.type);
+    if (!group || group.count >= BATCH_COMPACT_THRESHOLD) continue; // already rendered as compact
+    queuedLines.push(
+      truncate(`${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("dim", group.name)}  ${theme.fg("muted", a.description)}`),
+    );
   }
 
   const runningLines: string[][] = [];
