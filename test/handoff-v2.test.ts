@@ -370,3 +370,148 @@ describe("Handoff v2 \u2014 typed artifacts", () => {
     });
   });
 });
+
+// ── Benchmark: parseHandoff — parse time ──────────────────────────────
+
+function benchmarkLog(
+  label: string,
+  measured: number,
+  threshold: number,
+  unit = "ms",
+): void {
+  const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
+  let status: string;
+  if (measured > threshold) {
+    status = "FAIL";
+    console.warn(
+      `\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`,
+    );
+  } else if (pct > 80) {
+    status = "WARN";
+    console.warn(
+      `\u26a0\ufe0f  BENCHMARK WARN: ${label} \u2014 ${measured} approaching threshold ${threshold} (${pct.toFixed(0)}%)`,
+    );
+  } else {
+    status = "OK";
+  }
+  const measuredStr = unit === "\u00b5s"
+    ? `${(measured * 1000).toFixed(1)}\u00b5s`
+    : `${measured.toFixed(3)}ms`;
+  const thresholdStr = unit === "\u00b5s"
+    ? `${(threshold * 1000).toFixed(1)}\u00b5s`
+    : `${threshold.toFixed(3)}ms`;
+  process.stdout.write(
+    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
+  );
+}
+
+function buildHandoffText(opts: {
+  findingsCount: number;
+  artifactCount: number;
+  legacy?: boolean;
+}): string {
+  const findings = Array.from({ length: opts.findingsCount }, (_, i) => `Finding ${i + 1}: something noteworthy`);
+  const artifacts = Array.from({ length: opts.artifactCount }, (_, i) => {
+    if (opts.legacy) {
+      // Legacy loose shape - unknown `type` string
+      return `{"type": "old", "path": "/path/file-${i}.ts", "title": "File ${i}"}`;
+    }
+    return `{"type": "file", "path": "/path/file-${i}.ts", "title": "File ${i}"}`;
+  });
+  return `\`\`\`json
+{
+  "type": "handoff",
+  "status": "success",
+  "summary": "Implemented the feature with findings and artifacts to share",
+  "findings": [${findings.map(f => `"${f}"`).join(", ")}],
+  "artifacts": [${artifacts.join(", ")}]
+}
+\`\`\``;
+}
+
+describe("Benchmark: parseHandoff — parse time", () => {
+  it("small handoff (3 findings, 1 artifact) under 100\u00b5s", () => {
+    const text = buildHandoffText({ findingsCount: 3, artifactCount: 1 });
+
+    const start = performance.now();
+    for (let i = 0; i < 1000; i++) {
+      parseHandoff(text);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 1000;
+
+    benchmarkLog("parseHandoff small", perCall, 0.1, "\u00b5s");
+    expect(perCall).toBeLessThan(0.1);
+  });
+
+  it("medium handoff (10 findings, 5 v2 artifacts) under 200\u00b5s", () => {
+    const text = buildHandoffText({ findingsCount: 10, artifactCount: 5 });
+
+    const start = performance.now();
+    for (let i = 0; i < 500; i++) {
+      parseHandoff(text);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 500;
+
+    benchmarkLog("parseHandoff medium v2", perCall, 0.2, "\u00b5s");
+    expect(perCall).toBeLessThan(0.2);
+  });
+
+  // Large handoff regime (realistic bulk-spawn handoff).
+  // 50 v2-strict artifacts is the upper bound (MAX_ARTIFACTS_COUNT).
+  // This is the regime where any per-artifact duplicate work shows up.
+  it("large handoff (50 findings, 50 v2 artifacts) under 2ms", () => {
+    const text = buildHandoffText({ findingsCount: 50, artifactCount: 50 });
+
+    const start = performance.now();
+    for (let i = 0; i < 100; i++) {
+      parseHandoff(text);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 100;
+
+    benchmarkLog("parseHandoff large 50 v2 artifacts", perCall, 2);
+    expect(perCall).toBeLessThan(2);
+  });
+
+  it("large handoff (50 findings, 50 legacy artifacts) under 2ms (coercion path)", () => {
+    const text = buildHandoffText({ findingsCount: 50, artifactCount: 50, legacy: true });
+
+    const start = performance.now();
+    for (let i = 0; i < 100; i++) {
+      parseHandoff(text);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 100;
+
+    benchmarkLog("parseHandoff large 50 legacy artifacts", perCall, 2);
+    expect(perCall).toBeLessThan(2);
+  });
+
+  // Over-limit string truncation (exercises truncateStrings tree walk + actual slice).
+  // Summary > MAX_SUMMARY_LENGTH (10000) to force truncation, plus an artifact
+  // value > MAX_STRING_LENGTH (50000) to force the inner truncation path.
+  it("large handoff with over-limit strings (exercises truncateStrings slice) under 2ms", () => {
+    const longSummary = "x".repeat(12000);
+    const text = `\`\`\`json
+{
+  "type": "handoff",
+  "status": "success",
+  "summary": "${longSummary}",
+  "findings": ["f1", "f2", "f3"],
+  "artifacts": [{"type": "note", "title": "big", "value": "${"y".repeat(51000)}"}]
+}
+\`\`\``;
+
+    const start = performance.now();
+    for (let i = 0; i < 100; i++) {
+      parseHandoff(text);
+    }
+    const elapsed = performance.now() - start;
+    const perCall = elapsed / 100;
+
+    benchmarkLog("parseHandoff long summary", perCall, 2);
+    expect(perCall).toBeLessThan(2);
+  });
+});
