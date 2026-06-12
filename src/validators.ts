@@ -18,12 +18,26 @@ const MAX_DESCRIPTION_LENGTH = 500;
  *   3. Sandbox isolation: validators run with isolated=true, levelLimit=0,
  *      skipValidators=true, so even a compromised validator cannot recurse.
  */
+
+
+function truncateUnicode(str: string, maxLength: number): string {
+  if (str.length <= maxLength) return str;
+  let count = 0;
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if (code >= 0xD800 && code <= 0xDBFF) i++;
+    count++;
+    if (count >= maxLength) return str.slice(0, i + 1);
+  }
+  return str;
+}
+
 function sanitizeValidatorInput(input: string, maxLength: number = MAX_OUTPUT_SIZE): string {
   if (typeof input !== 'string') return '';
   // Remove control chars (C0 and C1), preserving whitespace like tab/newline
   const noControl = input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
   // Unicode-safe truncation to prevent lone surrogates
-  return Array.from(noControl).slice(0, maxLength).join('');
+  return truncateUnicode(noControl, maxLength);
 }
 
 /**
