@@ -182,47 +182,45 @@ export class AgentWidget {
       else finished.push(a);
     }
 
-    // Estimate lines per agent: running=2, queued=1, finished=1.
-    // Build flat line estimate array.
-    const lineEstimates: { agent: AgentRecord; lines: number }[] = [];
-    for (const a of running) lineEstimates.push({ agent: a, lines: 2 });
-    for (const a of queued) lineEstimates.push({ agent: a, lines: 1 });
-    for (const a of finished) lineEstimates.push({ agent: a, lines: 1 });
+    // Compute total lines without allocating a wrapper array.
+    // running=2 lines, queued=1, finished=1.
+    const totalLines = running.length * 2 + queued.length + finished.length;
 
-    this.maxPages = Math.max(1, Math.ceil(
-      lineEstimates.reduce((sum, e) => sum + e.lines, 0) / PAGE_SIZE,
-    ));
+    this.maxPages = Math.max(1, Math.ceil(totalLines / PAGE_SIZE));
 
     // Clamp scroll page
     if (this.scrollPage >= this.maxPages) {
       this.scrollPage = Math.max(0, this.maxPages - 1);
     }
 
-    // Compute visible window: slice from lineEstimates
+    // Compute visible window without wrapper objects: iterate categories directly.
     const visible: AgentRecord[] = [];
     let remainingLines = PAGE_SIZE;
-    let skippedLines = this.scrollPage * PAGE_SIZE;
+    let skipped = this.scrollPage * PAGE_SIZE;
 
-    for (const est of lineEstimates) {
-      if (skippedLines > 0) {
-        // Skip agents entirely within the skip region
-        if (est.lines <= skippedLines) {
-          skippedLines -= est.lines;
-          continue;
+    const processCategory = (arr: AgentRecord[], linesPerAgent: number) => {
+      for (let i = 0; i < arr.length; i++) {
+        if (skipped > 0) {
+          if (linesPerAgent <= skipped) {
+            skipped -= linesPerAgent;
+            continue;
+          }
+          // Agent starts mid-page after partial skip.
+          skipped = 0;
+          visible.push(arr[i]);
+          remainingLines -= linesPerAgent;
+        } else if (remainingLines >= linesPerAgent) {
+          visible.push(arr[i]);
+          remainingLines -= linesPerAgent;
+        } else {
+          return; // No more room in this page
         }
-        // Partial skip: agent starts mid-page
-        skippedLines = 0;
-        // This agent is partially visible — show it
-        visible.push(est.agent);
-        remainingLines -= est.lines;
-      } else if (remainingLines >= est.lines) {
-        visible.push(est.agent);
-        remainingLines -= est.lines;
-      } else {
-        // Agent doesn't fit — stop
-        break;
       }
-    }
+    };
+
+    processCategory(running, 2);
+    processCategory(queued, 1);
+    processCategory(finished, 1);
 
     return visible;
   }
@@ -370,9 +368,11 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
         this.lastStatusText = undefined;
       }
       if (this.widgetInterval) { clearInterval(this.widgetInterval); this.widgetInterval = undefined; }
-      // Clean up stale entries
+      // Clean up stale entries (O(N) via Set, not O(N*M) via .some).
+      const agentIds = new Set<string>();
+      for (let i = 0; i < allAgents.length; i++) agentIds.add(allAgents[i].id);
       for (const [id] of this.finishedTurnAge) {
-        if (!allAgents.some(a => a.id === id)) this.finishedTurnAge.delete(id);
+        if (!agentIds.has(id)) this.finishedTurnAge.delete(id);
       }
       this.dirty = false;
       return;

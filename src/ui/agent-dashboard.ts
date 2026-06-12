@@ -291,7 +291,11 @@ export class AgentDashboard implements Component {
       }
 
       // Purge selected IDs that no longer exist.
-      const currentIds = new Set(this.agents.map((a) => a.id));
+      // Build Set via for loop (avoids intermediate .map() array allocation).
+      const currentIds = new Set<string>();
+      for (let i = 0; i < this.agents.length; i++) {
+        currentIds.add(this.agents[i].id);
+      }
       for (const id of this.selectedIds) {
         if (!currentIds.has(id)) this.selectedIds.delete(id);
       }
