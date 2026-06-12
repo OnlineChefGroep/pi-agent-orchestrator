@@ -145,6 +145,7 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
       isolation: fm.isolation === "worktree" ? "worktree" : undefined,
       handoff: parseBooleanWithDefault(fm.handoff, false),
       promptCompressionLevel: parseCompressionLevel(fm.prompt_compression),
+      validators: parseValidators(fm.validators),
       enabled: parseBooleanWithDefault(fm.enabled, true),
       source,
     };
@@ -244,6 +245,36 @@ function parseCsvListOptional(val: unknown): string[] | undefined {
 
 function parseMemory(val: unknown): MemoryScope | undefined {
   return (val === "user" || val === "project" || val === "local") ? val : undefined;
+}
+
+/**
+ * Parse the `validators` frontmatter field. Returns an array of
+ * `{ agentId, criteria }` objects, or `undefined` if the input is missing,
+ * empty, or malformed.
+ *
+ * **Strict-reject policy:** if *any* item in the array is malformed (non-object,
+ * non-string agentId, empty agentId, non-array criteria, or empty criteria
+ * after filtering), the entire array is dropped. This is a conscious choice:
+ * hand-edited YAML frontmatter is error-prone, and silently keeping partially
+ * valid chains would hide misconfigurations from the user. Better to fail the
+ * whole chain and let `validateAgentConfig` flag the agent as needing review.
+ */
+function parseValidators(
+  val: unknown,
+): readonly { agentId: string; criteria: readonly string[] }[] | undefined {
+  if (val === undefined || val === null) return undefined;
+  if (!Array.isArray(val)) return undefined;
+  const result: { agentId: string; criteria: string[] }[] = [];
+  for (const item of val) {
+    if (typeof item !== "object" || item === null) return undefined;
+    const obj = item as Record<string, unknown>;
+    if (typeof obj.agentId !== "string" || obj.agentId === "") return undefined;
+    if (!Array.isArray(obj.criteria)) return undefined;
+    const criteria = obj.criteria.filter((c): c is string => typeof c === "string" && c.length > 0);
+    if (criteria.length === 0) return undefined;
+    result.push({ agentId: obj.agentId, criteria });
+  }
+  return result.length > 0 ? result : undefined;
 }
 
 function parseInheritField(val: unknown): true | string[] | false {

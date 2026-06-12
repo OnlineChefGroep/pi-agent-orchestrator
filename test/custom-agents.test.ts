@@ -551,4 +551,85 @@ Unsafe agent.`);
     expect(result.get("agent..traversal")!.enabled).toBe(false);
   });
 
+  it("parses validators frontmatter as an array of {agentId, criteria}", async () => {
+    writeAgent("chain-validator", `---
+description: Chain validator
+validators:
+  - agentId: security-check
+    criteria:
+      - "no secrets in output"
+      - "input is sanitized"
+  - agentId: style-check
+    criteria:
+      - "uses project linter"
+      - "no eslint disable comments"
+---
+
+You are a chain validator.`);
+    const result = await loadCustomAgents(tmpDir);
+    const agent = result.get("chain-validator")!;
+    expect(agent.validators).toEqual([
+      { agentId: "security-check", criteria: ["no secrets in output", "input is sanitized"] },
+      { agentId: "style-check", criteria: ["uses project linter", "no eslint disable comments"] },
+    ]);
+  });
+
+  it("validators defaults to undefined when omitted from frontmatter", async () => {
+    writeAgent("no-validators", `---
+description: No validators
+---
+
+Plain agent.`);
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("no-validators")!.validators).toBeUndefined();
+  });
+
+  it("validators: [] (empty array) parses as undefined (no validators)", async () => {
+    writeAgent("empty-validators", `---
+description: Empty validators
+validators: []
+---
+
+Plain agent.`);
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("empty-validators")!.validators).toBeUndefined();
+  });
+
+  it("strict-rejects validator with non-string agentId (whole array dropped, agent remains enabled)", async () => {
+    writeAgent("bad-validator", `---
+description: Malformed validator
+validators:
+  - agentId: 42
+    criteria:
+      - "some criterion"
+---
+
+Malformed.`);
+    const result = await loadCustomAgents(tmpDir);
+    const agent = result.get("bad-validator")!;
+    expect(agent.validators).toBeUndefined();
+    // Permissive parser — does NOT disable the agent; validateAgentConfig handles security flags separately.
+    expect(agent.enabled).toBe(true);
+  });
+
+  it("strict-rejects mixed valid/invalid validator entries (whole array dropped)", async () => {
+    writeAgent("mixed-validators", `---
+description: One good, one bad
+validators:
+  - agentId: good
+    criteria:
+      - "ok"
+  - agentId: 42
+    criteria:
+      - "bad entry"
+---
+
+Mixed.`);
+    const result = await loadCustomAgents(tmpDir);
+    const agent = result.get("mixed-validators")!;
+    // Strict-reject: the bad entry drops the whole array (conscious design choice,
+    // see parseValidators JSDoc).
+    expect(agent.validators).toBeUndefined();
+  });
+
 });

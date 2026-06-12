@@ -39,10 +39,10 @@
 
 ## In Progress / Near-Term (P1)
 
-- [ ] **Public typed API surface** — Formalize cross-extension contracts (currently behind Symbols + events) — _tracked in [#137](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/137)_
+- [ ] **Public typed API surface** — Formalize cross-extension contracts (currently behind Symbols + events) — _tracked in [#137](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/137); in-progress on branch `feat/typed-rpc-client` (`src/public-api.ts` scaffolded + tested)_
 - [x] **Schedule locking hardening** — `proper-lockfile` is in use (CVE-010 fix, merged); see `src/schedule-store.ts` (`withLock`, `removeLegacyFileLock`) and tests in `test/schedule-store.test.ts` (legacy lock recovery, no-deadlock-after-release)
 - [ ] **Windows CI reliability** — Schedule tests are blocking again; watch for regressions — _tracked in [#138](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/138)_
-- [ ] **Example-agent expansion** — Keep `examples/agents/` current as new patterns stabilize — _tracked in [#139](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/139)_
+- [ ] **Example-agent expansion** — Keep `examples/agents/` current as new patterns stabilize — _tracked in [#139](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/139); in-progress: added `validator-chain-reviewer.md` + wired `validators` frontmatter parsing in `src/custom-agents.ts`_
 
 ---
 
