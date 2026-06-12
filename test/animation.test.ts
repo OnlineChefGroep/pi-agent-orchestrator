@@ -27,7 +27,7 @@ describe("SPINNER_FRAMES", () => {
   });
 
   it("each style has at least one frame", () => {
-    for (const [key, frames] of Object.entries(SPINNER_FRAMES)) {
+    for (const [, frames] of Object.entries(SPINNER_FRAMES)) {
       expect(Array.isArray(frames)).toBe(true);
       expect(frames.length).toBeGreaterThan(0);
     }
@@ -36,7 +36,6 @@ describe("SPINNER_FRAMES", () => {
 
 describe("setSpinnerStyle", () => {
   it("updates the global SPINNER array", () => {
-    const originalLen = SPINNER.length;
     setSpinnerStyle("lines");
     expect(SPINNER[0]).toBe("-");
     setSpinnerStyle("braille"); // restore
@@ -103,6 +102,7 @@ describe("SpinnerEngine", () => {
 
   it("creates with custom frames", () => {
     const engine = new SpinnerEngine({ customFrames: ["A", "B", "C"] });
+    // Custom frames are directly assigned from options
     expect(engine.frames).toEqual(["A", "B", "C"]);
   });
 

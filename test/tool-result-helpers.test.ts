@@ -94,10 +94,9 @@ describe("createActivityTracker", () => {
   });
 
   it("callbacks update lastSeenMs", () => {
-    const { callbacks } = createActivityTracker();
-    const before = Date.now();
+    const { state, callbacks } = createActivityTracker();
     callbacks.onToolActivity({ type: "start", toolName: "read" });
-    // lastSeenMs should have been updated to approximately now
+    expect(state.lastSeenMs).toBeGreaterThan(0);
   });
 
   it("stream update callback fires on tool activity", () => {
