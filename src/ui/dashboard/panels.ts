@@ -99,7 +99,7 @@ export function renderDashboardFooter(
 ): string[] {
   const innerW = Math.max(1, width - 4);
   const primary = "↑↓/jk navigate  ·  space select  ·  enter view  ·  s steer  ·  Shift+K kill";
-  const secondary = "p perms  ·  w swarm  ·  r refresh  ·  /:cmd  ·  ? help  ·  q/esc close";
+  const secondary = "z sch  ·  p perms  ·  w swarm  ·  r refresh  ·  /:cmd  ·  ? help  ·  q/esc close";
   const both = `${primary}  ·  ${secondary}`;
   const footerText = both.length <= innerW ? both : primary;
 
@@ -176,6 +176,7 @@ export function renderDashboardHelp(
     key("Shift+K", "Kill selected (or current)"),
     key("s", "Steer selected agent"),
     key("p", "Show permissions & scope"),
+    key("z", "Toggle scheduled jobs view"),
     key("w", "Create swarm from selection"),
     "",
     section("General"),

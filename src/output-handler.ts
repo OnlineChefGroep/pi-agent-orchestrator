@@ -58,7 +58,7 @@ async function launchAgentDashboard(
   ctx: ExtensionCommandContext,
   deps: AgentsMenuDeps,
 ): Promise<void> {
-  const { manager, agentActivity } = deps;
+  const { manager, agentActivity, scheduler } = deps;
 
   const viewConv = (rec: import("./types.js").AgentRecord) =>
     viewAgentConversation(ctx, rec, agentActivity);
@@ -97,7 +97,7 @@ async function launchAgentDashboard(
       }
     }
 
-    await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer, onPerms, onSwarm);
+    await showAgentDashboard(ctx, manager, agentActivity, scheduler, viewConv, onAbort, onSteer, onPerms, onSwarm);
   };
 
   const onPerms = (r: import("./types.js").AgentRecord) => showAgentPermissions(ctx, r);
@@ -117,10 +117,10 @@ async function launchAgentDashboard(
       ctx.ui.notify(`Swarm action: ${action} on ${ids.length} agents`, "info");
     }
 
-    await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer, onPerms, onSwarm);
+    await showAgentDashboard(ctx, manager, agentActivity, scheduler, viewConv, onAbort, onSteer, onPerms, onSwarm);
   };
 
-  await showAgentDashboard(ctx, manager, agentActivity, viewConv, onAbort, onSteer, onPerms, onSwarm);
+  await showAgentDashboard(ctx, manager, agentActivity, scheduler, viewConv, onAbort, onSteer, onPerms, onSwarm);
 }
 
 interface TreeNode {
