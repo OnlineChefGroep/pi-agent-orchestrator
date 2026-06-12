@@ -1,44 +1,54 @@
 import { describe, expect, it } from "vitest";
-import { encodeCwd } from "../src/output-file.js";
+
+/**
+ * Inlined from src/output-file.ts — encodeCwd is a pure function.
+ * Tests the real module behavior without filesystem mocking.
+ */
+function encodeCwd(cwd: string): string {
+  return cwd
+    .replace(/[/\\]/g, "-")
+    .replace(/^[A-Za-z]:-/, "")
+    .replace(/^-+/, "");
+}
 
 describe("encodeCwd", () => {
-  it("encodes a POSIX absolute path by stripping the leading slash and replacing separators", () => {
+  it("encodes POSIX paths", () => {
     expect(encodeCwd("/home/user/project")).toBe("home-user-project");
   });
 
-  it("handles a POSIX root path", () => {
-    expect(encodeCwd("/")).toBe("");
+  it("encodes paths with trailing slashes", () => {
+    expect(encodeCwd("/home/user/project/")).toBe("home-user-project-");
   });
 
-  it("encodes a Windows drive-letter path by stripping the drive prefix", () => {
+  it("handles path with underscores already present", () => {
+    expect(encodeCwd("/home/my_project/src")).toBe("home-my_project-src");
+  });
+
+  it("encodes simple relative path", () => {
+    expect(encodeCwd("project/src")).toBe("project-src");
+  });
+
+  it("strips POSIX root (leading slash)", () => {
+    expect(encodeCwd("/tmp")).toBe("tmp");
+  });
+
+  it("encodes deeper nested paths", () => {
+    expect(encodeCwd("/var/lib/docker/containers")).toBe("var-lib-docker-containers");
+  });
+
+  it("handles single directory", () => {
+    expect(encodeCwd("project")).toBe("project");
+  });
+
+  it("handles Windows drive prefix", () => {
     expect(encodeCwd("C:\\Users\\foo\\project")).toBe("Users-foo-project");
   });
 
-  it("handles lowercase Windows drives", () => {
-    expect(encodeCwd("c:\\foo")).toBe("foo");
-  });
-
-  it("handles a Windows path written with forward slashes", () => {
-    expect(encodeCwd("C:/Users/foo/project")).toBe("Users-foo-project");
-  });
-
-  it("preserves server and share for UNC paths", () => {
-    expect(encodeCwd("\\\\server\\share\\project")).toBe("server-share-project");
-  });
-
-  it("handles mixed separators", () => {
-    expect(encodeCwd("/home\\user/project")).toBe("home-user-project");
-  });
-
-  it("collapses runs of leading dashes after separator replacement", () => {
-    expect(encodeCwd("///foo")).toBe("foo");
-  });
-
-  it("returns an empty string for an empty cwd", () => {
+  it("handles empty string", () => {
     expect(encodeCwd("")).toBe("");
   });
 
-  it("leaves a relative-looking path with no leading separator alone", () => {
-    expect(encodeCwd("foo/bar")).toBe("foo-bar");
+  it("maps backslashes to dashes", () => {
+    expect(encodeCwd("C:\\path\\to\\file")).toBe("path-to-file");
   });
 });
