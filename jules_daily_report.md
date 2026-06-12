@@ -1,18 +1,20 @@
 # Jules Daily Report – 2026-06-11
 
-### Portfolio Health (Skill-Grinder)
+## Portfolio Health (Skill-Grinder)
 
 - Overall score: 8.5/10 (trend vs yesterday: slightly up)
 - Top findings (bloat / completeness / duplicates / gaps)
   - SKILL.md frontmatters in the `daemons` folder (`github-activity-digest`, `js-ts-dependency-upgrades`, `linear-issue-labeler`, `pr-check-repair`) do not have `trigger` fields, unlike the `skills` folder, causing potential tool routing ambiguity.
   - `github-activity-digest` has no clear integration notes for Pi Orchestra.
 - Actions taken (with connector commit/PR links)
-  - No changes directly made to daemons yet, identifying the missing taxonomy gaps.
+  - Added explicit `trigger` fields to all four `daemons` (`github-activity-digest`, `js-ts-dependency-upgrades`, `linear-issue-labeler`, `pr-check-repair`) to match the `skills` taxonomy standard. (PR #136)
+  - Created the `overdrive` skill for Pi Orchestra performance auditing.
+  - Identified `github-activity-digest` lacks clear integration notes for Pi Orchestra.
 - Proposed next optimizations (prioritized, with impact)
-  - Add explicit `trigger` fields to all `daemons` to match the `skills` taxonomy standard and improve deterministic tool routing.
-  - Create the overdrive skill explicitly for Pi Orchestra performance auditing.
+  - Add integration notes to `github-activity-digest` daemon for tighter Pi Orchestra integration.
+  - Expose daemon schedules to the Orchestra UI for manual monitoring and toggling.
 
-### Pi Orchestra Status
+## Pi Orchestra Status
 
 - Runtime summary (active agents, resources, issues)
   - 1035 tests passing cleanly in ~22 seconds. No stuck tasks.
@@ -21,9 +23,9 @@
 - Safety/resource warnings (if any)
   - None at this time.
 - Integration wins with skill portfolio
-  - The missing triggers in `daemons` represent an opportunity for tighter Orchestra integration.
+  - The newly standardized `trigger` fields in `daemons` now enable tighter Orchestra integration and deterministic tool routing.
 
-### Cross Insights & Trends
+## Cross Insights & Trends
 
 - Patterns noticed over last days/weeks
   - Consistency in metadata across the agent portfolio (e.g., frontmatter in `.md` files) is critical for Orchestra to discover capabilities automatically.
@@ -32,21 +34,22 @@
 - Self-reflection on Jules effectiveness
   - Need to always check both `skills` and `daemons` folders for consistency.
 
-### Tomorrow's Focus (clear, actionable)
+## Tomorrow's Focus (clear, actionable)
 
 - Top 2-3 items
-  - Apply the proposed `trigger` fixes to the daemon SKILL/DAEMON files.
-  - Draft the `overdrive` skill.
+  - Review and merge the daemon `trigger` standardization and `overdrive` skill PR.
+  - Add integration notes to `github-activity-digest` daemon.
+  - Begin daemon schedule UI exposure for Orchestra monitoring.
 - Any prep needed (tools, research, user confirmation)
-  - Ensure the user agrees with adding `trigger` to DAEMON files.
+  - Ensure CI passes on the current PR before merging.
 
-### Self-Improvement Notes (for this prompt)
+## Self-Improvement Notes (for this prompt)
 
 - What worked well today?
   - Identifying the discrepancy between `skills` and `daemons` metadata.
 - What should be added/removed/clarified in Jules’ instructions?
   - Explicitly mention that both `skills` and `daemons` folders exist and should be audited.
 
-### Commit / PR Summary
+## Commit / PR Summary
 
-- No commits yet.
+- PR #136: Added `trigger` fields to all four daemons, created `overdrive` skill, updated daily report.
