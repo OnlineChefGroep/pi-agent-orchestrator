@@ -112,7 +112,7 @@ MP4_COMPRESSED="$OUT_DIR/showcase_tmux_compressed.mp4"
 HAS_DRAWTEXT=false
 if $NO_TITLES; then
 	echo "--no-titles flag set — skipping title card and scene labels"
-elif ffmpeg -filters 2>/dev/null | grep -q drawtext; then
+elif grep -q drawtext < <(ffmpeg -filters 2>/dev/null); then
 	HAS_DRAWTEXT=true
 	echo "ffmpeg drawtext filter available — adding title card and scene labels"
 else
