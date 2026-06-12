@@ -56,6 +56,19 @@ export function renderDashboardDetailPanel(
       : `${th.success}validation: passed${th.reset}`);
   }
   if (rec.outputFile) details.push(`${th.dim}output: ${rec.outputFile}${th.reset}`);
+
+  // Invocation details (thinking level, model, isolation)
+  const inv = rec.invocation;
+  if (inv) {
+    const invokeParts: string[] = [];
+    if (inv.thinking) invokeParts.push(`${th.accent}🧠 ${inv.thinking}${th.reset}`);
+    if (inv.modelName) invokeParts.push(`${th.dim}model: ${inv.modelName}${th.reset}`);
+    if (inv.isolated || inv.isolation) invokeParts.push(`${th.dim}isolated${inv.isolation === "worktree" ? " (worktree)" : ""}${th.reset}`);
+    if (invokeParts.length > 0) {
+      details.push(invokeParts.join(`  ${th.border}│${th.reset}  `));
+    }
+  }
+
   if (details.length > 0) {
     lines.push(framedRow(details.join(`  ${th.border}│${th.reset}  `), innerW, th, box));
   }

@@ -17,10 +17,11 @@ export function renderCompactRow(
   const pointer = selected ? `${th.highlight}▶${th.reset}` : " ";
   const icon = `${statusColor(rec, th)}${statusIcon(rec, state.frame)}${th.reset}`;
   const name = fastTruncate(getDisplayName(rec.type), 18);
-  const desc = fastTruncate(rec.description || activityText(rec, activity), Math.max(12, innerW - 48));
+  const thinking = rec.invocation?.thinking ? ` ${th.dim}🧠${rec.invocation.thinking}${th.reset}` : "";
+  const desc = fastTruncate(rec.description || activityText(rec, activity), Math.max(12, innerW - 54));
   const stats = agentStats(rec, activity);
   return fastTruncate(
-    `${pointer}${checked} ${icon} ${th.title}${name}${th.reset}  ${th.muted}${desc}${th.reset} ${th.dim}· ${stats}${th.reset}`,
+    `${pointer}${checked} ${icon} ${th.title}${name}${th.reset}${thinking}  ${th.muted}${desc}${th.reset} ${th.dim}· ${stats}${th.reset}`,
     innerW,
   );
 }

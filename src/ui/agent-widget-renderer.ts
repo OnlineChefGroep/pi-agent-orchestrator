@@ -256,10 +256,15 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     parts.push(elapsed);
     const statsText = parts.join(" · ");
 
+    // Thinking level indicator
+    const thinkingLabel = a.invocation?.thinking
+      ? ` ${theme.fg("dim", `🧠${a.invocation.thinking}`)}`
+      : "";
+
     const activity = bg ? describeActivity(bg.activeTools, bg.responseText) : "thinking…";
 
     runningLines.push([
-      truncate(`${theme.fg("dim", c_tree)} ${theme.fg("accent", frame)} ${theme.bold(name)}${modeTag}  ${theme.fg("muted", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", statsText)}`),
+      truncate(`${theme.fg("dim", c_tree)} ${theme.fg("accent", frame)} ${theme.bold(name)}${modeTag}${thinkingLabel}  ${theme.fg("muted", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", statsText)}`),
       truncate(theme.fg("dim", c_bar) + theme.fg("dim", `${c_ind}${activity}`)),
     ]);
   }
