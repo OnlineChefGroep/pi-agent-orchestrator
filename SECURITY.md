@@ -4,8 +4,8 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.11.x  | :white_check_mark: |
-| < 0.11  | :x:                |
+| 0.12.x  | :white_check_mark: |
+| < 0.12  | :x:                |
 
 This project is a **pi extension** — it runs inside the Pi coding agent host, not as a standalone service. Security reports should scope concerns to the extension's behavior within that host context.
 

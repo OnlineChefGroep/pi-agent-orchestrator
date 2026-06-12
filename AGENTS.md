@@ -10,7 +10,7 @@ Pi extension — runs inside the pi coding agent host, not standalone. Orchestra
 |------|--------|
 | **Spawn SSOT** | `src/default-agents.ts` (built-ins), `.pi/agents/*.md` (custom overrides), `src/settings.ts` + `.pi/subagent-settings.json` (runtime) |
 | **Never** | Import `@earendil-works/pi-*` as direct deps; treat YAML booleans as truthy strings; sort agent lists (Map insertion order is intentional) |
-| **Peer extensions** | `@onlinechef/context-mode` → `ctx_*` tools; `@onlinechefgroep/pi-subagents-tui` → cinematic sidecar |
+| **Peer extensions** | `@onlinechef/context-mode` → `ctx_*` tools; `@onlinechefgroep/pi-subagents-tui` → cinematic Go TUI sidecar (optional, feature-gated) |
 
 ## Sub-agent pre-context matrix (Pi stack)
 
@@ -19,7 +19,7 @@ What each layer injects **before** a sub-agent session runs. Parent-only rows af
 | Layer | Package / repo | Injected at spawn | Hooks / surface |
 |-------|----------------|-------------------|-----------------|
 | **Orchestrator** | `pi-agent-orchestrator` (this repo) | Parent execution log, permission matrix, handoff payload, prompt compression, optional `ctx_*` bridge | `subagent:start` · `subagent:end` · `subagent:spawn` · `subagent:steer` · RPC `subagents:rpc:spawn` |
-| **Subagent TUI** | `@onlinechefgroep/pi-subagents-tui` | *(parent-only)* JSON heartbeat: agent tree, token/turn metrics, queue state | Vim dashboard `/agents`, bulk-spawn debounce, `steer` / kill from widget |
+| **Subagent TUI** | `@onlinechefgroep/pi-subagents-tui` (Go binary, optional) | *(parent-only)* JSON heartbeat: agent tree, token/turn metrics, queue state, plasma/shaders via `bubbletea-cinematic` | Vim dashboard `/agents`, bulk-spawn debounce, `steer` / kill from widget |
 | **Memory hooks** | `Pi-Helios-Memory-Private` + `pi-helios-context-extensie` | Timeline `ctx_search`, FTS5 facts, session resume snapshot, failure memories | `PreToolUse` · `PostToolUse` · `PreCompact` · `helios-memory context` |
 | **Control extension** | `pi-agent-control-extension` | Browser/TUI routing (`control_route`), `tctl`, capture drivers, atomized control skills | `/route-control` · `control_browser_command` · WebSocket bridge |
 
@@ -30,6 +30,7 @@ What each layer injects **before** a sub-agent session runs. Parent-only rows af
 | **Codebase graph navigation** | `.agents/skills/graphify/SKILL.md` |
 | **Test / benchmark discipline** | `.agents/skills/testing/SKILL.md` |
 | **Infra / extension packaging** | `.agents/skills/infrastructure/SKILL.md` |
+| **Performance auditing** | `.agents/skills/overdrive/SKILL.md` |
 | **Research loops** | `.agents/skills/autoresearch/SKILL.md` · `.agents/skills/showcase/SKILL.md` (demo video — UI-facing only) |
 | **Global agent patterns** | `~/.agents/skills/agent-explore` · `agent-architect` · `agent-code-reviewer` |
 | **Memory session init** | `~/.agents/skills/agent-memory-hooks` · `../skill-grinder/skills/agent-memory-hooks/SKILL.md` |
@@ -57,8 +58,8 @@ What each layer injects **before** a sub-agent session runs. Parent-only rows af
 | Role | When | Spawn type | Focus paths |
 |------|------|------------|-------------|
 | **orchestrator-core** | `agent-runner`, permissions, context pipeline | `Explore` | `src/agent-runner.ts` · `src/context.ts` · `src/agent-types.ts` |
-| **orchestrator-ui** | Dashboard, widget, top view | `Explore` | `src/ui/agent-dashboard.ts` · `src/ui/agent-widget.ts` |
-| **orchestrator-schedule** | Cron, swarm, handoff | `Plan` | `src/schedule.ts` · `src/swarm-join.ts` · `src/handoff.ts` |
+| **orchestrator-ui** | Dashboard, widget, top view, schedules | `Explore` | `src/ui/agent-dashboard.ts` · `src/ui/agent-widget.ts` · `src/ui/dashboard/` |
+| **orchestrator-schedule** | Cron, swarm, handoff, daemons | `Plan` | `src/schedule.ts` · `src/swarm-join.ts` · `src/handoff.ts` · `.agents/daemons/` |
 | **orchestrator-implement** | After readonly agents report | `general-purpose` | Bounded file set from handoff JSON |
 
 ## CHEF
@@ -181,7 +182,7 @@ Use `.test.ts` extension. Use `describe`/`it`/`expect` from vitest. Do not co-lo
 
 ## Optional peer deps
 
-`@onlinechef/context-mode` enables `ctx_*` sandbox tools. `@onlinechefgroep/pi-subagents-tui` enables the cinematic TUI sidecar. Code paths for both are gated behind feature detection (`src/context-mode-bridge.ts`, `src/ui/agent-widget.ts`).
+`@onlinechef/context-mode` enables `ctx_*` sandbox tools. `@onlinechefgroep/pi-subagents-tui` is a Go-based Bubble Tea TUI sidecar (see sibling repos `pi-subagents-tui` and `bubbletea-cinematic`). Code paths for both are gated behind feature detection (`src/context-mode-bridge.ts`). The cinematic TUI sidecar's Go binary spawning was removed from `agent-widget.ts` in v0.9.1; re-integration is tracked in issue #1.
 
 ## Settings reference
 
@@ -192,18 +193,21 @@ All runtime-configurable settings are defined in `src/settings.ts` (`SubagentsSe
 - `src/agent-types.ts` — permission model (base tools → parent restrictions → partition filter → disallow floor)
 - `src/agent-runner.ts` — agent lifecycle: spawn → build context → create session → run loop
 - `src/index.ts` — extension entry point, command registration, batch/group coordination
-- `src/ui/agent-dashboard.ts` — vim-hotkey interactive TUI featuring standard view and the `/agents top` resource usage view
+- `src/ui/agent-dashboard.ts` — vim-hotkey interactive TUI with 6 views: list, top (resource usage), schedules (`z`), perf (`/perf`), help (`?`), settings
 - `src/ui/agent-top-renderer.ts` — top view table calculations, sorting (by tokens, turns, duration, tool uses, name, recency), and pagination
-- `src/ui/agent-widget-renderer.ts` + `src/ui/agent-widget.ts` — virtual scrolling logic, rendering safety limits, batching and debouncing spawns
+- `src/ui/agent-widget-renderer.ts` + `src/ui/agent-widget.ts` — virtual scrolling, thinking level display, compact batch rendering, adaptive refresh
+- `src/ui/dashboard/schedules-section.ts` — daemon schedule view in dashboard body
 - `src/swarm-join.ts` — live swarm join/leave coordination
 - `src/schedule.ts` + `src/schedule-store.ts` — cron-style scheduling, persisted to `.pi/subagent-schedules/`
+- `.agents/daemons/` — 4 autonomous daemons (github-activity-digest, js-ts-dependency-upgrades, linear-issue-labeler, pr-check-repair) with Pi Orchestra Integration docs
+- `.agents/skills/overdrive/SKILL.md` — performance auditing skill with benchmark suite
 
 See `docs/architecture.md` for the full module map and data-flow diagram.
 
 ## Verification Suite
 
 Ensure you run `npm run typecheck && npm run lint && npm test` before committing.
-Currently passing: **1006 tests** across **57 test files**, including performance benchmarks for render, snapshot, and virtual scrolling.
+Currently passing: **1035 tests** across **58 test files**, including performance benchmarks for render, snapshot, virtual scrolling, and spawn latency.
 
 ## graphify
 

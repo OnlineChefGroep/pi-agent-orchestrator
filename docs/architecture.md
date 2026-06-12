@@ -146,12 +146,16 @@ Dynamic cluster topology control:
 - Parallel processing state machine.
 - Registry persistence bound to agent lifecycle memory.
 
-### `src/ui/agent-widget.ts` — Legacy Block (Deprecation Pending)
+### `src/ui/agent-widget.ts` — Above-Editor Widget
 
-When cinematic rendering engages:
-1. Triggers independent binary `@onlinechefgroep/pi-subagents-tui`.
-2. Emits JSON heartbeat with vector tree, instruction sets, usage metrics.
-3. Suppresses main-thread drawing routines.
+The persistent widget above the editor shows running/queued/finished agents with:
+- Virtual scrolling with pagination
+- Thinking level display (🧠)
+- Compact batch rendering (3+ queued agents of same type)
+- Activity heatmap indicator
+- Adaptive refresh (200ms active / 1000ms idle)
+
+**Cinematic sidecar**: The optional Go-based Bubble Tea TUI (`@onlinechefgroep/pi-subagents-tui`) was previously spawned as a separate binary for fullscreen rendering with plasma backgrounds. The Go binary spawning logic was removed from `agent-widget.ts` in v0.9.1. Settings infrastructure (`uiStyle: "cinematic"`, `cinematicEnabled`) still exists but is dormant. Sibling repos `pi-subagents-tui` and `bubbletea-cinematic` contain the Go source; re-integration is tracked in issue #1.
 
 ---
 

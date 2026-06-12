@@ -10,7 +10,7 @@
 
 | Workflow | File | Purpose |
 |---|---|---|
-| **CI** | `.github/workflows/ci.yml` | TypeScript matrix: `ubuntu/windows × node 20/22 × peer-deps lowest/latest`. Runs typecheck, lint, and full test suite (1035 tests). |
+| **CI** | `.github/workflows/ci.yml` | TypeScript matrix: `ubuntu/windows × node 20/22 × peer-deps lowest/latest`. Runs typecheck, lint, and full test suite (1035 tests across 58 files). |
 | **Linter** | `.github/workflows/linter.yml` | Super-linter with Bash, JSON, TypeScript checks. |
 | **CodeQL** | `.github/workflows/codeql.yml` | Security analysis (disabled auto-triggers, manual only). |
 | **Qodana** | `.github/workflows/qodana_code_quality.yml` | Static analysis for TS and Python. |

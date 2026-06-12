@@ -2,18 +2,35 @@
 
 ## v0.12.1 (2026-06-12)
 
+### Features
+
+- **Daemon schedule view** (`z` keybinding): New schedules section in dashboard body showing daemon schedules as a compact table (status, name, interval, type, next run). Threads `SubagentScheduler` through `AgentDashboardOptions`. New `src/ui/dashboard/schedules-section.ts`.
+- **Thinking level display** (#1): `🧠` indicator in agent widget, dashboard compact rows, and detail panel showing invocation thinking level (low/medium/high) from `AgentRecord.invocation.thinking`.
+- **Daemon integration notes**: All 4 daemons (`github-activity-digest`, `js-ts-dependency-upgrades`, `linear-issue-labeler`, `pr-check-repair`) now have Pi Orchestra Integration sections in their DAEMON.md files with schedule info, monitoring, toggle, persistence, and idempotency docs.
+- **Overdrive performance skill**: New `.agents/skills/overdrive/SKILL.md` for performance auditing with benchmark suite validation.
+
+### Performance
+
+- **Async UI optimizations**: Replaced O(N×M) `allAgents.some()` cleanup with Set-based O(N+M) lookup in `agent-widget.ts update()`. Removed intermediate `.map()` array allocation in `agent-dashboard.ts refreshAgents()` (for loop builds Set directly). Removed `lineEstimates` wrapper object array in `getVisibleWindow()` — now uses integer math + direct category iteration via `processCategory` helper.
+- **Benchmark suite**: 61 benchmarks all green, all well within thresholds (widget 200 agents: 4.82ms, dashboard 1000 agents: <40ms, spawn foreground: 8.76ms).
+
+### Documentation & Polish
+
+- **Full documentation refresh**: Updated AGENTS.md, CLAUDE.md, README.md, CHANGELOG.md, ROADMAP.md, SECURITY.md, INFRASTRUCTURE.md, and docs/architecture.md with current test counts (1035/58), version numbers (0.12.1), and feature descriptions.
+- **Stale file cleanup**: Removed personal daily report logs (`jules_daily_report.md`, `jules_daily_report_2026_06_10.md`).
+- **Go cinematic sidecar status**: Documented that `@onlinechefgroep/pi-subagents-tui` exists as sibling Go repo with `bubbletea-cinematic` library; binary spawning was removed in v0.9.1 but settings infrastructure remains dormant. Re-integration tracked in issue #1.
+
 ### Merged PRs & Housekeeping
 
-- **Agent metadata standardization** (#136): Added `trigger` fields to all four daemons (`github-activity-digest`, `js-ts-dependency-upgrades`, `linear-issue-labeler`, `pr-check-repair`) for consistent taxonomy with skills folder. Created `overdrive` performance auditing skill. Updated `jules_daily_report.md` with accurate completion status.
-- **Helios integration & code health** (#122): Added skill triggers to showcase and testing skills. Restored README with full project documentation. Integrated tmux showcase pipeline into `showcase-all.sh`. Fixed font path validation in `showcase-tmux-recorder.sh`. Updated benchmark thresholds for CI stability.
-- **Overdrive: single-pass render loop optimization** (#131): Replaced chained `Array.prototype.filter()` calls with single-pass `for` loops across dashboard, widget, header, body, and swarm-section renderers. 200-1000 agent benchmarks improved from ~24ms to ~10-15ms. 25-30% improvement in widget build/render benchmarks. Reduced GC allocation overhead for sustained fast-update rendering.
-- **Dependabot updates**: Bumped `actions/checkout` from 4 to 6 (#125), `@earendil-works/pi-agent-core` from 0.77.0 to 0.78.1 (#127).
-- **Branch cleanup**: Removed 10+ stale/merged remote branches. Deleted duplicate `jules_daily_report_2026_06_10.md`. Removed stale `.opencode` directory (109MB). Closed redundant overdrive PRs (#124, #130, #135) in favor of #131. Closed oversized PR #123 to be split into focused PRs.
-- **Daily report fixes**: Fixed markdown heading hierarchy (H1→H2), updated stale content to reflect completed work, added post-merge validation steps to Tomorrow's Focus.
+- **Agent metadata standardization** (#136): Added `trigger` fields to all four daemons. Created `overdrive` skill.
+- **Helios integration & code health** (#122): Skill triggers, README restoration, tmux showcase integration, font path fix.
+- **Overdrive: single-pass render loop** (#131): Replaced chained `.filter()` calls with single-pass `for` loops. 25-30% widget improvement.
+- **Dependabot updates**: `actions/checkout` 4→6 (#125), `@earendil-works/pi-agent-core` 0.77.0→0.78.1 (#127).
+- **Branch cleanup**: Removed 10+ stale/merged remote branches, stale `.opencode` directory (109MB).
 
 ### Metrics
 
-- 1035 tests across 58 test files.
+- 1035 tests across 58 test files. 61 benchmarks all passing. Typecheck + lint green.
 
 ---
 
@@ -231,7 +248,7 @@
 - `cinematic-renderer/cinematic-renderer.exe` toegevoegd aan `.gitignore`.
 - `auditor.md` verwijderd uit git tracking (was dev-only agent).
 
-### � Documentation
+### 📝 Documentation
 - **README.md volledig herschreven**: feature matrix, agent types tabel, custom agent frontmatter reference, cinematic dashboard docs, architecture diagram, development guide.
 - **CI workflow**: GitHub Actions CI voor TypeScript (typecheck, lint, test) en Go sidecar (vet, build, test).
 - **Vervolgplan**: `VERVOLG_PLAN.md` toegevoegd met prioriteitenlijst P0–P4.
@@ -240,7 +257,7 @@
 - **Lint**: ESLint verwijderd, Biome is enige linter. Alle pre-existing unused imports en organize-imports warnings opgelost.
 - **Biome fixes**: unused parameters/variables in `agent-widget.ts`, `output-handler.ts`, `conversation-viewer.ts`.
 
-### �📊 Metrics
+### 📊 Metrics
 - 611 tests, 34 test files (+ `default-agents.test.ts`)
 - Typecheck: groen
 - Lint: groen (3 stylistische warnings over static classes)

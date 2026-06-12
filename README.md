@@ -1,24 +1,27 @@
 # @onlinechefgroep/pi-agent-orchestrator
 
-> Multi-agent orchestrator for Pi coding agents — sub-agents, handoffs, prompt compression, and clean workflows.
+> Multi-agent orchestrator for Pi coding agents — sub-agents, handoffs, prompt compression, scheduling, and cinematic TUI dashboard.
 
 [![npm version](https://img.shields.io/npm/v/@onlinechefgroep/pi-agent-orchestrator)](https://www.npmjs.com/package/@onlinechefgroep/pi-agent-orchestrator)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions)
 [![Tests](https://img.shields.io/badge/tests-1035%20passed-brightgreen)](https://github.com/OnlineChefGroep/pi-agent-orchestrator)
 
-A Pi extension that adds powerful orchestration capabilities: autonomous sub-agents, structured handoffs, 3-tier prompt compression for token control, custom agent definitions, and polished showcase tooling.
+A Pi extension that adds powerful orchestration capabilities: autonomous sub-agents, structured handoffs, 3-tier prompt compression, cron scheduling, swarm coordination, and a vim-style interactive TUI dashboard.
 
 ## Features
 
+- **Interactive TUI Dashboard** — Vim-style hotkeys (`j/k` navigate, `z` schedules, `t` top view, `?` help, `/perf` metrics). 6 interactive views: list, resource top, daemon schedules, performance metrics, help overlay, settings.
+- **Sub-agent System** — Spawn specialized agents (Explore, Plan, Analysis, general-purpose, custom) with intelligent coordination, permission inheritance, and partition filtering.
+- **Thinking Level Display** — `🧠` indicator in widget, dashboard rows, and detail panel showing agent invocation thinking level (low/medium/high).
 - **Prompt Compression** — `minimal` / `balanced` / `aggressive` levels with global default + per-agent overrides. Dramatically reduces token usage while keeping essential context.
-- **Sub-agent System** — Spawn specialized agents (Explore, Plan, Analysis, custom) with intelligent coordination.
-- **Handoff Protocol** — Clean JSON-based handoff system between agents.
-- **Custom Agents** — Define via simple frontmatter in `.md` files (supports `prompt_compression`, `handoff`, `enabled`).
-- **Interactive TUI Dashboard** — Vim-style hotkeys, live activity indicators, top-view resource table, swarm topology view, settings menu.
-- **Scheduling Engine** — Cron-style scheduling for recurring autonomous agent jobs with persistent store.
-- **Swarm Coordination** — Dynamic multi-agent swarm join/leave with real-time status in dashboard.
-- **Showcase Pipelines** — tmux recording, programmatic, Remotion and VHS pipelines for high-quality demos.
+- **Scheduling Engine** — Cron-style scheduling for recurring autonomous agent jobs with persistent store and daemon schedule view (`z` key).
+- **Daemon Integration** — 4 autonomous daemons with Pi Orchestra Integration docs: github-activity-digest, js-ts-dependency-upgrades, linear-issue-labeler, pr-check-repair.
+- **Handoff Protocol** — Clean JSON-based handoff system between agents enabling chain-of-agents workflows.
+- **Custom Agents** — Define via simple frontmatter in `.md` files (supports `prompt_compression`, `handoff`, `thinking`, `enabled`).
+- **Swarm Coordination** — Dynamic multi-agent swarm join/leave with real-time status in dashboard (`w` key).
+- **Performance Skills** — `overdrive` skill for performance auditing with benchmark suite (61 benchmarks, adaptive refresh, O(N) rendering).
+- **Showcase Pipelines** — tmux recording, programmatic, Remotion, VHS, and live asciinema pipelines for high-quality demos.
 
 ## Showcase
 
@@ -62,10 +65,11 @@ See the `docs/` folder for architecture, custom agent examples, handoff workflow
 
 ```bash
 npm install
-npm run setup:hooks   # git hooks
-npm test              # 1035 tests
+npm run setup:hooks   # git hooks (opt-in)
+npm test              # 1035 tests across 58 test files
 npm run lint:fix
 npm run typecheck
+npm run bench:all     # 61 performance benchmarks
 ```
 
 ## Chain of Agents

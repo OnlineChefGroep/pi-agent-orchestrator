@@ -1,6 +1,8 @@
-# Pi Agent Orchestrator Extension — Analysis, Review & Future
+# Pi Agent Orchestrator Extension — Historical Analysis (Archived)
 
-**Date:** 2026 (current branch: `chore/adopt-pr-workflow`)  
+> **ARCHIVED — June 2026.** This document was produced during the initial analysis on the `chore/adopt-pr-workflow` branch (v0.9.x era). It is preserved for historical reference. For current status, see [CHANGELOG.md](../CHANGELOG.md), [ROADMAP.md](../ROADMAP.md), and [AGENTS.md](../AGENTS.md).
+
+**Date:** 2026 (original branch: `chore/adopt-pr-workflow`)  
 **Focus:** Strictly the `@onlinechefgroep/pi-agent-orchestrator` pi-extension itself. No scope creep into the broader pi host, Grok skills, or unrelated systems.
 **Branch context:** All work performed on a dedicated feature branch in PR form per CONTRIBUTING.md (conventional commits, pre-commit checks).
 

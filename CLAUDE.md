@@ -5,7 +5,7 @@
 ```bash
 npm install                  # install deps (needs access to GitHub Packages for peer deps)
 npm run build                # compile TypeScript → dist/
-npm test                     # run all tests (vitest run --retry=2)
+npm test                     # run all tests (vitest run --retry=2, 1035 tests across 58 files)
 npm test -- path/to.test.ts  # single test file
 npm test -- --watch          # watch mode
 npm run typecheck            # tsc --noEmit (no output, type errors only)
@@ -59,18 +59,20 @@ src/
   usage.ts              Token and turn tracking, session context percentage
 
   ui/                   TUI components (built on @earendil-works/pi-tui)
-    agent-dashboard.ts      Rich interactive dashboard with vim hotkeys (supersedes agent-widget)
-    agent-widget.ts         Legacy persistent widget
+    agent-dashboard.ts      Rich interactive dashboard: list, top, schedules (z), perf (/perf), help (?)
+    agent-widget.ts         Above-editor widget with virtual scrolling, thinking level, compact batches
     conversation-viewer.ts  Live conversation overlay
     schedule-menu.ts        Schedule management menu
     settings-menu.ts        Settings UI
     theme.ts                Theme system
     animation.ts            Spinner animations (braille, dots, lines, classic, none)
-    ...renderers, formatters, type definitions
+    dashboard/              Modular dashboard components (swarm-section, schedules-section, 
+                            compact-row, panels, header, body, helpers, progress)
 
-test/                   Vitest test suite (mirrors src/ structure)
+test/                   Vitest test suite (1035 tests across 58 files)
 docs/                   Architecture, API reference, troubleshooting, custom agents guide
 examples/agents/        Example agent definition files
+.agents/                Agent definitions: 4 daemons + 6 skills (graphify, overdrive, showcase, testing, autoresearch, infrastructure)
 ```
 
 ## Key Patterns
@@ -114,9 +116,18 @@ examples/agents/        Example agent definition files
 
 7. **Adding settings.** Update `settings.ts` (interface + defaults + sanitize function) + `output-handler.ts` (buildSettingsSnapshot + settings menu).
 
-8. **Optional peer deps.** `@onlinechef/context-mode` and `@onlinechefgroep/pi-subagents-tui` are optional — code paths are gated behind feature detection, not hard imports.
+8. **Optional peer deps.** `@onlinechef/context-mode` and `@onlinechefgroep/pi-subagents-tui` are optional — code paths are gated behind feature detection, not hard imports. `pi-subagents-tui` is a Go-based Bubble Tea TUI sidecar (see sibling repos `pi-subagents-tui` and `bubbletea-cinematic`). The cinematic Go binary spawning was removed in v0.9.1; re-integration is tracked in issue #1.
 
 9. **Security fixes.** CVE-002 through CVE-005 fixes are in place (input validation, size limits, control char sanitization). Don't weaken these guards.
+
+10. **Async performance.** The UI uses O(N) single-pass rendering, Set-based cleanup (not O(N×M) some()), and inline category iteration (no wrapper objects). See `docs/PERFORMANCE.md` for the full performance architecture.
+
+## Recent Features (v0.12.1)
+
+- **Daemon Integration**: All 4 daemons have Pi Orchestra Integration sections in their DAEMON.md files with schedule info, monitoring, and toggle docs.
+- **Schedule UI**: `z` keybinding in dashboard shows daemon schedules as a compact table (status, name, interval, type, runs).
+- **Thinking Level**: `🧠` indicator in widget, dashboard rows, and detail panel showing agent invocation thinking level.
+- **Async Perf Optimizations**: O(N×M)→O(N+M) cleanup, removed intermediate array allocations, direct category iteration for virtual scrolling.
 
 ## Showcase
 
