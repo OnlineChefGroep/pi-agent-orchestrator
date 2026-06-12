@@ -25,7 +25,8 @@ function renderAgentSections(
   const queued: AgentRecord[] = [];
   const done: AgentRecord[] = [];
 
-  for (const a of state.agents) {
+  for (let i = 0; i < state.agents.length; i++) {
+    const a = state.agents[i];
     if (!a.swarmId) {
       solo.push(a);
       if (a.status === "running") running.push(a);
@@ -122,7 +123,8 @@ function buildVirtualBodyLines(
   const swarmsSet = new Set<string>();
   const firstSwarmAgentMap = new Map<string, AgentRecord>();
 
-  for (const a of agents) {
+  for (let i = 0; i < agents.length; i++) {
+    const a = agents[i];
     if (!a.swarmId) {
       solo.push(a);
       if (a.status === "running") running.push(a);
