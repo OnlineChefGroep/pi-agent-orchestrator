@@ -2,7 +2,7 @@
 
 ## Current State
 
-**v0.11.0** — Stable release with subagent orchestration, TUI dashboard, swarm coordination, scheduling engine, hooks, and permission inheritance. MIT licensed.
+**v0.12.0** — Stable release with subagent orchestration, TUI dashboard, swarm coordination, scheduling engine, hooks, permission inheritance, 3-tier prompt compression, and cinematic showcase tooling. MIT licensed.
 
 ## Planned Features
 

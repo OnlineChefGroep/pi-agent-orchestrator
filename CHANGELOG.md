@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.12.1 (2026-06-12)
+
+### Merged PRs & Housekeeping
+
+- **Agent metadata standardization** (#136): Added `trigger` fields to all four daemons (`github-activity-digest`, `js-ts-dependency-upgrades`, `linear-issue-labeler`, `pr-check-repair`) for consistent taxonomy with skills folder. Created `overdrive` performance auditing skill. Updated `jules_daily_report.md` with accurate completion status.
+- **Helios integration & code health** (#122): Added skill triggers to showcase and testing skills. Restored README with full project documentation. Integrated tmux showcase pipeline into `showcase-all.sh`. Fixed font path validation in `showcase-tmux-recorder.sh`. Updated benchmark thresholds for CI stability.
+- **Overdrive: single-pass render loop optimization** (#131): Replaced chained `Array.prototype.filter()` calls with single-pass `for` loops across dashboard, widget, header, body, and swarm-section renderers. 200-1000 agent benchmarks improved from ~24ms to ~10-15ms. 25-30% improvement in widget build/render benchmarks. Reduced GC allocation overhead for sustained fast-update rendering.
+- **Dependabot updates**: Bumped `actions/checkout` from 4 to 6 (#125), `@earendil-works/pi-agent-core` from 0.77.0 to 0.78.1 (#127).
+- **Branch cleanup**: Removed 10+ stale/merged remote branches. Deleted duplicate `jules_daily_report_2026_06_10.md`. Removed stale `.opencode` directory (109MB). Closed redundant overdrive PRs (#124, #130, #135) in favor of #131. Closed oversized PR #123 to be split into focused PRs.
+- **Daily report fixes**: Fixed markdown heading hierarchy (H1→H2), updated stale content to reflect completed work, added post-merge validation steps to Tomorrow's Focus.
+
+### Metrics
+
+- 1035 tests across 58 test files.
+
+---
+
 ## v0.12.0 (2026-06-06)
 
 ### MIT Open-Source Release
