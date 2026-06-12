@@ -372,6 +372,173 @@ Retrieves saturation metric (0-100) of context window.
 
 ---
 
+## // PUBLIC TYPED API
+
+Single entry point for peer extensions and tests that want a stable, typed
+contract against the orchestrator. Re-exports the RPC + hook types from one
+place and adds Symbol-based discovery for the runtime handle.
+
+**FILE:** `src/public-api.ts`
+
+### // SYMBOL DISCOVERY
+
+The orchestrator publishes its typed API on two well-known `globalThis` keys:
+
+| Symbol | Returns | Notes |
+|---|---|---|
+| `Symbol.for("pi-subagents:api")` | `SubagentsPublicApi \| undefined` | New — typed RPC + typed event subscription |
+| `Symbol.for("pi-subagents:hooks")` | `HookRegistry \| undefined` | Documented but previously unimplemented; now published |
+
+Use the safe accessors `getSubagentsApi()` / `getSubagentsHooks()` (both return
+`undefined` when the extension is not loaded). Clear with `clearSubagentsApi()`
+in test teardown.
+
+### // REGISTRATION
+
+Called once by the extension on load. **Idempotent** — last registration wins,
+matching the contract documented for `registerRpcHandlers` in
+`src/cross-extension-rpc.ts`.
+
+```ts
+import {
+  registerSubagentsApi,
+  HookRegistry,
+  type SubagentsPublicApi,
+} from "@onlinechefgroep/pi-agent-orchestrator/public-api";
+
+export function init(api: ExtensionAPI): SubagentsPublicApi {
+  const hooks = new HookRegistry();
+  // ... register pi-extension handlers on the hook registry ...
+  return registerSubagentsApi(api.events, hooks, { extensionId: "my-extension" });
+}
+```
+
+### // TYPED EVENT SUBSCRIPTION
+
+The `TypedEventSubscription` returned via `api.hooks` gives handlers a
+discriminated payload — `data` is shaped by the subscribed event name, not
+the previous `Record<string, unknown>` black box.
+
+```ts
+import {
+  getSubagentsApi,
+  type TypedHookPayload,
+} from "@onlinechefgroep/pi-agent-orchestrator/public-api";
+
+const api = getSubagentsApi();
+if (!api) throw new Error("pi-agent-orchestrator extension is not loaded");
+
+// Single typed event — handler gets the exact data shape for "subagent:start"
+const off = api.hooks.on("subagent:start", async (payload) => {
+  //    ^? TypedHookPayload<"subagent:start"> → { event, agentId, data: AgentStartData, ... }
+  console.log(payload.data.type, payload.data.description);
+  return "allow";
+});
+
+// Every event with a union payload
+const offAll = api.hooks.onAll((payload) => {
+  if (payload.event === "subagent:end" && payload.data.status === "completed") {
+    // ... payload.data is narrowed to AgentEndData here
+  }
+});
+```
+
+`TYPED_HOOK_PAYLOAD_MAP` maps every `HookEvent` to its specific data shape
+(`AgentStartData`, `AgentEndData`, `ToolCallData`, etc.) and is exhaustiveness-
+checked against the `HookEvent` union via `satisfies Record<HookEvent, unknown>`
+— adding a new event without a row in the map fails the build.
+
+### // TYPED RPC
+
+The `api.rpc` field is a `SubagentsRpcClient` (same shape as the existing
+`createSubagentsRpcClient` factory), with the four supported operations:
+
+- `ping()` → `{ version: number }`
+- `spawn({ type, prompt, options? })` → `{ id: string }`
+- `stop({ agentId })` → `void`
+- `sessionUsage()` → `{ usage, limits }`
+
+The rate-limit, authentication, and audit-trail guarantees documented in
+`// CROSS-EXTENSION RPC` below apply unchanged.
+
+### // MANAGER HANDLE
+
+`api.manager` is a read-only `SubagentManagerHandle` over the orchestrator's
+`AgentManager`. It is also published under `Symbol.for("pi-subagents:manager")`
+and exposed via the safe accessor `getSubagentsManager()`.
+
+The handle exposes four observation methods only — every mutating surface
+(`spawn`, `stop`, `abort`, `clearCompleted`, etc.) is intentionally **not**
+exposed, so peer extensions can monitor agents without gaining the ability
+to create or stop them.
+
+```ts
+import {
+  getSubagentsApi,
+  getSubagentsManager,
+  type SubagentManagerHandle,
+  type SubagentManagerRecord,
+} from "@onlinechefgroep/pi-agent-orchestrator/public-api";
+
+// Via the typed API
+const api = getSubagentsApi();
+if (api) {
+  await api.manager.waitForAll();
+  const rec: SubagentManagerRecord | undefined = api.manager.getRecord("agent-123");
+  const exploreIds: string[] = api.manager.listAgentIds("Explore");
+}
+
+// Or via the safe accessor
+const mgr: SubagentManagerHandle | undefined = getSubagentsManager();
+if (mgr) {
+  const running = mgr.hasRunning();
+}
+```
+
+**METHOD SHAPE (`SubagentManagerHandle`):**
+
+| Method | Returns | Purpose |
+|---|---|---|
+| `waitForAll()` | `Promise<void>` | Resolve when every currently-running agent reaches a terminal state |
+| `hasRunning()` | `boolean` | Whether any agent is currently running |
+| `getRecord(id)` | `SubagentManagerRecord \| undefined` | Sanitized record for an agent, or `undefined` if absent |
+| `listAgentIds(type)` | `string[]` | All known agent ids of the given type |
+
+**SANITIZATION CONTRACT (`SubagentManagerRecord`):**
+
+The record returned by `getRecord(id)` is a *projection* of the internal
+`AgentRecord`. Only `id`, `type`, `status`, and a truncated `description`
+are exposed. Sensitive fields (full prompt, result, error stack, internal
+flags) are intentionally omitted — consumers that need the full record
+should use the `Agent` tool or RPC instead.
+
+The `description` field is truncated to
+`SUBAGENT_MANAGER_MAX_DESCRIPTION_CHARS` (currently `200`) characters
+to avoid leaking long context (full file contents, transcripts, etc.) to
+peer extensions in the process.
+
+### // RE-EXPORTS
+
+For convenience, the following types and helpers are re-exported from a
+single import path:
+
+- **RPC:** `PROTOCOL_VERSION`, `createSubagentsRpcClient`, `EventBus`,
+  `SubagentsRpcClient`, `RpcReply`, `SpawnRpcRequest`, `StopRpcRequest`,
+  `PingRpcReply`, `SessionUsageRpcReply`, `SpawnCapable`, `SessionCapable`,
+  `SwarmCapable`, `AuthContext`, `RateLimitConfig`
+- **Hooks:** `HookRegistry`, `HookEvent`, `HookPayload`, `HookHandler`,
+  `HookResponse`, `composeHandlers`
+- **This module:** `TYPED_HOOK_PAYLOAD_MAP`, `TypedHookPayload`,
+  `TypedHookHandler`, `TypedEventSubscription`, `SubagentsPublicApi`,
+  `SUBAGENTS_API_SYMBOL`, `SUBAGENTS_HOOKS_SYMBOL`, `SUBAGENTS_MANAGER_SYMBOL`,
+  `SUBAGENT_MANAGER_MAX_DESCRIPTION_CHARS`, all event-payload
+  data interfaces (`AgentStartData`, `AgentEndData`, `ToolCallData`, etc.),
+  `registerSubagentsApi`, `getSubagentsApi`, `getSubagentsHooks`,
+  `getSubagentsManager`, `clearSubagentsApi`, `SubagentManagerHandle`,
+  `SubagentManagerRecord`, `SubagentManagerLike`
+
+---
+
 ## // CROSS-EXTENSION RPC
 
 ### // PROTOCOL DEFINITION
@@ -448,6 +615,8 @@ await manager.waitForAll();
 const record = manager.getRecord("agent-123");
 const ids = manager.listAgentIds("Explore");
 ```
+
+> **Status:** published via `registerSubagentsApi(...)` (see `// PUBLIC TYPED API` above). Peer extensions should prefer the safe accessor `getSubagentsManager()` or `api.manager` over the raw symbol read.
 
 **SECURITY DIRECTIVE:** Write functions physically detached from registry pointer.
 

@@ -22,6 +22,7 @@ import { registerHooksCommand } from "./commands/hooks.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
 import { GroupJoinManager } from "./group-join.js";
 import { HookRegistry } from "./hooks.js";
+import { clearSubagentsApi, registerSubagentsApi } from "./public-api.js";
 import { SubagentScheduler } from "./schedule.js";
 import { resolveStorePath, ScheduleStore } from "./schedule-store.js";
 import { applyAndEmitLoaded } from "./settings.js";
@@ -285,31 +286,13 @@ export default async function (pi: ExtensionAPI) {
     pi.sendMessage({ customType: "subagent-notification", content: `${prefix} Session ${threshold}. ${advice}`, display: true });
   });
 
-  // Expose hook registry via Symbol.for() global registry for cross-package access.
-  // Extensions and other packages can discover and register hooks by reading:
-  //   (globalThis as any)[Symbol.for('pi-subagents:hooks')]
-  const HOOKS_KEY = Symbol.for("pi-subagents:hooks");
-  (globalThis as any)[HOOKS_KEY] = {
-    getHandlers: () => hookRegistry.getHandlers(),
-    // NO register, NO unregister, NO dispatch
-  };
-
-  // Expose manager via Symbol.for() global registry for cross-package access.
-  // Standard Node.js pattern for cross-package singletons (used by OpenTelemetry, etc.).
-  const MANAGER_KEY = Symbol.for("pi-subagents:manager");
-  (globalThis as any)[MANAGER_KEY] = {
-    waitForAll: () => manager.waitForAll(),
-    hasRunning: () => manager.hasRunning(),
-    getRecord: (id: string) => {
-      const r = manager.getRecord(id);
-      if (!r) return undefined;
-      // Only return safe, non-sensitive fields. Truncate description to
-      // avoid leaking sensitive context to other extensions in the process.
-      return { id: r.id, type: r.type, status: r.status, description: r.description?.slice(0, 200) };
-    },
-    // NO spawn, NO listAgents (that goes through the Agent tool or API)
-    listAgentIds: (type: string) => manager.listAgents().filter(a => a.type === type).map(a => a.id),
-  };
+  // Publish the typed public API on `globalThis` so peer extensions and tests
+  // can discover and consume it. See `src/public-api.ts` for the contract.
+  // This supersedes the old read-only `pi-subagents:hooks` mirror: the new
+  // publication hands out the real `HookRegistry` instance, a typed RPC
+  // client, the typed event subscription helpers, and a read-only
+  // `SubagentManagerHandle` (published under `pi-subagents:manager`).
+  registerSubagentsApi(pi.events, hookRegistry, manager);
 
   // Expose widget render metrics via Symbol.for() global registry for dashboard access.
   // The dashboard reads this lazily via (globalThis as any)[Symbol.for("pi-subagents:widget-metrics")],
@@ -384,8 +367,7 @@ export default async function (pi: ExtensionAPI) {
     unsubSessionUsageRpc?.();
     unsubSwarmHealthRpc?.();
     currentCtx = undefined;
-    delete (globalThis as any)[MANAGER_KEY];
-    delete (globalThis as any)[HOOKS_KEY];
+    clearSubagentsApi();
     delete (globalThis as any)[WIDGET_KEY];
     scheduler.stop();
     manager.abortAll();
