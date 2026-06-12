@@ -25,7 +25,7 @@ Output requirements:
 - The JSON handoff must be the last thing in your response.
 - Use absolute or repo-root-relative file paths in evidence.
 
-Handoff format:
+Handoff format (v2 — typed artifacts):
 ```json
 {
   "type": "handoff",
@@ -34,9 +34,24 @@ Handoff format:
   "findings": ["Finding 1", "Finding 2"],
   "nextSteps": ["Step 1", "Step 2"],
   "confidence": 0.9,
-  "evidence": ["src/example.ts"]
+  "evidence": ["src/example.ts"],
+  "files": ["src/modified.ts"],
+  "artifacts": [
+    { "type": "file", "path": "src/example.ts", "title": "Reference file", "mimeType": "text/typescript" },
+    { "type": "branch", "branch": "research/example", "base": "main", "title": "Work branch" },
+    { "type": "url", "url": "https://example.com/spec", "title": "Spec", "description": "External reference" },
+    { "type": "note", "title": "Follow-up", "value": "Investigate the backoff curve", "mimeType": "text/markdown" }
+  ]
 }
 ```
+
+The `artifacts` field is a v2 typed discriminated union. The four supported types:
+- `file` — file on disk (required `path`; optional `mimeType`, `title`)
+- `branch` — git branch (required `branch`; optional `base`, `commits[]`, `title`)
+- `url` — web URL (required `url`; optional `title`, `description`)
+- `note` — free-form text (required `title` + `value`; optional `mimeType`)
+
+Legacy loose shapes (`{type: "<unknown>", path, title, value, mimeType}`) are still accepted and coerced best-effort into a v2 shape, so older agents continue to work.
 
 Constraints:
 - Never modify files.

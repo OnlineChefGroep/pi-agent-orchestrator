@@ -339,6 +339,83 @@ When `handoff: true` is set, the agent produces a structured JSON handoff at the
 
 **SECURITY DIRECTIVE:** Symlinks are explicitly ignored to prevent LFI vulnerabilities.
 
+### // HANDOFF V2 — TYPED ARTIFACTS
+
+**FILE:** `src/handoff.ts`
+
+Handoff v2 replaces the loose `artifacts: HandoffArtifact[]` shape with a
+strict discriminated union on `type`. Parsed handoffs expose the v2 shape
+regardless of what older agents emit; legacy loose artifacts are coerced
+best-effort.
+
+```ts
+type HandoffArtifactV2 =
+  | HandoffFileArtifact
+  | HandoffBranchArtifact
+  | HandoffUrlArtifact
+  | HandoffNoteArtifact;
+
+interface HandoffFileArtifact {
+  type: "file";
+  path: string;            // required, ≤ 4096 chars
+  mimeType?: string;       // ≤ 200 chars
+  title?: string;          // ≤ 200 chars
+}
+
+interface HandoffBranchArtifact {
+  type: "branch";
+  branch: string;          // required, ≤ 256 chars
+  base?: string;           // ≤ 256 chars
+  commits?: string[];      // ≤ 100 entries, each ≤ 64 chars
+  title?: string;          // ≤ 200 chars
+}
+
+interface HandoffUrlArtifact {
+  type: "url";
+  url: string;             // required, ≤ 2048 chars
+  title?: string;          // ≤ 200 chars
+  description?: string;    // ≤ 500 chars
+}
+
+interface HandoffNoteArtifact {
+  type: "note";
+  title: string;           // required, ≤ 200 chars
+  value: string;           // required, ≤ 50000 chars
+  mimeType?: string;       // ≤ 200 chars
+}
+```
+
+**JSON EXAMPLE:**
+
+```json
+{
+  "type": "handoff",
+  "status": "success",
+  "summary": "Fixed token bucket refill in rate-limiter.ts",
+  "findings": ["Refill interval was 0ms"],
+  "artifacts": [
+    { "type": "file", "path": "src/rate-limiter.ts", "title": "Fix", "mimeType": "text/typescript" },
+    { "type": "branch", "branch": "fix/rate-limiter", "base": "main" },
+    { "type": "url", "url": "https://example.com/spec", "title": "Spec" },
+    { "type": "note", "title": "Follow-up", "value": "Investigate the backoff curve" }
+  ]
+}
+```
+
+**LEGACY COERCION:**
+
+Older agents that emit loose artifacts (e.g. `{type: "design", path, title, value, mimeType}`) continue to work. The parser runs `coerceLegacyArtifact` on every artifact that fails strict v2 validation, mapping first-match-wins to a v2 shape:
+
+| Loose shape | Coerced to |
+|---|---|
+| `{path}` (any type string) | `HandoffFileArtifact` |
+| `{title, value}` | `HandoffNoteArtifact` |
+| `{branch, ...}` | `HandoffBranchArtifact` |
+| `{url, ...}` | `HandoffUrlArtifact` |
+| anything else | dropped with `logger.warn` |
+
+**EXPORTS:** `HandoffFileArtifact`, `HandoffBranchArtifact`, `HandoffUrlArtifact`, `HandoffNoteArtifact`, `HandoffArtifactV2` (the discriminated union), `HandoffArtifact` (kept as a loose structural alias for source-level backwards compat), `HANDOFF_ARTIFACT_TYPES`, `HandoffArtifactType`, `parseHandoff`, `renderHandoffForParent`, `buildHandoffPrompt`.
+
 ---
 
 ## // TELEMETRY VIEWER
