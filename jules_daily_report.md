@@ -37,11 +37,11 @@
 ## Tomorrow's Focus (clear, actionable)
 
 - Top 2-3 items
-  - Review and merge the daemon `trigger` standardization and `overdrive` skill PR.
+  - Validate merged daemon `trigger` standardization and `overdrive` skill PR: run full benchmark suite (`npm run bench:all`), verify all 1035 tests pass, confirm `trigger` fields are correctly consumed by Orchestra tool routing.
   - Add integration notes to `github-activity-digest` daemon.
   - Begin daemon schedule UI exposure for Orchestra monitoring.
 - Any prep needed (tools, research, user confirmation)
-  - Ensure CI passes on the current PR before merging.
+  - Monitor CI for any flaky test regressions post-merge.
 
 ## Self-Improvement Notes (for this prompt)
 

@@ -6,7 +6,7 @@ description: Run performance optimization audits and rendering budget verificati
 
 # /overdrive
 
-Track, benchmark, and resolve performance regressions in Pi Orchestra using systematic measurement and structural refactoring. Focus primarily on eliminating $O(N^2)$ iterations, preventing main-thread UI render stalls, and minimizing DOM/string overhead in high-throughput components (like the TUI and orchestrator dashboards).
+Track, benchmark, and resolve performance regressions in Pi Orchestra using systematic measurement and structural refactoring. Focus primarily on eliminating $O(N^2)$ (O(N²)) iterations, preventing main-thread UI render stalls, and minimizing DOM/string overhead in high-throughput components (like the TUI and orchestrator dashboards).
 
 ## Key Principles
 
