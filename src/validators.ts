@@ -105,7 +105,11 @@ export function parseValidationResult(text: string, agentId: string): Validation
     // Try to find JSON block
     const jsonMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[1].trim());
+      const jsonText = jsonMatch[1].trim();
+      if (jsonText.length > MAX_OUTPUT_SIZE) {
+        throw new Error("JSON payload exceeds maximum size");
+      }
+      const parsed = JSON.parse(jsonText);
       const criteria: ValidationCriterion[] = Array.isArray(parsed.criteria)
         ? parsed.criteria
         : [];
