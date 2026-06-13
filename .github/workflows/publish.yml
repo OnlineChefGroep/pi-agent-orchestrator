@@ -12,12 +12,16 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: '22.x'
           registry-url: 'https://npm.pkg.github.com'
+          cache: npm
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -242,7 +242,6 @@ export function parseHandoff(text: string): AgentHandoff | null {
   }
 
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    // Replace console.warn with central logger
     logger.warn("[handoff] Parsed JSON is not an object");
     return null;
   }
