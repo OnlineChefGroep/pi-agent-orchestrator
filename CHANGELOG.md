@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.13.2 (2026-06-13)
+
+### Chore
+
+- **OSS release readiness**: community files (`SECURITY.md`, `CODE_OF_CONDUCT.md`, issue/PR templates, `CODEOWNERS`), public docs cleanup, cinematic sidecar removal, cross-platform npm scripts, programmatic dashboard screenshot (`npm run screenshots`).
+- **CodeQL**: stays manual-only (`workflow_dispatch`) until GitHub Code Security is enabled on the org repo.
+
 ## v0.13.1 (2026-06-12)
 
 ### Fixes
