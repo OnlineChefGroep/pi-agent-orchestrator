@@ -25,7 +25,7 @@ What went wrong? Include the expected vs actual behavior.
 
 ## Logs / output
 
-```
+```text
 Paste relevant terminal output or error messages here.
 ```
 

@@ -70,7 +70,6 @@ gh pr create --base main --title "chore: open-source release readiness (v0.10.2)
 
 After merge to org `main`:
 - Close staging PR: https://github.com/OnlineChef/pi-agent-orchestrator/pull/1
-- Enable [Code Security](https://github.com/OnlineChefGroep/pi-agent-orchestrator/settings/security_analysis) for CodeQL
 - Tag `v0.10.2` → triggers `publish.yml` → GitHub Packages
 
 ---
@@ -119,7 +118,7 @@ ec981a2 docs: add session handoff for OnlineChefGroep repo import
 - README settings table + defaults (`maxConcurrent=4`, `graceTurns=5`, `defaultJoinMode=smart`)
 - `docs/api-reference.md`, `docs/architecture.md` synced to code
 - `package.json` author `OnlineChefGroep`, engines `>=22.19.0`, lockfile `0.10.2`
-- `publish.yml` pre-publish gate; `codeql.yml` re-enabled
+- `publish.yml` pre-publish gate; `codeql.yml` manual-only (no Code Security on org)
 - `schedule.ts` logger + error emit
 
 ### Do not touch
@@ -133,7 +132,6 @@ ec981a2 docs: add session handoff for OnlineChefGroep repo import
 |---|------|
 | P0 | Merge branch from OnlineChef → OnlineChefGroep, open PR there |
 | P1 | Close staging PR on OnlineChef after org merge |
-| P1 | Enable Code Security on org repo for CodeQL |
 | P2 | Tag `v0.10.2` and publish to GitHub Packages |
 
 ---
