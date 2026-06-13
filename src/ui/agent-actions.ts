@@ -4,22 +4,35 @@ import { basename, join } from "node:path";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { reloadCustomAgents } from "../agent-registry.js";
 import type { AgentConfig } from "../types.js";
-import { findAgentFile, personalAgentsDir, projectAgentsDir } from "./agent-file-helpers.js";
+import {
+  findAgentFile,
+  personalAgentsDir,
+  projectAgentsDir,
+} from "./agent-file-helpers.js";
 
 /** Eject a default agent: write its embedded config as a .md file. */
-export async function ejectAgent(ctx: ExtensionCommandContext, name: string, cfg: AgentConfig): Promise<void> {
+export async function ejectAgent(
+  ctx: ExtensionCommandContext,
+  name: string,
+  cfg: AgentConfig,
+): Promise<void> {
   const location = await ctx.ui.select("Choose location", [
     "Project (.pi/agents/)",
     `Personal (${personalAgentsDir()})`,
   ]);
   if (!location) return;
 
-  const targetDir = location.startsWith("Project") ? projectAgentsDir() : personalAgentsDir();
+  const targetDir = location.startsWith("Project")
+    ? projectAgentsDir()
+    : personalAgentsDir();
   await mkdir(targetDir, { recursive: true });
 
   const targetPath = join(targetDir, `${basename(name)}.md`);
   if (existsSync(targetPath)) {
-    const overwrite = await ctx.ui.confirm("Overwrite", `${targetPath} already exists. Overwrite?`);
+    const overwrite = await ctx.ui.confirm(
+      "Overwrite",
+      `${targetPath} already exists. Overwrite?`,
+    );
     if (!overwrite) return;
   }
 
@@ -33,10 +46,13 @@ export async function ejectAgent(ctx: ExtensionCommandContext, name: string, cfg
   if (cfg.maxTurns) fmFields.push(`max_turns: ${cfg.maxTurns}`);
   fmFields.push(`prompt_mode: ${cfg.promptMode}`);
   if (cfg.extensions === false) fmFields.push("extensions: false");
-  else if (Array.isArray(cfg.extensions)) fmFields.push(`extensions: ${cfg.extensions.join(", ")}`);
+  else if (Array.isArray(cfg.extensions))
+    fmFields.push(`extensions: ${cfg.extensions.join(", ")}`);
   if (cfg.skills === false) fmFields.push("skills: false");
-  else if (Array.isArray(cfg.skills)) fmFields.push(`skills: ${cfg.skills.join(", ")}`);
-  if (cfg.disallowedTools?.length) fmFields.push(`disallowed_tools: ${cfg.disallowedTools.join(", ")}`);
+  else if (Array.isArray(cfg.skills))
+    fmFields.push(`skills: ${cfg.skills.join(", ")}`);
+  if (cfg.disallowedTools?.length)
+    fmFields.push(`disallowed_tools: ${cfg.disallowedTools.join(", ")}`);
   if (cfg.inheritContext) fmFields.push("inherit_context: true");
   if (cfg.runInBackground) fmFields.push("run_in_background: true");
   if (cfg.isolated) fmFields.push("isolated: true");
@@ -51,7 +67,10 @@ export async function ejectAgent(ctx: ExtensionCommandContext, name: string, cfg
 }
 
 /** Disable an agent: set enabled: false in its .md file, or create a stub for built-in defaults. */
-export async function disableAgent(ctx: ExtensionCommandContext, name: string): Promise<void> {
+export async function disableAgent(
+  ctx: ExtensionCommandContext,
+  name: string,
+): Promise<void> {
   const file = findAgentFile(name);
   if (file) {
     // Existing file — set enabled: false in frontmatter (idempotent)
@@ -74,7 +93,9 @@ export async function disableAgent(ctx: ExtensionCommandContext, name: string): 
   ]);
   if (!location) return;
 
-  const targetDir = location.startsWith("Project") ? projectAgentsDir() : personalAgentsDir();
+  const targetDir = location.startsWith("Project")
+    ? projectAgentsDir()
+    : personalAgentsDir();
   await mkdir(targetDir, { recursive: true });
 
   const targetPath = join(targetDir, `${basename(name)}.md`);
@@ -84,7 +105,10 @@ export async function disableAgent(ctx: ExtensionCommandContext, name: string): 
 }
 
 /** Enable a disabled agent by removing enabled: false from its frontmatter. */
-export async function enableAgent(ctx: ExtensionCommandContext, name: string): Promise<void> {
+export async function enableAgent(
+  ctx: ExtensionCommandContext,
+  name: string,
+): Promise<void> {
   const file = findAgentFile(name);
   if (!file) return;
 
