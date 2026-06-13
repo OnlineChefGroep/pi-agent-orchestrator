@@ -16,7 +16,7 @@
 
 Bring Claude Code-style autonomous sub-agents to Pi. Spawn specialized agents, enforce budgets, chain them with structured handoffs, swarm agents together, and watch a rich interactive TUI dashboard render their progress in real time.
 
-> **Repository:** [`OnlineChefGroep/pi-agent-orchestrator`](https://github.com/OnlineChefGroep/pi-agent-orchestrator) — the old `OnlineChef/pi-agent-orchestrator` location is deprecated. See [docs/repository.md](docs/repository.md).
+**Repository:** [`OnlineChefGroep/pi-agent-orchestrator`](https://github.com/OnlineChefGroep/pi-agent-orchestrator)
 
 ---
 
