@@ -48,10 +48,10 @@
     "proper-lockfile": "^4.1.2"
   },
   "scripts": {
-    "build": "NODE_OPTIONS='--max-old-space-size=4096' tsc",
-    "test": "NODE_OPTIONS='--max-old-space-size=4096' vitest run --retry=2",
+    "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc",
+    "test": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --retry=2",
     "test:watch": "vitest",
-    "typecheck": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit",
+    "typecheck": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc --noEmit",
     "lint": "biome check src/ test/",
     "lint:fix": "biome check --fix src/ test/"
   },
