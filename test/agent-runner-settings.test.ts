@@ -106,3 +106,23 @@ describe("setGraceTurns / getGraceTurns", () => {
     expect(getGraceTurns()).toBe(1);
   });
 });
+
+
+describe("getDefaultMaxTurns", () => {
+  beforeEach(() => {
+    setDefaultMaxTurns(undefined);
+  });
+
+  afterEach(() => {
+    setDefaultMaxTurns(0);
+  });
+
+  it("returns undefined when no default is set", () => {
+    expect(getDefaultMaxTurns()).toBeUndefined();
+  });
+
+  it("returns the currently configured default max turns", () => {
+    setDefaultMaxTurns(42);
+    expect(getDefaultMaxTurns()).toBe(42);
+  });
+});
