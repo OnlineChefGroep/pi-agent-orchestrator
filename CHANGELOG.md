@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.10.2 (2026-06-13)
+
+First public open-source release readiness pass. No runtime behaviour changes.
+
+### Documentation
+- Rewrote `README.md` configuration and built-in agent tables to match the actual
+  `SubagentsSettings` interface and default agent tool sets.
+- Rewrote `docs/api-reference.md` against the real exported surface (removed phantom
+  `registerCommands`/`initSubagents`/`createSubagent`/`registerHook` entries; corrected
+  `JoinMode`, `AgentRecord.status`, and `SubagentsSettings` shapes).
+- Corrected `docs/architecture.md` (entry-point description, removed duplicated
+  paragraph, added previously-missing modules to the file overview).
+- Removed broken image references and stale version/test badges.
+
+### Repository hygiene
+- Removed internal/confidential audit artifacts (`docs/SECURITY_AUDIT_REPORT.md`,
+  `docs/SECURITY_AUDIT_VERIFICATION_2026-05-23.md`, `docs/REVIEW_AND_FUTURE.md`).
+- Removed case-colliding internal note directories (`.Jules/`, `.jules/`).
+- Replaced a developer-specific Windows path in `.codex/hooks.json` with a portable command.
+
+### Community health
+- Added `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue templates, a pull-request template,
+  and `CODEOWNERS`.
+
+### Packaging & CI
+- Tightened `engines.node` to `>=22.19.0` to match peer-dependency requirements.
+- Added `publishConfig.access: public`.
+- Hardened the publish workflow with pre-publish typecheck/lint/test gating and
+  refreshed action versions.
+
+### Code
+- Routed a stray `console.warn` in `schedule.ts` through the central logger and stopped
+  silently swallowing scheduled-job execution errors.
+
+### Metrics
+- 795 tests, 46 test files.
+
+---
+
 ## v0.10.1 (2026-05-29)
 
 ### Fixes
@@ -102,52 +141,51 @@
 ## v0.9.1 (2026-05-24)
 
 ### 🧹 Cleanup
-- **Cinematic sidecar removal**: Go binary spawning logic verwijderd uit `agent-widget.ts`; sidecar wordt niet meer gebruikt.
-- **UI enhancements**: Nieuwe spinner frames (`pulse`, `wave`), tool display mappings (`glob`, `webSearch`, `webFetch`).
-- **Fix animation interval**: `ANIMATION_INTERVAL` constante toegevoegd en gebruikt in `ensureTimer()`.
+- **Cinematic sidecar removal**: Go binary spawning logic removed from `agent-widget.ts`; the sidecar is no longer used.
+- **UI enhancements**: New spinner frames (`pulse`, `wave`) and tool display mappings (`glob`, `webSearch`, `webFetch`).
+- **Fix animation interval**: Added an `ANIMATION_INTERVAL` constant, now used in `ensureTimer()`.
 
 ### 🛡 Security
-- **CVE-004**: Regex-blacklist verwijderd uit `validators.ts` — was "security theater" (triviaal te omzeilen met Unicode/whitespace). Vervangen door defense-in-depth: control char removal + hard length limits + sandbox isolatie (`isolated=true`, `levelLimit=0`).
-- `.npmrc` toegevoegd aan `.gitignore` (bevatte harde GitHub token).
+- Removed the regex blacklist from `validators.ts` — it was "security theater" (trivially bypassable with Unicode/whitespace). Replaced with defense-in-depth: control-character removal + hard length limits + sandbox isolation (`isolated=true`, `levelLimit=0`).
+- Added `.npmrc` to `.gitignore` (it had contained a hard-coded GitHub token).
 
 ### 🔧 CI
-- **Dependency compatibiliteitsmatrix**: `os [ubuntu, windows] x node [20, 22] x peer-deps [lowest, latest]`.
-- Correcte lowest peer deps install via `--no-save` (geen `package.json` mutatie).
-- Windows runner met `continue-on-error` voor pre-existing schedule flakiness.
+- **Dependency compatibility matrix**: `os [ubuntu, windows] x node [20, 22] x peer-deps [lowest, latest]`.
+- Correct lowest-peer-deps install via `--no-save` (no `package.json` mutation).
+- Windows runner with `continue-on-error` for pre-existing schedule flakiness.
 
 ### 📊 Metrics
-- 614 tests, 34 test files (+ `validators.test.ts` regressie tests voor CVE-004)
+- 614 tests, 34 test files (+ `validators.test.ts` regression tests)
 
 ## v0.9.0 (2026-05-24)
 
 ### 🔧 Fixes
-- **Fix refactor regressie in `agent-types.ts`**: `intersectToolNames` hernoemd naar `PermissionUtils.intersectToolNames` na class-refactor; herstelt alle 14 partition-filter tests.
-- **Fix template typo in `default-agents.ts`**: ontbrekende sluitende `}}` in `{{TOOL_INSTRUCTIONS}}` placeholder hersteld — prompts renderen nu correct.
+- **Fix refactor regression in `agent-types.ts`**: renamed `intersectToolNames` to `PermissionUtils.intersectToolNames` after a class refactor; restores all 14 partition-filter tests.
+- **Fix template typo in `default-agents.ts`**: restored the missing closing `}}` in the `{{TOOL_INSTRUCTIONS}}` placeholder — prompts now render correctly.
 
 ### 🏗 Refactor
-- **Consolidatie van parsing & permissie-logica**:
-  - `custom-agents.ts`: losse field-parser functies samengevoegd naar `AgentFieldParser` class.
-  - `default-agents.ts`: herhalende read-only prompt-boilerplate samengevoegd naar `AgentPromptTemplates` class.
-  - `agent-types.ts`: `intersectPermission` / `intersectToolNames` / `applyParentRestrictions` samengevoegd naar `PermissionUtils` class.
+- **Consolidation of parsing & permission logic**:
+  - `custom-agents.ts`: merged separate field-parser functions into an `AgentFieldParser` class.
+  - `default-agents.ts`: merged repeated read-only prompt boilerplate into an `AgentPromptTemplates` class.
+  - `agent-types.ts`: merged `intersectPermission` / `intersectToolNames` / `applyParentRestrictions` into a `PermissionUtils` class.
 
 ### 🛡 Repository hygiene
-- `.pi/agents/` expliciet toegevoegd aan `.gitignore` (dev-only agents nooit meer per ongeluk tracken).
-- `cinematic-renderer/cinematic-renderer.exe` toegevoegd aan `.gitignore`.
-- `auditor.md` verwijderd uit git tracking (was dev-only agent).
+- Explicitly added `.pi/agents/` to `.gitignore` (dev-only agents are never accidentally tracked again).
+- Added `cinematic-renderer/cinematic-renderer.exe` to `.gitignore`.
+- Removed `auditor.md` from git tracking (it was a dev-only agent).
 
-### � Documentation
-- **README.md volledig herschreven**: feature matrix, agent types tabel, custom agent frontmatter reference, cinematic dashboard docs, architecture diagram, development guide.
-- **CI workflow**: GitHub Actions CI voor TypeScript (typecheck, lint, test) en Go sidecar (vet, build, test).
-- **Vervolgplan**: `VERVOLG_PLAN.md` toegevoegd met prioriteitenlijst P0–P4.
+### 📚 Documentation
+- **README.md fully rewritten**: feature matrix, agent types table, custom agent frontmatter reference, cinematic dashboard docs, architecture diagram, development guide.
+- **CI workflow**: GitHub Actions CI for TypeScript (typecheck, lint, test) and the Go sidecar (vet, build, test).
 
 ### 🧹 Code cleanup
-- **Lint**: ESLint verwijderd, Biome is enige linter. Alle pre-existing unused imports en organize-imports warnings opgelost.
+- **Lint**: ESLint removed, Biome is the only linter. Resolved all pre-existing unused-import and organize-imports warnings.
 - **Biome fixes**: unused parameters/variables in `agent-widget.ts`, `output-handler.ts`, `conversation-viewer.ts`.
 
-### �📊 Metrics
+### 📊 Metrics
 - 611 tests, 34 test files (+ `default-agents.test.ts`)
-- Typecheck: groen
-- Lint: groen (3 stylistische warnings over static classes)
+- Typecheck: green
+- Lint: green
 
 ## v0.8.0 (2026-05-23)
 

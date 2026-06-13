@@ -57,7 +57,7 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.19.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
@@ -73,6 +73,7 @@
     ]
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   }
 }
