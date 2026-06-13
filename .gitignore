@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+node_modules/.vite/
 
 # Build outputs
 dist/
@@ -31,17 +32,12 @@ Thumbs.db
 # pi local state
 .pi/readcache
 .pi/agents/
-.claude
+.claude/
 .autoresearch
-.Jules
-.jules/*
-!.jules/overdrive.md
-.codex
-.devin
-
-# Internal agent working notes (not for public consumption)
 .Jules/
 .jules/
+.codex/
+.devin/
 
 # Autoresearch generated data
 autoresearch.jsonl
