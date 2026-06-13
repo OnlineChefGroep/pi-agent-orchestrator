@@ -1,12 +1,11 @@
 name: CodeQL
 
+# DISABLED auto-triggers: CodeQL requires GitHub Advanced Security / code scanning
+# enabled in repository settings. Without it, the analyze step fails with:
+#   "Code Security must be enabled for this repository to use code scanning."
+# Re-enable push/pull_request/schedule once enabled at:
+#   https://github.com/OnlineChefGroep/pi-agent-orchestrator/settings/security_analysis
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  schedule:
-    - cron: '0 6 * * 1'
   workflow_dispatch:
 
 permissions:
