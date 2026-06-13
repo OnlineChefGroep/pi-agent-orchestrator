@@ -39,6 +39,10 @@ Thumbs.db
 .codex
 .devin
 
+# Internal agent working notes (not for public consumption)
+.Jules/
+.jules/
+
 # Autoresearch generated data
 autoresearch.jsonl
 autoresearch.md

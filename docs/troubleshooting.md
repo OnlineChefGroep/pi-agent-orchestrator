@@ -110,23 +110,6 @@ npm install --legacy-peer-deps
 
 ---
 
-### Cinematic sidecar fails attachment
-
-**SYMPTOM:** Style configuration set `"cinematic"` but interface renders standard block.
-
-**VALIDATION MATRIX:**
-1. `isCinematicEnabled()` == true.
-2. Binary package `@onlinechefgroep/pi-subagents-tui` confirmed installed.
-3. Process stdout/stderr clean on sidecar attach.
-4. Settings memory confirms `"cinematic"` applied, not just stored.
-
-**ATTACHMENT INSTALLATION:**
-```bash
-pi install npm:@onlinechefgroep/pi-subagents-tui
-```
-
----
-
 ## // TEST SUITE
 
 ### Persistence test faults on Windows (`schedule.test.ts`)

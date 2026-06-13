@@ -10,7 +10,7 @@ Pi extension — runs inside the pi coding agent host, not standalone. Orchestra
 |------|--------|
 | **Spawn SSOT** | `src/default-agents.ts` (built-ins), `.pi/agents/*.md` (custom overrides), `src/settings.ts` + `.pi/subagent-settings.json` (runtime) |
 | **Never** | Import `@earendil-works/pi-*` as direct deps; treat YAML booleans as truthy strings; sort agent lists (Map insertion order is intentional) |
-| **Peer extensions** | `@onlinechef/context-mode` → `ctx_*` tools; `@onlinechefgroep/pi-subagents-tui` → cinematic Go TUI sidecar (optional, feature-gated) |
+| **Peer extensions** | `@onlinechef/context-mode` → `ctx_*` tools (optional, feature-gated) |
 
 ## Sub-agent pre-context matrix (Pi stack)
 
@@ -19,7 +19,6 @@ What each layer injects **before** a sub-agent session runs. Parent-only rows af
 | Layer | Package / repo | Injected at spawn | Hooks / surface |
 |-------|----------------|-------------------|-----------------|
 | **Orchestrator** | `pi-agent-orchestrator` (this repo) | Parent execution log, permission matrix, handoff payload, prompt compression, optional `ctx_*` bridge | `subagent:start` · `subagent:end` · `subagent:spawn` · `subagent:steer` · RPC `subagents:rpc:spawn` |
-| **Subagent TUI** | `@onlinechefgroep/pi-subagents-tui` (Go binary, optional) | *(parent-only)* JSON heartbeat: agent tree, token/turn metrics, queue state, plasma/shaders via `bubbletea-cinematic` | Vim dashboard `/agents`, bulk-spawn debounce, `steer` / kill from widget |
 | **Memory hooks** | `Pi-Helios-Memory-Private` + `pi-helios-context-extensie` | Timeline `ctx_search`, FTS5 facts, session resume snapshot, failure memories | `PreToolUse` · `PostToolUse` · `PreCompact` · `helios-memory context` |
 | **Control extension** | `pi-agent-control-extension` | Browser/TUI routing (`control_route`), `tctl`, capture drivers, atomized control skills | `/route-control` · `control_browser_command` · WebSocket bridge |
 
@@ -182,7 +181,7 @@ Use `.test.ts` extension. Use `describe`/`it`/`expect` from vitest. Do not co-lo
 
 ## Optional peer deps
 
-`@onlinechef/context-mode` enables `ctx_*` sandbox tools. `@onlinechefgroep/pi-subagents-tui` is a Go-based Bubble Tea TUI sidecar (see sibling repos `pi-subagents-tui` and `bubbletea-cinematic`). Code paths for both are gated behind feature detection (`src/context-mode-bridge.ts`). The cinematic TUI sidecar's Go binary spawning was removed from `agent-widget.ts` in v0.9.1; re-integration is tracked in issue #1.
+`@onlinechef/context-mode` enables `ctx_*` sandbox tools. Its code path is gated behind feature detection (`src/context-mode-bridge.ts`).
 
 ## Settings reference
 

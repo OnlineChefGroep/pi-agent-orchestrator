@@ -162,10 +162,9 @@ export async function showSettings(
       "premium — truecolor gradients and rounded connectors (default)",
       "retro — 16-color fallback and straight box lines",
       "plain — minimal markers, plain text with no ANSI styles",
-      "cinematic — ultra-rich fullscreen Go motion renderer via sidecar",
     ]);
     if (val) {
-      const style = val.split(" ")[0] as "premium" | "retro" | "plain" | "cinematic";
+      const style = val.split(" ")[0] as "premium" | "retro" | "plain";
       setUiStyle(style);
       notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `UI/UX style set to ${style}`);
     }

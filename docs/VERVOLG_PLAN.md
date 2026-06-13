@@ -54,7 +54,7 @@
 - [ ] **Execution tree visualization** — `/agents tree` command with Mermaid/JSON/text export
 - [ ] **Agent templates registry** — Versioned, updatable templates beyond raw `.md` files
 - [ ] **Cost estimation mode** — Dry-run token estimate before launching expensive trees
-- [ ] **Cinematic sidecar robustness** — Version handshake, auto-restart, graceful degradation — _tracked in [#1](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/1)_
+- [ ] **Dashboard robustness** — Refresh consistency, fallback rendering, graceful degradation across terminal capabilities
 
 ---
 

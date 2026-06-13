@@ -14,7 +14,7 @@ import { logger } from "./logger.js";
 
 import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { AgentManager } from "./agent-manager.js";
-import { isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setCinematicEnabled, setDashboardRefreshInterval, setDefaultJoinMode, setOrchestrationMode, setPromptCompressionLevel, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setUiStyle } from "./agent-registry.js";
+import { isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setDashboardRefreshInterval, setDefaultJoinMode, setOrchestrationMode, setPromptCompressionLevel, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setUiStyle } from "./agent-registry.js";
 import { setDefaultMaxTurns, setGraceTurns } from "./agent-runner.js";
 import { BatchOrchestrator } from "./batch-orchestrator.js";
 import { registerAgentsCommand } from "./commands/agents.js";
@@ -429,7 +429,6 @@ export default async function (pi: ExtensionAPI) {
         setSpinnerStyle(style);
       },
       setUiStyle,
-      setCinematicEnabled,
       setShowActivityStream,
       setShowTokenUsage,
       setShowTurnProgress,

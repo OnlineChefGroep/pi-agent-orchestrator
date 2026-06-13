@@ -21,7 +21,6 @@ vi.mock("@earendil-works/pi-tui", () => ({
 // Mock agent-registry — getUiStyle returns "premium"
 vi.mock("../src/agent-registry.js", () => ({
   getUiStyle: () => "premium",
-  isCinematicEnabled: () => false,
 }));
 
 // Mock agent-types — getConfig used by getDisplayName
