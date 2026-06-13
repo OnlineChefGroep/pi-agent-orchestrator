@@ -140,4 +140,4 @@ docs/
 - Join modes: `async`, `group`, `smart`, `swarm`
 - Orchestration modes: `auto`, `single`, `swarm`, `crew`
 - Animation styles: `braille`, `dots`, `lines`, `classic`, `none`
-- UI styles: `premium`, `retro`, `plain`, `cinematic`
+- UI styles: `premium`, `retro`, `plain`

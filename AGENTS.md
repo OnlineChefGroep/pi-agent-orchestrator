@@ -36,7 +36,7 @@ Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
 
 ## Optional peer deps
 
-`@onlinechef/context-mode` enables `ctx_*` sandbox tools. `@onlinechefgroep/pi-subagents-tui` enables the cinematic TUI sidecar. Code paths for both are gated behind feature detection (`src/context-mode-bridge.ts`, `src/ui/agent-widget.ts`).
+`@onlinechef/context-mode` enables `ctx_*` sandbox tools. The code path is gated behind feature detection (`src/context-mode-bridge.ts`).
 
 ## Architecture at a glance
 

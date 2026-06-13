@@ -4,7 +4,7 @@
 
 # 🤖 @onlinechefgroep/pi-agent-orchestrator
 
-**Autonomous sub-agents + cinematic TUI dashboard + swarm coordination for the Pi coding agent**
+**Autonomous sub-agents + interactive TUI dashboard + swarm coordination for the Pi coding agent**
 
 [![CI](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-0.10.2-blue)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/releases)
@@ -47,7 +47,6 @@ Requires Node.js >= 22.19 and pi >= 0.70.5.
 | **Dual-phase compaction** | Prune old tool outputs + per-agent memory limits (default keep 5 turns) |
 | **Scheduling** | Cron/interval/one-shot recurring agent jobs with file-backed persistence |
 | **Context-mode sandbox** | Optional `ctx_*` sandbox tool injection via `@onlinechef/context-mode` peer dependency |
-| **Cinematic TUI dashboard** | Optional rich visual sidecar via `@onlinechefgroep/pi-subagents-tui` |
 
 ---
 
@@ -110,32 +109,15 @@ Output findings as a markdown list with severity (Critical / High / Medium / Low
 
 ---
 
-## Cinematic Dashboard (TUI Sidecar)
+## Dashboard
 
-The cinematic dashboard is an **optional** Go Bubble Tea application that renders agent status in real time with animated backgrounds.
+The interactive dashboard renders live agent status directly in your terminal — running cards with spinners and activity, queued/done sections, swarm grouping, and a detail panel. Open it with `/agents` and drive it with vim-style hotkeys.
 
-![Cinematic Dashboard Preview](docs/images/dashboard_preview.png)
+![Pi Agent Orchestrator dashboard](docs/images/dashboard_preview.svg)
 
-### Installation
+The dashboard is pure TypeScript and ships with the extension — no external binary or sidecar to install. Three themes are available via the `uiStyle` setting: `premium` (truecolor, default), `retro` (16-color), and `plain` (no ANSI, for logs and CI).
 
-The TUI sidecar is now a separate package: **[@onlinechefgroep/pi-subagents-tui](https://github.com/OnlineChefGroep/pi-subagents-tui)**
-
-To enable cinematic mode:
-
-1. Install the TUI package: `pi install npm:@onlinechefgroep/pi-subagents-tui`
-2. Set `uiStyle` to `"cinematic"` in subagents settings (via `/agents` → Settings)
-
-Without the TUI package installed, cinematic mode will gracefully fall back to the standard TUI display.
-
-### Manual Build
-
-If you prefer to build from source:
-
-```bash
-git clone https://github.com/OnlineChefGroep/pi-subagents-tui.git
-cd pi-subagents-tui
-go build -o cinematic-tui .
-```
+> The screenshot above is rendered from the extension's actual renderers via `npm run screenshots` — it's the real terminal output, not a mockup.
 
 ---
 
@@ -152,8 +134,7 @@ Settings are managed via `/agents` → Settings or by editing `.pi/subagents.jso
 | `orchestrationMode` | `auto` | Coordination mode: `auto`, `single`, `swarm`, or `crew` |
 | `schedulingEnabled` | `true` | Enable cron/interval scheduled agent jobs |
 | `animationStyle` | `braille` | Dashboard spinner: `braille`, `dots`, `lines`, `classic`, `none` |
-| `uiStyle` | `premium` | UI theme: `premium`, `retro`, `plain`, or `cinematic` |
-| `cinematicEnabled` | `false` | Enable Go TUI sidecar (requires `uiStyle: "cinematic"`) |
+| `uiStyle` | `premium` | UI theme: `premium`, `retro`, or `plain` |
 | `showActivityStream` | `true` | Show live tool-call activity in the dashboard |
 | `showTokenUsage` | `true` | Show token usage and context fill percentage |
 | `showTurnProgress` | `true` | Show turn progress for running agents |
@@ -181,9 +162,6 @@ pi host
         ├── ScheduleStore (file-backed persistence, PID-locked)
         ├── Hooks (lifecycle events)
         └── PartitionedState (isolated tool/skill subsets)
-
-[Optional] pi-subagents-tui sidecar
-        └── Go Bubble Tea cinematic dashboard
 ```
 
 ---

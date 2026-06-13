@@ -81,15 +81,14 @@ export function setSchedulingEnabled(b: boolean): void {
 // ---- Animation & UI/UX Style configuration ----
 
 export type AnimationStyle = "braille" | "dots" | "lines" | "classic" | "none";
-export type UiStyle = "premium" | "retro" | "plain" | "cinematic";
+export type UiStyle = "premium" | "retro" | "plain";
 
 let activeUiStyle: UiStyle = "premium";
 
 let animationStyle: AnimationStyle = "braille";
 
-// ---- Cinematic and display settings ----
+// ---- Display settings ----
 
-let cinematicEnabled = true;  // Default enabled when uiStyle is cinematic
 let showActivityStream = true;
 let showTokenUsage = true;
 let showTurnProgress = true;
@@ -107,13 +106,6 @@ export function getUiStyle(): UiStyle {
 }
 export function setUiStyle(style: UiStyle): void {
   activeUiStyle = style;
-}
-
-export function isCinematicEnabled(): boolean {
-  return cinematicEnabled && activeUiStyle === "cinematic";
-}
-export function setCinematicEnabled(b: boolean): void {
-  cinematicEnabled = b;
 }
 
 export function isShowActivityStream(): boolean {

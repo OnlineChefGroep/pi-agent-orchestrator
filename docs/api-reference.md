@@ -189,8 +189,7 @@ interface SubagentsSettings {
   defaultJoinMode?: JoinMode;     // "async" | "group" | "smart" | "swarm"
   schedulingEnabled?: boolean;
   animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";
-  uiStyle?: "premium" | "retro" | "plain" | "cinematic";
-  cinematicEnabled?: boolean;
+  uiStyle?: "premium" | "retro" | "plain";
   showActivityStream?: boolean;
   showTokenUsage?: boolean;
   showTurnProgress?: boolean;

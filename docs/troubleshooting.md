@@ -110,23 +110,6 @@ npm install --legacy-peer-deps
 
 ---
 
-### Cinematic dashboard not rendering
-
-**Symptom:** UI style set to "cinematic" but no rich TUI appears.
-
-**Checklist:**
-1. `isCinematicEnabled()` returns true (check settings)
-2. The `@onlinechefgroep/pi-subagents-tui` package is installed
-3. No stderr output from the sidecar process (check logs)
-4. `getUiStyle()` is actually `"cinematic"` (not just set in settings but not applied)
-
-**Install the cinematic TUI:**
-```bash
-npm install @onlinechefgroep/pi-subagents-tui
-```
-
----
-
 ## Tests
 
 ### `schedule.test.ts` or `schedule-store.test.ts` fails on Windows

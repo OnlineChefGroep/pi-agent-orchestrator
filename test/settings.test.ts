@@ -242,11 +242,6 @@ describe("settings persistence", () => {
       expect(loadSettings(projectDir)).toEqual({});
     });
 
-    it("accepts uiStyle: cinematic", () => {
-      writeProject({ uiStyle: "cinematic" });
-      expect(loadSettings(projectDir)).toEqual({ uiStyle: "cinematic" });
-    });
-
     it("drops invalid uiStyle values", () => {
       writeProject({ uiStyle: "neon" });
       expect(loadSettings(projectDir)).toEqual({});
@@ -254,25 +249,24 @@ describe("settings persistence", () => {
       expect(loadSettings(projectDir)).toEqual({});
     });
 
-    it("accepts all four valid uiStyle values", () => {
-      for (const style of ["premium", "retro", "plain", "cinematic"] as const) {
+    it("accepts all valid uiStyle values", () => {
+      for (const style of ["premium", "retro", "plain"] as const) {
         writeProject({ uiStyle: style });
         expect(loadSettings(projectDir)).toEqual({ uiStyle: style });
       }
     });
 
-    it("round-trips cinematic boolean settings", () => {
-      writeProject({ cinematicEnabled: false, showActivityStream: true, showTokenUsage: false, showTurnProgress: true });
+    it("round-trips display boolean settings", () => {
+      writeProject({ showActivityStream: true, showTokenUsage: false, showTurnProgress: true });
       expect(loadSettings(projectDir)).toEqual({
-        cinematicEnabled: false,
         showActivityStream: true,
         showTokenUsage: false,
         showTurnProgress: true,
       });
     });
 
-    it("drops non-boolean cinematic settings silently", () => {
-      writeProject({ cinematicEnabled: "yes", showActivityStream: 1, showTokenUsage: null, showTurnProgress: "true" } as any);
+    it("drops non-boolean display settings silently", () => {
+      writeProject({ showActivityStream: 1, showTokenUsage: null, showTurnProgress: "true" } as any);
       expect(loadSettings(projectDir)).toEqual({});
     });
   });
@@ -332,7 +326,6 @@ describe("settings persistence", () => {
         setSchedulingEnabled: vi.fn(),
         setAnimationStyle: vi.fn(),
         setUiStyle: vi.fn(),
-        setCinematicEnabled: vi.fn(),
         setShowActivityStream: vi.fn(),
         setShowTokenUsage: vi.fn(),
         setShowTurnProgress: vi.fn(),
@@ -350,7 +343,6 @@ describe("settings persistence", () => {
       expect(appliers.setGraceTurns).not.toHaveBeenCalled();
       expect(appliers.setDefaultJoinMode).not.toHaveBeenCalled();
       expect(appliers.setSchedulingEnabled).not.toHaveBeenCalled();
-      expect(appliers.setCinematicEnabled).not.toHaveBeenCalled();
       expect(appliers.setShowActivityStream).not.toHaveBeenCalled();
       expect(appliers.setShowTokenUsage).not.toHaveBeenCalled();
       expect(appliers.setShowTurnProgress).not.toHaveBeenCalled();
@@ -364,7 +356,7 @@ describe("settings persistence", () => {
       expect(appliers.setDefaultMaxTurns).not.toHaveBeenCalled();
       expect(appliers.setDefaultJoinMode).not.toHaveBeenCalled();
       expect(appliers.setSchedulingEnabled).not.toHaveBeenCalled();
-      expect(appliers.setCinematicEnabled).not.toHaveBeenCalled();
+      expect(appliers.setShowActivityStream).not.toHaveBeenCalled();
     });
 
     it("applies all fields when all are present", () => {
@@ -377,8 +369,7 @@ describe("settings persistence", () => {
           graceTurns: 7,
           defaultJoinMode: "group",
           schedulingEnabled: false,
-          uiStyle: "cinematic",
-          cinematicEnabled: true,
+          uiStyle: "retro",
           showActivityStream: false,
           showTokenUsage: true,
           showTurnProgress: false,
@@ -394,8 +385,7 @@ describe("settings persistence", () => {
       expect(appliers.setGraceTurns).toHaveBeenCalledWith(7);
       expect(appliers.setDefaultJoinMode).toHaveBeenCalledWith("group");
       expect(appliers.setSchedulingEnabled).toHaveBeenCalledWith(false);
-      expect(appliers.setUiStyle).toHaveBeenCalledWith("cinematic");
-      expect(appliers.setCinematicEnabled).toHaveBeenCalledWith(true);
+      expect(appliers.setUiStyle).toHaveBeenCalledWith("retro");
       expect(appliers.setShowActivityStream).toHaveBeenCalledWith(false);
       expect(appliers.setShowTokenUsage).toHaveBeenCalledWith(true);
       expect(appliers.setShowTurnProgress).toHaveBeenCalledWith(false);
@@ -435,17 +425,15 @@ describe("settings persistence", () => {
       expect(appliers.setSchedulingEnabled).not.toHaveBeenCalled();
     });
 
-    it("applies cinematic boolean settings correctly", () => {
-      applySettings({ cinematicEnabled: false, showActivityStream: true, showTokenUsage: false, showTurnProgress: true }, appliers);
-      expect(appliers.setCinematicEnabled).toHaveBeenCalledWith(false);
+    it("applies display boolean settings correctly", () => {
+      applySettings({ showActivityStream: true, showTokenUsage: false, showTurnProgress: true }, appliers);
       expect(appliers.setShowActivityStream).toHaveBeenCalledWith(true);
       expect(appliers.setShowTokenUsage).toHaveBeenCalledWith(false);
       expect(appliers.setShowTurnProgress).toHaveBeenCalledWith(true);
     });
 
-    it("does not call cinematic appliers when fields are absent", () => {
+    it("does not call display appliers when fields are absent", () => {
       applySettings({ maxConcurrent: 4 }, appliers);
-      expect(appliers.setCinematicEnabled).not.toHaveBeenCalled();
       expect(appliers.setShowActivityStream).not.toHaveBeenCalled();
       expect(appliers.setShowTokenUsage).not.toHaveBeenCalled();
       expect(appliers.setShowTurnProgress).not.toHaveBeenCalled();
@@ -481,7 +469,6 @@ describe("settings persistence", () => {
         setSchedulingEnabled: vi.fn(),
         setAnimationStyle: vi.fn(),
         setUiStyle: vi.fn(),
-        setCinematicEnabled: vi.fn(),
         setShowActivityStream: vi.fn(),
         setShowTokenUsage: vi.fn(),
         setShowTurnProgress: vi.fn(),

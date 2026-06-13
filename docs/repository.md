@@ -30,5 +30,4 @@ Published to GitHub Packages (`npm.pkg.github.com`). Install via `pi install npm
 
 | Package | Repository |
 |---------|------------|
-| `@onlinechefgroep/pi-subagents-tui` | `OnlineChefGroep/pi-subagents-tui` |
 | `@onlinechef/context-mode` | optional peer (sandbox tools) |

@@ -36,9 +36,6 @@
   "peerDependenciesMeta": {
     "@onlinechef/context-mode": {
       "optional": true
-    },
-    "@onlinechefgroep/pi-subagents-tui": {
-      "optional": true
     }
   },
   "dependencies": {
@@ -53,7 +50,8 @@
     "test:watch": "vitest",
     "typecheck": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc --noEmit",
     "lint": "biome check src/ test/",
-    "lint:fix": "biome check --fix src/ test/"
+    "lint:fix": "biome check --fix src/ test/",
+    "screenshots": "npm run build && node scripts/render-screenshots.mjs"
   },
   "type": "module",
   "engines": {

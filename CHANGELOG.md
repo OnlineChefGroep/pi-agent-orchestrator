@@ -33,9 +33,20 @@ First public open-source release readiness pass. No runtime behaviour changes.
 ### Code
 - Routed a stray `console.warn` in `schedule.ts` through the central logger and stopped
   silently swallowing scheduled-job execution errors.
+- Removed the vestigial "cinematic" UI style and the `@onlinechefgroep/pi-subagents-tui`
+  Go sidecar integration entirely — the optional peer dependency, the `cinematicEnabled`
+  setting, the `cinematic` `uiStyle` value, and the `isCinematicEnabled`/`setCinematicEnabled`
+  registry hooks (the sidecar spawn logic was already gone; this clears the dead surface).
+  Remaining UI styles: `premium`, `retro`, `plain`.
+- Made the verification scripts (`build`, `test`, `typecheck`) cross-platform so they run
+  on Windows shells, not just POSIX.
+
+### Tooling
+- Added `npm run screenshots`: regenerates `docs/images/dashboard_preview.svg` from the
+  extension's actual dashboard renderers, so docs imagery is real terminal output.
 
 ### Metrics
-- 795 tests, 46 test files.
+- 794 tests, 46 test files.
 
 ---
 

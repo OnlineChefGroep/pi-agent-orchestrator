@@ -114,6 +114,6 @@ examples/agents/        Example agent definition files
 
 7. **Adding settings.** Update `settings.ts` (interface + defaults + sanitize function) + `output-handler.ts` (buildSettingsSnapshot + settings menu).
 
-8. **Optional peer deps.** `@onlinechef/context-mode` and `@onlinechefgroep/pi-subagents-tui` are optional — code paths are gated behind feature detection, not hard imports.
+8. **Optional peer deps.** `@onlinechef/context-mode` is optional — its code path is gated behind feature detection, not a hard import.
 
 9. **Security fixes.** Input validation, size limits, and control-character sanitization are in place across custom-agent loading, handoff parsing, and RPC. Do not weaken these guards.
