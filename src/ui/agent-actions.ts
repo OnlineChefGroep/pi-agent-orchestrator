@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { reloadCustomAgents } from "../agent-registry.js";
 import type { AgentConfig } from "../types.js";
@@ -17,7 +17,7 @@ export async function ejectAgent(ctx: ExtensionCommandContext, name: string, cfg
   const targetDir = location.startsWith("Project") ? projectAgentsDir() : personalAgentsDir();
   await mkdir(targetDir, { recursive: true });
 
-  const targetPath = join(targetDir, `${name}.md`);
+  const targetPath = join(targetDir, `${basename(name)}.md`);
   if (existsSync(targetPath)) {
     const overwrite = await ctx.ui.confirm("Overwrite", `${targetPath} already exists. Overwrite?`);
     if (!overwrite) return;
@@ -77,7 +77,7 @@ export async function disableAgent(ctx: ExtensionCommandContext, name: string): 
   const targetDir = location.startsWith("Project") ? projectAgentsDir() : personalAgentsDir();
   await mkdir(targetDir, { recursive: true });
 
-  const targetPath = join(targetDir, `${name}.md`);
+  const targetPath = join(targetDir, `${basename(name)}.md`);
   await writeFile(targetPath, "---\nenabled: false\n---\n", "utf-8");
   await reloadCustomAgents();
   ctx.ui.notify(`Disabled ${name} (${targetPath})`, "info");
