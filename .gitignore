@@ -34,6 +34,10 @@ Thumbs.db
 .claude
 .autoresearch
 
+# Internal agent working notes (not for public consumption)
+.Jules/
+.jules/
+
 # Autoresearch generated data
 autoresearch.jsonl
 autoresearch.md
