@@ -331,3 +331,122 @@ describe("buildNotificationDetails", () => {
     expect(details.resultPreview).toBe("No output.");
   });
 });
+
+describe("additional coverage for createActivityTracker", () => {
+  it("callbacks track tool usage end when tool is not found", () => {
+    const { state, callbacks } = createActivityTracker();
+    callbacks.onToolActivity({ type: "start", toolName: "read" });
+    // This will hit the else case of `if (name === activity.toolName)` in the loop
+    callbacks.onToolActivity({ type: "end", toolName: "write" });
+    expect(state.toolUses).toBe(1);
+    expect(state.activeTools.size).toBe(1);
+  });
+});
+
+describe("additional coverage for formatTaskNotification", () => {
+  const baseRecord: AgentRecord = {
+    id: "agent-1",
+    type: "Explore",
+    description: "Test agent",
+    status: "completed",
+    startedAt: Date.now() - 5000,
+    completedAt: Date.now(),
+    toolUses: 5,
+    level: 0,
+    lifetimeUsage: { input: 1000, output: 500, cacheWrite: 0 },
+    result: "Task completed successfully",
+    compactionCount: 0,
+    invocation: {
+      type: "Explore",
+      description: "Test agent",
+      model: "claude",
+      toolAllowList: ["read"],
+      level: 0,
+    },
+  } as any;
+
+  it("handles missing startedAt", () => {
+    const record = { ...baseRecord, startedAt: undefined };
+    const xml = formatTaskNotification(record, 200);
+    expect(xml).toContain("<duration_ms>");
+  });
+
+  it("handles missing completedAt", () => {
+    const record = { ...baseRecord, completedAt: undefined };
+    const xml = formatTaskNotification(record, 200);
+    expect(xml).toContain("<duration_ms>0</duration_ms>");
+  });
+
+  it("handles contextPercent", () => {
+    const record = { ...baseRecord, session: { getSessionStats: () => ({ contextUsage: { percent: 50.4 } }) } };
+    const xml = formatTaskNotification(record, 200);
+    expect(xml).toContain("<context_percent>50</context_percent>");
+  });
+
+  it("handles toolCallId and outputFile", () => {
+    const record = { ...baseRecord, toolCallId: "call_123", outputFile: "out.txt" };
+    const xml = formatTaskNotification(record, 200);
+    expect(xml).toContain("<tool-use-id>call_123</tool-use-id>");
+    expect(xml).toContain("<output-file>out.txt</output-file>");
+  });
+});
+
+describe("additional coverage for buildDetails", () => {
+  const base = {
+    displayName: "Explore",
+    description: "Test",
+    subagentType: "Explore" as const,
+    modelName: "claude",
+    tags: [],
+  };
+
+  const record = {
+    toolUses: 3,
+    startedAt: undefined,
+    completedAt: 5000,
+    status: "completed",
+    lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 } as LifetimeUsage,
+    validated: true,
+  };
+
+  it("handles missing startedAt", () => {
+    const details = buildDetails(base, record as any);
+    expect(details.durationMs).toBe(5000);
+  });
+});
+
+
+  it("handles completedAt but missing startedAt in buildNotificationDetails", () => {
+    const recordWithCompleted = { id: "agent-1", description: "Test", status: "completed", toolUses: 3, lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 }, completedAt: 5000, startedAt: undefined };
+    const details = buildNotificationDetails(recordWithCompleted as any, 200);
+    expect(details.durationMs).toBe(5000);
+  });
+
+describe("additional coverage for buildNotificationDetails", () => {
+  const record: AgentRecord = {
+    id: "agent-1",
+    type: "Explore",
+    description: "Test",
+    status: "completed",
+    toolUses: 3,
+    startedAt: undefined,
+    completedAt: undefined,
+    lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 },
+    result: "All done!",
+    level: 0,
+    invocation: { type: "Explore", description: "Test", model: "claude", toolAllowList: [], level: 0 },
+  } as any;
+
+  it("handles missing startedAt and completedAt", () => {
+    const details = buildNotificationDetails(record, 200);
+    expect(details.durationMs).toBe(0);
+  });
+
+describe("more buildNotificationDetails coverage", () => {
+  it("handles completedAt but missing startedAt in buildNotificationDetails", () => {
+    const recordWithCompleted = { id: "agent-1", description: "Test", status: "completed", toolUses: 3, lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 }, completedAt: 5000, startedAt: undefined };
+    const details = buildNotificationDetails(recordWithCompleted as any, 200);
+    expect(details.durationMs).toBe(5000);
+  });
+});
+});
