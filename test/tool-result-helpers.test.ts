@@ -56,6 +56,50 @@ describe("createActivityTracker", () => {
     expect(state.maxTurns).toBe(5);
   });
 
+  it("callbacks handle ending a tool that wasn't started", () => {
+    const { state, callbacks } = createActivityTracker();
+    callbacks.onToolActivity({ type: "end", toolName: "read" });
+    // toolUses should still increment but activeTools shouldn't fail
+    expect(state.toolUses).toBe(1);
+    expect(state.activeTools.size).toBe(0);
+  });
+
+  it("handles multiple active tools and ending a different one", () => {
+    const { state, callbacks } = createActivityTracker();
+    callbacks.onToolActivity({ type: "start", toolName: "read" });
+    callbacks.onToolActivity({ type: "start", toolName: "write" });
+    expect(state.activeTools.size).toBe(2);
+
+    callbacks.onToolActivity({ type: "end", toolName: "write" });
+    expect(state.toolUses).toBe(1);
+    expect(state.activeTools.size).toBe(1);
+
+    // The active tool should be "read"
+    let hasRead = false;
+    for (const [_key, name] of state.activeTools) {
+      if (name === "read") hasRead = true;
+    }
+    expect(hasRead).toBe(true);
+  });
+
+  it("handles multiple active tools and ending a specific one", () => {
+    const { state, callbacks } = createActivityTracker();
+    callbacks.onToolActivity({ type: "start", toolName: "read" });
+    callbacks.onToolActivity({ type: "start", toolName: "write" });
+    expect(state.activeTools.size).toBe(2);
+
+    callbacks.onToolActivity({ type: "end", toolName: "read" });
+    expect(state.toolUses).toBe(1);
+    expect(state.activeTools.size).toBe(1);
+
+    // The active tool should be "write"
+    let hasWrite = false;
+    for (const [_key, name] of state.activeTools) {
+      if (name === "write") hasWrite = true;
+    }
+    expect(hasWrite).toBe(true);
+  });
+
   it("callbacks track tool usage", () => {
     const { state, callbacks } = createActivityTracker();
     callbacks.onToolActivity({ type: "start", toolName: "read" });
@@ -220,6 +264,12 @@ describe("formatTaskNotification", () => {
     },
   } as any;
 
+  it("handles missing completedAt formatTaskNotification", () => {
+    const record = { ...baseRecord, completedAt: undefined };
+    const xml = formatTaskNotification(record as any, 200);
+    expect(xml).toContain("<duration_ms>0</duration_ms>");
+  });
+
   it("produces valid task notification XML", () => {
     const xml = formatTaskNotification(baseRecord, 200);
     expect(xml).toContain("<task-notification>");
@@ -232,6 +282,36 @@ describe("formatTaskNotification", () => {
     const xml = formatTaskNotification(record, 10);
     expect(xml).toContain("truncated");
     expect(xml.split("a").length - 1).toBeLessThan(300);
+  });
+
+  it("includes toolCallId, outputFile and context percent if present", () => {
+    const record = {
+      ...baseRecord,
+      toolCallId: "call-123",
+      outputFile: "out.txt",
+      session: {
+        getSessionStats: () => ({
+          contextUsage: { percent: 45.6 }
+        })
+      }
+    };
+    const xml = formatTaskNotification(record, 200);
+    expect(xml).toContain("<tool-use-id>call-123</tool-use-id>");
+    expect(xml).toContain("<output-file>out.txt</output-file>");
+    expect(xml).toContain("<context_percent>46</context_percent>");
+  });
+
+  it("handles missing startedAt formatTaskNotification", () => {
+    const record = { ...baseRecord, startedAt: undefined };
+    const xml = formatTaskNotification(record as any, 200);
+    expect(xml).toContain("<duration_ms>");
+  });
+
+  it("handles empty values for session percent and compaction count", () => {
+    const record = { ...baseRecord, session: undefined, compactionCount: 0 };
+    const xml = formatTaskNotification(record, 200);
+    expect(xml).not.toContain("<context_percent>");
+    expect(xml).not.toContain("<compactions>");
   });
 
   it("handles missing result", () => {
@@ -272,6 +352,13 @@ describe("buildDetails", () => {
     expect(details.toolUses).toBe(99);
   });
 
+  it("handles missing startedAt", () => {
+    const missingStartRecord = { ...record, startedAt: undefined as any };
+    const details = buildDetails(base, missingStartRecord);
+    // completedAt is 5000, missing startedAt defaults to 0
+    expect(details.durationMs).toBe(5000);
+  });
+
   it("includes activity when provided", () => {
     const activity: AgentActivity = {
       turnCount: 5,
@@ -310,6 +397,12 @@ describe("buildNotificationDetails", () => {
     invocation: { type: "Explore", description: "Test", model: "claude", toolAllowList: [], level: 0 },
   } as any;
 
+  it("handles missing completedAt buildNotificationDetails", () => {
+    const recordNoComplete = { ...record, completedAt: undefined };
+    const details = buildNotificationDetails(recordNoComplete as any, 200);
+    expect(details.durationMs).toBe(0);
+  });
+
   it("builds notification details", () => {
     const details = buildNotificationDetails(record, 200);
     expect(details.id).toBe("agent-1");
@@ -323,6 +416,31 @@ describe("buildNotificationDetails", () => {
     const longRecord = { ...record, result: "x".repeat(500) };
     const details = buildNotificationDetails(longRecord, 10);
     expect(details.resultPreview).toContain("…");
+  });
+
+  it("handles missing startedAt", () => {
+    const noStart = { ...record, startedAt: undefined };
+    const details = buildNotificationDetails(noStart, 200);
+    expect(details.durationMs).toBe(1000);
+  });
+
+  it("handles missing turnCount", () => {
+    const details = buildNotificationDetails(record, 200);
+    expect(details.turnCount).toBe(0);
+  });
+
+  it("handles missing startedAt missing fallback", () => {
+    // testing fallback for durationMs when startedAt is missing and not 0 implicitly (it handles undefined -> 0)
+    const noStart = { ...record, startedAt: undefined };
+    const details = buildNotificationDetails(noStart, 200);
+    expect(details.durationMs).toBe(1000);
+  });
+
+  it("handles missing startedAt without fallback", () => {
+    // buildNotificationDetails
+    const noStart = { ...record, completedAt: 1000, startedAt: undefined };
+    const details = buildNotificationDetails(noStart, 200);
+    expect(details.durationMs).toBe(1000); // 1000 - 0
   });
 
   it("handles missing result", () => {
