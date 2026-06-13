@@ -1,20 +1,22 @@
 <div align="center">
 
+![Pi Agent Orchestrator Banner](docs/images/orchestrator_banner.png)
+
 # 🤖 @onlinechefgroep/pi-agent-orchestrator
 
 **Autonomous sub-agents + cinematic TUI dashboard + swarm coordination for the Pi coding agent**
-
----
-
-</div>
-
-Bring Claude Code-style autonomous sub-agents to Pi. Spawn specialized agents, enforce budgets, chain them with structured handoffs, swarm agents together, and watch a rich interactive TUI dashboard render their progress in real time.
 
 [![CI](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-0.10.2-blue)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/releases)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.19-green)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+</div>
+
+Bring Claude Code-style autonomous sub-agents to Pi. Spawn specialized agents, enforce budgets, chain them with structured handoffs, swarm agents together, and watch a rich interactive TUI dashboard render their progress in real time.
+
+> **Repository:** [`OnlineChefGroep/pi-agent-orchestrator`](https://github.com/OnlineChefGroep/pi-agent-orchestrator) — the old `OnlineChef/pi-agent-orchestrator` location is deprecated. See [docs/repository.md](docs/repository.md).
 
 ---
 
@@ -112,6 +114,8 @@ Output findings as a markdown list with severity (Critical / High / Medium / Low
 
 The cinematic dashboard is an **optional** Go Bubble Tea application that renders agent status in real time with animated backgrounds.
 
+![Cinematic Dashboard Preview](docs/images/dashboard_preview.png)
+
 ### Installation
 
 The TUI sidecar is now a separate package: **[@onlinechefgroep/pi-subagents-tui](https://github.com/OnlineChefGroep/pi-subagents-tui)**
@@ -164,6 +168,8 @@ Per-invocation parameters on the `Agent` tool (not persisted settings): `levelLi
 ---
 
 ## Architecture
+
+![Pi Agent Orchestrator Architecture](docs/images/orchestrator_architecture.png)
 
 ```
 pi host

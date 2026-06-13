@@ -2,7 +2,7 @@
   "name": "@onlinechefgroep/pi-agent-orchestrator",
   "version": "0.10.2",
   "description": "A pi extension for orchestrating autonomous coding agents, swarms, schedules, and handoffs.",
-  "author": "OnlineChef",
+  "author": "OnlineChefGroep",
   "license": "MIT",
   "repository": {
     "type": "git",

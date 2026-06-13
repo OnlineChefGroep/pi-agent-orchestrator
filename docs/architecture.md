@@ -6,6 +6,8 @@
 
 ## System Diagram
 
+![Pi Agent Orchestrator Architecture](./images/orchestrator_architecture.png)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    pi-coding-agent host                     │
