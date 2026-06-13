@@ -68,7 +68,7 @@ We use **Biome** for both linting and formatting.
 npm run lint
 
 # Check + auto-fix safe issues
-node_modules/.bin/biome check --write src/ test/
+npm run lint:fix
 
 # Check + auto-fix unsafe issues too
 node_modules/.bin/biome check --write --unsafe src/ test/
@@ -106,7 +106,7 @@ npm test -- --coverage
 2. **Commits:** Use [Conventional Commits](https://www.conventionalcommits.org/) style:
    - `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
 3. **Pre-commit:** Ensure `npm run typecheck`, `npm run lint`, and `npm test` pass (Windows schedule flakiness excepted).
-4. **PR description:** Reference any related issues or VERVOLG_PLAN items.
+4. **PR description:** Reference any related GitHub issues.
 5. **Review:** All PRs require at least one review before merge.
 
 ---

@@ -1,7 +1,5 @@
 <div align="center">
 
-![Pi Agent Orchestrator Banner](docs/images/orchestrator_banner.png)
-
 # 🤖 @onlinechefgroep/pi-agent-orchestrator
 
 **Autonomous sub-agents + cinematic TUI dashboard + swarm coordination for the Pi coding agent**
@@ -12,9 +10,9 @@
 
 Bring Claude Code-style autonomous sub-agents to Pi. Spawn specialized agents, enforce budgets, chain them with structured handoffs, swarm agents together, and watch a rich interactive TUI dashboard render their progress in real time.
 
-[![Tests](https://img.shields.io/badge/tests-670%2F670-green)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions)
-[![Version](https://img.shields.io/badge/version-0.10.1-blue)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/releases)
-[![Node](https://img.shields.io/badge/node-%3E%3D22-green)](https://nodejs.org/)
+[![CI](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-0.10.2-blue)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/releases)
+[![Node](https://img.shields.io/badge/node-%3E%3D22.19-green)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -26,7 +24,7 @@ Bring Claude Code-style autonomous sub-agents to Pi. Spawn specialized agents, e
 pi install npm:@onlinechefgroep/pi-agent-orchestrator
 ```
 
-Requires Node.js >= 22 and pi >= 0.70.5.
+Requires Node.js >= 22.19 and pi >= 0.70.5.
 
 ---
 
@@ -56,9 +54,9 @@ Requires Node.js >= 22 and pi >= 0.70.5.
 | Type | Description | Tools | Context-mode |
 |------|-------------|-------|-------------|
 | `general-purpose` | All-rounder for complex multi-step tasks | all built-in | opt-in |
-| `Explore` | Fast read-only codebase exploration | read, bash, grep, find, ls | no |
-| `Plan` | Software architect and implementation planner | read, bash, grep, find, ls | no |
-| `Analysis` | Data analysis with sandboxed code execution | read, bash, grep, find, ls | yes |
+| `Explore` | Fast read-only codebase exploration | read, grep | no |
+| `Plan` | Software architect and implementation planner | read, grep | no |
+| `Analysis` | Data analysis with sandboxed code execution | read, grep | yes |
 
 ---
 
@@ -114,8 +112,6 @@ Output findings as a markdown list with severity (Critical / High / Medium / Low
 
 The cinematic dashboard is an **optional** Go Bubble Tea application that renders agent status in real time with animated backgrounds.
 
-![Cinematic Dashboard Preview](docs/images/dashboard_preview.png)
-
 ### Installation
 
 The TUI sidecar is now a separate package: **[@onlinechefgroep/pi-subagents-tui](https://github.com/OnlineChefGroep/pi-subagents-tui)**
@@ -123,7 +119,7 @@ The TUI sidecar is now a separate package: **[@onlinechefgroep/pi-subagents-tui]
 To enable cinematic mode:
 
 1. Install the TUI package: `pi install npm:@onlinechefgroep/pi-subagents-tui`
-2. Set `subagents.cinematic.uiStyle` to `"cinematic"` in settings
+2. Set `uiStyle` to `"cinematic"` in subagents settings (via `/agents` → Settings)
 
 Without the TUI package installed, cinematic mode will gracefully fall back to the standard TUI display.
 
@@ -141,26 +137,33 @@ go build -o cinematic-tui .
 
 ## Configuration
 
-Settings are managed via pi's settings UI or `pi settings` CLI:
+Settings are managed via `/agents` → Settings or by editing `.pi/subagents.json` (project) or `~/.pi/agent/subagents.json` (global defaults):
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `subagents.levelLimit` | `5` | Maximum depth of agent tree |
-| `subagents.taskBudget` | `unlimited` | Max concurrent tasks |
-| `subagents.orchestrationMode` | `spawn` | Default orchestration: `spawn`, `parallel`, or `sequential` |
-| `subagents.dashboardRefreshInterval` | `5000` | Dashboard refresh interval in ms |
-| `subagents.compaction.keepTurns` | `5` | Memory turns to retain per agent |
-| `subagents.deferredContext` | `true` | Build context at session boundary |
-| `subagents.validators.enabled` | `true` | Run adversarial validators |
-| `subagents.swarm.enabled` | `true` | Enable swarm mode |
-| `subagents.cinematic.animation` | `"smooth"` | TUI animation style |
-| `subagents.cinematic.uiStyle` | `"dark"` | TUI color theme |
+| `maxConcurrent` | `3` | Maximum parallel agents |
+| `defaultMaxTurns` | unlimited (`0`) | Default turn limit per agent (`0` = unlimited) |
+| `graceTurns` | `3` | Extra turns after wrap-up steer before forced stop |
+| `defaultJoinMode` | `async` | Default join mode: `async`, `group`, `smart`, or `swarm` |
+| `orchestrationMode` | `auto` | Coordination mode: `auto`, `single`, `swarm`, or `crew` |
+| `schedulingEnabled` | `true` | Enable cron/interval scheduled agent jobs |
+| `animationStyle` | `braille` | Dashboard spinner: `braille`, `dots`, `lines`, `classic`, `none` |
+| `uiStyle` | `premium` | UI theme: `premium`, `retro`, `plain`, or `cinematic` |
+| `cinematicEnabled` | `false` | Enable Go TUI sidecar (requires `uiStyle: "cinematic"`) |
+| `showActivityStream` | `true` | Show live tool-call activity in the dashboard |
+| `showTokenUsage` | `true` | Show token usage and context fill percentage |
+| `showTurnProgress` | `true` | Show turn progress for running agents |
+| `dashboardRefreshInterval` | `750` | Dashboard refresh interval in ms (100–60000) |
+| `maxAgentsPerSession` | unlimited | Hard cap on agents spawned in one pi session |
+| `maxTotalTurnsPerSession` | unlimited | Hard cap on cumulative agent turns per session |
+| `sessionMaxSpawns` | unlimited | Guardrail for total spawns in a session |
+| `sessionMaxTurns` | unlimited | Guardrail for cumulative turns in a session |
+
+Per-invocation parameters on the `Agent` tool (not persisted settings): `levelLimit` (default 5), `taskBudget`, `join_mode`, `model`, `max_turns`, and others — see [docs/api-reference.md](docs/api-reference.md).
 
 ---
 
 ## Architecture
-
-![Pi Agent Orchestrator Architecture](docs/images/orchestrator_architecture.png)
 
 ```
 pi host
@@ -219,12 +222,21 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ---
 
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `/agents` | Open the agent dashboard, settings, schedules, and conversation viewer |
+| `/hooks` | Manage lifecycle hook handlers |
+
+---
+
 ## Security
 
-See [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) and [SECURITY_AUDIT_VERIFICATION_2026-05-23.md](SECURITY_AUDIT_VERIFICATION_2026-05-23.md) for detailed findings and mitigations.
+See [SECURITY.md](SECURITY.md) for the vulnerability reporting process and security model.
 
 ---
 
 ## License
 
-MIT — [OnlineChef](https://github.com/OnlineChef)
+MIT — [OnlineChefGroep](https://github.com/OnlineChefGroep)

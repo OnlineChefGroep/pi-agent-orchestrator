@@ -116,4 +116,4 @@ examples/agents/        Example agent definition files
 
 8. **Optional peer deps.** `@onlinechef/context-mode` and `@onlinechefgroep/pi-subagents-tui` are optional — code paths are gated behind feature detection, not hard imports.
 
-9. **Security fixes.** CVE-002 through CVE-005 fixes are in place (input validation, size limits, control char sanitization). Don't weaken these guards.
+9. **Security fixes.** Input validation, size limits, and control-character sanitization are in place across custom-agent loading, handoff parsing, and RPC. Do not weaken these guards.

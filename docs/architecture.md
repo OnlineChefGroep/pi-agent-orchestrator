@@ -6,8 +6,6 @@
 
 ## System Diagram
 
-![Pi Agent Orchestrator Architecture](./images/orchestrator_architecture.png)
-
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    pi-coding-agent host                     │
@@ -17,8 +15,8 @@
         ┌────────────┴────────────┐
         │    Extension Entry      │
         │    src/index.ts         │
-        │  - registerCommands()   │
-        │  - initSubagents()      │
+        │  - default export fn    │
+        │  - tools + commands     │
         └────────────┬────────────┘
                      │
         ┌────────────┴────────────┐
@@ -40,8 +38,8 @@
         ┌────────────┴────────────┐
         │      Agent Runner       │
         │   src/agent-runner.ts   │
-        │  - createSubagent()     │
         │  - runAgent()           │
+        │  - steerAgent()         │
         │  - compaction logic     │
         │  - permission inherit   │
         └────────────┬────────────┘
@@ -74,10 +72,10 @@
     │                │                │
 ┌───┴────┐    ┌─────┴──────┐  ┌─────┴────────┐
 │ Agent  │    │ Schedule   │  │   Cinematic  │
-│ Widget │    │  Menu      │  │   Sidecar    │
-│ui/     │    │ui/         │  │cinematic-    │
-│agent-  │    │schedule-   │  │renderer/     │
-│widget.ts│   │menu.ts     │  │              │
+│Widget  │    │  Menu      │  │   Sidecar    │
+│ui/     │    │ui/         │  │(optional pkg)│
+│agent-  │    │schedule-   │  │pi-subagents- │
+│widget  │    │menu.ts     │  │tui           │
 └────────┘    └────────────┘  └──────────────┘
 ```
 
@@ -153,10 +151,7 @@ When `getUiStyle() === "cinematic"` and `isCinematicEnabled()`:
 
 ### `src/ui/agent-widget.ts` — Widget (Legacy, superseded by agent-dashboard)
 
-When `getUiStyle()` === "cinematic"` and `isCinematicEnabled()`:
-1. Uses the optional `@onlinechefgroep/pi-subagents-tui` package (installed separately)
-2. Sends JSON payload with agent tree, activity, token usage every tick
-3. Sidecar renders rich TUI; main process returns empty widget (to avoid double rendering)
+Falls back to the standard TypeScript widget when cinematic mode is disabled or the optional `@onlinechefgroep/pi-subagents-tui` package is not installed.
 
 ---
 
@@ -169,17 +164,13 @@ User command / scheduled trigger
 ExtensionCommand (src/index.ts)
   │
   ▼
-resolveModel() ──→ createSubagent() ──→ runAgent()
-  │                      │                  │
-  │                      │                  ├── tool call loop
-  │                      │                  │      └── validate tool against resolved tools
-  │                      │                  ├── compaction (prune old tool outputs)
-  │                      │                  ├── hooks (subagent:start, turn:end, ...)
-  │                      │                  └── handoff (structured chain-of-agents JSON)
+resolveModel() ──→ runAgent()
   │                      │
-  │                      └── build context
-  │                            ├── parent context (if child agent)
-  │                            └── context-mode tools (if enabled)
+  │                      ├── tool call loop
+  │                      │      └── validate tool against resolved tools
+  │                      ├── compaction (prune old tool outputs)
+  │                      ├── hooks (subagent:start, turn:end, ...)
+  │                      └── handoff (structured chain-of-agents JSON)
   │
   └── model label → ExtensionAPI.createAgentSession(model)
 ```
@@ -190,7 +181,12 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 
 | File | Responsibility |
 |------|----------------|
-| `src/index.ts` | Extension entry point, command registration |
+| `src/index.ts` | Extension entry point, tool/command registration |
+| `src/agent-tree.ts` | Mermaid agent execution tree builder |
+| `src/audit-logger.ts` | Audit logging for agent operations |
+| `src/estimate.ts` | Token estimation utilities |
+| `src/logger.ts` | Structured logger |
+| `src/tool-result-helpers.ts` | Notification formatting helpers |
 | `src/agent-types.ts` | Tool resolution, permission inheritance, partition filtering |
 | `src/agent-runner.ts` | Agent lifecycle, session creation, run loop |
 | `src/agent-manager.ts` | Manager wrapper around ExtensionAPI's AgentManager |
@@ -231,7 +227,13 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/ui/agent-ui-types.ts` | Shared UI type definitions |
 | `src/ui/agent-widget-renderer.ts` | Widget rendering logic (delegated from agent-widget.ts) |
 | `src/ui/agent-dashboard-renderer.ts` | Dashboard rendering logic (delegated from agent-dashboard.ts) |
-| `src/ui/notification-renderer.ts` | Custom notification renderer for agent completions |
+| `src/ui/agent-detail.ts` | Single-agent detail view |
+| `src/ui/agent-actions.ts` | Dashboard action handlers |
+| `src/ui/agent-list-views.ts` | List rendering for dashboard |
+| `src/ui/agent-file-helpers.ts` | File path helpers for UI |
+| `src/ui/agent-wizards.ts` | Interactive wizards |
+| `src/ui/agent-viewer.ts` | Agent output viewer |
+| `src/ui/settings-snapshot.ts` | Settings snapshot for UI |
 
 ---
 

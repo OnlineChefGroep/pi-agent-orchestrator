@@ -1,35 +1,37 @@
 # API Reference
 
-> Publieke API surface van `@onlinechefgroep/pi-agent-orchestrator`. Private internals (`AgentFieldParser`, `PermissionUtils`, etc.) zijn bewust buiten scope — gebruik de publieke functies.
+> Public API surface of `@onlinechefgroep/pi-agent-orchestrator`. This extension runs inside the Pi host — most integration happens via registered tools, slash commands, lifecycle events, and the cross-extension RPC protocol documented below.
 
 ---
 
 ## Extension Entry Point
 
-### `registerCommands(api: ExtensionAPI): void`
+### Default export: `(pi: ExtensionAPI) => Promise<void>`
 
 **File:** `src/index.ts`
 
-Registers the `/agents` slash command and hooks into the pi-coding-agent lifecycle. Called once during extension load.
+The Pi host loads this extension via `package.json` → `pi.extensions`. On load it:
 
-### `initSubagents(api: ExtensionAPI): void`
+1. Applies persisted settings from `~/.pi/agent/subagents.json` and `.pi/subagents.json`.
+2. Reloads custom agents from `.pi/agents/*.md`.
+3. Registers tools: `Agent`, `get_subagent_result`, `steer_subagent`.
+4. Registers commands: `/agents`, `/hooks`.
+5. Wires lifecycle hooks, the agent dashboard widget, scheduler, and RPC handlers.
 
-**File:** `src/index.ts`
-
-Initializes the subagent system: loads custom agents, sets up the widget, and registers lifecycle hooks.
+There is no separate `registerCommands()` or `initSubagents()` export — initialization happens inside the default-export function.
 
 ---
 
 ## Agent Registry
 
-### `reloadCustomAgents(projectDir: string): void`
+### `reloadCustomAgents(): Promise<void>`
 
 **File:** `src/agent-registry.ts`
 
 Reloads all `.pi/agents/*.md` files from both the project directory and the user's global agent directory. Call this after creating or editing a custom agent file.
 
 ```ts
-reloadCustomAgents(process.cwd());
+await reloadCustomAgents();
 ```
 
 ### `getAgentConfig(name: string): AgentConfig | undefined`
@@ -48,36 +50,41 @@ Returns all registered agent type names (defaults + custom + built-in types).
 
 ## Agent Runner
 
-### `createSubagent(options: SubagentOptions): Promise<AgentSession>`
+### `runAgent(options: RunOptions): Promise<RunResult>`
 
 **File:** `src/agent-runner.ts`
 
-Creates and starts a new subagent session. This is the primary API for spawning agents programmatically.
+Creates and runs a subagent session. This is the primary programmatic entry point for spawning agents from within the extension.
+
+Key `RunOptions` fields:
 
 ```ts
-interface SubagentOptions {
+interface RunOptions {
   type: string;              // "general-purpose", "Explore", custom name, etc.
-  description: string;         // Human-readable task description
-  parentSession?: AgentSession; // Optional parent for context inheritance
-  model?: string;              // Override default model
-  maxTurns?: number;           // Override default max turns
-  joinMode?: JoinMode;         // "await" | "fire-and-forget" | "notify"
-  contextMode?: boolean;       // Enable ctx_* sandbox tools
-  level?: number;              // Recursion depth (default 0)
+  description: string;       // Human-readable task description
+  parentId?: string;         // Parent agent for context inheritance
+  model?: string;            // Override default model
+  maxTurns?: number;         // Override default max turns (0 = unlimited)
+  joinMode?: JoinMode;       // "async" | "group" | "smart" | "swarm"
+  inheritContext?: boolean;
+  runInBackground?: boolean;
+  isolated?: boolean;
+  levelLimit?: number;       // Recursion depth cap (default 5)
+  taskBudget?: number;       // Max recursive spawns from this agent
 }
 ```
 
-### `steerAgent(session: AgentSession, instruction: string): void`
+### `steerAgent(record: AgentRecord, instruction: string): Promise<void>`
 
 **File:** `src/agent-runner.ts`
 
 Sends a steering instruction to a running agent session. Used for mid-flight course correction.
 
-### `getAgentConversation(sessionId: string): CompactableMessage[]`
+### `getAgentConversation(session: AgentSession): string`
 
 **File:** `src/agent-runner.ts`
 
-Retrieves the full conversation history of a completed or running agent.
+Retrieves the full conversation history of a completed or running agent as plain text.
 
 ### `getDefaultMaxTurns(): number | undefined`
 
@@ -123,17 +130,16 @@ scheduler.cancel(jobId);
 
 ## Hooks
 
-### `registerHook(event: HookEvent, handler: HookHandler): () => void`
+### `HookRegistry`
 
 **File:** `src/hooks.ts`
 
-Registers a lifecycle hook handler. Returns an unsubscribe function.
+Lifecycle hooks are managed by a `HookRegistry` instance created during extension init. End users register hooks via the `/hooks` command UI. Other extensions can observe hooks read-only via `Symbol.for("pi-subagents:hooks")`.
 
 ```ts
-import { registerHook } from "@onlinechefgroep/pi-agent-orchestrator";
-
-const unsubscribe = registerHook("subagent:start", async (payload) => {
-  console.log(`Agent ${payload.agentId} started`);
+// Internal pattern (not a package-level export):
+const registry = new HookRegistry();
+registry.register("subagent:start", async (payload) => {
   return "allow"; // "allow" | "block" | "modify"
 });
 ```
@@ -153,7 +159,7 @@ const unsubscribe = registerHook("subagent:start", async (payload) => {
 
 ## Context
 
-### `buildParentContext(parentSession: AgentSession): Message[]`
+### `buildParentContext(ctx: ExtensionContext): string`
 
 **File:** `src/context.ts`
 
@@ -175,21 +181,31 @@ Extracts plain text from a message content block (handles string, array, and obj
 
 ```ts
 interface SubagentsSettings {
-  maxConcurrent: number;        // Max parallel agents (default 3)
-  defaultMaxTurns: number;      // 0 = unlimited
-  graceTurns: number;           // Turns after wrap-up steer (default 3)
-  defaultJoinMode: JoinMode;    // "await" | "fire-and-forget" | "notify"
-  schedulingEnabled: boolean;     // Enable cron jobs
-  animationStyle: "dots" | "line" | "minimal";
-  uiStyle: "premium" | "retro" | "plain" | "cinematic";
+  maxConcurrent?: number;
+  maxAgentsPerSession?: number;
+  maxTotalTurnsPerSession?: number;
+  defaultMaxTurns?: number;       // 0 = unlimited
+  graceTurns?: number;
+  defaultJoinMode?: JoinMode;     // "async" | "group" | "smart" | "swarm"
+  schedulingEnabled?: boolean;
+  animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";
+  uiStyle?: "premium" | "retro" | "plain" | "cinematic";
+  cinematicEnabled?: boolean;
+  showActivityStream?: boolean;
+  showTokenUsage?: boolean;
+  showTurnProgress?: boolean;
+  orchestrationMode?: "auto" | "single" | "swarm" | "crew";
+  dashboardRefreshInterval?: number;  // ms, 100–60000
+  sessionMaxSpawns?: number;
+  sessionMaxTurns?: number;
 }
 ```
 
-### `saveAndEmitChanged(settings: SubagentsSettings): void`
+### `saveAndEmitChanged(snapshot, successMsg, emit, cwd?): { message, level }`
 
 **File:** `src/settings.ts`
 
-Persists settings to disk and emits a change event for listeners.
+Persists settings to `.pi/subagents.json` and emits a `subagents:settings_changed` event.
 
 ---
 
@@ -202,16 +218,24 @@ Persists settings to disk and emits a change event for listeners.
 ```ts
 interface AgentConfig {
   name: string;
+  displayName?: string;
   description: string;
-  systemPrompt: string;
-  builtinToolNames: string[];
+  builtinToolNames?: string[];
   disallowedTools?: string[];
-  extensions?: boolean;
-  contextMode?: boolean;
-  allowedTools?: string[];
+  extensions: true | string[] | false;
+  skills: true | string[] | false;
   model?: string;
-  temperature?: number;
-  parentType?: string;
+  thinking?: ThinkingLevel;
+  maxTurns?: number;
+  systemPrompt: string;
+  promptMode: "replace" | "append";
+  inheritContext?: boolean;
+  runInBackground?: boolean;
+  isolated?: boolean;
+  memory?: "user" | "project" | "local";
+  isolation?: "worktree";
+  useContextMode?: boolean;
+  enabled?: boolean;
 }
 ```
 
@@ -226,11 +250,12 @@ interface AgentRecord {
   id: string;
   type: string;
   description: string;
-  status: "running" | "completed" | "failed" | "cancelled";
+  status: "queued" | "running" | "completed" | "steered" | "aborted" | "stopped" | "error";
+  spawnedAt: number;
   startedAt: number;
   completedAt?: number;
   toolUses: number;
-  level: number;
+  currentLevel: number;
   compactionCount: number;
 }
 ```
@@ -239,15 +264,16 @@ interface AgentRecord {
 
 **File:** `src/types.ts`
 
-- `"await"` — Wait for completion, return result to parent
-- `"fire-and-forget"` — Spawn and immediately return
-- `"notify"` — Spawn, return immediately, notify parent on completion
+- `"async"` — Spawn and return immediately; parent is notified on completion
+- `"group"` — Batch coordination: agents in a group complete together
+- `"smart"` — Adaptive join based on task characteristics
+- `"swarm"` — Live collaborative swarm with dynamic join/leave
 
 ---
 
 ## Custom Agent Loading
 
-### `loadCustomAgents(dir: string): Map<string, AgentConfig>`
+### `loadCustomAgents(cwd: string): Promise<Map<string, AgentConfig>>`
 
 **File:** `src/custom-agents.ts`
 
