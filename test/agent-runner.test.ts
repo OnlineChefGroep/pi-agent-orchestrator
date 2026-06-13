@@ -71,7 +71,7 @@ vi.mock("../src/skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
 }));
 
-import { getGraceTurns, resumeAgent, runAgent, setGraceTurns } from "../src/agent-runner.js";
+import { getAgentConversation, getGraceTurns, resumeAgent, runAgent, setGraceTurns } from "../src/agent-runner.js";
 
 function createSession(finalText: string) {
   const listeners: Array<(event: any) => void> = [];
@@ -324,6 +324,7 @@ describe("agent-runner usage callback wiring", () => {
 });
 
 
+
 describe("getGraceTurns / setGraceTurns", () => {
   let originalTurns: number;
   beforeEach(() => {
@@ -347,5 +348,138 @@ describe("getGraceTurns / setGraceTurns", () => {
 
     setGraceTurns(-5);
     expect(getGraceTurns()).toBe(1);
+  });
+});
+
+vi.mock("../src/context.js", () => ({
+  extractText: vi.fn((content) => {
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      return content.filter((c) => c.type === "text").map((c) => c.text).join("");
+    }
+    return "";
+  }),
+}));
+
+describe("getAgentConversation", () => {
+  it("should format user and assistant text messages", () => {
+    const session = {
+      messages: [
+        { role: "user", content: "Hello!" },
+        { role: "assistant", content: [{ type: "text", text: "Hi there!" }] }
+      ]
+    };
+    expect(getAgentConversation(session as any)).toBe("[User]: Hello!\n\n[Assistant]: Hi there!");
+  });
+
+  it("should skip empty/whitespace user messages", () => {
+    const session = {
+      messages: [
+        { role: "user", content: "   " },
+        { role: "assistant", content: [{ type: "text", text: "Hi there!" }] }
+      ]
+    };
+    expect(getAgentConversation(session as any)).toBe("[Assistant]: Hi there!");
+  });
+
+  it("should format tool calls and tool results", () => {
+    const session = {
+      messages: [
+        { role: "user", content: "Can you list my files?" },
+        { role: "assistant", content: [{ type: "toolCall", name: "list_files", id: "1" }] },
+        { role: "toolResult", content: "file1.txt\nfile2.txt", toolName: "list_files", toolCallId: "1" }
+      ]
+    };
+    expect(getAgentConversation(session as any)).toBe(
+      "[User]: Can you list my files?\n\n[Tool Calls]:\n  Tool: list_files\n\n[Tool Result (list_files)]: file1.txt\nfile2.txt"
+    );
+  });
+
+  it("should truncate long tool results", () => {
+    const longText = "A".repeat(250);
+    const session = {
+      messages: [
+        { role: "toolResult", content: longText, toolName: "read_file", toolCallId: "1" }
+      ]
+    };
+    expect(getAgentConversation(session as any)).toBe(
+      `[Tool Result (read_file)]: ${"A".repeat(200)}...`
+    );
+  });
+});
+  afterEach(() => {
+    setGraceTurns(originalTurns);
+  });
+
+  it("should get and set grace turns correctly", () => {
+    setGraceTurns(10);
+    expect(getGraceTurns()).toBe(10);
+
+    setGraceTurns(2);
+    expect(getGraceTurns()).toBe(2);
+  });
+
+  it("should enforce minimum of 1", () => {
+    setGraceTurns(0);
+    expect(getGraceTurns()).toBe(1);
+
+    setGraceTurns(-5);
+    expect(getGraceTurns()).toBe(1);
+=======
+vi.mock("../src/context.js", () => ({
+  extractText: vi.fn((content) => {
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      return content.filter((c) => c.type === "text").map((c) => c.text).join("");
+    }
+    return "";
+  }),
+}));
+
+describe("getAgentConversation", () => {
+  it("should format user and assistant text messages", () => {
+    const session = {
+      messages: [
+        { role: "user", content: "Hello!" },
+        { role: "assistant", content: [{ type: "text", text: "Hi there!" }] }
+      ]
+    };
+    expect(getAgentConversation(session as any)).toBe("[User]: Hello!\n\n[Assistant]: Hi there!");
+  });
+
+  it("should ignore empty user messages", () => {
+    const session = {
+      messages: [
+        { role: "user", content: "   " },
+        { role: "assistant", content: [{ type: "text", text: "Hi there!" }] }
+      ]
+    };
+    expect(getAgentConversation(session as any)).toBe("[Assistant]: Hi there!");
+  });
+
+  it("should format tool calls and tool results", () => {
+    const session = {
+      messages: [
+        { role: "user", content: "Can you list my files?" },
+        { role: "assistant", content: [{ type: "toolCall", name: "list_files", id: "1" }] },
+        { role: "toolResult", content: "file1.txt\nfile2.txt", toolName: "list_files", toolCallId: "1" }
+      ]
+    };
+    expect(getAgentConversation(session as any)).toBe(
+      "[User]: Can you list my files?\n\n[Tool Calls]:\n  Tool: list_files\n\n[Tool Result (list_files)]: file1.txt\nfile2.txt"
+    );
+  });
+
+  it("should truncate long tool results", () => {
+    const longText = "A".repeat(250);
+    const session = {
+      messages: [
+        { role: "toolResult", content: longText, toolName: "read_file", toolCallId: "1" }
+      ]
+    };
+    expect(getAgentConversation(session as any)).toBe(
+      `[Tool Result (read_file)]: ${"A".repeat(200)}...`
+    );
+>>>>>>> 691321c (🧪 Add tests for getAgentConversation)
   });
 });
