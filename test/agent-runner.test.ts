@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   createAgentSession,
@@ -71,7 +71,7 @@ vi.mock("../src/skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
 }));
 
-import { resumeAgent, runAgent } from "../src/agent-runner.js";
+import { getGraceTurns, resumeAgent, runAgent, setGraceTurns } from "../src/agent-runner.js";
 
 function createSession(finalText: string) {
   const listeners: Array<(event: any) => void> = [];
@@ -320,5 +320,32 @@ describe("agent-runner usage callback wiring", () => {
     });
 
     expect(seen).toEqual([{ reason: "threshold", tokensBefore: 12345 }]);
+  });
+});
+
+
+describe("getGraceTurns / setGraceTurns", () => {
+  let originalTurns: number;
+  beforeEach(() => {
+    originalTurns = getGraceTurns();
+  });
+  afterEach(() => {
+    setGraceTurns(originalTurns);
+  });
+
+  it("should get and set grace turns correctly", () => {
+    setGraceTurns(10);
+    expect(getGraceTurns()).toBe(10);
+
+    setGraceTurns(2);
+    expect(getGraceTurns()).toBe(2);
+  });
+
+  it("should enforce minimum of 1", () => {
+    setGraceTurns(0);
+    expect(getGraceTurns()).toBe(1);
+
+    setGraceTurns(-5);
+    expect(getGraceTurns()).toBe(1);
   });
 });
