@@ -239,16 +239,17 @@ function lineToSpans(line, charW) {
   const style = { color: PREMIUM.default, bold: false, dim: false };
   let last = 0;
   const re = new RegExp(ANSI_PATTERN, "g");
-  let m;
+  let m = re.exec(line);
   const flush = (text) => {
     if (!text) return;
     spans.push({ text, x: col * charW, color: style.color, bold: style.bold, dim: style.dim });
     col += visibleWidth(text);
   };
-  while ((m = re.exec(line)) !== null) {
+  while (m !== null) {
     flush(line.slice(last, m.index));
     applySgr(style, m[1]);
     last = re.lastIndex;
+    m = re.exec(line);
   }
   flush(line.slice(last));
   return spans;

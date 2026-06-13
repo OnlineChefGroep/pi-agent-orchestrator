@@ -6,11 +6,14 @@
  * If changes exist, a branch is created and returned in the result.
  */
 
-import { execFileSync } from "node:child_process";
+import { execFile as execFileCb, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFileCb);
 
 export interface WorktreeInfo {
   /** Absolute path to the worktree directory. */
@@ -29,14 +32,14 @@ export interface WorktreeCleanupResult {
 }
 
 /**
- * Create a temporary git worktree for an agent.
+ * Create a temporary git worktree for an agent (async, non-blocking).
  * Returns the worktree path, or undefined if not in a git repo.
  */
-export function createWorktree(cwd: string, agentId: string): WorktreeInfo | undefined {
+export async function createWorktree(cwd: string, agentId: string): Promise<WorktreeInfo | undefined> {
   // Verify we're in a git repo with at least one commit (HEAD must exist)
   try {
-    execFileSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd, stdio: "pipe", timeout: 5000 });
-    execFileSync("git", ["rev-parse", "HEAD"], { cwd, stdio: "pipe", timeout: 5000 });
+    await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], { cwd, timeout: 5000 });
+    await execFileAsync("git", ["rev-parse", "HEAD"], { cwd, timeout: 5000 });
   } catch {
     return undefined;
   }
@@ -47,9 +50,8 @@ export function createWorktree(cwd: string, agentId: string): WorktreeInfo | und
 
   try {
     // Create detached worktree at HEAD
-    execFileSync("git", ["worktree", "add", "--detach", worktreePath, "HEAD"], {
+    await execFileAsync("git", ["worktree", "add", "--detach", worktreePath, "HEAD"], {
       cwd,
-      stdio: "pipe",
       timeout: 30000,
     });
     return { path: worktreePath, branch };
@@ -89,15 +91,18 @@ export function cleanupWorktree(
 
     // Changes exist — stage, commit, and create a branch
     execFileSync("git", ["add", "-A"], { cwd: worktree.path, stdio: "pipe", timeout: 10000 });
+    
     // CVE-001 FIX: Sanitize commit message to prevent git hook injection
     // Remove newlines, carriage returns, control characters, and shell metacharacters
     const safeDesc = agentDescription
       .replace(/[\r\n\x00-\x1F]/g, ' ')  // Remove newlines and control chars
       .replace(/["`$\\]/g, '')            // Remove shell metacharacters
-      .replace(/\s+/g, ' ')                // Normalize whitespace
+      .replace(/\s+/g, ' ')               // Normalize whitespace
       .trim()
       .slice(0, 200);
+    
     const commitMsg = `pi-agent: ${safeDesc}`;
+    
     execFileSync("git", ["commit", "-m", commitMsg], {
       cwd: worktree.path,
       stdio: "pipe",

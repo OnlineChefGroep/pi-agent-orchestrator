@@ -2,9 +2,9 @@
  * compaction.ts — Dual-phase conversation compaction.
  *
  * Phase 1 (prune): Remove tool outputs older than N turns to free context
- *                  window without losing conversation structure.
+ * window without losing conversation structure.
  * Phase 2 (summary): Rely on the upstream LLM to summarize (handled by
- *                    pi-coding-agent's built-in compaction).
+ * pi-coding-agent's built-in compaction).
  */
 
 /** Default number of conversation turns to keep fully intact during pruning. */
@@ -15,21 +15,17 @@ export const MIN_KEEP_TURNS = 2;
 
 /** Result of a compaction operation with token reduction metrics. */
 export interface CompactResult {
-  /** Estimated token count before compaction. */
-  originalTokens: number;
-  /** Estimated token count after compaction. */
-  compactedTokens: number;
-  /** Percentage reduction (0–100). */
-  reductionPercent: number;
-  /** Total number of conversation turns processed. */
-  turnCount: number;
+    originalTokens: number;
+    compactedTokens: number;
+    reductionPercent: number;
+    turnCount: number;
 }
 
 /** Minimal message shape needed for compaction — works with any message-like object. */
 export interface CompactableMessage {
-  role: "user" | "assistant" | "toolResult";
-  content: string | unknown[];
-  toolName?: string;
+    role: "user" | "assistant" | "toolResult";
+    content: string | unknown[];
+    toolName?: string;
 }
 
 /**
@@ -37,42 +33,46 @@ export interface CompactableMessage {
  * Rough heuristic: 1 token ≈ 4 characters for English text.
  */
 function estimateTokens(message: CompactableMessage): number {
-  let len = 0;
-  if (typeof message.content === "string") {
-    len = message.content.length;
-  } else if (Array.isArray(message.content)) {
-    for (let i = 0; i < message.content.length; i++) {
-      const c = message.content[i] as any;
-      if (c && c.type === "text" && typeof c.text === "string") {
-        len += c.text.length;
-      } else if (c && c.type === "tool_result" && typeof c.content === "string") {
-        len += c.content.length;
-      } else if (c && c.type === "tool_result" && Array.isArray(c.content)) {
-        for (let j = 0; j < c.content.length; j++) {
-          const nested = c.content[j] as any;
-          if (nested && nested.type === "text" && typeof nested.text === "string") {
-            len += nested.text.length;
-          } else {
-            len += 50;
-          }
+    let len = 0;
+    const { content } = message;
+
+    if (typeof content === "string") {
+        len = content.length;
+    } else if (Array.isArray(content)) {
+        for (const block of content) {
+            const b = block as any;
+            if (b?.type === "text" && typeof b.text === "string") {
+                len += b.text.length;
+            } else if (b?.type === "tool_result") {
+                if (typeof b.content === "string") {
+                    len += b.content.length;
+                } else if (Array.isArray(b.content)) {
+                    for (const nested of b.content) {
+                        const n = nested as any;
+                        len +=
+                            n?.type === "text" && typeof n.text === "string"
+                                ? n.text.length
+                                : 50;
+                    }
+                } else {
+                    len += 50; // default penalty for non-text tool results
+                }
+            } else if (b?.type === "tool_use" && b.input != null) {
+                len += JSON.stringify(b.input).length;
+            } else {
+                len += 50; // fast heuristic for other unknown blocks
+            }
         }
-      } else if (c && c.type === "tool_use" && c.input != null) {
-        len += JSON.stringify(c.input).length;
-      } else {
-        len += 50; // fast heuristic for other non-text blocks to avoid slow JSON stringify
-      }
+    } else {
+        len = JSON.stringify(content).length;
     }
-  } else {
-    len = JSON.stringify(message.content).length;
-  }
-  return Math.ceil(len / 4);
+
+    return Math.ceil(len / 4);
 }
 
-/**
- * Sum estimated tokens across an array of messages.
- */
-function totalTokens(messages: CompactableMessage[]): number {
-  return messages.reduce((sum, m) => sum + estimateTokens(m), 0);
+/** Sum estimated tokens across an array of messages. */
+function totalTokens(messages: readonly CompactableMessage[]): number {
+    return messages.reduce((sum, m) => sum + estimateTokens(m), 0);
 }
 
 /**
@@ -82,86 +82,59 @@ function totalTokens(messages: CompactableMessage[]): number {
  * Keeps the last `keepLastNTurns` turns fully intact (all message roles).
  * For older turns, removes tool result messages while preserving user and assistant messages.
  * Never removes user messages regardless of their position.
- *
- * Returns a new array — does not mutate the input.
  */
 export function pruneOldToolOutputs(
-  messages: CompactableMessage[],
-  keepLastNTurns: number,
+    messages: readonly CompactableMessage[],
+    keepLastNTurns: number,
 ): CompactableMessage[] {
-  // Guard: empty array
-  if (messages.length === 0) return [];
+    if (!messages.length) return [];
 
-  // Clamp to MIN_KEEP_TURNS to prevent overly aggressive pruning
-  const keepTurns = Math.max(MIN_KEEP_TURNS, keepLastNTurns);
+    const keepTurns = Math.max(MIN_KEEP_TURNS, keepLastNTurns);
+    const result: CompactableMessage[] = [];
+    let assistantSeen = 0;
 
-  // Walk in reverse, counting assistant messages as turn boundaries.
-  // Tool results that appear BEFORE the Nth assistant (in reverse) belong to
-  // turn N+1 from the end. They have assistantSeen = N at that point.
-  // Keeping them requires: assistantSeen < keepTurns.
-  const result: CompactableMessage[] = [];
-  let assistantSeen = 0;
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
 
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
-
-    // Never remove user messages
-    if (msg.role === "user") {
-      result.push(msg);
-      continue;
+        if (msg.role === "user") {
+            result.push(msg); // Always keep user prompts
+        } else if (msg.role === "assistant") {
+            assistantSeen++;
+            result.push(msg); // Always keep assistant reasoning
+        } else if (assistantSeen < keepTurns) {
+            result.push(msg); // Keep toolResult if it belongs to a recent turn
+        }
     }
 
-    if (msg.role === "assistant") {
-      assistantSeen++;
-      // Assistant messages are always kept (even from old turns)
-      result.push(msg);
-      continue;
-    }
-
-    // Tool results — kept only if they belong to a turn within the keep window.
-    // A tool result belongs to the NEXT assistant encountered going forward,
-    // which is the PREVIOUS assistant encountered going backward.
-    // At this point, assistantSeen is the count of assistants already seen
-    // (i.e., the turn index from the end for the NEXT assistant in reverse).
-    // The tool result belongs to turn (assistantSeen + 1) from the end,
-    // which should be kept when (assistantSeen + 1) ≤ keepTurns → assistantSeen < keepTurns.
-    if (assistantSeen < keepTurns) {
-      result.push(msg);
-    }
-    // else: skip — this tool output is from an old turn
-  }
-
-  return result.reverse();
+    return result.reverse();
 }
 
 /**
  * Estimate the reduction achieved by compaction.
- *
- * @param original - Original message array before compaction.
- * @param compacted - Message array after compaction (e.g. from pruneOldToolOutputs).
- * @returns CompactResult with token estimates and reduction percentage.
  */
 export function estimateReduction(
-  original: CompactableMessage[],
-  compacted: CompactableMessage[],
+    original: readonly CompactableMessage[],
+    compacted: readonly CompactableMessage[],
 ): CompactResult {
-  const originalTokens = totalTokens(original);
-  const compactedTokens = totalTokens(compacted);
-  const reductionPercent = originalTokens > 0
-    ? Math.round(((originalTokens - compactedTokens) / originalTokens) * 100)
-    : 0;
+    const originalTokens = totalTokens(original);
+    const compactedTokens = totalTokens(compacted);
 
-  // Count total turns (assistant messages) in the original
-  const turnCount = original.filter((m) => m.role === "assistant").length;
+    const reductionPercent =
+        originalTokens > 0
+            ? Math.round(
+                  ((originalTokens - compactedTokens) / originalTokens) * 100,
+              )
+            : 0;
 
-  return { originalTokens, compactedTokens, reductionPercent, turnCount };
+    const turnCount = original.filter((m) => m.role === "assistant").length;
+
+    return { originalTokens, compactedTokens, reductionPercent, turnCount };
 }
 
-/**
- * Check whether a conversation exceeds a given token threshold.
- * Hook point — callers can use this to decide whether to trigger compaction
- * mid-session before context window overflow.
- */
-export function shouldCompact(messages: CompactableMessage[], thresholdTokens: number): boolean {
-  return totalTokens(messages) > thresholdTokens;
+/** Check whether a conversation exceeds a given token threshold. */
+export function shouldCompact(
+    messages: readonly CompactableMessage[],
+    thresholdTokens: number,
+): boolean {
+    return totalTokens(messages) > thresholdTokens;
 }

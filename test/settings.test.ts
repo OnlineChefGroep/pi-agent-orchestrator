@@ -249,6 +249,27 @@ describe("settings persistence", () => {
       expect(loadSettings(projectDir)).toEqual({});
     });
 
+    it("accepts all three valid promptCompressionLevel values", () => {
+      for (const level of ["minimal", "balanced", "aggressive"] as const) {
+        writeProject({ promptCompressionLevel: level });
+        expect(loadSettings(projectDir)).toEqual({ promptCompressionLevel: level });
+      }
+    });
+
+    it("drops invalid promptCompressionLevel values", () => {
+      writeProject({ promptCompressionLevel: "none" });
+      expect(loadSettings(projectDir)).toEqual({});
+      writeProject({ promptCompressionLevel: 42 });
+      expect(loadSettings(projectDir)).toEqual({});
+      writeProject({ promptCompressionLevel: "Maximum" });
+      expect(loadSettings(projectDir)).toEqual({});
+    });
+
+    it("round-trips promptCompressionLevel", () => {
+      saveSettings({ promptCompressionLevel: "aggressive" }, projectDir);
+      expect(loadSettings(projectDir)).toEqual({ promptCompressionLevel: "aggressive" });
+    });
+
     it("accepts all valid uiStyle values", () => {
       for (const style of ["premium", "retro", "plain"] as const) {
         writeProject({ uiStyle: style });
@@ -333,6 +354,7 @@ describe("settings persistence", () => {
         setDashboardRefreshInterval: vi.fn(),
         setSessionMaxSpawns: vi.fn(),
         setSessionMaxTurns: vi.fn(),
+        setPromptCompressionLevel: vi.fn(),
       };
     });
 
@@ -438,6 +460,16 @@ describe("settings persistence", () => {
       expect(appliers.setShowTokenUsage).not.toHaveBeenCalled();
       expect(appliers.setShowTurnProgress).not.toHaveBeenCalled();
     });
+
+    it("calls setPromptCompressionLevel when present", () => {
+      applySettings({ promptCompressionLevel: "aggressive" }, appliers);
+      expect(appliers.setPromptCompressionLevel).toHaveBeenCalledWith("aggressive");
+    });
+
+    it("does not call setPromptCompressionLevel when absent", () => {
+      applySettings({ maxConcurrent: 4 }, appliers);
+      expect(appliers.setPromptCompressionLevel).not.toHaveBeenCalled();
+    });
   });
 
   describe("persistToastFor", () => {
@@ -476,6 +508,7 @@ describe("settings persistence", () => {
         setDashboardRefreshInterval: vi.fn(),
         setSessionMaxSpawns: vi.fn(),
         setSessionMaxTurns: vi.fn(),
+        setPromptCompressionLevel: vi.fn(),
       };
     });
 

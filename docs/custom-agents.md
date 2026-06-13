@@ -1,12 +1,12 @@
-# Custom Agent Authoring Guide
+# // CUSTOM AGENT AUTHORING GUIDE
 
-> How to create, configure, and deploy custom sub-agents via `.pi/agents/*.md` files.
+> CONFIGURATION, DEPLOYMENT, AND CONSTRAINTS FOR CUSTOM SUB-AGENTS VIA `.pi/agents/*.md` FILES.
 
 ---
 
-## Quick Start
+## // QUICK START BOOTSTRAP
 
-Create `.pi/agents/typescript-reviewer.md` in your project root:
+Target directory: `.pi/agents/typescript-reviewer.md` at project root.
 
 ```markdown
 ---
@@ -26,15 +26,19 @@ Report findings with severity, exact file paths, and actionable fixes.
 Never modify files.
 ```
 
-The file name is the agent type. In the example above, spawn it as `typescript-reviewer`.
+Filename equates to system identifier (`typescript-reviewer`).
 
-Project agents are loaded from `.pi/agents/*.md`. Global agents are loaded from `$PI_CODING_AGENT_DIR/agents/*.md` or `~/.pi/agent/agents/*.md`. Project agents override global agents with the same file name.
+**Load paths:**
+1. Project scope: `.pi/agents/*.md`
+2. Global scope: `$PI_CODING_AGENT_DIR/agents/*.md` or `~/.pi/agent/agents/*.md`
+
+Project scope strictly overrides global scope collisions.
 
 ---
 
-## File Format
+## // DEFINITION FORMAT
 
-Custom agents use Markdown files with optional YAML frontmatter. The Markdown body after the closing `---` is the system prompt.
+Markdown primitive format with YAML frontmatter. Post-frontmatter body block parses as the system prompt directive.
 
 ```markdown
 ---
@@ -44,99 +48,101 @@ tools: read, grep, find
 System prompt starts here.
 ```
 
-Only files directly under the agents directory are loaded. Subdirectories are ignored. Symlinks are skipped.
+Subdirectories are explicitly ignored. Symlink references are skipped.
 
 ---
 
-## Frontmatter Reference
+## // FRONTMATTER SCHEMA
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `display_name` | string | file name | Human-readable label shown in UIs. |
-| `description` | string | file name | Short description shown in agent lists. |
-| `tools` | CSV or `none` | all built-in tools | Built-in tools the agent can use. |
-| `disallowed_tools` | CSV | none | Hard floor; these tools are removed even if otherwise available. |
-| `extensions` | boolean, CSV, or `none` | `true` | Extension tool access. Use `false`/`none` for no extension tools. |
-| `skills` | boolean, CSV, or `none` | `true` | Skill access or preload list. |
-| `model` | string | host default | Model override, resolved by the host model registry. |
-| `thinking` | string | none | Thinking level hint, passed through to the host. |
-| `max_turns` | number | default setting | Maximum conversation turns. `0` means unlimited. |
-| `prompt_mode` | `replace` or `append` | `replace` | Whether the body replaces or appends to the inherited prompt. |
-| `inherit_context` | boolean | caller decides | Default for whether to inherit parent conversation context. |
-| `run_in_background` | boolean | caller decides | Default for background execution. |
-| `isolated` | boolean | caller decides | Default for isolated execution. |
-| `memory` | `user`, `project`, or `local` | none | Persistent memory scope. |
-| `isolation` | `worktree` | none | Run file edits in a temporary git worktree. |
-| `enabled` | boolean | `true` | Set `false` to hide/disable the agent. |
+| Directive | Primitive Type | Default Value | Operational Definition |
+|---|---|---|---|
+| `display_name` | string | file name | User-interface label. |
+| `description` | string | file name | Telemetry and menu description string. |
+| `tools` | CSV / `none` | all | Authorized primitive toolset. |
+| `disallowed_tools` | CSV | none | Hard floor nullification block. Trumps availability. |
+| `extensions` | boolean / CSV / `none` | `true` | Module access. Set `false`/`none` for zero expansion. |
+| `skills` | boolean / CSV / `none` | `true` | Skill primitive preload list. |
+| `model` | string | host default | Model execution override. Resolves via host registry. |
+| `thinking` | string | none | Inference effort passthrough metric. |
+| `max_turns` | number | host default | Maximum bounded turn integer (`0` = infinite). |
+| `prompt_mode` | `replace` / `append` | `replace` | System directive injection mode. |
+| `inherit_context` | boolean | caller defined | Inheritance directive for vector payload. |
+| `run_in_background` | boolean | caller defined | Execution thread blocking control. |
+| `isolated` | boolean | caller defined | Sandbox topology switch. |
+| `memory` | `user` / `project` / `local` | none | State persistence storage volume. |
+| `isolation` | `worktree` | none | Git worktree detachment mode. |
+| `handoff` | boolean / string | `false` | Produce structured JSON handoff at end of response. Enables chain-of-agents workflows. |
+| `prompt_compression` | `minimal` / `balanced` / `aggressive` | inherits global | Per-agent compression override. `minimal` = full verbose prompts (+70% tokens), `balanced` = concise (default), `aggressive` = ultra-short (−44% tokens). |
+| `enabled` | boolean | `true` | Binary load toggle. |
 
-Unsupported fields are ignored. The current loader does not read `name`, `systemPrompt`, `builtinToolNames`, `disallowedTools`, `validators`, or `handoff` frontmatter fields.
+Non-schema fields are silently dropped. Loader explicitly ignores `name`, `systemPrompt`, `builtinToolNames`, `disallowedTools`, `validators` within the YAML block.
 
 ---
 
-## Tool Values
+## // TOOL CONSTRAINTS
 
-Built-in tool names:
+Valid primitive values:
 
-| Tool | Purpose |
-|------|---------|
-| `read` | Read file contents. |
-| `write` | Create or overwrite files. |
-| `edit` | Edit existing files. |
+| Primitive | Operation |
+|---|---|
+| `read` | Retrieve block contents. |
+| `write` | Create or overwrite blocks. |
+| `edit` | Mutate block state. |
 | `bash` | Execute shell commands. |
-| `grep` | Search file contents. |
-| `find` | Find files by name or pattern. |
-| `ls` | List directories. |
+| `grep` | Stream content search. |
+| `find` | Object metadata queries. |
+| `ls` | Directory structure enumeration. |
 
-Use CSV values:
+Syntax:
 
 ```yaml
 tools: read, grep, find, ls
 disallowed_tools: write, edit
 ```
 
-Use `tools: none` for a prompt-only agent.
+Syntax for nullified execution (prompt-only): `tools: none`.
 
 ---
 
-## Security Practices
+## // SECURITY DIRECTIVES
 
-### Prefer Explicit Disallows
+### Explicit Nullification Floors
 
-For read-only agents, set both an allowlist and a disallow floor:
+Read-only agents mandate both an allowlist and a disallow list:
 
 ```yaml
 tools: read, grep, find, ls, bash
 disallowed_tools: write, edit
 ```
 
-### Disable Extension Tools Unless Needed
+### Module Boundary Enforcement
 
 ```yaml
 extensions: false
 ```
 
-Extension tools can expand the available surface area. Keep them disabled for narrow reviewer, planner, and explorer agents.
+Extensions expand attack surface matrices. Nullify default access for narrow review, planning, and enumeration agents.
 
-### Use Worktree Isolation For File-Editing Agents
+### Worktree State Separation
 
 ```yaml
 tools: read, write, edit, grep, find, ls, bash
 isolation: worktree
 ```
 
-Worktree isolation keeps parallel edits out of the main working tree until they are intentionally integrated.
+Forces parallel physical detachment from master working tree state pending deliberate integration.
 
-### Avoid Built-In Wildcard Overrides
+### Override Collisions
 
-Custom agents may override built-in names by file name, but validation disables attempts to override a built-in agent with wildcard tools.
+Custom definitions override primitive definitions by identical filename. Wildcard primitive overrides fail validation checks.
 
 ---
 
-## Prompt Modes
+## // DIRECTIVE INJECTION MODES
 
 ### `replace`
 
-The agent receives the custom prompt body as its role instructions. This is the safest default for specialized agents.
+Agent payload completely overwrites generic instructions. Optimal state for isolated domains.
 
 ```yaml
 prompt_mode: replace
@@ -144,7 +150,7 @@ prompt_mode: replace
 
 ### `append`
 
-The custom prompt body is appended to the inherited prompt. Use this only when the agent should remain a variant of the parent behavior.
+Agent payload attaches to standard vector instruction block. Use strictly for sub-variant topologies.
 
 ```yaml
 prompt_mode: append
@@ -152,38 +158,73 @@ prompt_mode: append
 
 ---
 
-## Examples
+## // CANONICAL EXAMPLES
 
-Canonical examples live under `examples/agents/`:
+Reference material located at `examples/agents/`:
 
-| Example | Purpose |
-|---------|---------|
-| `adversarial-validator.md` | Read-only security review agent. |
-| `handoff-chain-researcher.md` | Research agent that ends with structured handoff JSON. |
-| `handoff-chain-implementer.md` | Worktree-isolated implementation agent for handoff follow-up. |
-| `scheduled-explorer.md` | Read-only scheduled codebase scan agent. |
-| `worktree-isolated-editor.md` | File-editing agent configured for worktree isolation. |
+| Specimen | Subsystem Function |
+|---|---|
+| `adversarial-validator.md` | Non-mutating code analysis. |
+| `handoff-chain-researcher.md` | Data gathering agent outputting structured JSON payload. |
+| `handoff-chain-implementer.md` | Worktree-detached logic builder driven by JSON payload. |
+| `scheduled-explorer.md` | Temporal chronometric scan agent. |
+| `worktree-isolated-editor.md` | Physical detachment editing block. |
 
-Copy an example into `.pi/agents/` to activate it in a project.
+Copy target specimen to `.pi/agents/` to activate inside scope.
 
 ---
 
-## Troubleshooting
+## // HANDOFF WORKFLOWS
 
-### Agent Does Not Appear
+When `handoff: true` is set, the agent produces a structured JSON handoff at the end of its response. This enables chain-of-agents pipelines where one agent's output feeds directly into the next.
 
-Check that:
+### Handoff + Compression
 
-- The file extension is `.md`.
-- The file is directly under `.pi/agents/`.
-- Frontmatter starts and ends with `---`.
-- `enabled` is not `false`.
-- The file is not a symlink.
+Compression levels affect the handoff prompt injected into the agent:
 
-### Agent Has Too Many Tools
+| Level | Handoff Prompt Style |
+|---|---|
+| `minimal` | Full verbose instructions with two examples |
+| `balanced` | Concise instructions with one example (default) |
+| `aggressive` | One-liner instruction |
 
-Remember that `tools` defaults to all built-in tools. For read-only agents, set `tools` explicitly and add `disallowed_tools`.
+```markdown
+---
+display_name: "Researcher"
+tools: read, grep, find
+handoff: true
+prompt_compression: minimal
+---
 
-### Agent Prompt Looks Wrong
+Investigate the codebase and emit a structured handoff JSON with:
+- "task": what needs to be done
+- "files": affected file paths
+- "approach": recommended implementation strategy
+- "evidence": supporting code snippets
+```
 
-The body of the Markdown file is the system prompt. Do not put the prompt in a `systemPrompt` frontmatter field; that field is ignored by the current loader.
+### Three-Example Pipeline
+
+See README.md "Chain of Agents" section for complete Research→Write→Review, Test→Fix→Verify, and Multi-perspective Analysis examples.
+
+---
+
+## // TROUBLESHOOTING MATRIX
+
+### Definition Missing From Load
+
+Validation checks:
+- Suffix requires `.md`.
+- Placement must be top-level `.pi/agents/`.
+- YAML block requires strict `---` boundaries.
+- `enabled` flag must evaluate `true`.
+- Symlink pointers fail standard ingestion.
+
+### Constraint Violations
+
+Base state includes full primitive access. Explicit definition of `tools` and `disallowed_tools` is mandatory to restrict capabilities.
+
+### Corrupted System Directives
+
+System prompt defined strictly via post-frontmatter Markdown. YAML field definitions (`systemPrompt: ...`) fail ingestion parser.
+

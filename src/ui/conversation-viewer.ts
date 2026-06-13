@@ -6,7 +6,7 @@
  */
 
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { type Component, matchesKey, type TUI, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { type Component, matchesKey, type TUI, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { getUiStyle } from "../agent-registry.js";
 import { extractText } from "../context.js";
 import type { AgentRecord } from "../types.js";
@@ -14,7 +14,7 @@ import { getLifetimeTotal, getSessionContextPercent } from "../usage.js";
 import { buildInvocationTags, describeActivity, formatDuration, formatSessionTokens, getDisplayName, getPromptModeLabel } from "./agent-format.js";
 import type { AgentActivity } from "./agent-ui-types.js";
 import { getTimeSpinnerFrame } from "./animation.js";
-import { activeTheme, getBoxChars, padVisible, type Theme } from "./theme.js";
+import { activeTheme, fastTruncate, getBoxChars, padVisible, type Theme } from "./theme.js";
 
 /** Base lines consumed by chrome: top border + header + header sep + footer sep + footer + bottom border. */
 const CHROME_LINES_BASE = 6;
@@ -29,6 +29,20 @@ export class ConversationViewer implements Component {
   private lastInnerW = 0;
   private closed = false;
 
+  // ── Performance: debounced render ──
+
+  /** Timestamp of the last actual render for rate limiting. */
+  private lastRenderTime = 0;
+
+  /** True while a microtask render is pending. */
+  private renderPending = false;
+
+  /** Coalesce timer handle for scheduling a render after rate-limit window. */
+  private coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Minimum gap between consecutive renders (60 fps cap). */
+  private static readonly MIN_RENDER_GAP_MS = 16;
+
   constructor(
     private tui: TUI,
     private session: AgentSession,
@@ -39,6 +53,45 @@ export class ConversationViewer implements Component {
   ) {
     this.unsubscribe = session.subscribe(() => {
       if (this.closed) return;
+      this.requestRender();
+    });
+  }
+
+  /**
+   * Debounced render request with rate limiting.
+   * Coalesces rapid session events into a single render via queueMicrotask.
+   * Falls back to setTimeout when rate-limited to ensure the final state
+   * is always rendered, even if session events stop during a rate-limit window.
+   * Never renders more than ~60fps.
+   */
+  private requestRender(): void {
+    if (this.closed) return;
+
+    const now = Date.now();
+    const elapsed = now - this.lastRenderTime;
+
+    // Rate limit: if we rendered within the last MIN_RENDER_GAP_MS,
+    // schedule a coalesced render after the window expires.
+    if (this.lastRenderTime > 0 && elapsed < ConversationViewer.MIN_RENDER_GAP_MS) {
+      if (!this.coalesceTimer && !this.renderPending) {
+        this.coalesceTimer = setTimeout(() => {
+          this.coalesceTimer = null;
+          this.lastRenderTime = 0; // force allow
+          this.requestRender();
+        }, ConversationViewer.MIN_RENDER_GAP_MS - elapsed);
+      }
+      return;
+    }
+
+    // Avoid stacking multiple microtasks during synchronous event bursts.
+    if (this.renderPending) return;
+
+    this.renderPending = true;
+
+    queueMicrotask(() => {
+      this.renderPending = false;
+      if (this.closed) return;
+      this.lastRenderTime = Date.now();
       this.tui.requestRender();
     });
   }
@@ -86,7 +139,7 @@ export class ConversationViewer implements Component {
     const lines: string[] = [];
 
     const row = (content: string) => {
-      const body = truncateToWidth(padVisible(content, innerW), innerW);
+      const body = fastTruncate(padVisible(content, innerW), innerW);
       if (activeUiStyle === "plain") {
         return `  ${body}  `;
       }
@@ -118,7 +171,7 @@ export class ConversationViewer implements Component {
         : this.record.status === "error"
           ? th.fg("error", "✗")
           : th.fg("dim", "○");
-    const duration = formatDuration(this.record.startedAt, this.record.completedAt);
+    const duration = formatDuration(this.record.startedAt ?? 0, this.record.completedAt);
 
     const headerParts: string[] = [duration];
     const toolUses = this.activity?.toolUses ?? this.record.toolUses;
@@ -170,6 +223,10 @@ export class ConversationViewer implements Component {
 
   dispose(): void {
     this.closed = true;
+    if (this.coalesceTimer) {
+      clearTimeout(this.coalesceTimer);
+      this.coalesceTimer = null;
+    }
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = undefined;
@@ -365,8 +422,9 @@ export class ConversationViewer implements Component {
           lines.push(`   ${bottomBorder}`);
         } else {
           lines.push(th.fg("accent", `$ ${command}`));
-          if (output.trim()) {
-            for (const line of wrapTextWithAnsi(output.trim(), width)) {
+          const trimmedOutput = output.trim();
+          if (trimmedOutput) {
+            for (const line of wrapTextWithAnsi(trimmedOutput, width)) {
               lines.push(th.fg("dim", line));
             }
           }
@@ -388,9 +446,9 @@ export class ConversationViewer implements Component {
       } else if (activeUiStyle === "plain") {
         runningLineStr = `  ${spinnerFrame} Hermes is working: ${act}`;
       }
-      lines.push(truncateToWidth(runningLineStr, width));
+      lines.push(fastTruncate(runningLineStr, width));
     }
 
-    return lines.map(l => truncateToWidth(l, width));
+    return lines.map(l => fastTruncate(l, width));
   }
 }

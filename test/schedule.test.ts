@@ -200,6 +200,22 @@ describe("SubagentScheduler — lifecycle", () => {
   // at create time, so this is the only remaining production path.
 
   describe("SubagentScheduler — bounds (CVE-005)", () => {
+    it("updateJob enforces input bounds", async () => {
+      const job = await scheduler.addJob({
+        name: "test", description: "test", schedule: "+10m",
+        subagent_type: "general-purpose", prompt: "x",
+      });
+
+      await expect(scheduler.updateJob(job.id, { prompt: "c".repeat(50001) }))
+        .rejects.toThrow(/Prompt must be a string <= 50000 characters/);
+
+      await expect(scheduler.updateJob(job.id, { name: "n".repeat(101) }))
+        .rejects.toThrow(/Schedule name must be a string <= 100 characters/);
+
+      await expect(scheduler.updateJob(job.id, { description: "d".repeat(501) }))
+        .rejects.toThrow(/Description must be a string <= 500 characters/);
+    });
+
     it("enforces MAX_SCHEDULES concurrently (TOCTOU protection)", { timeout: 15000 }, async () => {
       // Mock MAX_SCHEDULES to a smaller number just for this test implicitly by
       // filling the store to just below the real limit (100).
@@ -324,7 +340,9 @@ describe("SubagentScheduler — fire path", () => {
 
   afterEach(() => {
     scheduler.stop();
-    rmSync(tmp, { recursive: true, force: true });
+    // maxRetries + retryDelay handles Windows file-locking races where the
+    // proper-lockfile lockfile directory is briefly held open after release.
+    rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
 
   it("interval jobs fire repeatedly via setInterval", async () => {
@@ -341,7 +359,7 @@ describe("SubagentScheduler — fire path", () => {
   });
 
   it("one-shot fires once and auto-disables", async () => {
-    const future = new Date(Date.now() + 100).toISOString();
+    const future = new Date(Date.now() + 1000).toISOString();
     const job = await scheduler.addJob({
       name: "soon", description: "once", schedule: future,
       subagent_type: "general-purpose", prompt: "once",
@@ -375,7 +393,7 @@ describe("SubagentScheduler — fire path", () => {
   });
 
   it("disabled jobs do not fire", async () => {
-    const future = new Date(Date.now() + 100).toISOString();
+    const future = new Date(Date.now() + 1000).toISOString();
     const job = await scheduler.addJob({
       name: "off", description: "x", schedule: future,
       subagent_type: "general-purpose", prompt: "x",
@@ -386,7 +404,7 @@ describe("SubagentScheduler — fire path", () => {
   });
 
   it("emits fired event with agentId on successful spawn", async () => {
-    const future = new Date(Date.now() + 100).toISOString();
+    const future = new Date(Date.now() + 1000).toISOString();
     await scheduler.addJob({
       name: "fire-once", description: "x", schedule: future,
       subagent_type: "general-purpose", prompt: "x",
@@ -399,7 +417,7 @@ describe("SubagentScheduler — fire path", () => {
 
   it("records lastStatus error and emits when manager.spawn throws", async () => {
     manager.spawn.mockImplementationOnce(() => { throw new Error("no slots"); });
-    const future = new Date(Date.now() + 100).toISOString();
+    const future = new Date(Date.now() + 1000).toISOString();
     const job = await scheduler.addJob({
       name: "boom", description: "x", schedule: future,
       subagent_type: "general-purpose", prompt: "x",
@@ -434,7 +452,7 @@ describe("SubagentScheduler — fire path", () => {
 
     it("records lastStatus 'error' when the agent terminates with status='error'", async () => {
       const records = installFaithfulMock();
-      const future = new Date(Date.now() + 100).toISOString();
+      const future = new Date(Date.now() + 1000).toISOString();
       const job = await scheduler.addJob({
         name: "fail-job", description: "x", schedule: future,
         subagent_type: "general-purpose", prompt: "x",
@@ -453,7 +471,7 @@ describe("SubagentScheduler — fire path", () => {
 
     it("records lastStatus 'success' when the agent terminates with status='completed'", async () => {
       const records = installFaithfulMock();
-      const future = new Date(Date.now() + 100).toISOString();
+      const future = new Date(Date.now() + 1000).toISOString();
       const job = await scheduler.addJob({
         name: "ok-job", description: "x", schedule: future,
         subagent_type: "general-purpose", prompt: "x",
@@ -469,7 +487,7 @@ describe("SubagentScheduler — fire path", () => {
 
     it("treats aborted and stopped as errors (terminal failure states)", async () => {
       const records = installFaithfulMock();
-      const futureA = new Date(Date.now() + 100).toISOString();
+      const futureA = new Date(Date.now() + 1000).toISOString();
       const futureB = new Date(Date.now() + 200).toISOString();
       const a = await scheduler.addJob({
         name: "abort-job", description: "x", schedule: futureA,

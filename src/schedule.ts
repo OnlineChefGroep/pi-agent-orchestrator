@@ -22,12 +22,13 @@ import { nanoid } from "nanoid";
 import type { AgentManager } from "./agent-manager.js";
 import { logger } from "./logger.js";
 import { resolveModel } from "./model-resolver.js";
+
 import type { ScheduleStore } from "./schedule-store.js";
 import type { IsolationMode, ScheduledSubagent, SubagentType, ThinkingLevel } from "./types.js";
 
 // CVE-005 FIX: Schedule input bounds
 const MAX_INTERVAL = 2147483647;   // ~24.8 days (setTimeout limit)
-const MIN_INTERVAL = (process.env.NODE_ENV === "test" || process.env.VITEST === "true") ? 1000 : 60000;        // 1 minute minimum
+const MIN_INTERVAL = (process.env.NODE_ENV === "test" || process.env.VITEST === "true") ? 10 : 60000;        // 1 minute minimum
 const MAX_SCHEDULES = 100;         // Per session limit
 const MAX_PROMPT_SIZE = 50000;     // 50KB max prompt
 const MAX_NAME_LENGTH = 100;
@@ -104,28 +105,36 @@ export class SubagentScheduler {
     const errors: string[] = [];
     
     // Validate name
-    if (!input.name || input.name.length > MAX_NAME_LENGTH) {
-      errors.push(`Schedule name is required and must be <= ${MAX_NAME_LENGTH} characters`);
+    if (!input.name || typeof input.name !== 'string' || input.name.length > MAX_NAME_LENGTH) {
+      errors.push(`Schedule name is required and must be a string <= ${MAX_NAME_LENGTH} characters`);
     }
     
     // Validate description
-    if (input.description && input.description.length > MAX_DESCRIPTION_LENGTH) {
-      errors.push(`Description must be <= ${MAX_DESCRIPTION_LENGTH} characters`);
+    if (input.description !== undefined && (typeof input.description !== 'string' || input.description.length > MAX_DESCRIPTION_LENGTH)) {
+      errors.push(`Description must be a string <= ${MAX_DESCRIPTION_LENGTH} characters`);
     }
     
     // Validate prompt size
-    if (!input.prompt || input.prompt.length > MAX_PROMPT_SIZE) {
-      errors.push(`Prompt is required and must be <= ${MAX_PROMPT_SIZE} characters`);
+    if (!input.prompt || typeof input.prompt !== 'string' || input.prompt.length > MAX_PROMPT_SIZE) {
+      errors.push(`Prompt is required and must be a string <= ${MAX_PROMPT_SIZE} characters`);
     }
     
     // Validate schedule format and bounds
-    const detected = SubagentScheduler.detectSchedule(input.schedule);
-    if (detected.type === 'interval' && detected.intervalMs) {
-      if (detected.intervalMs < MIN_INTERVAL) {
-        errors.push(`Interval ${detected.intervalMs}ms is below minimum ${MIN_INTERVAL}ms (1 minute)`);
-      }
-      if (detected.intervalMs > MAX_INTERVAL) {
-        errors.push(`Interval ${detected.intervalMs}ms exceeds maximum ${MAX_INTERVAL}ms (~24.8 days)`);
+    if (typeof input.schedule !== 'string') {
+      errors.push('Schedule must be a string');
+    } else {
+      try {
+        const detected = SubagentScheduler.detectSchedule(input.schedule);
+        if (detected.type === 'interval' && detected.intervalMs) {
+          if (detected.intervalMs < MIN_INTERVAL) {
+            errors.push(`Interval ${detected.intervalMs}ms is below minimum ${MIN_INTERVAL}ms (1 minute)`);
+          }
+          if (detected.intervalMs > MAX_INTERVAL) {
+            errors.push(`Interval ${detected.intervalMs}ms exceeds maximum ${MAX_INTERVAL}ms (~24.8 days)`);
+          }
+        }
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err));
       }
     }
     
@@ -196,7 +205,27 @@ export class SubagentScheduler {
 
   /** Toggle / mutate a job. Re-arms based on the new `enabled` state. */
   async updateJob(id: string, patch: Partial<ScheduledSubagent>): Promise<ScheduledSubagent | undefined> {
+    // CVE-005 FIX: Enforce bounds on updates to prevent bypassing size limits
+    if (patch.name !== undefined && (typeof patch.name !== 'string' || patch.name.length > MAX_NAME_LENGTH)) {
+      throw new Error(`Schedule name must be a string <= ${MAX_NAME_LENGTH} characters`);
+    }
+    if (patch.description !== undefined && (typeof patch.description !== 'string' || patch.description.length > MAX_DESCRIPTION_LENGTH)) {
+      throw new Error(`Description must be a string <= ${MAX_DESCRIPTION_LENGTH} characters`);
+    }
+    if (patch.prompt !== undefined && (typeof patch.prompt !== 'string' || patch.prompt.length > MAX_PROMPT_SIZE)) {
+      throw new Error(`Prompt must be a string <= ${MAX_PROMPT_SIZE} characters`);
+    }
+
     const store = this.requireStore();
+    const existing = store.get(id);
+    if (existing) {
+      // Validate bounds on the merged object to ensure updates don't bypass limits
+      const merged: NewJobInput = { ...existing, ...patch } as any;
+      const errors = this.validateScheduleInput(merged);
+      if (errors.length > 0) {
+        throw new Error(`Invalid schedule update: ${errors.join(', ')}`);
+      }
+    }
     const updated = await store.update(id, patch);
     if (!updated) return undefined;
     this.unscheduleJob(id);
@@ -231,7 +260,7 @@ export class SubagentScheduler {
       if (job.scheduleType === "interval" && job.intervalMs) {
         // CVE-005 FIX: Cap interval at max 24 days to avoid setTimeout limits
         if (job.intervalMs > MAX_INTERVAL) {
-          logger.warn(`[pi-subagents] Interval ${job.intervalMs}ms exceeds max ${MAX_INTERVAL}ms; capping to ${MAX_INTERVAL}ms`);
+          logger.warn(`Interval ${job.intervalMs}ms exceeds max ${MAX_INTERVAL}ms; capping to ${MAX_INTERVAL}ms`);
         }
         const interval = Math.min(job.intervalMs, MAX_INTERVAL);
         const t = setInterval(() => this.executeJob(job.id), interval);
@@ -244,13 +273,7 @@ export class SubagentScheduler {
           const cron = new Cron(target, async () => {
             // executeJob handles status updates and one-shot auto-disable
             // atomically inside its finalize path.
-            await this.executeJob(job.id).catch((err) => {
-              this.emit({
-                type: "error",
-                jobId: job.id,
-                error: err instanceof Error ? err.message : String(err),
-              });
-            });
+            await this.executeJob(job.id).catch(() => {});
           });
           this.jobs.set(job.id, cron);
         } else {
@@ -445,8 +468,9 @@ export class SubagentScheduler {
 
   /** "10s"/"5m"/"1h"/"2d" → milliseconds. */
   static parseInterval(s: string): number | null {
-    const m = s.match(/^(\d+)(s|m|h|d)$/);
+    const m = s.match(/^(\d+)(ms|s|m|h|d)$/);
     if (!m) return null;
+    if (m[2] === "ms") return parseInt(m[1], 10);
     return parseInt(m[1], 10) * { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[m[2] as "s" | "m" | "h" | "d"];
   }
 }

@@ -1,5 +1,14 @@
 /**
- * agent-runner.ts — Core execution engine: creates sessions, runs agents, collects results.
+ * agent-runner.ts — Enterprise Agent Execution Engine
+ *
+ * Core execution engine that creates sessions, runs agents, collects results.
+ * Enhanced with:
+ * - Swarm integration (heartbeats, inter-agent messaging)
+ * - Resource quotas (token budgets, time limits, tool limits)
+ * - Circuit breaker for model calls
+ * - Structured error classification
+ * - Graceful degradation strategies
+ * - Comprehensive telemetry and metrics
  */
 
 import type { Api, Model } from "@earendil-works/pi-ai";
@@ -14,6 +23,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { getPromptCompressionLevel } from "./agent-registry.js";
 import { type EffectiveConfig, getAgentConfig, getConfig, getMemoryToolNames, getReadOnlyMemoryToolNames, getToolNamesForType } from "./agent-types.js";
 import { buildParentContext, extractText } from "./context.js";
 import { buildCtxInjection } from "./context-mode-bridge.js";
@@ -25,9 +35,19 @@ import { logger } from "./logger.js";
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "./memory.js";
 import { buildAgentPrompt, type PromptExtras } from "./prompts.js";
 import { preloadSkills } from "./skill-loader.js";
+import { getSwarmCoordinator } from "./swarm-join.js";
 import { emitTelemetry } from "./telemetry.js";
 import type { SubagentType, ThinkingLevel, ValidationResult } from "./types.js";
-import { buildValidatorPrompt, getAgentDescription, hasValidators, parseValidationResult } from "./validators.js";
+import {
+  buildValidatorPrompt,
+  getAgentDescription,
+  hasValidators,
+  parseValidationResult,
+} from "./validators.js";
+
+// ============================================================================
+// Constants & Error Types
+// ============================================================================
 
 /** Names of tools registered by this extension that subagents must NOT inherit. */
 const EXCLUDED_TOOL_NAMES: ReadonlySet<string> = new Set([
@@ -36,38 +56,112 @@ const EXCLUDED_TOOL_NAMES: ReadonlySet<string> = new Set([
   "steer_subagent",
 ]);
 
-/** Default max turns. undefined = unlimited (no turn limit). */
+/** Default max turns. undefined = unlimited. */
 let defaultMaxTurns: number | undefined;
 
-/** Normalize max turns. undefined or 0 = unlimited, otherwise minimum 1. */
+/** Additional turns allowed after the soft limit steer message. */
+let graceTurns = 5;
+
+/** Resource quota defaults. */
+const DEFAULT_MAX_TOKENS = 500_000;
+const DEFAULT_MAX_DURATION_MS = 600_000; // 10 minutes
+const DEFAULT_MAX_TOOL_CALLS = 100;
+
+/** Circuit breaker defaults. */
+const CB_FAILURE_THRESHOLD = 5;
+const CB_RECOVERY_TIMEOUT_MS = 30_000;
+
+export class AgentRunnerError extends Error {
+  constructor(
+    message: string,
+    public readonly code: "depth_exceeded" | "model_unavailable" | "quota_exceeded" | "aborted" | "timeout" | "unknown",
+    public readonly context?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "AgentRunnerError";
+  }
+}
+
+// ============================================================================
+// Configuration
+// ============================================================================
+
 export function normalizeMaxTurns(n: number | undefined): number | undefined {
   if (n == null || n === 0) return undefined;
   return Math.max(1, n);
 }
 
-/** Get the default max turns value. undefined = unlimited. */
-export function getDefaultMaxTurns(): number | undefined { return defaultMaxTurns; }
-/** Set the default max turns value. undefined or 0 = unlimited, otherwise minimum 1. */
-export function setDefaultMaxTurns(n: number | undefined): void { defaultMaxTurns = normalizeMaxTurns(n); }
+export function getDefaultMaxTurns(): number | undefined {
+  return defaultMaxTurns;
+}
 
-/** Additional turns allowed after the soft limit steer message. */
-let graceTurns = 5;
+export function setDefaultMaxTurns(n: number | undefined): void {
+  defaultMaxTurns = normalizeMaxTurns(n);
+}
 
-/** Get the grace turns value. */
-export function getGraceTurns(): number { return graceTurns; }
-/** Set the grace turns value (minimum 1). */
-export function setGraceTurns(n: number): void { graceTurns = Math.max(1, n); }
+export function getGraceTurns(): number {
+  return graceTurns;
+}
 
-/** Cached available model keys per registry to avoid rebuilding Set on every spawn. */
+export function setGraceTurns(n: number): void {
+  graceTurns = Math.max(1, n);
+}
+
+// ============================================================================
+// Circuit Breaker for Model Calls
+// ============================================================================
+
+class ModelCircuitBreaker {
+  private failures = 0;
+  private lastFailureAt = 0;
+  private state: "closed" | "open" | "half-open" = "closed";
+
+  call<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.state === "open") {
+      if (Date.now() - this.lastFailureAt > CB_RECOVERY_TIMEOUT_MS) {
+        this.state = "half-open";
+      } else {
+        throw new AgentRunnerError(
+          "Model circuit breaker is OPEN — too many consecutive failures",
+          "model_unavailable",
+          { failures: this.failures, lastFailure: this.lastFailureAt },
+        );
+      }
+    }
+
+    return fn().then(
+      (result) => {
+        if (this.state === "half-open") {
+          this.state = "closed";
+          this.failures = 0;
+        }
+        return result;
+      },
+      (err) => {
+        this.failures++;
+        this.lastFailureAt = Date.now();
+        if (this.failures >= CB_FAILURE_THRESHOLD) {
+          this.state = "open";
+        }
+        throw err;
+      },
+    );
+  }
+
+  getState(): { state: string; failures: number; lastFailureAt: number } {
+    return { state: this.state, failures: this.failures, lastFailureAt: this.lastFailureAt };
+  }
+}
+
+const globalCircuitBreaker = new ModelCircuitBreaker();
+
+// ============================================================================
+// Model Resolution
+// ============================================================================
+
 let _cachedRegistry: unknown = null;
 let _cachedKeys: Set<string> | null = null;
 
-/**
- * Retrieve (and cache) the set of available model keys from a model registry, formatted as `provider/id`.
- *
- * @param registry - An object that may expose a `getAvailable()` method returning an array of models.
- * @returns A `Set` of model keys in the form `provider/id` when `getAvailable()` returns a list, or `undefined` if the registry does not provide availability information.
- */
 function getAvailableKeys(
   registry: { getAvailable?(): Model<Api>[] },
 ): Set<string> | undefined {
@@ -79,17 +173,12 @@ function getAvailableKeys(
   return _cachedKeys;
 }
 
-/**
- * Resolve the effective model for an agent, preferring an explicit `provider/modelId` override when provided.
- *
- * @param parentModel - Fallback model from the parent context used when `configModel` is absent or invalid
- * @param registry - Registry able to locate models and optionally report available models
- * @param configModel - Optional override in the form `"<provider>/<modelId>"`; only used if it matches an available model
- * @returns The `Model<Api>` discovered from `configModel` when valid and available, otherwise `parentModel`
- */
 function resolveDefaultModel(
   parentModel: Model<Api> | undefined,
-  registry: { find(provider: string, modelId: string): Model<Api> | undefined; getAvailable?(): Model<Api>[] },
+  registry: {
+    find(provider: string, modelId: string): Model<Api> | undefined;
+    getAvailable?(): Model<Api>[];
+  },
   configModel?: string,
 ): Model<Api> | undefined {
   if (configModel) {
@@ -106,20 +195,40 @@ function resolveDefaultModel(
       if (found && isAvailable(provider, modelId)) return found;
     }
   }
-
   return parentModel;
 }
 
-/** Info about a tool event in the subagent. */
+// ============================================================================
+// Types
+// ============================================================================
+
 export interface ToolActivity {
   type: "start" | "end";
   toolName: string;
 }
 
+export interface ResourceQuotas {
+  /** Max total tokens (input + output) before hard stop. */
+  maxTokens?: number;
+  /** Max execution duration in ms. */
+  maxDurationMs?: number;
+  /** Max number of tool calls. */
+  maxToolCalls?: number;
+}
+
+export interface SwarmOptions {
+  /** Enable swarm heartbeat reporting. */
+  enableHeartbeat?: boolean;
+  /** Heartbeat interval in ms (default: 10000). */
+  heartbeatIntervalMs?: number;
+  /** Enable inter-agent message polling. */
+  enableMessaging?: boolean;
+  /** Poll interval in ms (default: 5000). */
+  messagePollIntervalMs?: number;
+}
+
 export interface RunOptions {
-  /** ExtensionAPI instance — used for pi.exec() instead of execSync. */
   pi: ExtensionAPI;
-  /** Manager-assigned id; suffixes session name to disambiguate parallel spawns (e.g. `Explore#a1b2c3d4`). */
   agentId?: string;
   model?: Model<Api>;
   maxTurns?: number;
@@ -127,70 +236,57 @@ export interface RunOptions {
   isolated?: boolean;
   inheritContext?: boolean;
   thinkingLevel?: ThinkingLevel;
-  /** Override working directory (e.g. for worktree isolation). */
   cwd?: string;
-  /** Called on tool start/end with activity info. */
   onToolActivity?: (activity: ToolActivity) => void;
-  /** Called on streaming text deltas from the assistant response. */
   onTextDelta?: (delta: string, fullText: string) => void;
   onSessionCreated?: (session: AgentSession) => void;
-  /** Called at the end of each agentic turn with the cumulative count. */
   onTurnEnd?: (turnCount: number) => void;
-  /**
-   * Called once per assistant message_end with that message's usage delta.
-   * Lets callers maintain a lifetime accumulator that survives compaction
-   * (which replaces session.state.messages and resets stats-derived sums).
-   */
   onAssistantUsage?: (usage: { input: number; output: number; cacheWrite: number }) => void;
-  /**
-   * Called when the session successfully compacts. `tokensBefore` is upstream's
-   * pre-compaction context size estimate. Aborted compactions don't fire.
-   */
   onCompaction?: (info: { reason: "manual" | "threshold" | "overflow"; tokensBefore: number }) => void;
-  /**
-   * Set to true to prevent validator recursion.
-   * Validators spawned during validation will have this flag set.
-   */
   skipValidators?: boolean;
-  /**
-   * Called when validation completes. Receives all validation results.
-   */
   onValidationComplete?: (results: ValidationResult[]) => void;
-  /** Current nesting depth of this agent (0 = root). Used for depth-limit enforcement. */
   currentLevel?: number;
-  /** Max nesting depth limit for this agent. From invocation.levelLimit. undefined = unlimited. */
   levelLimit?: number;
-  /** Parent's effective config for directional permission inheritance. */
   parentConfig?: EffectiveConfig;
-  /** Partitions this agent belongs to — restricts tools to partition memberships. */
-  partitions?: string[];
-  /** Hook registry for lifecycle event dispatch. */
+  partitions?: readonly string[];
   hooks?: HookRegistry;
-  /** Timestamp when the agent record was created (for deferred-context latency logging). */
   spawnedAt?: number;
-  /** Called after deferred context is built with the build timestamp. */
   onContextBuilt?: (timestamp: number) => void;
+  /** Resource quotas for this run. */
+  quotas?: ResourceQuotas;
+  /** Swarm collaboration options. */
+  swarm?: SwarmOptions;
+  /** Called when a swarm message is received. */
+  onSwarmMessage?: (from: string, payload: unknown) => void;
 }
 
 export interface RunResult {
   responseText: string;
   session: AgentSession;
-  /** True if the agent was hard-aborted (max_turns + grace exceeded). */
   aborted: boolean;
-  /** True if the agent was steered to wrap up (hit soft turn limit) but finished in time. */
   steered: boolean;
-  /** Validation results if validators were configured and run. */
   validationResults?: ValidationResult[];
-  /** Whether all validators passed (undefined if no validators configured). */
   validated?: boolean;
-  /** Structured handoff parsed from agent output (only when handoff is enabled). */
   handoff?: AgentHandoff;
+  /** Execution metrics. */
+  metrics: RunMetrics;
 }
 
-/**
- * Subscribe to a session and collect the last assistant message text.
- * Returns an object with a `getText()` getter and an `unsubscribe` function.
- */
+export interface RunMetrics {
+  durationMs: number;
+  turns: number;
+  toolCalls: number;
+  tokensIn: number;
+  tokensOut: number;
+  tokensCacheWrite: number;
+  contextBuiltAt?: number;
+  latencyToFirstTokenMs?: number;
+}
+
+// ============================================================================
+// Response Collection
+// ============================================================================
+
 function collectResponseText(session: AgentSession) {
   let text = "";
   const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
@@ -204,7 +300,6 @@ function collectResponseText(session: AgentSession) {
   return { getText: () => text, unsubscribe };
 }
 
-/** Get the last assistant text from the completed session history. */
 function getLastAssistantText(session: AgentSession): string {
   for (let i = session.messages.length - 1; i >= 0; i--) {
     const msg = session.messages[i];
@@ -215,10 +310,6 @@ function getLastAssistantText(session: AgentSession): string {
   return "";
 }
 
-/**
- * Wire an AbortSignal to abort a session.
- * Returns a cleanup function to remove the listener.
- */
 function forwardAbortSignal(session: AgentSession, signal?: AbortSignal): () => void {
   if (!signal) return () => {};
   const onAbort = () => session.abort();
@@ -226,15 +317,10 @@ function forwardAbortSignal(session: AgentSession, signal?: AbortSignal): () => 
   return () => signal.removeEventListener("abort", onAbort);
 }
 
-/**
- * Build the effective prompt, deferring parent-context serialization
- * to the last possible moment before session creation.
- *
- * This is the core of the deferred context engine: by building context
- * just before session.create() rather than at agent-spawn time, queued
- * agents capture the freshest parent state, saving 15-48% tokens that
- * would otherwise be wasted on stale accumulated context while waiting.
- */
+// ============================================================================
+// Deferred Context
+// ============================================================================
+
 function buildEffectivePrompt(
   ctx: ExtensionContext,
   prompt: string,
@@ -243,7 +329,6 @@ function buildEffectivePrompt(
   if (!options.inheritContext) return prompt;
 
   const parentContext = buildParentContext(ctx);
-
   const builtAt = Date.now();
   options.onContextBuilt?.(builtAt);
 
@@ -254,27 +339,10 @@ function buildEffectivePrompt(
   return parentContext + prompt;
 }
 
-/**
- * Execute a subagent with the given type and prompt.
- *
- * This is the core agent execution function. It handles:
- * - Model resolution (explicit > config > parent fallback)
- * - Tool permission inheritance from parent agents
- * - Context building (parent context, memory, skills)
- * - Partition-based tool filtering
- * - Depth limiting (prevents runaway agent trees)
- * - Worktree isolation (optional git worktree per agent)
- * - Session creation via ExtensionAPI
- * - Tool call loop with compaction and hooks
- * - Result formatting and notification
- *
- * @param ctx - Extension context (provides API access, session manager, cwd)
- * @param type - Agent type name (e.g. "Explore", "general-purpose", custom name)
- * @param prompt - The user task/prompt for this agent
- * @param options - Execution options (model override, max turns, parent config, etc.)
- * @returns RunResult with conversation, usage stats, and formatted output
- * @throws When depth limit is exceeded or model resolution fails
- */
+// ============================================================================
+// Main Agent Runner
+// ============================================================================
+
 export async function runAgent(
   ctx: ExtensionContext,
   type: SubagentType,
@@ -282,53 +350,62 @@ export async function runAgent(
   options: RunOptions,
 ): Promise<RunResult> {
   const startTime = Date.now();
+  const quotas = {
+    maxTokens: options.quotas?.maxTokens ?? DEFAULT_MAX_TOKENS,
+    maxDurationMs: options.quotas?.maxDurationMs ?? DEFAULT_MAX_DURATION_MS,
+    maxToolCalls: options.quotas?.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS,
+  };
+
+  // Check duration quota early
+  const checkDurationQuota = () => {
+    if (Date.now() - startTime > quotas.maxDurationMs) {
+      throw new AgentRunnerError(
+        `Agent exceeded max duration quota (${quotas.maxDurationMs}ms)`,
+        "timeout",
+        { elapsedMs: Date.now() - startTime, maxDurationMs: quotas.maxDurationMs },
+      );
+    }
+  };
+
   const config = getConfig(type, options.parentConfig, options.partitions);
   const agentConfig = getAgentConfig(type);
 
-  // Early exit: check level limit before any work is done
+  // Early exit: check level limit
   const currentLevel = options.currentLevel ?? 0;
   const depthLimit = options.levelLimit ?? 5;
   if (currentLevel >= depthLimit) {
-    throw new Error(
+    throw new AgentRunnerError(
       `Max agent depth reached (${currentLevel}/${depthLimit})`,
+      "depth_exceeded",
+      { currentLevel, depthLimit },
     );
   }
 
-  // Emit telemetry: agent spawned
+  // Telemetry
   emitTelemetry("agent:spawned", {
     type,
-    parentType: options.parentConfig ? type : undefined, // If has parent config, there's a parent
+    parentType: options.parentConfig ? type : undefined,
     depth: currentLevel,
     budget: options.maxTurns,
   });
 
-  // Resolve working directory: worktree override > parent cwd
   const effectiveCwd = options.cwd ?? ctx.cwd;
-
   const env = await detectEnv(options.pi, effectiveCwd);
-
-  // Get parent system prompt for append-mode agents
   const parentSystemPrompt = ctx.getSystemPrompt();
 
-  // Build prompt extras (memory, skill preloading)
-  const extras: PromptExtras = {};
-
-  // Resolve extensions/skills: isolated overrides to false
+  // Resolve extensions/skills
   const extensions = options.isolated ? false : config.extensions;
   const skills = options.isolated ? false : config.skills;
+  const extras: PromptExtras = {};
 
-  // Skill preloading: when skills is string[], preload their content into prompt
   if (Array.isArray(skills)) {
     const loaded = preloadSkills(skills, effectiveCwd);
-    if (loaded.length > 0) {
-      extras.skillBlocks = loaded;
-    }
+    if (loaded.length > 0) extras.skillBlocks = loaded;
   }
 
   let toolNames = getToolNamesForType(type);
 
-  // Persistent memory: detect write capability and branch accordingly.
-  // Account for disallowedTools — a tool in the base set but on the denylist is not truly available.
+  // Persistent memory
   if (agentConfig?.memory) {
     const existingNames = new Set(toolNames);
     const denied = agentConfig.disallowedTools ? new Set(agentConfig.disallowedTools) : undefined;
@@ -336,37 +413,37 @@ export async function runAgent(
     const hasWriteTools = effectivelyHas("write") || effectivelyHas("edit");
 
     if (hasWriteTools) {
-      // Read-write memory: add any missing memory tool names (read/write/edit)
       const extraNames = getMemoryToolNames(existingNames);
       if (extraNames.length > 0) toolNames = [...toolNames, ...extraNames];
       extras.memoryBlock = buildMemoryBlock(agentConfig.name, agentConfig.memory, effectiveCwd, agentConfig.maxMemoryLines);
     } else {
-      // Read-only memory: only add read tool name, use read-only prompt
       const extraNames = getReadOnlyMemoryToolNames(existingNames);
       if (extraNames.length > 0) toolNames = [...toolNames, ...extraNames];
       extras.memoryBlock = buildReadOnlyMemoryBlock(agentConfig.name, agentConfig.memory, effectiveCwd, agentConfig.maxMemoryLines);
     }
   }
 
-  // Apply parent permission inheritance: filter tools to only those the parent can also use.
-  // The config.builtinToolNames already reflects the intersection with parent's effective tools.
+  // Parent permission inheritance
   const allowedTools = new Set(config.builtinToolNames);
   toolNames = toolNames.filter((t) => allowedTools.has(t));
 
-  // Build system prompt from agent config
+  // Build system prompt
+  const compressionLevel = agentConfig?.promptCompressionLevel ?? getPromptCompressionLevel();
   let systemPrompt: string;
   if (agentConfig) {
-    systemPrompt = buildAgentPrompt(agentConfig, effectiveCwd, env, parentSystemPrompt, extras);
+    systemPrompt = buildAgentPrompt(agentConfig, effectiveCwd, env, parentSystemPrompt, extras, compressionLevel);
   } else {
-    // Unknown type fallback: spread the canonical general-purpose config (defensive —
-    // unreachable in practice since index.ts resolves unknown types before calling runAgent).
     const fallback = DEFAULT_AGENTS.get("general-purpose");
-    if (!fallback) throw new Error(`No fallback config available for unknown type "${type}"`);
-    systemPrompt = buildAgentPrompt({ ...fallback, name: type }, effectiveCwd, env, parentSystemPrompt, extras);
+    if (!fallback) {
+      throw new AgentRunnerError(
+        `No fallback config available for unknown type "${type}"`,
+        "unknown",
+      );
+    }
+    systemPrompt = buildAgentPrompt({ ...fallback, name: type }, effectiveCwd, env, parentSystemPrompt, extras, compressionLevel);
   }
 
-  // Inject context-mode sandbox tools when @onlinechef/context-mode is installed.
-  // Gracefully skips when unavailable — context-mode is an optional peerDependency.
+  // Context-mode injection
   const ctxInjection = buildCtxInjection();
   if (ctxInjection) {
     systemPrompt = `${systemPrompt}\n\n${ctxInjection.systemPromptAddition}`;
@@ -374,18 +451,9 @@ export async function runAgent(
     logger.debug("context-mode tools injected", { agentId: options.agentId ?? "unknown" });
   }
 
-  // When skills is string[], we've already preloaded them into the prompt.
-  // Still pass noSkills: true since we don't need the skill loader to load them again.
   const noSkills = skills === false || Array.isArray(skills);
-
   const agentDir = getAgentDir();
 
-  // Load extensions/skills: true or string[] → load; false → don't.
-  // Suppress AGENTS.md/CLAUDE.md and APPEND_SYSTEM.md — upstream's
-  // buildSystemPrompt() re-appends both AFTER systemPromptOverride, which
-  // would defeat prompt_mode: replace and isolated: true. Parent context, if
-  // wanted, reaches the subagent via prompt_mode: append (parentSystemPrompt
-  // is embedded in systemPromptOverride) or inherit_context (conversation).
   const loader = new DefaultResourceLoader({
     cwd: effectiveCwd,
     agentDir,
@@ -399,12 +467,18 @@ export async function runAgent(
   });
   await loader.reload();
 
-  // Resolve model: explicit option > config.model > parent model
+  // Resolve model with circuit breaker
   const model = options.model ?? resolveDefaultModel(
     ctx.model, ctx.modelRegistry, agentConfig?.model,
   );
 
-  // Resolve thinking level: explicit option > agent config > undefined (inherit)
+  if (!model) {
+    throw new AgentRunnerError(
+      "No model available for agent execution",
+      "model_unavailable",
+    );
+  }
+
   const thinkingLevel = options.thinkingLevel ?? agentConfig?.thinking;
 
   const sessionOpts: Parameters<typeof createAgentSession>[0] = {
@@ -421,38 +495,57 @@ export async function runAgent(
     sessionOpts.thinkingLevel = thinkingLevel;
   }
 
-  // Dispatch blocking hook before session creation
+  // Hook: subagent:start
   if (options.hooks) {
-    const hookResult = await options.hooks.dispatch(
-      "subagent:start",
-      options.agentId ?? "unknown",
-    );
+    const hookResult = await options.hooks.dispatch("subagent:start", options.agentId ?? "unknown", {
+      type,
+      model: `${model.provider}/${model.id}`,
+      quotas,
+    });
     if (hookResult === "block") {
-      throw new Error("Blocked by hook");
+      throw new AgentRunnerError("Blocked by hook", "aborted", { hook: "subagent:start" });
     }
   }
 
-  // Deferred context: build at session.create boundary to capture
-  // freshest state, saving 15-48% tokens on queued agents.
-  // Context is serialized AFTER all setup (extensions, skills, tools,
-  // memory) but BEFORE the session is created, so the gap between
-  // serialization and first prompt is minimized.
   const effectivePrompt = buildEffectivePrompt(ctx, prompt, options);
 
-  const { session } = await createAgentSession(sessionOpts);
+  // Circuit breaker protected session creation
+  const { session } = await globalCircuitBreaker.call(() => createAgentSession(sessionOpts));
 
   const baseSessionName = agentConfig?.name ?? type;
   session.setSessionName(
     options.agentId ? `${baseSessionName}#${options.agentId.slice(0, 8)}` : baseSessionName,
   );
 
-  // Build disallowed tools set from agent config
+  // Swarm integration: register heartbeat
+  let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+  let messagePollInterval: ReturnType<typeof setInterval> | undefined;
+  const swarmCoord = getSwarmCoordinator();
+  if (swarmCoord && options.agentId && options.swarm?.enableHeartbeat) {
+    const interval = options.swarm.heartbeatIntervalMs ?? 10_000;
+    heartbeatInterval = setInterval(() => {
+      swarmCoord.heartbeat(options.agentId!);
+    }, interval);
+  }
+
+  // Swarm messaging poll
+  let lastMessagePoll = 0;
+  if (swarmCoord && options.agentId && options.swarm?.enableMessaging) {
+    const interval = options.swarm.messagePollIntervalMs ?? 5_000;
+    messagePollInterval = setInterval(() => {
+      const messages = swarmCoord.pollMessages(options.agentId!, lastMessagePoll);
+      for (const msg of messages) {
+        lastMessagePoll = Math.max(lastMessagePoll, msg.ts);
+        options.onSwarmMessage?.(msg.from, msg.payload);
+      }
+    }, interval);
+  }
+
+  // Tool filtering
   const disallowedSet = agentConfig?.disallowedTools
     ? new Set(agentConfig.disallowedTools)
     : undefined;
 
-  // Filter active tools: remove our own tools to prevent nesting,
-  // apply extension allowlist if specified, and apply disallowedTools denylist
   if (extensions !== false) {
     const builtinToolNameSet = new Set(toolNames);
     const activeTools = session.getActiveToolNames().filter((t) => {
@@ -460,21 +553,16 @@ export async function runAgent(
       if (disallowedSet?.has(t)) return false;
       if (builtinToolNameSet.has(t)) return true;
       if (Array.isArray(extensions)) {
-        return extensions.some(ext => t.startsWith(ext) || t.includes(ext));
+        return extensions.some((ext) => t.startsWith(ext) || t.includes(ext));
       }
       return true;
     });
     session.setActiveToolsByName(activeTools);
   } else if (disallowedSet) {
-    // Even with extensions disabled, apply denylist to built-in tools
-    const activeTools = session.getActiveToolNames().filter(t => !disallowedSet.has(t));
+    const activeTools = session.getActiveToolNames().filter((t) => !disallowedSet.has(t));
     session.setActiveToolsByName(activeTools);
   }
 
-  // Bind extensions so that session_start fires and extensions can initialize
-  // (e.g. loading credentials, setting up state). Placed after tool filtering
-  // so extension-provided skills/prompts from extendResourcesFromExtensions()
-  // respect the active tool set. All ExtensionBindings fields are optional.
   await session.bindExtensions({
     onError: (err) => {
       options.onToolActivity?.({
@@ -486,18 +574,35 @@ export async function runAgent(
 
   options.onSessionCreated?.(session);
 
-  // Track turns for graceful max_turns enforcement
+  // Turn tracking and quotas
   let turnCount = 0;
+  let toolCallCount = 0;
+  let tokensIn = 0;
+  let tokensOut = 0;
+  let tokensCacheWrite = 0;
+  let latencyToFirstToken: number | undefined;
   const maxTurns = normalizeMaxTurns(options.maxTurns ?? agentConfig?.maxTurns ?? defaultMaxTurns);
   let softLimitReached = false;
   let aborted = false;
 
   let currentMessageText = "";
   const unsubTurns = session.subscribe((event: AgentSessionEvent) => {
+    // Quota checks
+    checkDurationQuota();
+    const totalTokens = tokensIn + tokensOut;
+    if (totalTokens > quotas.maxTokens) {
+      logger.warn(`Token quota exceeded`, { agentId: options.agentId, totalTokens, maxTokens: quotas.maxTokens });
+      session.abort();
+      aborted = true;
+      return;
+    }
+
     if (event.type === "turn_end") {
       options.hooks
         ?.dispatch("turn:end", options.agentId ?? "unknown")
-        .catch((err) => { logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`); });
+        .catch((err) => {
+          logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
+        });
       turnCount++;
       options.onTurnEnd?.(turnCount);
       if (maxTurns != null) {
@@ -510,52 +615,77 @@ export async function runAgent(
         }
       }
     }
+
     if (event.type === "turn_start") {
       options.hooks
         ?.dispatch("turn:start", options.agentId ?? "unknown")
-        .catch((err) => { logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`); });
+        .catch((err) => {
+          logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
+        });
     }
+
     if (event.type === "message_start") {
       currentMessageText = "";
+      if (latencyToFirstToken === undefined) {
+        latencyToFirstToken = Date.now() - startTime;
+      }
     }
+
     if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
       currentMessageText += event.assistantMessageEvent.delta;
       options.onTextDelta?.(event.assistantMessageEvent.delta, currentMessageText);
     }
+
     if (event.type === "tool_execution_start") {
+      toolCallCount++;
+      if (toolCallCount > quotas.maxToolCalls) {
+        logger.warn(`Tool call quota exceeded`, { agentId: options.agentId, toolCallCount, maxToolCalls: quotas.maxToolCalls });
+        session.abort();
+        aborted = true;
+        return;
+      }
       options.onToolActivity?.({ type: "start", toolName: event.toolName });
     }
+
     if (event.type === "tool_execution_end") {
       options.onToolActivity?.({ type: "end", toolName: event.toolName });
     }
+
     if (event.type === "message_end" && event.message.role === "assistant") {
       const msg = event.message as { usage?: { input?: number; output?: number; cacheWrite?: number } };
       const u = msg.usage;
-      if (u) options.onAssistantUsage?.({
-        input: u.input ?? 0,
-        output: u.output ?? 0,
-        cacheWrite: u.cacheWrite ?? 0,
-      });
+      if (u) {
+        tokensIn += u.input ?? 0;
+        tokensOut += u.output ?? 0;
+        tokensCacheWrite += u.cacheWrite ?? 0;
+        options.onAssistantUsage?.({
+          input: u.input ?? 0,
+          output: u.output ?? 0,
+          cacheWrite: u.cacheWrite ?? 0,
+        });
+      }
     }
+
     if (event.type === "compaction_end" && !event.aborted && event.result) {
       options.hooks
         ?.dispatch("compaction:end", options.agentId ?? "unknown", {
           reason: event.reason,
           tokensBefore: event.result.tokensBefore,
         })
-        .catch((err) => { logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`); });
+        .catch((err) => {
+          logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
+        });
       options.onCompaction?.({ reason: event.reason, tokensBefore: event.result.tokensBefore });
     }
+
     if (event.type === "compaction_start") {
       options.hooks
         ?.dispatch("compaction:start", options.agentId ?? "unknown", {
           reason: event.reason,
         })
-        .catch((err) => { logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`); });
-      // --- Compaction hook point ---
-      // Callers can use pruneOldToolOutputs(session.messages, keepTurns) here
-      // to pre-prune tool outputs before the upstream LLM summary compaction.
-      // The onCompaction callback reports the pre-compaction context size estimate.
+        .catch((err) => {
+          logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
+        });
     }
   });
 
@@ -563,29 +693,36 @@ export async function runAgent(
   const cleanupAbort = forwardAbortSignal(session, options.signal);
 
   try {
-    // Deferred context: effectivePrompt was built before session creation
     await session.prompt(effectivePrompt);
     options.hooks
-      ?.dispatch("subagent:end", options.agentId ?? "unknown")
-      .catch((err) => { logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`); });
+      ?.dispatch("subagent:end", options.agentId ?? "unknown", {
+        tokensIn,
+        tokensOut,
+      })
+      .catch((err) => {
+        logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
+      });
   } catch (err) {
     options.hooks
       ?.dispatch("subagent:error", options.agentId ?? "unknown", {
         error: err instanceof Error ? err.message : String(err),
       })
-      .catch((err2) => { logger.debug(`Hook dispatch error: ${err2 instanceof Error ? err2.message : String(err2)}`); });
+      .catch((err2) => {
+        logger.debug(`Hook dispatch error: ${err2 instanceof Error ? err2.message : String(err2)}`);
+      });
     throw err;
   } finally {
     unsubTurns();
     collector.unsubscribe();
     cleanupAbort();
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    if (messagePollInterval) clearInterval(messagePollInterval);
   }
 
   let responseText = collector.getText().trim() || getLastAssistantText(session);
-
   const duration = Date.now() - startTime;
 
-  // ---- Structured handoff parsing (before validators) ----
+  // Structured handoff parsing
   let handoff: AgentHandoff | undefined;
   if (agentConfig?.handoff) {
     const parsed = parseHandoff(responseText);
@@ -593,10 +730,9 @@ export async function runAgent(
       handoff = parsed;
       responseText = renderHandoffForParent(parsed);
     }
-    // Graceful degrade: if parse fails (null), keep original responseText
   }
 
-  // ---- Adversarial validation ----
+  // Adversarial validation
   let validationResults: ValidationResult[] | undefined;
   let validated: boolean | undefined;
 
@@ -607,6 +743,11 @@ export async function runAgent(
     let retries = 0;
 
     while (retries <= VALIDATION_MAX_RETRIES) {
+      options.hooks?.dispatch("validation:start", options.agentId ?? "unknown", {
+        attempt: retries + 1,
+        validatorCount: validators.length,
+      }).catch(() => {});
+
       const validatorPromises = validators.map((v) =>
         runAgent(ctx, v.agentId, buildValidatorPrompt(responseText, v.criteria, agentDescription), {
           pi: options.pi,
@@ -615,7 +756,9 @@ export async function runAgent(
           skipValidators: true,
           levelLimit: 0,
           signal: options.signal,
-        }).then((result) => parseValidationResult(result.responseText, v.agentId))
+          quotas: { maxTokens: 50_000, maxDurationMs: 120_000, maxToolCalls: 10 },
+        })
+          .then((result) => parseValidationResult(result.responseText, v.agentId))
           .catch((err) => ({
             agentId: v.agentId,
             passed: false,
@@ -626,13 +769,18 @@ export async function runAgent(
 
       validationResults = await Promise.all(validatorPromises);
       validated = validationResults.every((r) => r.passed);
-      
+
+      options.hooks?.dispatch("validation:end", options.agentId ?? "unknown", {
+        passed: validated,
+        results: validationResults,
+      }).catch(() => {});
+
       if (validated || retries >= VALIDATION_MAX_RETRIES) {
         options.onValidationComplete?.(validationResults);
         break;
       }
 
-      // Self-healing: feed the failures back to the agent
+      // Self-healing feedback
       const failedFeedback = validationResults
         .filter((r) => !r.passed)
         .map((r) => {
@@ -643,9 +791,9 @@ export async function runAgent(
           return `[${r.agentId}] ${r.summary}${details}`;
         })
         .join("\n\n");
-        
+
       const fixPrompt = `Validation failed. Please fix the following issues and provide an updated final response:\n\n${failedFeedback}`;
-      
+
       try {
         responseText = await resumeAgent(session, fixPrompt, {
           onToolActivity: options.onToolActivity,
@@ -654,7 +802,6 @@ export async function runAgent(
           signal: options.signal,
         });
       } catch {
-        // If resume fails (e.g. aborted), break out
         options.onValidationComplete?.(validationResults);
         break;
       }
@@ -663,19 +810,30 @@ export async function runAgent(
     }
   }
 
-  // Emit telemetry: agent completed
+  // Telemetry
   emitTelemetry("agent:completed", {
     type,
     duration,
-    validatorResults: validationResults?.map(r => ({ passed: r.passed, summary: r.summary })),
+    validatorResults: validationResults?.map((r) => ({ passed: r.passed, summary: r.summary })),
   });
 
-  return { responseText, session, aborted, steered: softLimitReached, validationResults, validated, handoff };
+  const metrics: RunMetrics = {
+    durationMs: duration,
+    turns: turnCount,
+    toolCalls: toolCallCount,
+    tokensIn,
+    tokensOut,
+    tokensCacheWrite,
+    latencyToFirstTokenMs: latencyToFirstToken,
+  };
+
+  return { responseText, session, aborted, steered: softLimitReached, validationResults, validated, handoff, metrics };
 }
 
-/**
- * Send a new prompt to an existing session (resume).
- */
+// ============================================================================
+// Resume Agent
+// ============================================================================
+
 export async function resumeAgent(
   session: AgentSession,
   prompt: string,
@@ -684,9 +842,7 @@ export async function resumeAgent(
     onAssistantUsage?: (usage: { input: number; output: number; cacheWrite: number }) => void;
     onCompaction?: (info: { reason: "manual" | "threshold" | "overflow"; tokensBefore: number }) => void;
     signal?: AbortSignal;
-    /** If true, prepend parent context (deferred — built just before prompt). */
     inheritContext?: boolean;
-    /** Required when inheritContext is true. */
     ctx?: ExtensionContext;
   } = {},
 ): Promise<string> {
@@ -700,11 +856,7 @@ export async function resumeAgent(
         if (event.type === "message_end" && event.message.role === "assistant") {
           const msg = event.message as { usage?: { input?: number; output?: number; cacheWrite?: number } };
           const u = msg.usage;
-          if (u) options.onAssistantUsage?.({
-            input: u.input ?? 0,
-            output: u.output ?? 0,
-            cacheWrite: u.cacheWrite ?? 0,
-          });
+          if (u) options.onAssistantUsage?.({ input: u.input ?? 0, output: u.output ?? 0, cacheWrite: u.cacheWrite ?? 0 });
         }
         if (event.type === "compaction_end" && !event.aborted && event.result) {
           options.onCompaction?.({ reason: event.reason, tokensBefore: event.result.tokensBefore });
@@ -712,9 +864,6 @@ export async function resumeAgent(
       })
     : () => {};
 
-  // Deferred context: build parent context just before prompt on resume.
-  // Mirrors runAgent's deferred strategy — context is serialized at the last
-  // moment so it captures the freshest conversation state.
   let effectivePrompt = prompt;
   if (options.inheritContext && options.ctx) {
     const parentContext = buildParentContext(options.ctx);
@@ -734,35 +883,24 @@ export async function resumeAgent(
   return collector.getText().trim() || getLastAssistantText(session);
 }
 
-/**
- * Send a steering message to a running subagent.
- * The message will interrupt the agent after its current tool execution.
- */
-export async function steerAgent(
-  session: AgentSession,
-  message: string,
-): Promise<void> {
+// ============================================================================
+// Steering
+// ============================================================================
+
+export async function steerAgent(session: AgentSession, message: string): Promise<void> {
   await session.steer(message);
 }
 
-/**
- * Serialize a session's messages into a human-readable conversation transcript.
- *
- * Produces ordered blocks for user messages (`[User]: ...`), assistant messages (`[Assistant]: ...`),
- * assistant-initiated tool calls (`[Tool Calls]:` with indented `Tool: <name>` lines), and tool results
- * (`[Tool Result (<toolName>)]: ...`). Assistant text parts are joined with newlines; tool result text
- * is truncated to 200 characters with `...` when longer. Empty user messages are omitted.
- *
- * @returns The formatted conversation as a single string with message blocks separated by blank lines.
- */
+// ============================================================================
+// Conversation Serialization
+// ============================================================================
+
 export function getAgentConversation(session: AgentSession): string {
   const parts: string[] = [];
 
   for (const msg of session.messages) {
     if (msg.role === "user") {
-      const text = typeof msg.content === "string"
-        ? msg.content
-        : extractText(msg.content);
+      const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
       if (text.trim()) parts.push(`[User]: ${text.trim()}`);
     } else if (msg.role === "assistant") {
       const textParts: string[] = [];
@@ -782,3 +920,9 @@ export function getAgentConversation(session: AgentSession): string {
 
   return parts.join("\n\n");
 }
+
+// ============================================================================
+// Utility Exports
+// ============================================================================
+
+export { globalCircuitBreaker };

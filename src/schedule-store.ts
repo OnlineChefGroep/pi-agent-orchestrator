@@ -53,9 +53,10 @@ export class ScheduleStore {
   private loadSync(): void {
     if (!existsSync(this.filePath)) return;
     try {
-      const data: ScheduleStoreData = JSON.parse(
-        readFileSync(this.filePath, "utf-8"),
-      );
+      const content = readFileSync(this.filePath, "utf-8");
+      // CVE-005 FIX: Enforce max payload size to prevent DoS via JSON.parse
+      if (content.length > 5 * 1024 * 1024) throw new Error("Schedule store payload too large");
+      const data: ScheduleStoreData = JSON.parse(content);
       this.jobs.clear();
       for (const j of data.jobs ?? []) this.jobs.set(j.id, j);
     } catch {
@@ -66,9 +67,10 @@ export class ScheduleStore {
   /** Reload from disk into the in-memory cache (async). */
   private async load(): Promise<void> {
     try {
-      const data: ScheduleStoreData = JSON.parse(
-        await fs.readFile(this.filePath, "utf-8"),
-      );
+      const content = await fs.readFile(this.filePath, "utf-8");
+      // CVE-005 FIX: Enforce max payload size to prevent DoS via JSON.parse
+      if (content.length > 5 * 1024 * 1024) throw new Error("Schedule store payload too large");
+      const data: ScheduleStoreData = JSON.parse(content);
       this.jobs.clear();
       for (const j of data.jobs ?? []) this.jobs.set(j.id, j);
     } catch {

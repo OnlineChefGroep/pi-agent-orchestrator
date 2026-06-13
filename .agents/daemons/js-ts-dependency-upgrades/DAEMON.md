@@ -1,5 +1,6 @@
 ---
 id: js-ts-dependency-upgrades
+trigger: /js-ts-dependency-upgrades
 purpose: Keep JavaScript and TypeScript dependencies current with low-noise grouped upgrade pull requests.
 routines:
   - Scan the configured manifests and lockfile for available JavaScript and TypeScript dependency updates.
@@ -16,6 +17,17 @@ schedule: '0 8 * * 1'
 ---
 
 # JavaScript/TypeScript Dependency Update Maintainer
+
+## Pi Orchestra Integration
+
+This daemon runs on the Pi Orchestra schedule system via its `trigger` frontmatter (`/js-ts-dependency-upgrades`) and the cron expression in `schedule`.
+
+- **Schedule:** `0 8 * * 1` — fires every Monday at 08:00 UTC
+- **Orchestra monitoring:** View active schedules in the dashboard via `z` (schedule view) or `/agents → Scheduled jobs`
+- **Toggle:** Enable/disable via `/agents → Settings → Scheduling`
+- **Persistence:** Schedule state is stored in `.pi/subagent-schedules/<sessionId>.json`
+- **Limits:** Max 2 PRs per run (runtime + dev), max 20 packages per PR
+- **No-op behavior:** Silently no-ops when no upgrades available, configuration is incomplete, or verification can't run safely
 
 ## Configuration
 

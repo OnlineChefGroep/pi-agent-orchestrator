@@ -1,4 +1,6 @@
-name: Publish to GitHub Packages
+# This publishes to GitHub Packages (internal mirror).
+# For npmjs.org public release, see publish-npm.yml.
+name: Publish to GitHub Packages (Internal Mirror)
 
 on:
   push:

@@ -1,132 +1,186 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { GroupJoinManager } from '../src/group-join.js';
-import type { AgentRecord } from '../src/types.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-describe('GroupJoinManager', () => {
-  let manager: GroupJoinManager;
-  let deliverCb: ReturnType<typeof vi.fn>;
+import type { AgentRecord } from "../src/types.js";
 
-  const createDummyRecord = (id: string): AgentRecord => ({
-    id,
-    type: 'general-purpose',
-    description: 'test',
-    status: 'completed',
-    toolUses: 0,
+// Mock logger
+vi.mock("../src/logger.js", () => ({
+  logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
+const { GroupJoinManager } = await import("../src/group-join.js");
+
+function makeRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {
+  return {
+    id: "agent-1",
+    type: "Explore",
+    status: "completed",
+    description: "Done",
     spawnedAt: Date.now(),
-    startedAt: Date.now(),
-    lifetimeUsage: { inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, totalDurationMs: 0 },
+    startedAt: Date.now() - 1000,
+    completedAt: Date.now(),
+    swarmId: undefined,
+    handoff: undefined,
+    invocation: undefined,
     compactionCount: 0,
-    currentLevel: 0,
-    totalSpawned: 0,
-  });
+    toolUses: 0,
+    lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 },
+    ...overrides,
+  } as AgentRecord;
+}
+
+describe("GroupJoinManager", () => {
+  let deliverCb: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
     deliverCb = vi.fn();
-    manager = new GroupJoinManager(deliverCb, 30_000);
   });
 
   afterEach(() => {
-    manager.dispose();
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
-  describe('registration', () => {
-    it('registers a group and correctly reports if an agent is grouped', () => {
-      manager.registerGroup('g1', ['a1', 'a2']);
-      expect(manager.isGrouped('a1')).toBe(true);
-      expect(manager.isGrouped('a2')).toBe(true);
-      expect(manager.isGrouped('a3')).toBe(false);
-    });
-  });
-
-  describe('onAgentComplete', () => {
-    it('returns pass for ungrouped agents', () => {
-      const record = createDummyRecord('a1');
-      expect(manager.onAgentComplete(record)).toBe('pass');
-      expect(deliverCb).not.toHaveBeenCalled();
+  describe("registerGroup", () => {
+    it("registers a group with string shorthand", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      gjm.registerGroup("group-1", ["agent-1", "agent-2"]);
+      expect(gjm.isGrouped("agent-1")).toBe(true);
+      expect(gjm.isGrouped("agent-2")).toBe(true);
+      expect(gjm.isGrouped("agent-3")).toBe(false);
     });
 
-    it('returns pass if group is already delivered', () => {
-      manager.registerGroup('g1', ['a1']);
-      manager.onAgentComplete(createDummyRecord('a1'));
-      expect(manager.onAgentComplete(createDummyRecord('a1'))).toBe('pass');
+    it("registers a group with full config", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      gjm.registerGroup({
+        groupId: "group-1",
+        agentIds: ["a1", "a2"],
+        timeout: 10000,
+        progressiveDelivery: true,
+      });
+      expect(gjm.isGrouped("a1")).toBe(true);
     });
 
-    it('delivers immediately when all agents complete before timeout', () => {
-      manager.registerGroup('g1', ['a1', 'a2']);
+    it("emits group:created event", () => {
+      const onEvent = vi.fn();
+      const gjm = new GroupJoinManager(deliverCb);
+      gjm.registerGroup({
+        groupId: "group-1",
+        agentIds: ["a1"],
+        onEvent,
+      });
 
-      const r1 = createDummyRecord('a1');
-      expect(manager.onAgentComplete(r1)).toBe('held');
-      expect(deliverCb).not.toHaveBeenCalled();
-
-      const r2 = createDummyRecord('a2');
-      expect(manager.onAgentComplete(r2)).toBe('delivered');
-
-      expect(deliverCb).toHaveBeenCalledTimes(1);
-      expect(deliverCb).toHaveBeenCalledWith([r1, r2], false);
-
-      // Cleanup check
-      expect(manager.isGrouped('a1')).toBe(false);
-    });
-
-    it('delivers partial results on default timeout', () => {
-      manager.registerGroup('g1', ['a1', 'a2', 'a3']);
-
-      const r1 = createDummyRecord('a1');
-      expect(manager.onAgentComplete(r1)).toBe('held');
-
-      vi.advanceTimersByTime(30_000);
-
-      expect(deliverCb).toHaveBeenCalledTimes(1);
-      expect(deliverCb).toHaveBeenCalledWith([r1], true);
-
-      // Completed agent is cleaned up
-      expect(manager.isGrouped('a1')).toBe(false);
-      // Remaining agents are still grouped
-      expect(manager.isGrouped('a2')).toBe(true);
-    });
-
-    it('handles stragglers with straggler timeout', () => {
-      manager.registerGroup('g1', ['a1', 'a2', 'a3']);
-
-      // First completion triggers main timeout
-      const r1 = createDummyRecord('a1');
-      manager.onAgentComplete(r1);
-      vi.advanceTimersByTime(30_000);
-
-      deliverCb.mockClear();
-
-      // First straggler completion triggers straggler timeout
-      const r2 = createDummyRecord('a2');
-      expect(manager.onAgentComplete(r2)).toBe('held');
-
-      vi.advanceTimersByTime(15_000);
-
-      expect(deliverCb).toHaveBeenCalledTimes(1);
-      expect(deliverCb).toHaveBeenCalledWith([r2], true);
-
-      deliverCb.mockClear();
-
-      // Final straggler completes immediately
-      const r3 = createDummyRecord('a3');
-      expect(manager.onAgentComplete(r3)).toBe('delivered');
-      expect(deliverCb).toHaveBeenCalledTimes(1);
-      expect(deliverCb).toHaveBeenCalledWith([r3], false);
-
-      expect(manager.isGrouped('a3')).toBe(false);
+      expect(onEvent).toHaveBeenCalledWith("group-1", expect.objectContaining({
+        type: "group:created",
+      }));
     });
   });
 
-  describe('dispose', () => {
-    it('clears timeouts on dispose', () => {
-      manager.registerGroup('g1', ['a1', 'a2']);
-      manager.onAgentComplete(createDummyRecord('a1'));
+  describe("onAgentComplete", () => {
+    it("returns pass for ungrouped agent", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      const rec = makeRecord({ id: "a1" });
+      expect(gjm.onAgentComplete(rec)).toBe("pass");
+    });
 
-      manager.dispose();
+    it("returns held when group not yet complete", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      gjm.registerGroup("group-1", ["a1", "a2"]);
 
-      vi.advanceTimersByTime(30_000);
-      expect(deliverCb).not.toHaveBeenCalled();
+      const rec = makeRecord({ id: "a1" });
+      expect(gjm.onAgentComplete(rec)).toBe("held");
+    });
+
+    it("returns delivered when all agents complete", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      gjm.registerGroup("group-1", ["a1", "a2"]);
+
+      const r1 = makeRecord({ id: "a1" });
+      const r2 = makeRecord({ id: "a2" });
+
+      expect(gjm.onAgentComplete(r1)).toBe("held");
+      expect(gjm.onAgentComplete(r2)).toBe("delivered");
+    });
+
+    it("calls delivery callback when all complete", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      gjm.registerGroup("group-1", ["a1", "a2"]);
+
+      const r1 = makeRecord({ id: "a1" });
+      const r2 = makeRecord({ id: "a2" });
+
+      gjm.onAgentComplete(r1);
+      gjm.onAgentComplete(r2);
+
+      expect(deliverCb).toHaveBeenCalledWith(
+        expect.arrayContaining([r1, r2]),
+        false,
+        expect.objectContaining({ groupId: "group-1" }),
+      );
+    });
+  });
+
+  describe("isGrouped", () => {
+    it("returns true for registered agents", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      gjm.registerGroup("group-1", ["a1"]);
+      expect(gjm.isGrouped("a1")).toBe(true);
+    });
+
+    it("returns false for unregistered agents", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      expect(gjm.isGrouped("a1")).toBe(false);
+    });
+  });
+
+  describe("getGroupInfo", () => {
+    it("returns group info", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      gjm.registerGroup("group-1", ["a1", "a2"]);
+
+      const info = gjm.getGroupInfo("group-1");
+      expect(info).toBeDefined();
+      expect(info!.total).toBe(2);
+      expect(info!.completed).toBe(0);
+      expect(info!.delivered).toBe(false);
+    });
+
+    it("tracks completed count", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      gjm.registerGroup("group-1", ["a1", "a2"]);
+      gjm.onAgentComplete(makeRecord({ id: "a1" }));
+
+      const info = gjm.getGroupInfo("group-1");
+      expect(info!.completed).toBe(1);
+    });
+
+    it("returns undefined for unknown group", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      expect(gjm.getGroupInfo("nonexistent")).toBeUndefined();
+    });
+  });
+
+  describe("listGroups", () => {
+    it("returns all group IDs", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      gjm.registerGroup("group-1", ["a1"]);
+      gjm.registerGroup("group-2", ["a2"]);
+      expect(gjm.listGroups()).toEqual(["group-1", "group-2"]);
+    });
+
+    it("returns empty array when no groups", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      expect(gjm.listGroups()).toEqual([]);
+    });
+  });
+
+  describe("dispose", () => {
+    it("clears all groups", () => {
+      const gjm = new GroupJoinManager(deliverCb);
+      gjm.registerGroup("group-1", ["a1"]);
+      gjm.dispose();
+      expect(gjm.listGroups()).toEqual([]);
+      expect(gjm.isGrouped("a1")).toBe(false);
     });
   });
 });

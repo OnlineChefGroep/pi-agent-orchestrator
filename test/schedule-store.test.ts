@@ -37,7 +37,10 @@ describe("ScheduleStore", () => {
   });
 
   afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true });
+    // maxRetries + retryDelay handles Windows file-locking races where the
+    // proper-lockfile lockfile directory is briefly held open after release.
+    // EBUSY/EPERM triggers Node's built-in retry-with-linear-backoff.
+    rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
 
   it("resolveStorePath produces session-scoped path under .pi/subagent-schedules/", () => {

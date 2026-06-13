@@ -624,3 +624,90 @@ describe("Performance: RPC audit & rate limiter", () => {
     expect(elapsed).toBeLessThan(5);
   });
 });
+
+// ── 9. Memory Stability ──────────────────────────────────────────────────────
+
+describe("Performance: memory stability", () => {
+  let manager: AgentManager;
+
+  afterEach(() => {
+    manager?.dispose();
+  });
+
+  it(
+    "sessionUsage.spawnedAgents stays accurate through 100 rapid spawn/drain cycles",
+    { timeout: 30000 },
+    async () => {
+      manager = new AgentManager(undefined, 20);
+      resolvedRun();
+
+      // Spawn 100 foreground agents sequentially. Each completes before the next
+      // spawns, so there's no stacking. Foreground agents use spawnAndWait internally
+      // which properly manages the session counter.
+      for (let i = 0; i < 100; i++) {
+        await manager.spawnAndWait(mockPi, mockCtx, "general-purpose", `mem-${i}`, {
+          description: `mem-test-${i}`,
+        });
+      }
+
+      const usage = manager.getSessionUsage();
+      // All 100 spawned agents were tracked in the session counter
+      expect(usage.spawnedAgents).toBe(100);
+    },
+  );
+
+  it(
+    "lastTurnCounts Map is cleaned up when agents complete",
+    { timeout: 15000 },
+    async () => {
+      manager = new AgentManager(undefined, 50);
+      resolvedRun();
+
+      for (let i = 0; i < 50; i++) {
+        const id = manager.spawn(mockPi, mockCtx, "general-purpose", `turns-${i}`, {
+          description: `turns-test-${i}`,
+          isBackground: true,
+        });
+        await manager.getRecord(id)!.promise.catch(() => {});
+      }
+
+      manager.cleanup();
+
+      const lastTurnCountsSize = (manager as any).lastTurnCounts.size;
+      expect(lastTurnCountsSize).toBe(0);
+    },
+  );
+
+  it(
+    "sessionUsage counters are correctly decremented on worktree failure",
+    { timeout: 15000 },
+    async () => {
+      manager = new AgentManager(undefined, 10);
+
+      const { createWorktree } = await import("../src/worktree.js");
+      // Make worktree creation fail immediately for all agents
+      vi.mocked(createWorktree).mockResolvedValue(undefined);
+
+      // Spawn 10 background agents — they'll fail on worktree creation
+      const ids: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        ids.push(manager.spawn(mockPi, mockCtx, "general-purpose", `fail-${i}`, {
+          description: `fail-test-${i}`,
+          isolation: "worktree",
+          isBackground: true,
+        }));
+      }
+
+      // Wait for all catch handlers to fire — each rejection runs in a microtask
+      // Use queueMicrotask to flush microtasks, then a small setTimeout for event loop
+      await new Promise<void>(resolve => {
+        queueMicrotask(() => queueMicrotask(() => setTimeout(resolve, 50)));
+      });
+      manager.cleanup();
+
+      const usage = manager.getSessionUsage();
+      expect(usage.spawnedAgents).toBe(0);
+      expect((manager as any).agents.size).toBe(0);
+    },
+  );
+});

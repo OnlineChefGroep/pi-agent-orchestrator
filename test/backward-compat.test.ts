@@ -342,7 +342,7 @@ describe("Backward compat: existing agent types", () => {
   describe("Explore", () => {
     it("loads and has read-only tool list", () => {
       const config = getConfig("Explore");
-      expect(config.builtinToolNames).toEqual(["read", "grep"]);
+      expect(config.builtinToolNames).toEqual(["read", "bash", "grep"]);
       expect(config.builtinToolNames).not.toContain("edit");
       expect(config.builtinToolNames).not.toContain("write");
     });
@@ -365,7 +365,7 @@ describe("Backward compat: existing agent types", () => {
   describe("Plan", () => {
     it("loads and has read-only tool list", () => {
       const config = getConfig("Plan");
-      expect(config.builtinToolNames).toEqual(["read", "grep"]);
+      expect(config.builtinToolNames).toEqual(["read", "bash", "grep"]);
       expect(config.builtinToolNames).not.toContain("edit");
       expect(config.builtinToolNames).not.toContain("write");
     });
@@ -407,7 +407,7 @@ describe("Backward compat: existing agent types", () => {
   describe("case-insensitive resolution", () => {
     it("lowercase 'explore' resolves to Explore", () => {
       const config = getConfig("explore");
-      expect(config.builtinToolNames).toEqual(["read", "grep"]);
+      expect(config.builtinToolNames).toEqual(["read", "bash", "grep"]);
     });
 
     it("lowercase 'plan' resolves to Plan", () => {

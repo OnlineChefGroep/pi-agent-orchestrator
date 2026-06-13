@@ -45,7 +45,7 @@ export function createGetResultTool(ctx: ToolContext) {
       }
 
       const displayName = getDisplayName(record.type);
-      const duration = formatDuration(record.startedAt, record.completedAt);
+      const duration = formatDuration(record.startedAt ?? 0, record.completedAt);
       const tokens = formatLifetimeTokens(record);
       const contextPercent = getSessionContextPercent(record.session);
       const statsParts = [`Tool uses: ${record.toolUses}`];

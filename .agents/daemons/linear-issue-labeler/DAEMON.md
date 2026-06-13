@@ -1,5 +1,6 @@
 ---
 id: linear-issue-labeler
+trigger: /linear-issue-labeler
 purpose: Keep recently changed Linear issues labeled according to the team's current taxonomy.
 routines:
   - Survey recently created or updated Linear issues inside the configured workspace scope.
@@ -15,6 +16,18 @@ schedule: '0 */4 * * *'
 ---
 
 # Issue Label Hygiene Helper
+
+## Pi Orchestra Integration
+
+This daemon runs on the Pi Orchestra schedule system via its `trigger` frontmatter (`/linear-issue-labeler`) and the cron expression in `schedule`.
+
+- **Schedule:** `0 */4 * * *` — fires every 4 hours
+- **Orchestra monitoring:** View active schedules in the dashboard via `z` (schedule view) or `/agents → Scheduled jobs`
+- **Toggle:** Enable/disable via `/agents → Settings → Scheduling`
+- **Persistence:** Schedule state is stored in `.pi/subagent-schedules/<sessionId>.json`
+- **Limits:** Max 100 issues inspected, 30 mutated, 10 repair proposals, 5 labels per issue per run
+- **Idempotency:** Uses conflict signatures (issue ID + label set + title/body hash + taxonomy version) to prevent duplicate proposals
+- **No-op behavior:** Silently no-ops when taxonomy can't be read, no in-scope issues need labels, or label can't be selected with high confidence
 
 ## Label taxonomy
 

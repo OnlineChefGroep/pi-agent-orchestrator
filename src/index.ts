@@ -14,7 +14,7 @@ import { logger } from "./logger.js";
 
 import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { AgentManager } from "./agent-manager.js";
-import { isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setDashboardRefreshInterval, setDefaultJoinMode, setOrchestrationMode, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setUiStyle } from "./agent-registry.js";
+import { isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setDashboardRefreshInterval, setDefaultJoinMode, setOrchestrationMode, setPromptCompressionLevel, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setUiStyle } from "./agent-registry.js";
 import { setDefaultMaxTurns, setGraceTurns } from "./agent-runner.js";
 import { BatchOrchestrator } from "./batch-orchestrator.js";
 import { registerAgentsCommand } from "./commands/agents.js";
@@ -22,6 +22,7 @@ import { registerHooksCommand } from "./commands/hooks.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
 import { GroupJoinManager } from "./group-join.js";
 import { HookRegistry } from "./hooks.js";
+import { clearSubagentsApi, registerSubagentsApi } from "./public-api.js";
 import { SubagentScheduler } from "./schedule.js";
 import { resolveStorePath, ScheduleStore } from "./schedule-store.js";
 import { applyAndEmitLoaded } from "./settings.js";
@@ -171,7 +172,7 @@ export default async function (pi: ExtensionAPI) {
 
   /** Helper: build event data for lifecycle events from an AgentRecord. */
   function buildEventData(record: AgentRecord) {
-    const durationMs = record.completedAt ? record.completedAt - record.startedAt : Date.now() - record.startedAt;
+    const durationMs = record.completedAt ? record.completedAt - (record.startedAt ?? 0) : Date.now() - (record.startedAt ?? 0);
     // All three fields are lifetime-accumulated (Σ over every assistant message_end),
     // so they survive compaction together — input + output ≤ total always.
     // tokens is omitted when nothing was ever produced (e.g. agent errored before
@@ -255,34 +256,48 @@ export default async function (pi: ExtensionAPI) {
     });
   });
 
+  // Wire up agentActivity cleanup: when records are removed from the
+  // manager (cleanup cycle, clearCompleted), purge corresponding activity entries.
+  manager.onRecordRemoved = (id: string) => {
+    agentActivity.delete(id);
+  };
+
   // Attach the global hook registry to the agent manager
   manager.hooks = hookRegistry;
 
-  // Expose hook registry via Symbol.for() global registry for cross-package access.
-  // Extensions and other packages can discover and register hooks by reading:
-  //   (globalThis as any)[Symbol.for('pi-subagents:hooks')]
-  const HOOKS_KEY = Symbol.for("pi-subagents:hooks");
-  (globalThis as any)[HOOKS_KEY] = {
-    getHandlers: () => hookRegistry.getHandlers(),
-    // NO register, NO unregister, NO dispatch
-  };
+  // Session budget warning at 80% — emit a pi.events notification so the
+  // user sees it as a non-blocking alert even if the dashboard isn't open.
+  manager.setBudgetWarningHandler((type, usage, limits) => {
+    const isCritical = type === "agents_at_90" || type === "turns_at_90";
+    const threshold = type === "agents_at_80" || type === "agents_at_90"
+      ? `agent budget ${isCritical ? "90" : "80"}% used (${usage.spawnedAgents}/${limits.maxAgents})`
+      : `turn budget ${isCritical ? "90" : "80"}% used (${usage.totalTurns}/${limits.maxTurns})`;
+    const prefix = isCritical ? "🚨" : "⚠️";
+    const advice = isCritical
+      ? "Session budget nearly exhausted — spawns will stop soon!"
+      : "Consider /agents → Settings to increase limits.";
+    pi.events.emit("subagents:budget_warning", {
+      type,
+      usage,
+      limits,
+      threshold,
+      message: `${prefix} Session ${threshold}. ${advice}`,
+    });
+    pi.sendMessage({ customType: "subagent-notification", content: `${prefix} Session ${threshold}. ${advice}`, display: true });
+  });
 
-  // Expose manager via Symbol.for() global registry for cross-package access.
-  // Standard Node.js pattern for cross-package singletons (used by OpenTelemetry, etc.).
-  const MANAGER_KEY = Symbol.for("pi-subagents:manager");
-  (globalThis as any)[MANAGER_KEY] = {
-    waitForAll: () => manager.waitForAll(),
-    hasRunning: () => manager.hasRunning(),
-    getRecord: (id: string) => {
-      const r = manager.getRecord(id);
-      if (!r) return undefined;
-      // Only return safe, non-sensitive fields. Truncate description to
-      // avoid leaking sensitive context to other extensions in the process.
-      return { id: r.id, type: r.type, status: r.status, description: r.description?.slice(0, 200) };
-    },
-    // NO spawn, NO listAgents (that goes through the Agent tool or API)
-    listAgentIds: (type: string) => manager.listAgents().filter(a => a.type === type).map(a => a.id),
-  };
+  // Publish the typed public API on `globalThis` so peer extensions and tests
+  // can discover and consume it. See `src/public-api.ts` for the contract.
+  // This supersedes the old read-only `pi-subagents:hooks` mirror: the new
+  // publication hands out the real `HookRegistry` instance, a typed RPC
+  // client, the typed event subscription helpers, and a read-only
+  // `SubagentManagerHandle` (published under `pi-subagents:manager`).
+  registerSubagentsApi(pi.events, hookRegistry, manager);
+
+  // Expose widget render metrics via Symbol.for() global registry for dashboard access.
+  // The dashboard reads this lazily via (globalThis as any)[Symbol.for("pi-subagents:widget-metrics")],
+  // so the symbol must be declared before any closure that references it (e.g. session_shutdown).
+  const WIDGET_KEY = Symbol.for("pi-subagents:widget-metrics");
 
   // --- Cross-extension RPC via pi.events ---
   let currentCtx: ExtensionContext | undefined;
@@ -304,7 +319,7 @@ export default async function (pi: ExtensionAPI) {
     } catch (err) {
       // Scheduling is non-essential — log and move on so the rest of the
       // extension keeps working if e.g. .pi/ is unwritable.
-      logger.warn("[pi-subagents] Failed to start scheduler:", { error: err instanceof Error ? err.message : String(err) });
+      logger.warn("Failed to start scheduler:", { error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -322,13 +337,22 @@ export default async function (pi: ExtensionAPI) {
     scheduler.stop();
   });
 
-  // TODO: Implement proper authProvider to verify extension identity.
-  // Currently all calls authenticate as "legacy" with a shared rate limit bucket.
-  const { unsubPing: unsubPingRpc, unsubSpawn: unsubSpawnRpc, unsubStop: unsubStopRpc } = registerRpcHandlers({
+    // Auth provider validates caller identity using authContext provided in the payload.
+  // Using the payload ensures each calling extension has its own rate-limit bucket.
+  const { unsubPing: unsubPingRpc, unsubSpawn: unsubSpawnRpc, unsubStop: unsubStopRpc, unsubSessionUsage: unsubSessionUsageRpc, unsubSwarmHealth: unsubSwarmHealthRpc } = registerRpcHandlers({
     events: pi.events,
     pi,
     getCtx: () => currentCtx,
     manager,
+    sessionManager: manager as any,
+    swarmCoordinator: swarmJoin as any,
+    authProvider: (_requestId, payload) => {
+      const extensionId = payload?.authContext?.extensionId;
+      if (extensionId && typeof extensionId === "string") {
+        return { extensionId, extensionName: payload?.authContext?.extensionName };
+      }
+      return undefined; // Will throw UNAUTHORIZED in cross-extension-rpc.ts if undefined
+    },
   });
 
   // Broadcast readiness so extensions loaded after us can discover us
@@ -340,19 +364,25 @@ export default async function (pi: ExtensionAPI) {
     unsubSpawnRpc();
     unsubStopRpc();
     unsubPingRpc();
+    unsubSessionUsageRpc?.();
+    unsubSwarmHealthRpc?.();
     currentCtx = undefined;
-    delete (globalThis as any)[MANAGER_KEY];
-    delete (globalThis as any)[HOOKS_KEY];
+    clearSubagentsApi();
+    delete (globalThis as any)[WIDGET_KEY];
     scheduler.stop();
     manager.abortAll();
     for (const timer of pendingNudges.values()) clearTimeout(timer);
     pendingNudges.clear();
-    batchOrchestrator.dispose();
+    await batchOrchestrator.dispose();
     manager.dispose();
   });
 
   // Live widget: show running agents above editor
   const widget = new AgentWidget(manager, agentActivity);
+
+  (globalThis as any)[WIDGET_KEY] = {
+    getSnapshot: () => widget.getRenderMetrics(),
+  };
 
   // ---- Batch orchestrator for smart/group/swarm join modes ----
   const batchOrchestrator = new BatchOrchestrator({
@@ -406,6 +436,7 @@ export default async function (pi: ExtensionAPI) {
       setDashboardRefreshInterval,
       setSessionMaxSpawns: (n) => manager.setSessionMaxSpawns(n),
       setSessionMaxTurns: (n) => manager.setSessionMaxTurns(n),
+      setPromptCompressionLevel,
     },
     (event, payload) => pi.events.emit(event, payload),
   );

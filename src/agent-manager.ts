@@ -26,6 +26,9 @@ export type OnAgentStart = (record: AgentRecord) => void;
 export type OnAgentCompact = (record: AgentRecord, info: CompactionInfo) => void;
 export type CompactionInfo = { reason: "manual" | "threshold" | "overflow"; tokensBefore: number };
 
+export type BudgetWarningType = "agents_at_80" | "turns_at_80" | "agents_at_90" | "turns_at_90";
+export type OnBudgetWarning = (type: BudgetWarningType, usage: { spawnedAgents: number; totalTurns: number }, limits: { maxAgents: number; maxTurns: number }) => void;
+
 /** Default max concurrent background agents. */
 const DEFAULT_MAX_CONCURRENT = 4;
 
@@ -91,6 +94,7 @@ export class AgentManager {
   private sessionMaxSpawns = 0;
   private sessionMaxTurns = 0;
   hooks?: HookRegistry;
+  onBudgetWarning?: OnBudgetWarning;
 
   /** Queue of background agents waiting to start. */
   private queue: { id: string; args: SpawnArgs }[] = [];
@@ -99,19 +103,42 @@ export class AgentManager {
   /** Stack of currently executing agent IDs (for budget/depth tracking). */
   private activeAgentIdStack: string[] = [];
 
+  /** Cleanup TTL: completed agents older than this are pruned periodically. */
+  private cleanupTtlMs: number;
+
   constructor(
     onComplete?: OnAgentComplete,
     maxConcurrent = DEFAULT_MAX_CONCURRENT,
     onStart?: OnAgentStart,
     onCompact?: OnAgentCompact,
+    /**
+     * Cleanup TTL in milliseconds: completed/stopped/errored agents older than
+     * this are pruned from memory during periodic cleanup cycles.
+     * Default: 60 seconds (down from 120s to reduce memory pressure during long sessions).
+     */
+    cleanupTtlMs = 60_000,
   ) {
     this.onComplete = onComplete;
     this.onStart = onStart;
     this.onCompact = onCompact;
     this.maxConcurrent = maxConcurrent;
-    const CLEANUP_INTERVAL_MS = 60_000;
+    this.cleanupTtlMs = cleanupTtlMs;
+    const CLEANUP_INTERVAL_MS = 30_000;
     this.cleanupInterval = setInterval(() => this.cleanup(), CLEANUP_INTERVAL_MS);
     this.cleanupInterval.unref();
+  }
+
+  /**
+   * Set a new cleanup TTL. Completed/stopped/errored agents older than this
+   * value will be pruned on the next periodic cleanup cycle.
+   */
+  setCleanupTtl(ms: number): void {
+    this.cleanupTtlMs = Math.max(10_000, ms);
+  }
+
+  /** Get the current cleanup TTL in milliseconds. */
+  getCleanupTtl(): number {
+    return this.cleanupTtlMs;
   }
 
   /** Update the max concurrent background agents limit. */
@@ -166,6 +193,10 @@ export class AgentManager {
   resetSessionUsage(): void {
     this.sessionUsage = { spawnedAgents: 0, totalTurns: 0 };
     this.lastTurnCounts.clear();
+  }
+
+  setBudgetWarningHandler(handler: OnBudgetWarning): void {
+    this.onBudgetWarning = handler;
   }
 
   /** Get the ID of the currently executing agent (top of active stack). */
@@ -255,7 +286,7 @@ export class AgentManager {
         isBackground: options.isBackground ?? false,
       })
       .catch((err) => {
-        logger.warn(`[pi-subagents] Hook dispatch failed:`, { error: err instanceof Error ? err.message : String(err) });
+        logger.warn(`Hook dispatch failed:`, { error: err instanceof Error ? err.message : String(err) });
       });
 
     const args: SpawnArgs = { pi, ctx, type, prompt, options };
@@ -266,25 +297,27 @@ export class AgentManager {
       return id;
     }
 
-    // startAgent can throw (e.g. strict worktree-isolation failure) — clean
-    // up the record so callers don't see an orphan in `listAgents()`.
-    try {
-      this.startAgent(id, record, args);
-    } catch (err) {
-      this.agents.delete(id);
-      throw err;
-    }
+    // startAgent is async (worktree creation is non-blocking) — catch
+    // late startup failures and clean up the record.
+    this.startAgent(id, record, args).catch((_err) => {
+      // Clean up orphaned record on startup failure (e.g. worktree creation).
+      // Decrement usage counter so failed spawns don't consume the session budget.
+      this.sessionUsage.spawnedAgents--;
+      // Use removeRecord to clean up map, lastTurnCounts, session, and notify onRecordRemoved.
+      this.removeRecord(id, record);
+    });
     return id;
   }
 
   /** Actually start an agent (called immediately or from queue drain). */
-  private startAgent(id: string, record: AgentRecord, { pi, ctx, type, prompt, options }: SpawnArgs) {
+  private async startAgent(id: string, record: AgentRecord, { pi, ctx, type, prompt, options }: SpawnArgs) {
     // Worktree isolation: try to create a temporary git worktree. Strict —
     // fail loud if not possible (no silent fallback to main tree). Done
     // BEFORE state mutation so a throw doesn't leave the record half-running.
+    // Now async to avoid blocking the spawn pipeline during `git worktree add`.
     let worktreeCwd: string | undefined;
     if (options.isolation === "worktree") {
-      const wt = createWorktree(ctx.cwd, id);
+      const wt = await createWorktree(ctx.cwd, id);
       if (!wt) {
         throw new Error(
           'Cannot run with isolation: "worktree" — not a git repo, no commits yet, or `git worktree add` failed. ' +
@@ -335,7 +368,7 @@ export class AgentManager {
         currentLevel: record.currentLevel,
         levelLimit: record.invocation?.levelLimit,
         parentConfig,
-        partitions: childPartitions,
+        partitions: childPartitions ? [...childPartitions] : undefined,
         cwd: worktreeCwd,
         signal: record.abortController!.signal,
         hooks: this.hooks,
@@ -359,6 +392,8 @@ export class AgentManager {
             record.abortController?.abort();
             record.error = `Session turn limit reached (${this.sessionUsage.totalTurns}/${maxTurns})`;
           }
+          // Budget warning at 80% of limits
+          this.checkBudgetWarning();
           options.onTurnEnd?.(turnCount);
         },
         onTextDelta: options.onTextDelta,
@@ -396,16 +431,18 @@ export class AgentManager {
 
           // Append validation feedback when validators fail
           if (!validated) {
-            const failedFeedback = validationResults
-              .filter((r) => !r.passed)
-              .map((r) => {
-                const failedCriteria = r.criteria.filter((c) => !c.passed);
-                const details = failedCriteria.length > 0
-                  ? `\n${failedCriteria.map((c) => `  - ${c.criterion}: ${c.feedback}`).join("\n")}`
-                  : "";
-                return `[${r.agentId}] ${r.summary}${details}`;
-              })
-              .join("\n\n");
+            let failedFeedback = "";
+            for (const r of validationResults) {
+              if (r.passed) continue;
+              let details = "";
+              for (const c of r.criteria) {
+                if (!c.passed) {
+                  details += `\n  - ${c.criterion}: ${c.feedback}`;
+                }
+              }
+              if (failedFeedback) failedFeedback += "\n\n";
+              failedFeedback += `[${r.agentId}] ${r.summary}${details}`;
+            }
             record.result = (record.result ?? "") +
               `\n\n---\n## Validation Feedback (FAILED)\n${failedFeedback}`;
           }
@@ -482,16 +519,17 @@ export class AgentManager {
       const next = this.queue.shift()!;
       const record = this.agents.get(next.id);
       if (record?.status !== "queued") continue;
-      try {
-        this.startAgent(next.id, record, next.args);
-      } catch (err) {
-        // Late failure (e.g. strict worktree-isolation) — surface on the record
-        // so the user/agent can see it via /agents, then keep draining.
+      // startAgent is async — handle late failures via catch
+      this.startAgent(next.id, record, next.args).catch((err) => {
+        // Late failure (e.g. strict worktree-isolation) — clean up counters,
+        // surface on the record so the user/agent can see it via /agents, then keep draining.
+        this.sessionUsage.spawnedAgents--;
+        this.runningBackground--;
         record.status = "error";
         record.error = err instanceof Error ? err.message : String(err);
         record.completedAt = Date.now();
         this.onComplete?.(record);
-      }
+      });
     }
   }
 
@@ -561,7 +599,7 @@ export class AgentManager {
 
   listAgents(): AgentRecord[] {
     return [...this.agents.values()].sort(
-      (a, b) => b.startedAt - a.startedAt,
+      (a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0),
     );
   }
 
@@ -584,20 +622,58 @@ export class AgentManager {
     return true;
   }
 
+  /** Callback invoked when a record is removed from the agent map (cleanup). */
+  onRecordRemoved?: (id: string) => void;
+
   /** Dispose a record's session and remove it from the map. */
   private removeRecord(id: string, record: AgentRecord): void {
     record.session?.dispose?.();
     record.session = undefined;
     this.agents.delete(id);
     this.lastTurnCounts.delete(id);
+    // Notify external observers (e.g. index.ts) so they can purge agentActivity
+    this.onRecordRemoved?.(id);
+  }
+
+  private checkBudgetWarning(): void {
+    const handler = this.onBudgetWarning;
+    if (!handler) return;
+    const { maxAgentsPerSession, maxTotalTurnsPerSession } = this.sessionLimits;
+
+    if (maxAgentsPerSession !== undefined && maxAgentsPerSession > 0) {
+      const used = this.sessionUsage.spawnedAgents;
+      const pct = used / maxAgentsPerSession;
+      // 90% critical first, then 80% warning — don't double-fire if already at 90%
+      if (pct >= 0.9) {
+        handler("agents_at_90", this.sessionUsage, { maxAgents: maxAgentsPerSession, maxTurns: maxTotalTurnsPerSession ?? 0 });
+      } else if (pct >= 0.8) {
+        handler("agents_at_80", this.sessionUsage, { maxAgents: maxAgentsPerSession, maxTurns: maxTotalTurnsPerSession ?? 0 });
+      }
+    }
+    if (maxTotalTurnsPerSession !== undefined && maxTotalTurnsPerSession > 0) {
+      const used = this.sessionUsage.totalTurns;
+      const pct = used / maxTotalTurnsPerSession;
+      if (pct >= 0.9) {
+        handler("turns_at_90", this.sessionUsage, { maxAgents: maxAgentsPerSession ?? 0, maxTurns: maxTotalTurnsPerSession });
+      } else if (pct >= 0.8) {
+        handler("turns_at_80", this.sessionUsage, { maxAgents: maxAgentsPerSession ?? 0, maxTurns: maxTotalTurnsPerSession });
+      }
+    }
   }
 
   private cleanup() {
-    const cutoff = Date.now() - 10 * 60_000;
+    // Aggressive cleanup: remove inactive records after cleanupTtlMs.
+    // Default 60s keeps memory usage low during long sessions.
+    const cutoff = Date.now() - this.cleanupTtlMs;
+    let removed = 0;
     for (const [id, record] of this.agents) {
       if (record.status === "running" || record.status === "queued") continue;
       if ((record.completedAt ?? 0) >= cutoff) continue;
       this.removeRecord(id, record);
+      removed++;
+    }
+    if (removed > 0) {
+      logger.debug(`Cleanup: removed ${removed} stale agent records (TTL: ${this.cleanupTtlMs}ms)`);
     }
   }
 

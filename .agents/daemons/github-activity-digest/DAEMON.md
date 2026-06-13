@@ -1,5 +1,6 @@
 ---
 id: github-activity-digest
+trigger: /github-activity-digest
 purpose: Publish one low-noise daily digest of meaningful GitHub pull request and CI activity.
 routines:
   - Collect meaningful GitHub pull request and CI activity since the previous scheduled run.
@@ -15,6 +16,17 @@ schedule: "0 15 * * 1-5"
 ---
 
 # GitHub Activity Digest
+
+## Pi Orchestra Integration
+
+This daemon runs on the Pi Orchestra schedule system via its `trigger` frontmatter (`/github-activity-digest`) and the cron expression in `schedule`.
+
+- **Schedule:** `0 15 * * 1-5` — fires weekdays at 15:00 UTC
+- **Orchestra monitoring:** View active schedules in the dashboard via `z` (schedule view) or `/agents → Scheduled jobs`
+- **Toggle:** Enable/disable via `/agents → Settings → Scheduling`
+- **Persistence:** Schedule state is stored in `.pi/subagent-schedules/<sessionId>.json`
+- **Idempotency:** Uses UTC-date digest keys to prevent duplicate posts within the same day
+- **Silent no-op:** When no meaningful activity exists, the daemon exits silently without posting to Slack
 
 ## Repository configuration
 

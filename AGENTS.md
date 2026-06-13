@@ -1,4 +1,69 @@
-# AGENTS.md
+# AGENTS.md — pi-agent-orchestrator
+
+> **Spawn config SSOT** for the Pi agent stack. Sibling repos (`pi-helios-context-extensie`, `Pi-Helios-Memory-Private`, `pi-agent-control-extension`) cross-link here for sub-agent roles, parallel splits, and ecosystem pre-context.
+
+## Pre-context (read first)
+
+Pi extension — runs inside the pi coding agent host, not standalone. Orchestrates autonomous sub-agents: spawn lifecycle, permission inheritance, parent context injection, handoff JSON, cron schedules, swarm join, and TUI dashboard.
+
+| Rule | Detail |
+|------|--------|
+| **Spawn SSOT** | `src/default-agents.ts` (built-ins), `.pi/agents/*.md` (custom overrides), `src/settings.ts` + `.pi/subagent-settings.json` (runtime) |
+| **Never** | Import `@earendil-works/pi-*` as direct deps; treat YAML booleans as truthy strings; sort agent lists (Map insertion order is intentional) |
+| **Peer extensions** | `@onlinechef/context-mode` → `ctx_*` tools (optional, feature-gated) |
+
+## Sub-agent pre-context matrix (Pi stack)
+
+What each layer injects **before** a sub-agent session runs. Parent-only rows affect the host agent, not spawned children.
+
+| Layer | Package / repo | Injected at spawn | Hooks / surface |
+|-------|----------------|-------------------|-----------------|
+| **Orchestrator** | `pi-agent-orchestrator` (this repo) | Parent execution log, permission matrix, handoff payload, prompt compression, optional `ctx_*` bridge | `subagent:start` · `subagent:end` · `subagent:spawn` · `subagent:steer` · RPC `subagents:rpc:spawn` |
+| **Memory hooks** | `Pi-Helios-Memory-Private` + `pi-helios-context-extensie` | Timeline `ctx_search`, FTS5 facts, session resume snapshot, failure memories | `PreToolUse` · `PostToolUse` · `PreCompact` · `helios-memory context` |
+| **Control extension** | `pi-agent-control-extension` | Browser/TUI routing (`control_route`), `tctl`, capture drivers, atomized control skills | `/route-control` · `control_browser_command` · WebSocket bridge |
+
+## Skills (install paths)
+
+| Task | Skill path |
+|------|------------|
+| **Codebase graph navigation** | `.agents/skills/graphify/SKILL.md` |
+| **Test / benchmark discipline** | `.agents/skills/testing/SKILL.md` |
+| **Infra / extension packaging** | `.agents/skills/infrastructure/SKILL.md` |
+| **Performance auditing** | `.agents/skills/overdrive/SKILL.md` |
+| **Research loops** | `.agents/skills/autoresearch/SKILL.md` · `.agents/skills/showcase/SKILL.md` (demo video — UI-facing only) |
+| **Global agent patterns** | `~/.agents/skills/agent-explore` · `agent-architect` · `agent-code-reviewer` |
+| **Memory session init** | `~/.agents/skills/agent-memory-hooks` · `../skill-grinder/skills/agent-memory-hooks/SKILL.md` |
+| **Orchestrator dev helper** | `pi-subagents-helper` (see CHANGELOG) |
+
+**Taste:** No `taste-skill` in this repo — backend extension, no marketing copy. `showcase` is Remotion/demo output only.
+
+## Spawn rules
+
+**Config SSOT (edit order):** `src/default-agents.ts` → `.pi/agents/<name>.md` override → `src/custom-agents.ts` frontmatter → `/agents → Settings` (`.pi/subagent-settings.json`).
+
+| Built-in type | Mode | Use when |
+|---------------|------|----------|
+| `Explore` | read-only | Parallel codebase audit, grep/find sweeps, SSOT boundary checks |
+| `Plan` | read-only | Architecture pass before multi-file edits |
+| `Analysis` | read-only + `ctx_*` | Data/compute via sandbox (requires context-mode peer) |
+| `general-purpose` | full tools | Bounded implementation after Plan/Explore land |
+
+**Parallel subagents (this repo):** minimum **4** on cross-module passes (runner + UI + schedule/swarm + custom-agents/handoff). Spawn all in one batch; readonly agents first.
+
+**Site-wide passes (CHEF-98):** when orchestrator work touches public copy or `chefgroep.nl` consumers, follow **minimum 4** parallel subagents per [`chefgroep.nl/AGENTS.md`](../chefgroep.nl/AGENTS.md) — SSOT, pages, chrome/SEO, verify.
+
+## Sub-agents (this repo)
+
+| Role | When | Spawn type | Focus paths |
+|------|------|------------|-------------|
+| **orchestrator-core** | `agent-runner`, permissions, context pipeline | `Explore` | `src/agent-runner.ts` · `src/context.ts` · `src/agent-types.ts` |
+| **orchestrator-ui** | Dashboard, widget, top view, schedules | `Explore` | `src/ui/agent-dashboard.ts` · `src/ui/agent-widget.ts` · `src/ui/dashboard/` |
+| **orchestrator-schedule** | Cron, swarm, handoff, daemons | `Plan` | `src/schedule.ts` · `src/swarm-join.ts` · `src/handoff.ts` · `.agents/daemons/` |
+| **orchestrator-implement** | After readonly agents report | `general-purpose` | Bounded file set from handoff JSON |
+
+## CHEF
+
+Branch `chore/agent-fleet-a4-pi-stack` or `CHEF-<n>-slug` · PR `Fixes CHEF-<n>` · Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 
 ## Quick commands
 
@@ -28,26 +93,120 @@ ES modules only (`"type": "module"`). No CommonJS.
 ## Adding built-in agents or settings
 
 - New agent type → update `src/default-agents.ts` + `test/default-agents.test.ts` + `README.md`
-- New setting → update `src/settings.ts` (interface + defaults) + `src/output-handler.ts` (`buildSettingsSnapshot` + settings menu)
+- New setting → update `src/settings.ts` (interface + defaults) + `src/output-handler.ts` (`buildSettingsSnapshot` + settings menu) + `docs/api-reference.md`
 
 ## Commit style
 
 Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
 
+## Common Mistakes
+
+These are patterns that have caused bugs or wasted review cycles. Read before touching the codebase.
+
+### 1. YAML boolean strings are strings, not booleans
+
+When reading frontmatter via `js-yaml`, `handoff: true` is parsed as a JS string `"true"`, not a boolean. Use `parseBooleanOptional`/`parseBooleanWithDefault` helpers in `src/custom-agents.ts` — never write `if (frontmatter.handoff)` because that makes `handoff: "false"` truthy.
+
+```ts
+// Don't do this — string "false" is truthy
+if (frontmatter.handoff) { /* runs for "false" string */ }
+
+// Do this — explicit parse with strict semantics
+handoff: parseBooleanWithDefault(fm.handoff, false),
+```
+
+### 2. ESM imports need explicit `.js` extensions
+
+Even though source is TypeScript, imports must use `.js` (not `.ts`). `import { x } from './foo.js'` ✅, `import { x } from './foo'` ❌, `import { x } from './foo.ts'` ❌.
+
+### 3. Type-only imports must use `import type`
+
+`import type { Foo } from './foo.js'` for types. This is enforced by Biome and prevents accidental runtime imports of type-only modules.
+
+### 4. The three `@earendil-works/pi-*` packages are NEVER direct deps
+
+They are the host platform (the parent pi coding agent). Reference them via feature detection, never `import` from them in a way that assumes they exist. See `src/context-mode-bridge.ts` for the pattern.
+
+### 5. Windows schedule tests are known-flaky
+
+`test/schedule.test.ts` and `test/schedule-store.test.ts` race on temp dirs in Windows CI. CI marks them `continue-on-error`. Local Windows runs may flake. This is a known issue, not a regression in your code.
+
+### 6. Biome formatter is disabled
+
+Don't run `prettier` or assume `biome format` works. `biome.json` has `formatter.enabled: false`. Use `biome check` for lint, `npm run lint:fix` to auto-fix.
+
+### 7. Biome requires double quotes
+
+`"foo"` ✅, `'foo'` ❌. Use template literals for interpolation. The project's Biome config enforces double quotes.
+
+### 8. Avoid `as any` in test mocks
+
+When mocking `AgentRecord` or similar types, include ALL required fields. `as any` defeats type checking and breaks the `Parse Don't Validate` philosophy. Reference the type in `src/types.ts` and copy the shape.
+
+```ts
+// Don't do this
+const mock = { id: "x" } as any;
+
+// Do this
+const mock: AgentRecord = { id: "x", /* all required fields */ };
+```
+
+### 9. Benchmark tests use `toBeLessThan` thresholds, not `console.log`
+
+`test/*.benchmark.test.ts` files should assert performance with `expect(elapsed).toBeLessThan(threshold)`. `console.log` + `toContain` is a CodeRabbit-flagged anti-pattern in this repo.
+
+### 10. Settings persist to `.pi/subagent-settings.json`
+
+Not to `package.json`, not to env vars (except at first-run). The schema lives in `src/settings.ts` (`SubagentsSettings` interface). When adding a setting: update the interface, defaults, validation, snapshot (`buildSettingsSnapshot` in `output-handler.ts`), AND the settings menu.
+
+### 11. Pre-commit hook runs biome + tsc only, NOT tests
+
+Tests are in the pre-push hook. If you must push and tests are slow/flaky, `git push --no-verify` is acceptable but document why in the commit body. Hooks are opt-in: run `npm run setup:hooks` after `npm install` to enable.
+
+### 12. Extension entry is `pi.extensions` in package.json
+
+The `pi.extensions` field points to your entry file (e.g., `./dist/index.js` after build). The host loads this. Don't rename or restructure without updating package.json.
+
+### 13. Map/Set preserve insertion order
+
+Rely on this for deterministic UI output (running agents first, then queued, then done). Don't sort unless you need a different order.
+
+### 14. Conventional commit types are limited
+
+`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`. No `feat!` (use a body footer `BREAKING CHANGE:` instead). Scopes are recommended for clarity (e.g., `feat(agents):`).
+
+### 15. Test files live in `test/`, not `tests/`
+
+Use `.test.ts` extension. Use `describe`/`it`/`expect` from vitest. Do not co-locate tests with source files.
+
 ## Optional peer deps
 
-`@onlinechef/context-mode` enables `ctx_*` sandbox tools. The code path is gated behind feature detection (`src/context-mode-bridge.ts`).
+`@onlinechef/context-mode` enables `ctx_*` sandbox tools. Its code path is gated behind feature detection (`src/context-mode-bridge.ts`).
+
+## Settings reference
+
+All runtime-configurable settings are defined in `src/settings.ts` (`SubagentsSettings` interface) and surfaced through `/agents → Settings`. See `docs/api-reference.md` for the full settings schema.
 
 ## Architecture at a glance
 
 - `src/agent-types.ts` — permission model (base tools → parent restrictions → partition filter → disallow floor)
 - `src/agent-runner.ts` — agent lifecycle: spawn → build context → create session → run loop
 - `src/index.ts` — extension entry point, command registration, batch/group coordination
-- `src/ui/agent-dashboard.ts` — vim-hotkey interactive TUI (supersedes legacy agent-widget)
+- `src/ui/agent-dashboard.ts` — vim-hotkey interactive TUI with 6 views: list, top (resource usage), schedules (`z`), perf (`/perf`), help (`?`), settings
+- `src/ui/agent-top-renderer.ts` — top view table calculations, sorting (by tokens, turns, duration, tool uses, name, recency), and pagination
+- `src/ui/agent-widget-renderer.ts` + `src/ui/agent-widget.ts` — virtual scrolling, thinking level display, compact batch rendering, adaptive refresh
+- `src/ui/dashboard/schedules-section.ts` — daemon schedule view in dashboard body
 - `src/swarm-join.ts` — live swarm join/leave coordination
 - `src/schedule.ts` + `src/schedule-store.ts` — cron-style scheduling, persisted to `.pi/subagent-schedules/`
+- `.agents/daemons/` — 4 autonomous daemons (github-activity-digest, js-ts-dependency-upgrades, linear-issue-labeler, pr-check-repair) with Pi Orchestra Integration docs
+- `.agents/skills/overdrive/SKILL.md` — performance auditing skill with benchmark suite
 
 See `docs/architecture.md` for the full module map and data-flow diagram.
+
+## Verification Suite
+
+Ensure you run `npm run typecheck && npm run lint && npm test` before committing.
+Currently passing: **1035 tests** across **58 test files**, including performance benchmarks for render, snapshot, virtual scrolling, and spawn latency.
 
 ## graphify
 

@@ -1,52 +1,172 @@
 # Changelog
 
-## v0.10.2 (2026-06-13)
+## v0.13.1 (2026-06-12)
 
-First public open-source release readiness pass. No runtime behaviour changes.
+### Fixes
 
-### Documentation
-- Rewrote `README.md` configuration and built-in agent tables to match the actual
-  `SubagentsSettings` interface and default agent tool sets.
-- Rewrote `docs/api-reference.md` against the real exported surface (removed phantom
-  `registerCommands`/`initSubagents`/`createSubagent`/`registerHook` entries; corrected
-  `JoinMode`, `AgentRecord.status`, and `SubagentsSettings` shapes).
-- Corrected `docs/architecture.md` (entry-point description, removed duplicated
-  paragraph, added previously-missing modules to the file overview).
-- Removed broken image references and stale version/test badges.
+- **Double-compute: `input.toLowerCase()` in `model-resolver.ts`**: Cached the result once as `lowercasedInput` and reused for both the exact-match `availableSet.has(...)` check and the fuzzy-match `query` variable. Eliminates the redundant `.toLowerCase()` call in `resolveModel()`.
+- **Double-compute: `message?.trim()` in `output-handler.ts`**: Cached the result once as `trimmed` and reused for both the early-return guard (`if (!trimmed) return;`) and the `record.pendingSteers.push(trimmed)` push, plus the `steerAgent(record.session, trimmed)` call. Eliminates 2 redundant `.trim()` calls per steering flow.
+- **Double-compute: `output.trim()` in `conversation-viewer.ts`**: Cached the result once as `trimmedOutput` and reused for both the truthy guard (`if (trimmedOutput)`) and the `wrapTextWithAnsi(trimmedOutput, width)` call. Eliminates 2 redundant `.trim()` calls per bash command render.
 
-### Repository hygiene
-- Removed internal/confidential audit artifacts (`docs/SECURITY_AUDIT_REPORT.md`,
-  `docs/SECURITY_AUDIT_VERIFICATION_2026-05-23.md`, `docs/REVIEW_AND_FUTURE.md`).
-- Removed case-colliding internal note directories (`.Jules/`, `.jules/`).
-- Replaced a developer-specific Windows path in `.codex/hooks.json` with a portable command.
+### Notes
 
-### Community health
-- Added `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue templates, a pull-request template,
-  and `CODEOWNERS`.
-
-### Packaging & CI
-- Tightened `engines.node` to `>=22.19.0` to match peer-dependency requirements.
-- Added `publishConfig.access: public`.
-- Hardened the publish workflow with pre-publish typecheck/lint/test gating and
-  refreshed action versions.
-
-### Code
-- Routed a stray `console.warn` in `schedule.ts` through the central logger and stopped
-  silently swallowing scheduled-job execution errors.
-- Removed the vestigial "cinematic" UI style and the `@onlinechefgroep/pi-subagents-tui`
-  Go sidecar integration entirely — the optional peer dependency, the `cinematicEnabled`
-  setting, the `cinematic` `uiStyle` value, and the `isCinematicEnabled`/`setCinematicEnabled`
-  registry hooks (the sidecar spawn logic was already gone; this clears the dead surface).
-  Remaining UI styles: `premium`, `retro`, `plain`.
-- Made the verification scripts (`build`, `test`, `typecheck`) cross-platform so they run
-  on Windows shells, not just POSIX.
-
-### Tooling
-- Added `npm run screenshots`: regenerates `docs/images/dashboard_preview.svg` from the
-  extension's actual dashboard renderers, so docs imagery is real terminal output.
+- These 3 fixes were found by the new overdrive linter rule `detect-double-compute` (P4 in the overdrive pattern catalogue). See `docs/overdrive-patterns.md` and `scripts/overdrive/detect-double-compute.mjs`.
+- The 7 bounded optimization loops of 2026-06-12 (PRs #146–#152) were already released in **v0.13.0** — dashboard dead-allocation removal (~20% faster), widget O(K×N) → O(N+K) queued rendering (~27× hot-loop reduction), K>>3 benchmark test, skill-loader BFS sort-once + head-index (O(B·D²) → O(B·D)), handoff duplicate `isHandoffArtifactV2` call elimination (~10-30% on 50-v2-artifact), `truncateStrings` micro-opt (code-clarity), and context `extractText` single-pass + `buildParentContext` double-trim cache (~47% on 50-message regime).
 
 ### Metrics
-- 794 tests, 46 test files.
+
+- 1410+ tests across 81 test files. Typecheck + lint green. All 65 benchmark thresholds within budget.
+
+## v0.13.0 (2026-06-12)
+
+### Features
+
+- **Handoff protocol v2 — typed artifacts**: The `artifacts` field on `AgentHandoff` is now a discriminated union on `type` instead of the previous loose shape. Four v2 artifact types are supported:
+  - `{"type": "file", "path", mimeType?, title?}` — file reference
+  - `{"type": "branch", "branch", base?, commits?: string[], title?}` — git branch reference
+  - `{"type": "url", "url", title?, description?}` — URL reference
+  - `{"type": "note", "title", "value", mimeType?}` — free-form text
+  Each type has its own per-field length limits (path ≤ 4096, url ≤ 2048, title ≤ 200, value ≤ 50000, branch ≤ 256, commits ≤ 100×64, description ≤ 500). `parseHandoff` now returns strictly v2-typed artifacts. The `HANDOFF_BALANCED` and `HANDOFF_FULL` prompt templates document the new shape with file/branch/url/note examples. `renderHandoffForParent` delegates per-artifact rendering to an exhaustive switch over the union.
+
+- **Legacy loose-artifact coercion**: Older agents that still emit loose artifacts (e.g. `{type: "design", path, title, value, mimeType}`) continue to work. `coerceLegacyArtifact` maps first-match-wins into a v2 shape: `{path}` → file, `{title, value}` → note, `{branch}` → branch, `{url}` → url. Unrecognised artifacts are dropped with a `logger.warn`. `HandoffArtifact` is kept as a loose structural alias for source-level backwards compat alongside the new strict `HandoffArtifactV2` union.
+
+### Documentation
+
+- `docs/api-reference.md` — new `// HANDOFF V2 — TYPED ARTIFACTS` section with the union types, JSON example, and legacy coercion rules.
+- `examples/agents/handoff-chain-researcher.md` — Handoff format section updated to the v2 typed shape with all four artifact types.
+
+### Metrics
+
+- New test file `test/handoff-v2.test.ts` with 20+ tests covering per-type validation, length limits, legacy coercion, and exhaustive rendering. Existing `test/handoff.test.ts` updated for the new typed shape plus a legacy-coercion regression test. Total: 1410+ tests passing.
+
+## v0.12.2 (2026-06-12)
+
+### Fixes
+
+- **Windows schedule-test reliability** (#138): `test/schedule.test.ts`, `test/schedule-store.test.ts`, `test/schedule-e2e.test.ts`, and `test/schedule-bounds.test.ts` now pass `maxRetries: 5, retryDelay: 50` to every `rmSync` cleanup. On Windows the `proper-lockfile` lockfile directory is briefly held open after `release()` returns, and the built-in `EBUSY/EPERM` linear-backoff retry clears the race. E2E timings bumped (100→200, 150→300, 300→500ms) to give Windows more headroom on real-timer waits. The Windows schedule tests are no longer known-flaky.
+
+### CI
+
+- **Lowest-peer install version** (#142): `Install dependencies (lowest peer deps)` now installs `@earendil-works/pi-ai@0.78.0`, `@earendil-works/pi-coding-agent@0.78.0`, `@earendil-works/pi-tui@0.78.0` (was the non-existent `0.72.0`). The lowest-peer CI matrix slice now actually runs instead of failing with `ETARGET: No matching version found`.
+
+### Documentation
+
+- `docs/VERVOLG_PLAN.md` status overview updated to v0.12.2 (1390 tests, 58 files). The P1 list now shows #137, #138, #139, #140, #142 as completed.
+
+### Metrics
+
+- 1390 tests across 58 test files. Typecheck + lint green on all OS × Node × peer-deps matrix slices.
+
+## v0.12.1 (2026-06-12)
+
+### Features
+
+- **Daemon schedule view** (`z` keybinding): New schedules section in dashboard body showing daemon schedules as a compact table (status, name, interval, type, next run). Threads `SubagentScheduler` through `AgentDashboardOptions`. New `src/ui/dashboard/schedules-section.ts`.
+- **Thinking level display** (#1): `🧠` indicator in agent widget, dashboard compact rows, and detail panel showing invocation thinking level (low/medium/high) from `AgentRecord.invocation.thinking`.
+- **Daemon integration notes**: All 4 daemons (`github-activity-digest`, `js-ts-dependency-upgrades`, `linear-issue-labeler`, `pr-check-repair`) now have Pi Orchestra Integration sections in their DAEMON.md files with schedule info, monitoring, toggle, persistence, and idempotency docs.
+- **Overdrive performance skill**: New `.agents/skills/overdrive/SKILL.md` for performance auditing with benchmark suite validation.
+
+### Performance
+
+- **Async UI optimizations**: Replaced O(N×M) `allAgents.some()` cleanup with Set-based O(N+M) lookup in `agent-widget.ts update()`. Removed intermediate `.map()` array allocation in `agent-dashboard.ts refreshAgents()` (for loop builds Set directly). Removed `lineEstimates` wrapper object array in `getVisibleWindow()` — now uses integer math + direct category iteration via `processCategory` helper.
+- **Benchmark suite**: 61 benchmarks all green, all well within thresholds (widget 200 agents: 4.82ms, dashboard 1000 agents: <40ms, spawn foreground: 8.76ms).
+
+### Documentation & Polish
+
+- **Full documentation refresh**: Updated AGENTS.md, CLAUDE.md, README.md, CHANGELOG.md, ROADMAP.md, SECURITY.md, INFRASTRUCTURE.md, and docs/architecture.md with current test counts (1035/58), version numbers (0.12.1), and feature descriptions.
+- **Stale file cleanup**: Removed personal daily report logs (`jules_daily_report.md`, `jules_daily_report_2026_06_10.md`).
+- **Go cinematic sidecar status**: Documented that `@onlinechefgroep/pi-subagents-tui` exists as sibling Go repo with `bubbletea-cinematic` library; binary spawning was removed in v0.9.1 but settings infrastructure remains dormant. Re-integration tracked in issue #1.
+
+### Merged PRs & Housekeeping
+
+- **Agent metadata standardization** (#136): Added `trigger` fields to all four daemons. Created `overdrive` skill.
+- **Helios integration & code health** (#122): Skill triggers, README restoration, tmux showcase integration, font path fix.
+- **Overdrive: single-pass render loop** (#131): Replaced chained `.filter()` calls with single-pass `for` loops. 25-30% widget improvement.
+- **Dependabot updates**: `actions/checkout` 4→6 (#125), `@earendil-works/pi-agent-core` 0.77.0→0.78.1 (#127).
+- **Branch cleanup**: Removed 10+ stale/merged remote branches, stale `.opencode` directory (109MB).
+
+### Metrics
+
+- 1035 tests across 58 test files. 61 benchmarks all passing. Typecheck + lint green.
+
+---
+
+## v0.12.0 (2026-06-06)
+
+### MIT Open-Source Release
+
+- **Dual publishing**: Now published to both npmjs.org (`npm install @onlinechefgroep/pi-agent-orchestrator`) and GitHub Packages. Added `publish-npm.yml` CI workflow alongside existing `publish.yml`.
+- **Public documentation**: Added `SECURITY.md` (vulnerability reporting), `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1), and `ROADMAP.md` (public feature roadmap replacing internal ENTERPRISE_READINESS.md).
+- **README badges**: npm version badge, CI status badge, license badge. Dual install instructions (pi extension + standalone npm).
+- **License audit**: Verified MIT license consistency across all source files. No proprietary markings found.
+- **Verification tests**: Added `test/release-verification.test.ts` covering npm pack output, license headers, and registry URL correctness.
+- **Docs structure**: Moved HOWTO-perf.md, PERFORMANCE.md, VERVOLG_PLAN.md to docs/. Created docs/index.md master documentation index. Added 18 missing module descriptions to docs/architecture.md.
+
+## v0.11.0 (2026-06-06)
+
+### Features
+
+- **Prompt Compression Levels**: New `promptCompressionLevel` setting (`minimal` | `balanced` | `aggressive`) controls system prompt verbosity per agent. Affects read-only warnings, tool usage instructions, and handoff templates. Aggressive mode saves ~44% tokens on prompt components; minimal mode provides maximum instruction quality (+70% tokens). Supports per-agent override via `prompt_compression` frontmatter directive. Lazy runtime regeneration ensures the setting takes effect for all built-in agents at spawn time.
+- **Handoff Frontmatter Directive**: Custom agents can now set `handoff: true` in their `.md` frontmatter to enable structured JSON handoff at end of response, enabling chain-of-agents workflows. Parsing follows the same boolean pattern as `inheritContext`, `runInBackground`, and `isolated`. Three handoff prompt variants (full/balanced/aggressive) match the compression level setting.
+- **Interactive Compression Submenu**: New `Prompt compression` entry in `/agents → Settings` with live token-count preview, 3-level picker (minimal/balanced/aggressive), and side-by-side comparison breakdown.
+- **Boolean Parsing Helpers**: New exported `parseBooleanOptional` and `parseBooleanWithDefault` in `src/custom-agents.ts` for safe YAML frontmatter consumption. Case-insensitive string match (`"TRUE"`, `"False"`), throws on invalid types (numbers, unrecognised strings).
+- **Chain-of-Agents Workflow Examples**: New "Chain of Agents" section in README documenting three pattern templates: Research→Write→Review, Test→Fix→Verify (CI repair loop), and Multi-perspective Analysis (3 parallel → synthesizer).
+- **Interactive Top View (`/agents top`)**: Switch views with `t` in the dashboard to access a real-time table of active and completed agents sorted by resource usage metrics (Turns, Tokens, Tool Uses, Duration, Name, and Activity recency `LAST` column). Columns are sortable via keys: `t` (tokens), `r` (turns), `d` (duration), `u` (tool uses), `l` (last seen recency), `n` (name). Pagination supported with `left` / `right` arrow keys.
+- **Activity Heatmap Indicator**: Shows a visual heatmap representation of active subagent concurrency directly in the widget header.
+- **Virtual Scrolling**: Added virtual scrolling window calculations for the agent widget, with scroll hints and scroll boundaries to handle large lists gracefully.
+- **Token Burn Rate and Last-Seen Tracking**: Live token consumption rates and time-elapsed indicators are rendered next to running processes.
+- **Bulk Spawn Batching**: Coalesces concurrent subagent spawn requests over a 16ms window to debounce UI redraws and group matching agents in a compact queue row (e.g. `"5x Explore queued"`).
+- **Budget Critical Alerts**: Integrated 90% warning triggers (🚨 spawns will stop soon) to prevent session lockup on budget exhaustion.
+- **Security Hardening (CVE mitigations)**:
+  - **CVE-002**: Comprehensive field size checks on incoming agent configuration files.
+  - **CVE-003**: Fully authenticated cross-extension RPC endpoints with custom rate limiters.
+  - **CVE-005**: Bound schedule intervals and update caps.
+
+### Changed
+
+- **Git hooks are now opt-in**: removed `postinstall` auto-install. Run `npm run setup:hooks` after `npm install` to enable biome + tsc on commit and full test suite on push. Hooks are no longer installed by default for users who don't need them.
+
+### Performance & Cleanup
+
+- **Dashboard Body Rendering — Single-pass O(N) bucketing**: The agent dashboard's body now performs a single O(N) pass over the agent list, replacing the previous 4× `.filter()` cascade. Yields ~50% speedup on 50k agents (674ms → 337ms per 100 render frames). (#94)
+- **Configurable TTL & sweeps**: Reduced idle agent TTL (60s default) and shortened GC sweeps to 30s intervals.
+- **Adaptive Refresh Intervals**: Dynamically switches UI tick rates between 100ms (100+ agents), 150ms (50-99 agents), 200ms (active execution), and 750ms (idle) to conserve host CPU.
+- **Widget Dirty Snapshotting**: Saves cycles by skipping expensive UI buffer paints when no structural status or agent state has modified.
+- **SwarmHealth Consolidation**: RPC checks consolidated to avoid chatty inter-process handshakes.
+
+### Documentation
+
+- **AGENTS.md** expanded with 15-item "Common Mistakes" section covering YAML booleans, ESM imports, Biome conventions, peer-dep safety, Windows test flakiness, benchmark patterns, and more.
+- **CONTRIBUTING.md** updated with `npm run setup:hooks` opt-in workflow and link to AGENTS Common Mistakes.
+- **README.md** — new "Chain of Agents" section with three example workflows.
+- `docs/api-reference.md` documents the new `PromptCompressionLevel` type and `handoff` / `prompt_compression` frontmatter directives.
+- `docs/architecture.md` updated with the new compression flow in the module map.
+- Added real TUI showcase media (GIF + MP4) generated from dist renderers: dashboard, top view, widget heatmap (`scripts/render-showcase-assets.sh`).
+
+### Tests
+- **1006 tests** across **57 test files** (up from 989 / 56). Added 16 new edge-case tests for boolean parsing in custom-agents.
+
+---
+
+## v0.10.3 (2026-06-04)
+
+### Fixes
+- Fixed `.gitignore` merge conflict after integrating tool context extraction v2.
+- Restored agent tool typing compatibility in extracted modules.
+- Added docstrings to refactored tool context modules.
+- Resolved local `node_modules` sync issue (`proper-lockfile` was declared in `package.json` but not installed locally).
+
+### Documentation
+- Updated README version to 0.10.3 and corrected all settings parameters to match actual codebase defaults.
+- Updated CHANGELOG with v0.13.3 release entry.
+- Created `VERVOLG_PLAN.md` as living roadmap with accurate completion status.
+- Updated security audit docs with clear deprecation notices (CVEs were fabricated, no action required).
+- Updated `docs/architecture.md` with missing modules (`batch-orchestrator`, `telemetry`, `logger`, etc.).
+- Updated `docs/api-reference.md` with complete `SubagentsSettings` interface.
+- Updated `AGENTS.md` and `CONTRIBUTING.md` with current test counts and branch workflow.
+
+### Metrics
+- 795 tests, 46 test files.
 
 ---
 
@@ -140,7 +260,7 @@ First public open-source release readiness pass. No runtime behaviour changes.
 - **CodeRabbit review comments**: Addressed code quality feedback
 
 ### 🔧 CI
-- **Dependabot updates**: actions/checkout@6, setup-node@6, upload-artifact@7, super-linter@7, codeql-action@4
+- **Dependabot updates**: actions/checkout@6, setup-node@6, upload-artifact@7, super-linter@6, codeql-action@4
 - **Super-linter compatibility**: Disabled conflicting prettier/standard checkers
 - **CodeQL**: Disabled auto-triggers (requires GitHub Code Security)
 
@@ -152,51 +272,52 @@ First public open-source release readiness pass. No runtime behaviour changes.
 ## v0.9.1 (2026-05-24)
 
 ### 🧹 Cleanup
-- **Cinematic sidecar removal**: Go binary spawning logic removed from `agent-widget.ts`; the sidecar is no longer used.
-- **UI enhancements**: New spinner frames (`pulse`, `wave`) and tool display mappings (`glob`, `webSearch`, `webFetch`).
-- **Fix animation interval**: Added an `ANIMATION_INTERVAL` constant, now used in `ensureTimer()`.
+- **Cinematic sidecar removal**: Go binary spawning logic verwijderd uit `agent-widget.ts`; sidecar wordt niet meer gebruikt.
+- **UI enhancements**: Nieuwe spinner frames (`pulse`, `wave`), tool display mappings (`glob`, `webSearch`, `webFetch`).
+- **Fix animation interval**: `ANIMATION_INTERVAL` constante toegevoegd en gebruikt in `ensureTimer()`.
 
 ### 🛡 Security
-- Removed the regex blacklist from `validators.ts` — it was "security theater" (trivially bypassable with Unicode/whitespace). Replaced with defense-in-depth: control-character removal + hard length limits + sandbox isolation (`isolated=true`, `levelLimit=0`).
-- Added `.npmrc` to `.gitignore` (it had contained a hard-coded GitHub token).
+- **CVE-004**: Regex-blacklist verwijderd uit `validators.ts` — was "security theater" (triviaal te omzeilen met Unicode/whitespace). Vervangen door defense-in-depth: control char removal + hard length limits + sandbox isolatie (`isolated=true`, `levelLimit=0`).
+- `.npmrc` toegevoegd aan `.gitignore` (bevatte harde GitHub token).
 
 ### 🔧 CI
-- **Dependency compatibility matrix**: `os [ubuntu, windows] x node [20, 22] x peer-deps [lowest, latest]`.
-- Correct lowest-peer-deps install via `--no-save` (no `package.json` mutation).
-- Windows runner with `continue-on-error` for pre-existing schedule flakiness.
+- **Dependency compatibiliteitsmatrix**: `os [ubuntu, windows] x node [20, 22] x peer-deps [lowest, latest]`.
+- Correcte lowest peer deps install via `--no-save` (geen `package.json` mutatie).
+- Windows runner met `continue-on-error` voor pre-existing schedule flakiness.
 
 ### 📊 Metrics
-- 614 tests, 34 test files (+ `validators.test.ts` regression tests)
+- 614 tests, 34 test files (+ `validators.test.ts` regressie tests voor CVE-004)
 
 ## v0.9.0 (2026-05-24)
 
 ### 🔧 Fixes
-- **Fix refactor regression in `agent-types.ts`**: renamed `intersectToolNames` to `PermissionUtils.intersectToolNames` after a class refactor; restores all 14 partition-filter tests.
-- **Fix template typo in `default-agents.ts`**: restored the missing closing `}}` in the `{{TOOL_INSTRUCTIONS}}` placeholder — prompts now render correctly.
+- **Fix refactor regressie in `agent-types.ts`**: `intersectToolNames` hernoemd naar `PermissionUtils.intersectToolNames` na class-refactor; herstelt alle 14 partition-filter tests.
+- **Fix template typo in `default-agents.ts`**: ontbrekende sluitende `}}` in `{{TOOL_INSTRUCTIONS}}` placeholder hersteld — prompts renderen nu correct.
 
 ### 🏗 Refactor
-- **Consolidation of parsing & permission logic**:
-  - `custom-agents.ts`: merged separate field-parser functions into an `AgentFieldParser` class.
-  - `default-agents.ts`: merged repeated read-only prompt boilerplate into an `AgentPromptTemplates` class.
-  - `agent-types.ts`: merged `intersectPermission` / `intersectToolNames` / `applyParentRestrictions` into a `PermissionUtils` class.
+- **Consolidatie van parsing & permissie-logica**:
+  - `custom-agents.ts`: losse field-parser functies samengevoegd naar `AgentFieldParser` class.
+  - `default-agents.ts`: herhalende read-only prompt-boilerplate samengevoegd naar `AgentPromptTemplates` class.
+  - `agent-types.ts`: `intersectPermission` / `intersectToolNames` / `applyParentRestrictions` samengevoegd naar `PermissionUtils` class.
 
 ### 🛡 Repository hygiene
-- Explicitly added `.pi/agents/` to `.gitignore` (dev-only agents are never accidentally tracked again).
-- Added `cinematic-renderer/cinematic-renderer.exe` to `.gitignore`.
-- Removed `auditor.md` from git tracking (it was a dev-only agent).
+- `.pi/agents/` expliciet toegevoegd aan `.gitignore` (dev-only agents nooit meer per ongeluk tracken).
+- `cinematic-renderer/cinematic-renderer.exe` toegevoegd aan `.gitignore`.
+- `auditor.md` verwijderd uit git tracking (was dev-only agent).
 
-### 📚 Documentation
-- **README.md fully rewritten**: feature matrix, agent types table, custom agent frontmatter reference, cinematic dashboard docs, architecture diagram, development guide.
-- **CI workflow**: GitHub Actions CI for TypeScript (typecheck, lint, test) and the Go sidecar (vet, build, test).
+### 📝 Documentation
+- **README.md volledig herschreven**: feature matrix, agent types tabel, custom agent frontmatter reference, cinematic dashboard docs, architecture diagram, development guide.
+- **CI workflow**: GitHub Actions CI voor TypeScript (typecheck, lint, test) en Go sidecar (vet, build, test).
+- **Vervolgplan**: `VERVOLG_PLAN.md` toegevoegd met prioriteitenlijst P0–P4.
 
 ### 🧹 Code cleanup
-- **Lint**: ESLint removed, Biome is the only linter. Resolved all pre-existing unused-import and organize-imports warnings.
+- **Lint**: ESLint verwijderd, Biome is enige linter. Alle pre-existing unused imports en organize-imports warnings opgelost.
 - **Biome fixes**: unused parameters/variables in `agent-widget.ts`, `output-handler.ts`, `conversation-viewer.ts`.
 
 ### 📊 Metrics
 - 611 tests, 34 test files (+ `default-agents.test.ts`)
-- Typecheck: green
-- Lint: green
+- Typecheck: groen
+- Lint: groen (3 stylistische warnings over static classes)
 
 ## v0.8.0 (2026-05-23)
 
@@ -228,7 +349,6 @@ First public open-source release readiness pass. No runtime behaviour changes.
 
 ## 0.7.5
 - Remove tintinweb URLs from package.json
-- Add .npmignore for package-lock.json
 
 ## 0.7.4
 - Publish @onlinechefgroep/pi-agent-orchestrator to GitHub Packages

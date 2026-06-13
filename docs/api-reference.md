@@ -1,333 +1,635 @@
-# API Reference
+# // API REFERENCE
 
-> Public API surface of `@onlinechefgroep/pi-agent-orchestrator`. This extension runs inside the Pi host — most integration happens via registered tools, slash commands, lifecycle events, and the cross-extension RPC protocol documented below.
-
----
-
-## Extension Entry Point
-
-### Default export: `(pi: ExtensionAPI) => Promise<void>`
-
-**File:** `src/index.ts`
-
-The Pi host loads this extension via `package.json` → `pi.extensions`. On load it:
-
-1. Applies persisted settings from `~/.pi/agent/subagents.json` and `.pi/subagents.json`.
-2. Reloads custom agents from `.pi/agents/*.md`.
-3. Registers tools: `Agent`, `get_subagent_result`, `steer_subagent`.
-4. Registers commands: `/agents`, `/hooks`.
-5. Wires lifecycle hooks, the agent dashboard widget, scheduler, and RPC handlers.
-
-There is no separate `registerCommands()` or `initSubagents()` export — initialization happens inside the default-export function.
+> PUBLIC API SURFACE FOR `@onlinechefgroep/pi-agent-orchestrator`. INTERNAL STRUCTURES (`AgentFieldParser`, `PermissionUtils`) EXPLICITLY OMITTED. USE EXPOSED FUNCTIONS ONLY.
 
 ---
 
-## Agent Registry
+## // EXTENSION ENTRY POINT
 
-### `reloadCustomAgents(): Promise<void>`
+### `registerCommands(api: ExtensionAPI): void`
 
-**File:** `src/agent-registry.ts`
+**FILE:** `src/index.ts`
 
-Reloads all `.pi/agents/*.md` files from both the project directory and the user's global agent directory. Call this after creating or editing a custom agent file.
+Registers the `/agents` command and hooks into the `pi-coding-agent` lifecycle. Executes exactly once during extension load.
+
+### `initSubagents(api: ExtensionAPI): void`
+
+**FILE:** `src/index.ts`
+
+Initializes subsystem constraints: custom agent loads, widget setup, lifecycle hook registration.
+
+---
+
+## // AGENT REGISTRY
+
+### `reloadCustomAgents(projectDir: string): void`
+
+**FILE:** `src/agent-registry.ts`
+
+Reloads `.pi/agents/*.md` definitions from local project and global directories. Execute subsequent to filesystem mutations.
 
 ```ts
-await reloadCustomAgents();
+reloadCustomAgents(process.cwd());
 ```
 
 ### `getAgentConfig(name: string): AgentConfig | undefined`
 
-**File:** `src/agent-types.ts`
+**FILE:** `src/agent-types.ts`
 
-Returns the fully resolved agent configuration including inherited permissions. Priority: custom agents → default agents.
+Returns resolved configuration tree, including inherited constraints. Override sequence: Custom profiles → Built-in defaults.
 
 ### `getAllTypes(): string[]`
 
-**File:** `src/agent-types.ts`
+**FILE:** `src/agent-types.ts`
 
-Returns all registered agent type names (defaults + custom + built-in types).
+Returns array of all registered type identifiers.
 
 ---
 
-## Agent Runner
+## // AGENT RUNNER
 
-### `runAgent(options: RunOptions): Promise<RunResult>`
+### `createSubagent(options: SubagentOptions): Promise<AgentSession>`
 
-**File:** `src/agent-runner.ts`
+**FILE:** `src/agent-runner.ts`
 
-Creates and runs a subagent session. This is the primary programmatic entry point for spawning agents from within the extension.
-
-Key `RunOptions` fields:
+Spawns new execution session. Primary programmatic invocation method.
 
 ```ts
-interface RunOptions {
-  type: string;              // "general-purpose", "Explore", custom name, etc.
-  description: string;       // Human-readable task description
-  parentId?: string;         // Parent agent for context inheritance
-  model?: string;            // Override default model
-  maxTurns?: number;         // Override default max turns (0 = unlimited)
-  joinMode?: JoinMode;       // "async" | "group" | "smart" | "swarm"
-  inheritContext?: boolean;
-  runInBackground?: boolean;
-  isolated?: boolean;
-  levelLimit?: number;       // Recursion depth cap (default 5)
-  taskBudget?: number;       // Max recursive spawns from this agent
+interface SubagentOptions {
+  type: string;              // Type identifier (e.g., "general-purpose", "Explore")
+  description: string;       // Telemetry descriptor
+  parentSession?: AgentSession; // Context inheritance reference
+  model?: string;            // Model override identifier
+  maxTurns?: number;         // Hard turn constraint
+  joinMode?: JoinMode;       // "await" | "fire-and-forget" | "notify"
+  contextMode?: boolean;     // Sandbox toggle
+  level?: number;            // Depth integer (default 0)
 }
 ```
 
-### `steerAgent(record: AgentRecord, instruction: string): Promise<void>`
+### `steerAgent(session: AgentSession, instruction: string): void`
 
-**File:** `src/agent-runner.ts`
+**FILE:** `src/agent-runner.ts`
 
-Sends a steering instruction to a running agent session. Used for mid-flight course correction.
+Injects mid-flight execution steering instruction.
 
-### `getAgentConversation(session: AgentSession): string`
+### `getAgentConversation(sessionId: string): CompactableMessage[]`
 
-**File:** `src/agent-runner.ts`
+**FILE:** `src/agent-runner.ts`
 
-Retrieves the full conversation history of a completed or running agent as plain text.
+Retrieves immutable conversation log for specified session.
 
 ### `getDefaultMaxTurns(): number | undefined`
 
-**File:** `src/agent-runner.ts`
+**FILE:** `src/agent-runner.ts`
 
-Returns the configured default max turns (undefined = unlimited).
+Retrieves default depth constraint (undefined = infinite).
 
 ### `getGraceTurns(): number`
 
-**File:** `src/agent-runner.ts`
+**FILE:** `src/agent-runner.ts`
 
-Returns the number of grace turns after wrap-up steer before forced termination.
+Retrieves wrap-up iteration allowance prior to forced kill sequence.
 
 ---
 
-## Scheduling
+## // SCHEDULING
 
 ### `SubagentScheduler`
 
-**File:** `src/schedule.ts`
+**FILE:** `src/schedule.ts`
 
-Manages cron-like recurring agent jobs.
+Cron-engine manager for recurring autonomous jobs.
 
 ```ts
 const scheduler = new SubagentScheduler(api, manager);
 
-// Schedule a job
+// Register execution
 scheduler.schedule({
   agentType: "Explore",
   description: "Daily codebase scan",
-  cron: "0 9 * * *",  // 9 AM daily
+  cron: "0 9 * * *",
   enabled: true,
 });
 
-// List all jobs
+// Enumerate registry
 const jobs = scheduler.listJobs();
 
-// Cancel a job
+// Terminate execution cycle
 scheduler.cancel(jobId);
 ```
 
 ---
 
-## Hooks
+## // HOOKS
 
-### `HookRegistry`
+### `registerHook(event: HookEvent, handler: HookHandler): () => void`
 
-**File:** `src/hooks.ts`
+**FILE:** `src/hooks.ts`
 
-Lifecycle hooks are managed by a `HookRegistry` instance created during extension init. End users register hooks via the `/hooks` command UI. Other extensions can observe hooks read-only via `Symbol.for("pi-subagents:hooks")`.
+Registers lifecycle interrupt handler. Returns execution terminator function.
 
 ```ts
-// Internal pattern (not a package-level export):
-const registry = new HookRegistry();
-registry.register("subagent:start", async (payload) => {
+import { registerHook } from "@onlinechefgroep/pi-agent-orchestrator";
+
+const unsubscribe = registerHook("subagent:start", async (payload) => {
+  console.log(`Execution spawn: ${payload.agentId}`);
   return "allow"; // "allow" | "block" | "modify"
 });
 ```
 
-**Hook events:**
-- `subagent:start` — Before agent begins execution
-- `subagent:end` — After agent completes
-- `subagent:error` — On uncaught error
-- `subagent:spawn` — When child agent is spawned
-- `subagent:steer` — When steering instruction is sent
-- `tool:call` — Before a tool is invoked
-- `tool:result` — After a tool returns
+**EVENT REGISTRY:**
+- `subagent:start` — Pre-execution interrupt
+- `subagent:end` — Post-execution interrupt
+- `subagent:error` — Uncaught fault interrupt
+- `subagent:spawn` — Sub-process fork interrupt
+- `subagent:steer` — Instruction injection interrupt
+- `tool:call` — Pre-tool execution
+- `tool:result` — Post-tool execution
 - `compaction:start` / `compaction:end`
 - `turn:start` / `turn:end`
 
 ---
 
-## Context
+## // CONTEXT MANAGEMENT
 
-### `buildParentContext(ctx: ExtensionContext): string`
+### `buildParentContext(parentSession: AgentSession): Message[]`
 
-**File:** `src/context.ts`
+**FILE:** `src/context.ts`
 
-Builds a context injection from the parent agent's conversation for the child agent. Enables chain-of-thought continuity.
+Compiles context payload from parent log. Enforces chain-of-thought transmission.
 
 ### `extractText(content: unknown): string`
 
-**File:** `src/context.ts`
+**FILE:** `src/context.ts`
 
-Extracts plain text from a message content block (handles string, array, and object shapes).
+Extracts raw text primitive from message block structures.
 
 ---
 
-## Settings
+## // CONFIGURATION SETTINGS
 
 ### `SubagentsSettings`
 
-**File:** `src/settings.ts`
+**FILE:** `src/settings.ts`
 
 ```ts
 interface SubagentsSettings {
-  maxConcurrent?: number;
-  maxAgentsPerSession?: number;
-  maxTotalTurnsPerSession?: number;
-  defaultMaxTurns?: number;       // 0 = unlimited
-  graceTurns?: number;
-  defaultJoinMode?: JoinMode;     // "async" | "group" | "smart" | "swarm"
-  schedulingEnabled?: boolean;
-  animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";
-  uiStyle?: "premium" | "retro" | "plain";
-  showActivityStream?: boolean;
-  showTokenUsage?: boolean;
-  showTurnProgress?: boolean;
-  orchestrationMode?: "auto" | "single" | "swarm" | "crew";
-  dashboardRefreshInterval?: number;  // ms, 100–60000
-  sessionMaxSpawns?: number;
-  sessionMaxTurns?: number;
+  maxConcurrent?: number;              // Max concurrently running agents (default 4)
+  maxAgentsPerSession?: number;         // Hard cap on total agents spawned per session
+  maxTotalTurnsPerSession?: number;     // Hard cap on cumulative turns across the session
+  defaultMaxTurns?: number;             // Max turns per agent (0 = unlimited)
+  graceTurns?: number;                // Wrap-up turns before forced kill (default 5)
+  defaultJoinMode?: JoinMode;          // Agent join topology (default: "smart")
+  schedulingEnabled?: boolean;         // Master switch for cron scheduling (default: true)
+  animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";  // Spinner style (default: "braille")
+  uiStyle?: "premium" | "retro" | "plain";  // UI theme (default: "premium")
+  showActivityStream?: boolean;        // Show real-time activity stream in widget (default: true)
+  showTokenUsage?: boolean;            // Show token usage and context fill percentage (default: true)
+  showTurnProgress?: boolean;          // Show turn progress (current/max) for running agents (default: true)
+  orchestrationMode?: "auto" | "single" | "swarm" | "crew";  // Execution topology (default: "auto")
+  dashboardRefreshInterval?: number;   // Dashboard refresh interval in ms (default: 750, min: 100, max: 60000)
+  sessionMaxSpawns?: number;           // Guardrail: max agents spawned per session
+  sessionMaxTurns?: number;            // Guardrail: max cumulative turns per session
+  promptCompressionLevel?: PromptCompressionLevel;  // "minimal" | "balanced" | "aggressive" (default: "balanced")
 }
 ```
 
-### `saveAndEmitChanged(snapshot, successMsg, emit, cwd?): { message, level }`
+### `PromptCompressionLevel`
 
-**File:** `src/settings.ts`
+**FILE:** `src/types.ts`
 
-Persists settings to `.pi/subagents.json` and emits a `subagents:settings_changed` event.
+Controls the verbosity of system prompts injected into agents. Lower compression yields higher-quality instructions at the cost of more tokens; higher compression saves tokens at the cost of instruction detail.
+
+| Level | Behavior | Token Impact |
+|---|---|---|
+| `"minimal"` | Full verbose prompts with CAPS emphasis, per-tool bash equivalents, two handoff examples. Maximum instruction quality. | +70% vs balanced |
+| `"balanced"` | Concise prompts with realistic examples (default). Good trade-off between quality and token usage. | Baseline |
+| `"aggressive"` | Ultra-short one-liners for read-only warnings, tool usage, and handoff. Maximum token savings. | −44% vs balanced |
+
+**SCOPE:**
+- Affects all `replace`-mode built-in agents (Explore, Plan, Analysis) via lazy runtime regeneration.
+- Affects handoff prompt injection for all agents with `handoff: true`.
+- Custom agents (`.pi/agents/*.md`) can override per-agent via the `prompt_compression` frontmatter directive.
+- Append-mode agents (e.g. `general-purpose`) — only the handoff block varies; the inherited system prompt and bridge are unaffected.
+
+**PRECEDENCE:** Per-agent frontmatter `prompt_compression` > global `promptCompressionLevel` setting > default `"balanced"`.
+
+**PERSISTENCE:** Stored in `.pi/subagents.json` and managed via `SettingsAppliers.setPromptCompressionLevel`.
+
+### `saveAndEmitChanged(settings: SubagentsSettings): void`
+
+**FILE:** `src/settings.ts`
+
+Persists configuration map to block storage and triggers state reload.
 
 ---
 
-## Types
+## // TYPE DEFINITIONS
 
 ### `AgentConfig`
 
-**File:** `src/types.ts`
+**FILE:** `src/types.ts`
 
 ```ts
 interface AgentConfig {
   name: string;
-  displayName?: string;
   description: string;
-  builtinToolNames?: string[];
-  disallowedTools?: string[];
-  extensions: true | string[] | false;
-  skills: true | string[] | false;
-  model?: string;
-  thinking?: ThinkingLevel;
-  maxTurns?: number;
   systemPrompt: string;
-  promptMode: "replace" | "append";
-  inheritContext?: boolean;
-  runInBackground?: boolean;
-  isolated?: boolean;
-  memory?: "user" | "project" | "local";
-  isolation?: "worktree";
-  useContextMode?: boolean;
-  enabled?: boolean;
+  builtinToolNames: string[];
+  disallowedTools?: string[];
+  extensions?: boolean;
+  contextMode?: boolean;
+  allowedTools?: string[];
+  model?: string;
+  temperature?: number;
+  parentType?: string;
+  handoff?: boolean;          // Produce structured JSON handoff at end of response
+  promptCompressionLevel?: PromptCompressionLevel;  // Per-agent compression override
+  memory?: "user" | "project" | "local";       // State persistence scope
+  isolation?: "worktree";    // Isolation mode
 }
 ```
 
 ### `AgentRecord`
 
-**File:** `src/types.ts`
+**FILE:** `src/types.ts`
 
-Runtime state of an agent invocation:
+Runtime state memory map:
 
 ```ts
 interface AgentRecord {
   id: string;
   type: string;
   description: string;
-  status: "queued" | "running" | "completed" | "steered" | "aborted" | "stopped" | "error";
-  spawnedAt: number;
+  status: "running" | "completed" | "failed" | "cancelled";
   startedAt: number;
   completedAt?: number;
   toolUses: number;
-  currentLevel: number;
+  level: number;
   compactionCount: number;
 }
 ```
 
 ### `JoinMode`
 
-**File:** `src/types.ts`
+**FILE:** `src/types.ts`
 
-- `"async"` — Spawn and return immediately; parent is notified on completion
-- `"group"` — Batch coordination: agents in a group complete together
-- `"smart"` — Adaptive join based on task characteristics
-- `"swarm"` — Live collaborative swarm with dynamic join/leave
-
----
-
-## Custom Agent Loading
-
-### `loadCustomAgents(cwd: string): Promise<Map<string, AgentConfig>>`
-
-**File:** `src/custom-agents.ts`
-
-Loads all `.md` files from the given directory and parses their frontmatter into `AgentConfig` objects. Validates names, tool names, and checks for prompt injection patterns.
-
-**Security note:** Symlinks are skipped to prevent directory traversal.
+- `"async"` — Asynchronous fork, detached execution (default).
+- `"group"` — Synchronous barrier: waits for all agents in the group to finish, then emits a single grouped notification.
+- `"smart"` — Smart selection: automatically chooses the best join strategy based on context.
+- `"swarm"` — Swarm mode: dynamic collaborative multi-agent processing with runtime join/leave.
 
 ---
 
-## Conversation Viewer
+## // CUSTOM AGENT INGESTION
+
+### `loadCustomAgents(dir: string): Map<string, AgentConfig>`
+
+**FILE:** `src/custom-agents.ts`
+
+Ingests markdown definitions, parsing YAML frontmatter into memory constraints. Validates identifiers and nullifies injection primitives.
+
+**FRONTMATTER DIRECTIVES** (parsed in `src/custom-agents.ts`):
+
+| Directive | Type | Default | Effect |
+|---|---|---|---|
+| `display_name` | string | filename | UI label override |
+| `description` | string | filename | Telemetry description |
+| `tools` | CSV / `none` | all built-in tools | Authorized tool subset |
+| `disallowed_tools` | CSV | none | Explicit denylist (partition floor) |
+| `extensions` | bool / CSV | `true` | Extension module access |
+| `skills` | bool / CSV | `true` | Skill module access |
+| `model` | string | host default | Model override (e.g. `anthropic/claude-sonnet-4-5`) |
+| `thinking` | string | null | Inference effort: `low` / `medium` / `high` |
+| `max_turns` | number | null | Hard execution turn limit |
+| `prompt_mode` | `replace` / `append` | `replace` | System prompt integration strategy |
+| `inherit_context` | bool (or string `"true"`/`"false"`) | null | Parent conversation context |
+| `run_in_background` | bool (or string) | null | Non-blocking execution |
+| `isolated` | bool (or string) | null | Strict context isolation |
+| `memory` | `user` / `project` / `local` | null | State persistence scope |
+| `isolation` | `worktree` | null | Physical directory isolation |
+| `handoff` | bool (or string) | `false` | Produce structured JSON handoff at end of response |
+| `prompt_compression` | `minimal` / `balanced` / `aggressive` | inherits global | Per-agent compression override |
+| `enabled` | bool (or string) | `true` | Profile activation state |
+
+All boolean fields accept either native YAML booleans or string-encoded booleans
+(`"true"` / `"false"`, case-insensitive). They are parsed via `parseBooleanOptional`
+and `parseBooleanWithDefault` in `src/custom-agents.ts`, which throw on any
+unrecognised input (numbers, arbitrary strings) so YAML schema errors surface
+at load time rather than being silently coerced.
+
+**FRONTMATTER EXAMPLE (handoff):**
+
+```markdown
+---
+display_name: "Chain Reviewer"
+description: "Code review that hands off structured findings"
+tools: read, grep, find
+handoff: true
+prompt_compression: minimal
+---
+
+Perform a thorough code review and produce a structured handoff JSON
+with your findings for downstream agents.
+```
+
+When `handoff: true` is set, the agent produces a structured JSON handoff at the end of its response, enabling chain-of-agents workflows where one agent's output feeds directly into the next.
+
+**SECURITY DIRECTIVE:** Symlinks are explicitly ignored to prevent LFI vulnerabilities.
+
+### // HANDOFF V2 — TYPED ARTIFACTS
+
+**FILE:** `src/handoff.ts`
+
+Handoff v2 replaces the loose `artifacts: HandoffArtifact[]` shape with a
+strict discriminated union on `type`. Parsed handoffs expose the v2 shape
+regardless of what older agents emit; legacy loose artifacts are coerced
+best-effort.
+
+```ts
+type HandoffArtifactV2 =
+  | HandoffFileArtifact
+  | HandoffBranchArtifact
+  | HandoffUrlArtifact
+  | HandoffNoteArtifact;
+
+interface HandoffFileArtifact {
+  type: "file";
+  path: string;            // required, ≤ 4096 chars
+  mimeType?: string;       // ≤ 200 chars
+  title?: string;          // ≤ 200 chars
+}
+
+interface HandoffBranchArtifact {
+  type: "branch";
+  branch: string;          // required, ≤ 256 chars
+  base?: string;           // ≤ 256 chars
+  commits?: string[];      // ≤ 100 entries, each ≤ 64 chars
+  title?: string;          // ≤ 200 chars
+}
+
+interface HandoffUrlArtifact {
+  type: "url";
+  url: string;             // required, ≤ 2048 chars
+  title?: string;          // ≤ 200 chars
+  description?: string;    // ≤ 500 chars
+}
+
+interface HandoffNoteArtifact {
+  type: "note";
+  title: string;           // required, ≤ 200 chars
+  value: string;           // required, ≤ 50000 chars
+  mimeType?: string;       // ≤ 200 chars
+}
+```
+
+**JSON EXAMPLE:**
+
+```json
+{
+  "type": "handoff",
+  "status": "success",
+  "summary": "Fixed token bucket refill in rate-limiter.ts",
+  "findings": ["Refill interval was 0ms"],
+  "artifacts": [
+    { "type": "file", "path": "src/rate-limiter.ts", "title": "Fix", "mimeType": "text/typescript" },
+    { "type": "branch", "branch": "fix/rate-limiter", "base": "main" },
+    { "type": "url", "url": "https://example.com/spec", "title": "Spec" },
+    { "type": "note", "title": "Follow-up", "value": "Investigate the backoff curve" }
+  ]
+}
+```
+
+**LEGACY COERCION:**
+
+Older agents that emit loose artifacts (e.g. `{type: "design", path, title, value, mimeType}`) continue to work. The parser runs `coerceLegacyArtifact` on every artifact that fails strict v2 validation, mapping first-match-wins to a v2 shape:
+
+| Loose shape | Coerced to |
+|---|---|
+| `{path}` (any type string) | `HandoffFileArtifact` |
+| `{title, value}` | `HandoffNoteArtifact` |
+| `{branch, ...}` | `HandoffBranchArtifact` |
+| `{url, ...}` | `HandoffUrlArtifact` |
+| anything else | dropped with `logger.warn` |
+
+**EXPORTS:** `HandoffFileArtifact`, `HandoffBranchArtifact`, `HandoffUrlArtifact`, `HandoffNoteArtifact`, `HandoffArtifactV2` (the discriminated union), `HandoffArtifact` (kept as a loose structural alias for source-level backwards compat), `HANDOFF_ARTIFACT_TYPES`, `HandoffArtifactType`, `parseHandoff`, `renderHandoffForParent`, `buildHandoffPrompt`.
+
+---
+
+## // TELEMETRY VIEWER
 
 ### `ConversationViewer`
 
-**File:** `src/ui/conversation-viewer.ts`
+**FILE:** `src/ui/conversation-viewer.ts`
 
-TUI component for live viewing an agent's conversation stream. Used by the "View conversation" menu option.
+TUI rendering block for real-time log stream tracking.
 
 ```ts
 const viewer = new ConversationViewer(tui, session, record, activity, theme);
-viewer.render(width, height); // Returns string[] lines
+viewer.render(width, height); // Returns string[] display buffer
 ```
 
 ---
 
-## Usage Tracking
+## // USAGE METRICS
 
 ### `getLifetimeTotal(usage?: LifetimeUsage): number`
 
-**File:** `src/usage.ts`
+**FILE:** `src/usage.ts`
 
-Returns total tokens consumed across all sessions.
+Retrieves global token execution count.
 
 ### `getSessionContextPercent(session?: SessionLike): number`
 
-**File:** `src/usage.ts`
+**FILE:** `src/usage.ts`
 
-Returns the percentage of the model's context window currently in use (0–100).
+Retrieves saturation metric (0-100) of context window.
 
 ---
 
-## Cross-Extension RPC
+## // PUBLIC TYPED API
 
-### Protocol Overview
+Single entry point for peer extensions and tests that want a stable, typed
+contract against the orchestrator. Re-exports the RPC + hook types from one
+place and adds Symbol-based discovery for the runtime handle.
 
-**File:** `src/cross-extension-rpc.ts`
+**FILE:** `src/public-api.ts`
 
-The subagents extension exposes a request-reply RPC protocol over the pi.events event bus, allowing other extensions to spawn and control agents without direct coupling.
+### // SYMBOL DISCOVERY
 
-**Protocol version:** `2` (bumped when envelope or method contracts change)
+The orchestrator publishes its typed API on two well-known `globalThis` keys:
 
-Mutating RPC calls (`spawn`, `stop`) are authenticated by the host integration when `registerRpcHandlers()` is configured with `authProvider(requestId)`. In that mode, request payload identity is ignored; the provider is the only trusted source of `extensionId`. If no auth provider is configured, the handler keeps legacy in-process compatibility and uses the synthetic `legacy` identity for rate limiting.
+| Symbol | Returns | Notes |
+|---|---|---|
+| `Symbol.for("pi-subagents:api")` | `SubagentsPublicApi \| undefined` | New — typed RPC + typed event subscription |
+| `Symbol.for("pi-subagents:hooks")` | `HookRegistry \| undefined` | Documented but previously unimplemented; now published |
 
-### RPC Reply Envelope
+Use the safe accessors `getSubagentsApi()` / `getSubagentsHooks()` (both return
+`undefined` when the extension is not loaded). Clear with `clearSubagentsApi()`
+in test teardown.
 
-All RPC responses follow the pi-mono convention:
+### // REGISTRATION
+
+Called once by the extension on load. **Idempotent** — last registration wins,
+matching the contract documented for `registerRpcHandlers` in
+`src/cross-extension-rpc.ts`.
+
+```ts
+import {
+  registerSubagentsApi,
+  HookRegistry,
+  type SubagentsPublicApi,
+} from "@onlinechefgroep/pi-agent-orchestrator/public-api";
+
+export function init(api: ExtensionAPI): SubagentsPublicApi {
+  const hooks = new HookRegistry();
+  // ... register pi-extension handlers on the hook registry ...
+  return registerSubagentsApi(api.events, hooks, { extensionId: "my-extension" });
+}
+```
+
+### // TYPED EVENT SUBSCRIPTION
+
+The `TypedEventSubscription` returned via `api.hooks` gives handlers a
+discriminated payload — `data` is shaped by the subscribed event name, not
+the previous `Record<string, unknown>` black box.
+
+```ts
+import {
+  getSubagentsApi,
+  type TypedHookPayload,
+} from "@onlinechefgroep/pi-agent-orchestrator/public-api";
+
+const api = getSubagentsApi();
+if (!api) throw new Error("pi-agent-orchestrator extension is not loaded");
+
+// Single typed event — handler gets the exact data shape for "subagent:start"
+const off = api.hooks.on("subagent:start", async (payload) => {
+  //    ^? TypedHookPayload<"subagent:start"> → { event, agentId, data: AgentStartData, ... }
+  console.log(payload.data.type, payload.data.description);
+  return "allow";
+});
+
+// Every event with a union payload
+const offAll = api.hooks.onAll((payload) => {
+  if (payload.event === "subagent:end" && payload.data.status === "completed") {
+    // ... payload.data is narrowed to AgentEndData here
+  }
+});
+```
+
+`TYPED_HOOK_PAYLOAD_MAP` maps every `HookEvent` to its specific data shape
+(`AgentStartData`, `AgentEndData`, `ToolCallData`, etc.) and is exhaustiveness-
+checked against the `HookEvent` union via `satisfies Record<HookEvent, unknown>`
+— adding a new event without a row in the map fails the build.
+
+### // TYPED RPC
+
+The `api.rpc` field is a `SubagentsRpcClient` (same shape as the existing
+`createSubagentsRpcClient` factory), with the four supported operations:
+
+- `ping()` → `{ version: number }`
+- `spawn({ type, prompt, options? })` → `{ id: string }`
+- `stop({ agentId })` → `void`
+- `sessionUsage()` → `{ usage, limits }`
+
+The rate-limit, authentication, and audit-trail guarantees documented in
+`// CROSS-EXTENSION RPC` below apply unchanged.
+
+### // MANAGER HANDLE
+
+`api.manager` is a read-only `SubagentManagerHandle` over the orchestrator's
+`AgentManager`. It is also published under `Symbol.for("pi-subagents:manager")`
+and exposed via the safe accessor `getSubagentsManager()`.
+
+The handle exposes four observation methods only — every mutating surface
+(`spawn`, `stop`, `abort`, `clearCompleted`, etc.) is intentionally **not**
+exposed, so peer extensions can monitor agents without gaining the ability
+to create or stop them.
+
+```ts
+import {
+  getSubagentsApi,
+  getSubagentsManager,
+  type SubagentManagerHandle,
+  type SubagentManagerRecord,
+} from "@onlinechefgroep/pi-agent-orchestrator/public-api";
+
+// Via the typed API
+const api = getSubagentsApi();
+if (api) {
+  await api.manager.waitForAll();
+  const rec: SubagentManagerRecord | undefined = api.manager.getRecord("agent-123");
+  const exploreIds: string[] = api.manager.listAgentIds("Explore");
+}
+
+// Or via the safe accessor
+const mgr: SubagentManagerHandle | undefined = getSubagentsManager();
+if (mgr) {
+  const running = mgr.hasRunning();
+}
+```
+
+**METHOD SHAPE (`SubagentManagerHandle`):**
+
+| Method | Returns | Purpose |
+|---|---|---|
+| `waitForAll()` | `Promise<void>` | Resolve when every currently-running agent reaches a terminal state |
+| `hasRunning()` | `boolean` | Whether any agent is currently running |
+| `getRecord(id)` | `SubagentManagerRecord \| undefined` | Sanitized record for an agent, or `undefined` if absent |
+| `listAgentIds(type)` | `string[]` | All known agent ids of the given type |
+
+**SANITIZATION CONTRACT (`SubagentManagerRecord`):**
+
+The record returned by `getRecord(id)` is a *projection* of the internal
+`AgentRecord`. Only `id`, `type`, `status`, and a truncated `description`
+are exposed. Sensitive fields (full prompt, result, error stack, internal
+flags) are intentionally omitted — consumers that need the full record
+should use the `Agent` tool or RPC instead.
+
+The `description` field is truncated to
+`SUBAGENT_MANAGER_MAX_DESCRIPTION_CHARS` (currently `200`) characters
+to avoid leaking long context (full file contents, transcripts, etc.) to
+peer extensions in the process.
+
+### // RE-EXPORTS
+
+For convenience, the following types and helpers are re-exported from a
+single import path:
+
+- **RPC:** `PROTOCOL_VERSION`, `createSubagentsRpcClient`, `EventBus`,
+  `SubagentsRpcClient`, `RpcReply`, `SpawnRpcRequest`, `StopRpcRequest`,
+  `PingRpcReply`, `SessionUsageRpcReply`, `SpawnCapable`, `SessionCapable`,
+  `SwarmCapable`, `AuthContext`, `RateLimitConfig`
+- **Hooks:** `HookRegistry`, `HookEvent`, `HookPayload`, `HookHandler`,
+  `HookResponse`, `composeHandlers`
+- **This module:** `TYPED_HOOK_PAYLOAD_MAP`, `TypedHookPayload`,
+  `TypedHookHandler`, `TypedEventSubscription`, `SubagentsPublicApi`,
+  `SUBAGENTS_API_SYMBOL`, `SUBAGENTS_HOOKS_SYMBOL`, `SUBAGENTS_MANAGER_SYMBOL`,
+  `SUBAGENT_MANAGER_MAX_DESCRIPTION_CHARS`, all event-payload
+  data interfaces (`AgentStartData`, `AgentEndData`, `ToolCallData`, etc.),
+  `registerSubagentsApi`, `getSubagentsApi`, `getSubagentsHooks`,
+  `getSubagentsManager`, `clearSubagentsApi`, `SubagentManagerHandle`,
+  `SubagentManagerRecord`, `SubagentManagerLike`
+
+---
+
+## // CROSS-EXTENSION RPC
+
+### // PROTOCOL DEFINITION
+
+**FILE:** `src/cross-extension-rpc.ts`
+
+Standardized request-reply event structure over the `pi.events` bus. Designed for decoupled multi-extension operation.
+
+**PROTOCOL VERSION:** `2`
+
+Mutating parameters (`spawn`, `stop`) are hardware-authenticated when `authProvider` is defined. Unauthenticated requests strictly rejected unless legacy fallback is enabled.
+
+### // RPC PAYLOAD ENVELOPE
+
+Conforms to structural guarantees:
 
 ```ts
 type RpcReply<T = void> =
@@ -335,221 +637,87 @@ type RpcReply<T = void> =
   | { success: false; error: string };
 ```
 
-### RPC Methods
+### // RPC ENDPOINTS
 
 #### `subagents:rpc:ping`
 
-Health check endpoint. Returns the current protocol version.
+System health check and protocol discovery.
 
-**Request:** `{ requestId: string }`
-
-**Reply:** `{ success: true; data: { version: number } }`
-
-**Example:**
-```ts
-const requestId = crypto.randomUUID();
-pi.events.emit("subagents:rpc:ping", { requestId });
-
-pi.events.once(`subagents:rpc:ping:reply:${requestId}`, (reply) => {
-  if (reply.success) {
-    console.log(`Protocol version: ${reply.data.version}`);
-  }
-});
-```
+**REQUEST:** `{ requestId: string }`
+**REPLY:** `{ success: true; data: { version: number } }`
 
 #### `subagents:rpc:spawn`
 
-Spawn a new agent from another extension.
+Fork detached process from alternate module.
 
-**Request:**
+**REQUEST:**
 ```ts
 {
   requestId: string;
-  type: string;           // Agent type (e.g., "general-purpose", "Explore")
-  prompt: string;         // Task description
+  type: string;
+  prompt: string;
   options?: {
-    model?: string;       // Model override (provider/modelId or fuzzy name)
+    model?: string;
     maxTurns?: number;
     isolated?: boolean;
     inheritContext?: boolean;
-    // ... other Agent tool options
   };
 }
 ```
 
-**Reply:** `{ success: true; data: { id: string } }` or `{ success: false; error: string }`
+**REPLY:** `{ success: true; data: { id: string } }`
 
-**Authentication:** when `authProvider` is configured, `authProvider(requestId)` must return `{ extensionId }`; otherwise the request fails with `Unauthorized RPC request`.
-
-**Rate limiting:** 10 spawn requests per minute per authenticated extension ID.
-
-**Example:**
-```ts
-const requestId = crypto.randomUUID();
-pi.events.emit("subagents:rpc:spawn", {
-  requestId,
-  type: "Explore",
-  prompt: "Search for TODO comments in src/",
-  options: { maxTurns: 10 },
-});
-
-pi.events.once(`subagents:rpc:spawn:reply:${requestId}`, (reply) => {
-  if (reply.success) {
-    console.log(`Agent spawned with ID: ${reply.data.id}`);
-  } else {
-    console.error(`Spawn failed: ${reply.error}`);
-  }
-});
-```
+**RATE LIMITING:** 10 forks/minute per authenticated module ID.
 
 #### `subagents:rpc:stop`
 
-Abort a running agent.
+Force execution interrupt on specified PID.
 
-**Request:** `{ requestId: string; agentId: string }`
+**REQUEST:** `{ requestId: string; agentId: string }`
+**REPLY:** `{ success: true }`
 
-**Reply:** `{ success: true }` or `{ success: false; error: string }`
+**RATE LIMITING:** 10 interrupts/minute per authenticated module ID.
 
-**Authentication:** same as `spawn`. A stop request from an unauthenticated caller is rejected when `authProvider` is configured.
+### // SYMBOL REGISTRY
 
-**Rate limiting:** 10 stop requests per minute per authenticated extension ID.
-
-**Example:**
-```ts
-const requestId = crypto.randomUUID();
-pi.events.emit("subagents:rpc:stop", { requestId, agentId: "agent-123" });
-
-pi.events.once(`subagents:rpc:stop:reply:${requestId}`, (reply) => {
-  if (!reply.success) {
-    console.error(`Stop failed: ${reply.error}`);
-  }
-});
-```
-
-### Global Symbol Registry
-
-The extension exposes read-only APIs via `globalThis[Symbol.for(...)]` for cross-package discovery:
+Exposes read-only telemetry by passing globally registered symbols.
 
 #### `Symbol.for("pi-subagents:manager")`
-
-Read-only manager access for querying agent state:
 
 ```ts
 const manager = (globalThis as any)[Symbol.for("pi-subagents:manager")];
 
-// Wait for all running agents to complete
 await manager.waitForAll();
-
-// Check if any agents are running
-const hasRunning = manager.hasRunning();
-
-// Get safe record metadata (no sensitive data)
 const record = manager.getRecord("agent-123");
-// Returns: { id, type, status, description } or undefined
-
-// List agent IDs by type
 const ids = manager.listAgentIds("Explore");
 ```
 
-**Security note:** Only read-only methods are exposed. No `spawn`, `listAgents`, or mutation methods.
+> **Status:** published via `registerSubagentsApi(...)` (see `// PUBLIC TYPED API` above). Peer extensions should prefer the safe accessor `getSubagentsManager()` or `api.manager` over the raw symbol read.
+
+**SECURITY DIRECTIVE:** Write functions physically detached from registry pointer.
 
 #### `Symbol.for("pi-subagents:hooks")`
 
-Read-only hook registry access for discovering registered handlers:
-
 ```ts
 const hooks = (globalThis as any)[Symbol.for("pi-subagents:hooks")];
-
-// Get all registered hook handlers
 const handlers = hooks.getHandlers();
-// Returns: Map<HookEvent, HookHandler[]>
 ```
 
-**Security note:** No `register`, `unregister`, or `dispatch` methods are exposed.
+### // LIFECYCLE BROADCASTS
 
-### Lifecycle Events
+Event bus emission standards for external monitoring.
 
-The extension emits the following events on `pi.events` for telemetry and cross-extension coordination:
+- **`subagents:ready`** — Boot sequence complete.
+- **`subagents:scheduler_ready`** — Job registry loaded.
+- **`subagents:started`** — Execution unblocked.
+- **`subagents:completed`** — Clean termination.
+- **`subagents:failed`** — Unclean fault.
+- **`subagents:compacted`** — Buffer compaction cycle execution.
+- **`subagents:record`** — Persistent memory write.
 
-#### `subagents:ready`
+### // SECURITY CONSTRAINTS
 
-Broadcast when the extension is fully initialized and ready to handle RPC calls.
-
-**Payload:** `{}`
-
-#### `subagents:scheduler_ready`
-
-Emitted when the scheduler is active and has loaded persisted jobs.
-
-**Payload:** `{ sessionId: string; jobCount: number }`
-
-#### `subagents:started`
-
-Emitted when an agent transitions to running state (including from queue).
-
-**Payload:** `{ id: string; type: string; description: string }`
-
-#### `subagents:completed`
-
-Emitted when an agent completes successfully.
-
-**Payload:**
-```ts
-{
-  id: string;
-  type: string;
-  description: string;
-  result?: string;
-  status: "completed";
-  toolUses: number;
-  durationMs: number;
-  tokens?: { input: number; output: number; total: number };
-}
-```
-
-#### `subagents:failed`
-
-Emitted when an agent errors, stops, or is aborted.
-
-**Payload:** Same as `subagents:completed`, plus `error?: string`.
-
-#### `subagents:compacted`
-
-Emitted when an agent's session compacts (preserves conversation count).
-
-**Payload:**
-```ts
-{
-  id: string;
-  type: string;
-  description: string;
-  reason: string;
-  tokensBefore: number;
-  compactionCount: number;
-}
-```
-
-#### `subagents:record`
-
-Emitted on agent completion and persisted to pi's entry log for cross-session history reconstruction.
-
-**Payload:**
-```ts
-{
-  id: string;
-  type: string;
-  description: string;
-  status: string;
-  result?: string;
-  error?: string;
-  startedAt: number;
-  completedAt?: number;
-}
-```
-
-### Security Considerations
-
-- **Rate limiting:** Mutating RPC calls are rate-limited to 10 per minute per authenticated extension ID and operation.
-- **Authentication:** When an `authProvider` is configured, RPC identity comes from `authProvider(requestId)`. Payload-provided identity is ignored.
-- **Read-only globals:** Symbol registry exposes only read-only APIs; mutation methods are intentionally omitted.
-- **Model resolution:** RPC callers can specify models as strings; the extension resolves them to Model instances to avoid auth errors.
+- **Rate execution limits:** Hard throttle at 10/min per ID for destructive parameters.
+- **Authentication checks:** `authProvider` overrides explicit payload identifiers.
+- **Read-only execution:** Symbol mapping provides immutable pointers to memory maps.
+- **Model boundary enforcement:** String resolution blocks external credential injections.

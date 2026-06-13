@@ -1,226 +1,87 @@
-<div align="center">
+# @onlinechefgroep/pi-agent-orchestrator
 
-![Pi Agent Orchestrator Banner](docs/images/orchestrator_banner.png)
+> Multi-agent orchestrator for Pi coding agents — sub-agents, handoffs, prompt compression, scheduling, and an interactive TUI dashboard.
 
-# 🤖 @onlinechefgroep/pi-agent-orchestrator
+[![npm version](https://img.shields.io/npm/v/@onlinechefgroep/pi-agent-orchestrator)](https://www.npmjs.com/package/@onlinechefgroep/pi-agent-orchestrator)
+[![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions)
+[![Tests](https://img.shields.io/badge/tests-1035%20passed-brightgreen)](https://github.com/OnlineChefGroep/pi-agent-orchestrator)
 
-**Autonomous sub-agents + interactive TUI dashboard + swarm coordination for the Pi coding agent**
-
-[![CI](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.10.2-blue)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/releases)
-[![Node](https://img.shields.io/badge/node-%3E%3D22.19-green)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-
-</div>
-
-Bring Claude Code-style autonomous sub-agents to Pi. Spawn specialized agents, enforce budgets, chain them with structured handoffs, swarm agents together, and watch a rich interactive TUI dashboard render their progress in real time.
-
-**Repository:** [`OnlineChefGroep/pi-agent-orchestrator`](https://github.com/OnlineChefGroep/pi-agent-orchestrator)
-
----
-
-## Install
-
-```bash
-pi install npm:@onlinechefgroep/pi-agent-orchestrator
-```
-
-Requires Node.js >= 22.19 and pi >= 0.70.5.
-
----
+A Pi extension that adds powerful orchestration capabilities: autonomous sub-agents, structured handoffs, 3-tier prompt compression, cron scheduling, swarm coordination, and a vim-style interactive TUI dashboard.
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **Autonomous sub-agents** | Spawn specialized agents (Explore, Plan, Analysis) that run independently and return structured results |
-| **Rich interactive dashboard** | Vim-style hotkeys (`j/k/Enter/K/?`), multi-select, bulk kill, permissions view, spinners |
-| **Swarm mode** | Live SwarmCoordinator with dynamic join/leave, collaborative multi-agent swarms, `w` hotkey |
-| **Task budget & depth limiting** | Prevent runaway agent trees with configurable `levelLimit` (default 5) and `taskBudget` |
-| **Adversarial validators** | Post-completion `Promise.all` validation with pass/fail indicators |
-| **Structured handoff protocol** | JSON machine-parseable chain-of-agents with graceful degrade on malformed data |
-| **Hook system** | 11 lifecycle event types (spawn, complete, error, etc.) with 5s timeout, fail-open |
-| **Permission inheritance** | Directional parent→child tool restriction — a read-only parent forces a read-only child |
-| **Partitioned agent state** | Isolated tool/skill subsets per partition — no cross-contamination |
-| **Deferred context engine** | Build context at session boundary, saving 15-48% tokens on queued agents |
-| **Dual-phase compaction** | Prune old tool outputs + per-agent memory limits (default keep 5 turns) |
-| **Scheduling** | Cron/interval/one-shot recurring agent jobs with file-backed persistence |
-| **Context-mode sandbox** | Optional `ctx_*` sandbox tool injection via `@onlinechef/context-mode` peer dependency |
+- **Interactive TUI Dashboard** — Vim-style hotkeys (`j/k` navigate, `z` schedules, `t` top view, `?` help, `/perf` metrics). 6 interactive views: list, resource top, daemon schedules, performance metrics, help overlay, settings.
+- **Sub-agent System** — Spawn specialized agents (Explore, Plan, Analysis, general-purpose, custom) with intelligent coordination, permission inheritance, and partition filtering.
+- **Thinking Level Display** — `🧠` indicator in widget, dashboard rows, and detail panel showing agent invocation thinking level (low/medium/high).
+- **Prompt Compression** — `minimal` / `balanced` / `aggressive` levels with global default + per-agent overrides. Dramatically reduces token usage while keeping essential context.
+- **Scheduling Engine** — Cron-style scheduling for recurring autonomous agent jobs with persistent store and daemon schedule view (`z` key).
+- **Daemon Integration** — 4 autonomous daemons with Pi Orchestra Integration docs: github-activity-digest, js-ts-dependency-upgrades, linear-issue-labeler, pr-check-repair.
+- **Handoff Protocol** — Clean JSON-based handoff system between agents enabling chain-of-agents workflows.
+- **Custom Agents** — Define via simple frontmatter in `.md` files (supports `prompt_compression`, `handoff`, `thinking`, `enabled`).
+- **Swarm Coordination** — Dynamic multi-agent swarm join/leave with real-time status in dashboard (`w` key).
+- **Performance Skills** — `overdrive` skill for performance auditing with benchmark suite (61 benchmarks, adaptive refresh, O(N) rendering).
+- **Showcase Pipelines** — tmux recording, programmatic, Remotion, VHS, and live asciinema pipelines for high-quality demos.
 
----
+## Showcase
 
-## Built-in Agent Types
+![Dashboard Preview](docs/images/dashboard_preview.svg)
 
-| Type | Description | Tools | Context-mode |
-|------|-------------|-------|-------------|
-| `general-purpose` | All-rounder for complex multi-step tasks | all built-in | opt-in |
-| `Explore` | Fast read-only codebase exploration | read, grep | no |
-| `Plan` | Software architect and implementation planner | read, grep | no |
-| `Analysis` | Data analysis with sandboxed code execution | read, grep | yes |
+Rendered from the extension's actual dashboard renderers via `npm run screenshots` (real terminal output, not a mockup).
 
----
+The project includes a full showcase pipeline that generates high-quality terminal recordings:
 
-## Custom Agents
+| Pipeline | Command | Output |
+|---|---|---|
+| **Full pipeline** | `npm run showcase` | All assets (C→A→B→T→D) |
+| **Tmux recording** | `npm run showcase:tmux` | `showcase_tmux.gif` + `.mp4` |
+| **CI-safe assets** | `npm run showcase:ci` | Programmatic GIFs (no tmux needed) |
+| **Live capture** | `npm run showcase:live` | `showcase_live.gif` |
+| **Remotion hero** | `npm run showcase:remotion` | `dashboard_preview_remotion.mp4` |
+| **VHS tape** | `npm run showcase:vhs` | `showcase_vhs.gif` |
 
-Create `.pi/agents/<name>.md` in your project (or globally in `~/.pi/agent/agents/`). Project-level agents override global ones.
+All showcase assets live in `docs/images/`.
 
-### Example: `.pi/agents/security-auditor.md`
+## Installation
 
-```markdown
----
-display_name: "Security Auditor"
-description: "Audit code for common security issues"
-tools: read, grep, find
-model: anthropic/claude-sonnet-4-5-20250901
-extensions: false
-skills: false
-max_turns: 20
----
-You are a security auditor. Review the provided code for:
-- SQL injection
-- XSS vulnerabilities
-- Path traversal
-- Hardcoded secrets
-
-Output findings as a markdown list with severity (Critical / High / Medium / Low) and suggested fix.
+```bash
+npm install @onlinechefgroep/pi-agent-orchestrator
 ```
 
-### Frontmatter reference
+Requires compatible Pi packages (`@earendil-works/pi-coding-agent` etc.).
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `display_name` | string | agent name | Human-readable name |
-| `description` | string | agent name | Short description shown in UI |
-| `tools` | CSV or `none` | all built-in | Allowed tools |
-| `disallowed_tools` | CSV | — | Explicitly forbidden tools |
-| `extensions` | `true` / `false` / CSV | `true` | Extension access |
-| `skills` | `true` / `false` / CSV | `true` | Skill access |
-| `model` | string | (host default) | LLM model override |
-| `thinking` | string | — | Thinking level hint |
-| `max_turns` | number | — | Turn limit |
-| `prompt_mode` | `"replace"` / `"append"` | `"replace"` | How system prompt is applied |
-| `inherit_context` | boolean | — | Inherit parent conversation context |
-| `run_in_background` | boolean | — | Run without blocking parent |
-| `isolated` | boolean | — | Run in isolated context |
-| `memory` | `"user"` / `"project"` / `"local"` | — | Memory scope |
-| `isolation` | `"worktree"` | — | Worktree isolation |
-| `enabled` | boolean | `true` | Enable/disable this agent |
+## Quick Start
 
----
+```bash
+# Run the full showcase
+npm run showcase
 
-## Dashboard
-
-The interactive dashboard renders live agent status directly in your terminal — running cards with spinners and activity, queued/done sections, swarm grouping, and a detail panel. Open it with `/agents` and drive it with vim-style hotkeys.
-
-![Pi Agent Orchestrator dashboard](docs/images/dashboard_preview.svg)
-
-The dashboard is pure TypeScript and ships with the extension — no external binary or sidecar to install. Three themes are available via the `uiStyle` setting: `premium` (truecolor, default), `retro` (16-color), and `plain` (no ANSI, for logs and CI).
-
-> The screenshot above is rendered from the extension's actual renderers via `npm run screenshots` — it's the real terminal output, not a mockup.
-
----
-
-## Configuration
-
-Settings are managed via `/agents` → Settings or by editing `.pi/subagents.json` (project) or `~/.pi/agent/subagents.json` (global defaults):
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `maxConcurrent` | `4` | Maximum parallel agents |
-| `defaultMaxTurns` | unlimited (`0`) | Default turn limit per agent (`0` = unlimited) |
-| `graceTurns` | `5` | Extra turns after wrap-up steer before forced stop |
-| `defaultJoinMode` | `smart` | Default join mode: `async`, `group`, `smart`, or `swarm` |
-| `orchestrationMode` | `auto` | Coordination mode: `auto`, `single`, `swarm`, or `crew` |
-| `schedulingEnabled` | `true` | Enable cron/interval scheduled agent jobs |
-| `animationStyle` | `braille` | Dashboard spinner: `braille`, `dots`, `lines`, `classic`, `none` |
-| `uiStyle` | `premium` | UI theme: `premium`, `retro`, or `plain` |
-| `showActivityStream` | `true` | Show live tool-call activity in the dashboard |
-| `showTokenUsage` | `true` | Show token usage and context fill percentage |
-| `showTurnProgress` | `true` | Show turn progress for running agents |
-| `dashboardRefreshInterval` | `750` | Dashboard refresh interval in ms (100–60000) |
-| `maxAgentsPerSession` | unlimited | Hard cap on agents spawned in one pi session |
-| `maxTotalTurnsPerSession` | unlimited | Hard cap on cumulative agent turns per session |
-| `sessionMaxSpawns` | unlimited | Guardrail for total spawns in a session |
-| `sessionMaxTurns` | unlimited | Guardrail for cumulative turns in a session |
-
-Per-invocation parameters on the `Agent` tool (not persisted settings): `levelLimit` (default 5), `taskBudget`, `join_mode`, `model`, `max_turns`, and others — see [docs/api-reference.md](docs/api-reference.md).
-
----
-
-## Architecture
-
-![Pi Agent Orchestrator Architecture](docs/images/orchestrator_architecture.png)
-
-```
-pi host
-  └── pi-agent-orchestrator extension
-        ├── AgentRegistry (defaults + custom .md agents)
-        ├── AgentDashboard (live TUI with vim hotkeys, swarm view)
-        ├── AgentRunner (spawn → execute → handoff → validate)
-        ├── SwarmCoordinator (live join/leave, collaborative swarms)
-        ├── ScheduleStore (file-backed persistence, PID-locked)
-        ├── Hooks (lifecycle events)
-        └── PartitionedState (isolated tool/skill subsets)
+# Or specific pipelines
+npm run showcase:tmux
+npm run showcase:ci
 ```
 
----
+See the `docs/` folder for architecture, custom agent examples, handoff workflows and compression details.
 
 ## Development
 
 ```bash
-# Install dependencies
 npm install
-
-# Typecheck
+npm run setup:hooks   # git hooks (opt-in)
+npm test              # 1035 tests across 58 test files
+npm run lint:fix
 npm run typecheck
-
-# Run tests
-npm test
-
-# Lint
-npm run lint
+npm run bench:all     # 61 performance benchmarks
 ```
 
----
+## Chain of Agents
 
-## Hotkeys (AgentDashboard)
+Three canonical patterns for multi-agent workflows:
 
-| Key | Action |
-|-----|--------|
-| `j` / `↓` | Move selection down |
-| `k` / `↑` | Move selection up |
-| `Enter` | Steer selected agent |
-| `K` | Kill selected agent |
-| `v` | Visual mode (multi-select) |
-| `p` | Toggle permissions view |
-| `w` | Toggle swarm view |
-| `?` | Show help overlay |
-| `q` | Close dashboard / quit view |
-
----
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for version history.
-
----
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `/agents` | Open the agent dashboard, settings, schedules, and conversation viewer |
-| `/hooks` | Manage lifecycle hook handlers |
-
----
-
-## Security
-
-See [SECURITY.md](SECURITY.md) for the vulnerability reporting process and security model.
-
----
+1. **Research → Write → Review** — Explore researches codebase, general-purpose implements, Analysis reviews the result.
+2. **Test → Fix → Verify** — Analysis finds failures, general-purpose fixes, Explore verifies no regressions.
+3. **Multi-perspective Analysis** — 3 parallel Explore agents analyze different subsystems, synthesizer merges findings.
 
 ## License
 
-MIT — [OnlineChefGroep](https://github.com/OnlineChefGroep)
+MIT © OnlineChefGroep

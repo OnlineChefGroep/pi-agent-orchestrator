@@ -1,5 +1,6 @@
 ---
 id: pr-check-repair
+trigger: /pr-check-repair
 purpose: Repair failing checks on non-draft pull requests by diagnosing the triggering check, pushing evidence-grounded fixes, and commenting only when action or human attention is needed.
 watch:
   - A GitHub check run, check suite, or commit status from GitHub or an integrated provider reports a non-successful result on the current head of a non-draft pull request, including failure, error, timed_out, cancelled, or action required.
@@ -22,6 +23,16 @@ deny:
 ---
 
 # PR Check Repair
+
+## Pi Orchestra Integration
+
+This daemon is event-driven — triggered by GitHub check failure webhooks via its `trigger` frontmatter (`/pr-check-repair`) rather than a cron schedule.
+
+- **Trigger:** GitHub check run/check suite/commit status failure on non-draft PRs
+- **Orchestra monitoring:** View active agents in the dashboard; daemon-spawned agents appear with type `pr-check-repair`
+- **Concurrency:** Coordinates with other `pr-check-repair` activations via remote PR head verification before editing and before pushing
+- **No-op behavior:** Silently no-ops on stale triggers, duplicate activations, checks already fixed, or failures owned by another daemon
+- **Comment policy:** Only comments after a pushed fix, flaky rerun, or blocked state requiring human action
 
 ## Repository CI context
 

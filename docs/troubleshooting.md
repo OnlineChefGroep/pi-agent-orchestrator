@@ -1,16 +1,16 @@
-# Troubleshooting
+# // TROUBLESHOOTING
 
-> Common issues, their causes, and fixes.
+> COMMON FAULT CONDITIONS, CAUSAL ANALYSIS, AND RECOVERY PROCEDURES.
 
 ---
 
-## Installation
+## // INSTALLATION
 
 ### `npm install` fails with peer dependency errors
 
-**Cause:** This package has peer dependencies on `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui`.
+**CAUSE:** Hard peer constraints on `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui`.
 
-**Fix:** Install from within the pi-coding-agent extension environment, or use:
+**RECOVERY:** Execute installation inside pi-coding-agent environment boundary, or override constraint checks:
 
 ```bash
 npm install --legacy-peer-deps
@@ -18,153 +18,153 @@ npm install --legacy-peer-deps
 
 ---
 
-## Agents
+## // AGENT SUBSYSTEM
 
-### Custom agent not appearing in `/agents` list
+### Custom definition absent from `/agents` enumeration
 
-**Symptom:** You created `.pi/agents/my-agent.md` but it's not shown.
+**SYMPTOM:** Target `.pi/agents/my-agent.md` fails injection logic.
 
-**Checklist:**
-1. File extension is `.md` (not `.txt` or `.markdown`)
-2. File is directly in `.pi/agents/` (no subdirectories)
-3. Frontmatter starts with `---` on line 1
-4. Frontmatter ends with `---` on its own line
-5. The `name` field is valid (alphanumeric + hyphens, no spaces)
-6. No YAML syntax errors in frontmatter
+**VALIDATION MATRIX:**
+1. Extension strict match: `.md` (not `.txt` or `.markdown`).
+2. Placement constraint: Top-level `.pi/agents/` (recursive search disabled).
+3. YAML boundary 1: `---` at line 1.
+4. YAML boundary 2: `---` on isolated line.
+5. Identifier rules: alphanumeric + hyphens, zero whitespace.
+6. YAML syntax: Well-formed.
 
-**Force reload:** `/agents` → "Reload custom agents"
+**FORCED RELOAD:** Execute `/agents` → "Reload custom agents".
 
-**Debug:** Check extension output logs for parse errors (they include line numbers).
-
----
-
-### Agent fails with "tool not allowed"
-
-**Symptom:** Agent tries to use a tool and gets permission denied.
-
-**Causes:**
-1. Tool not listed in the custom agent's `tools` frontmatter
-2. Tool listed in `disallowed_tools`
-3. Parent agent has stricter permissions (inherited restriction)
-4. Partition filter removed the tool based on `contextMode`
-
-**Fix:** Check the agent config and parent chain. Use `getAgentConfig(name)` in code to inspect resolved permissions.
+**TELEMETRY:** Review extension output log for deterministic parse exceptions (includes trace lines).
 
 ---
 
-### Agent gets stuck in infinite loop
+### Agent faults with "tool not allowed"
 
-**Symptom:** Agent keeps calling tools without making progress.
+**SYMPTOM:** Capability requested, constraint enforced, execution denied.
 
-**Causes & fixes:**
+**CAUSAL VECTORS:**
+1. Capability absent from `tools` array.
+2. Capability present in `disallowed_tools` nullification list.
+3. Parent hierarchy enforces strict inheritance limitation.
+4. Memory partition filters dropped capability via `contextMode`.
 
-| Cause | Fix |
-|-------|-----|
-| Missing `maxTurns` limit | Set `defaultMaxTurns` in Settings, or pass `maxTurns` to `createSubagent` |
-| No clear task boundary | Improve the `description` to be more specific |
-| Tool results not informative | The LLM can't tell it's making progress — add validation steps |
-| Compaction not triggering | Check that `compactionCount` is increasing in agent records |
-
-**Emergency stop:** Use `/agents` → "Running agents" → select the agent → "Cancel".
+**RECOVERY:** Audit configuration matrix and parent hierarchy. Programmatic inspection via `getAgentConfig(name)`.
 
 ---
 
-## Scheduling
+### Infinite loop state execution
 
-### Scheduled jobs not firing
+**SYMPTOM:** Agent cycles capabilities without objective termination.
 
-**Symptom:** A cron job never runs.
+**CAUSAL VECTORS & RECOVERY:**
 
-**Checklist:**
-1. `schedulingEnabled` is true in Settings
-2. The job's `enabled` flag is true
-3. The cron expression is valid (use [crontab.guru](https://crontab.guru) to verify)
-4. The scheduler process is running (check if `SubagentScheduler` was initialized)
-5. No errors in extension logs
+| Vector | Recovery Protocol |
+|---|---|
+| Unbounded `maxTurns` limit | Enforce `defaultMaxTurns` or parameterize `maxTurns` explicitly. |
+| Boundary definition failure | Refine `description` prompt telemetry. |
+| Opaque tool payloads | LLM lacks state feedback. Inject validation blocks. |
+| Compaction engine halted | Audit `compactionCount` integer increment in session record. |
 
-**Note:** Jobs only fire while the pi session is active. They do not persist across VS Code restarts unless `schedule-store.ts` persistence is enabled.
-
----
-
-### Schedule store errors on Windows
-
-**Symptom:** `ENOENT`, stale lock, or rename errors in `schedule-store.test.ts` or `schedule.ts`.
-
-**Cause:** Schedule persistence uses a project-local JSON file with a lock file. Writes are atomic via same-directory temp file + rename, but stale lock files can still occur after an abrupt process exit.
-
-**Fix:** Retry the command after the stale lock recovery window, or remove the matching `.lock` file under `.pi/subagent-schedules/` if no pi process is using that session.
+**EMERGENCY INTERRUPT:** Execute `/agents` → "Running agents" → Select PID → "Cancel".
 
 ---
 
-## UI / Widget
+## // SCHEDULING ENGINE
 
-### Widget not showing
+### Temporal triggers fail execution
 
-**Symptom:** No agent widget visible above the editor.
+**SYMPTOM:** Scheduled cron definition silently skips trigger.
 
-**Checklist:**
-1. At least one agent must be running or recently completed
-2. `getUiStyle()` is not `"plain"` with no active agents
-3. Check terminal width — widget may collapse below minimum width
-4. No errors in `agent-widget.ts` logs
+**VALIDATION MATRIX:**
+1. `schedulingEnabled` == true.
+2. Target `enabled` == true.
+3. Cron definition string mathematically valid.
+4. Core chronometer process active (`SubagentScheduler` initialized).
+5. Error bus silent.
 
----
-
-## Tests
-
-### `schedule.test.ts` or `schedule-store.test.ts` fails on Windows
-
-**Symptom:** Lock, rename, or timing-related failures in schedule tests.
-
-**Status:** Schedule writes now use same-directory temp files before rename. If this still fails on Windows, treat it as a real regression and capture the failing path plus the matching `.lock` file state.
-
-**Fix:** Run the specific failing file first (`npm test -- test/schedule-store.test.ts`) to separate persistence failures from scheduler timing failures.
+**PERSISTENCE NOTICE:** Jobs require active PI session. Memory persistence strictly requires `schedule-store.ts` file-backed storage flag active.
 
 ---
 
-### `npm test` fails with import errors
+### Storage locks stall on Windows OS
 
-**Symptom:** `Cannot find module '@earendil-works/pi-coding-agent'`
+**SYMPTOM:** `ENOENT`, stale lock handle, or atomic rename fault in `schedule.ts`.
 
-**Fix:** This package is a peer dependency. Tests use Vitest with `deps.inline` configured. Make sure you installed from within the pi extension environment, or mock the peer deps in your test setup.
+**CAUSE:** Project-local atomic writes use same-dir temp + rename execution. Abrupt termination strands `.lock` physical files.
 
----
-
-## Performance
-
-### High token usage
-
-**Symptom:** Token counts are much higher than expected.
-
-**Checklist:**
-1. Check `compactionCount` — is compaction running?
-2. Large parent context being injected? Use `level` limiting (`levelLimit` in settings)
-3. Tool outputs not being pruned? Check `DEFAULT_KEEP_TURNS` setting
-4. Multiple agents running in parallel? Check `maxConcurrent`
-
-**Mitigation:**
-- Reduce `maxTurns` for long-running agents
-- Enable context mode for sandboxed tasks (smaller context injection)
-- Use `fire-and-forget` join mode for independent agents (no parent context overhead)
+**RECOVERY:** Wait for stale recovery interval trigger, or manually unlink `.lock` artifacts in `.pi/subagent-schedules/` if target process is verified dead.
 
 ---
 
-## Git
+## // UI / TELEMETRY VIEWS
 
-### Worktree errors
+### Widget block fails render
 
-**Symptom:** "git worktree" fails when agent tries to create a branch.
+**SYMPTOM:** Telemetry overlay absent.
 
-**Cause:** The worktree path may already exist, or the repository is not a git repo.
-
-**Fix:** The extension handles this gracefully — it falls back to in-place execution. Check `src/worktree.ts` logs for details.
+**VALIDATION MATRIX:**
+1. Agent session minimum: >= 1 (running or cached).
+2. Configuration state: `getUiStyle() !== "plain"` when agents = 0.
+3. Terminal geometry: Check column width minimum constraint.
+4. Event bus silent on `agent-widget.ts` faults.
 
 ---
 
-## Getting Help
+## // TEST SUITE
 
-1. Check `docs/architecture.md` for component relationships
-2. Check `docs/api-reference.md` for function signatures
-3. Check `docs/custom-agents.md` for agent authoring
-4. Review `CHANGELOG.md` for recent changes
-5. Enable verbose logging in pi-coding-agent settings for detailed traces
+### Persistence test faults on Windows (`schedule.test.ts`)
+
+**SYMPTOM:** Lock contention, atomic rename lag, or temporal jitter in suite execution.
+
+**STATE:** Execution writes utilize same-dir temp buffering. Treat consistent failures as structural regressions. Capture physical `.lock` state.
+
+**RECOVERY:** Isolate target sequence (`npm test -- test/schedule-store.test.ts`) to bisect temporal vs. storage faults.
+
+---
+
+### Test framework faults on module import
+
+**SYMPTOM:** `Cannot find module '@earendil-works/pi-coding-agent'`
+
+**RECOVERY:** Target package represents a peer constraint. Vitest runs via `deps.inline`. Run framework strictly within PI extension envelope, or inject mock dependencies.
+
+---
+
+## // PERFORMANCE METRICS
+
+### Token consumption over thresholds
+
+**SYMPTOM:** Saturation metric significantly exceeds projection.
+
+**VALIDATION MATRIX:**
+1. `compactionCount` incrementing (pruning active)?
+2. Parent payload injection excessive? Enforce `levelLimit`.
+3. Tool block caching failing? Validate `DEFAULT_KEEP_TURNS`.
+4. Concurrency limit saturated? Validate `maxConcurrent`.
+
+**MITIGATION DIRECTIVES:**
+- Clamp `maxTurns` parameter.
+- Toggle `contextMode` for payload reduction logic.
+- Route detached tasks via `fire-and-forget` join topology (strips parent injection).
+
+---
+
+## // SOURCE CONTROL
+
+### Worktree isolation faults
+
+**SYMPTOM:** Shell exception executing `git worktree`.
+
+**CAUSE:** Target topology conflict (path exists) or base directory lacks `.git` subsystem.
+
+**RECOVERY:** System defaults to in-place mutation. Parse `src/worktree.ts` telemetry logs for state analysis.
+
+---
+
+## // SUBSYSTEM DOCUMENTATION
+
+1. **Topology & Vectors**: `docs/architecture.md`
+2. **Interface Definitions**: `docs/api-reference.md`
+3. **Configuration Schema**: `docs/custom-agents.md`
+4. **State Deltas**: `CHANGELOG.md`
+5. **Deep Trace**: Enable verbose telemetry in PI settings block.

@@ -10,14 +10,23 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
  * Filters for objects with `type: "text"` and joins their `text` fields.
  * Non-text blocks (images, tool calls, etc.) are silently skipped.
  *
+ * Single-pass loop instead of `.filter().map().join("\n")` — avoids
+ * 3 intermediate array allocations per call. Called once per assistant
+ * message in `buildParentContext`, so for a 200-message conversation
+ * that's 200 × 3 = 600 fewer intermediate arrays.
+ *
  * @param content - Array of message content blocks (typically from assistant messages)
  * @returns Concatenated text of all text blocks, joined by newlines
  */
 export function extractText(content: unknown[]): string {
-  return content
-    .filter((c: any) => c.type === "text")
-    .map((c: any) => c.text ?? "")
-    .join("\n");
+  if (!content || content.length === 0) return "";
+  const parts: string[] = [];
+  for (const c of content as any[]) {
+    if (c && c.type === "text") {
+      parts.push(c.text ?? "");
+    }
+  }
+  return parts.join("\n");
 }
 
 /**
@@ -35,13 +44,14 @@ export function buildParentContext(ctx: ExtensionContext): string {
     if (entry.type === "message") {
       const msg = entry.message;
       if (msg.role === "user") {
-        const text = typeof msg.content === "string"
+        const text = (typeof msg.content === "string"
           ? msg.content
-          : extractText(msg.content);
-        if (text.trim()) parts.push(`[User]: ${text.trim()}`);
+          : extractText(msg.content)
+        ).trim();
+        if (text) parts.push(`[User]: ${text}`);
       } else if (msg.role === "assistant") {
-        const text = extractText(msg.content);
-        if (text.trim()) parts.push(`[Assistant]: ${text.trim()}`);
+        const text = extractText(msg.content).trim();
+        if (text) parts.push(`[Assistant]: ${text}`);
       }
       // Skip toolResult messages — too verbose for context
     } else if (entry.type === "compaction") {

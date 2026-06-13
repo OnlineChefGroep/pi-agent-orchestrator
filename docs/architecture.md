@@ -1,14 +1,14 @@
-# Architecture
+# // ARCHITECTURE
 
-> High-level overview of `@onlinechefgroep/pi-agent-orchestrator` components and data flow.
+> HIGH-LEVEL SUBSYSTEM OVERVIEW FOR `@onlinechefgroep/pi-agent-orchestrator`. STRUCTURAL TOPOLOGY AND DATA FLOW DEFINITIONS.
 
 ---
 
-## System Diagram
+## // SYSTEM DIAGRAM
 
 ![Pi Agent Orchestrator Architecture](./images/orchestrator_architecture.png)
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    pi-coding-agent host                     │
 │  (loads this extension, provides ExtensionAPI + AgentMgr)   │
@@ -17,8 +17,8 @@
         ┌────────────┴────────────┐
         │    Extension Entry      │
         │    src/index.ts         │
-        │  - default export fn    │
-        │  - tools + commands     │
+        │  - registerCommands()   │
+        │  - initSubagents()      │
         └────────────┬────────────┘
                      │
         ┌────────────┴────────────┐
@@ -40,8 +40,8 @@
         ┌────────────┴────────────┐
         │      Agent Runner       │
         │   src/agent-runner.ts   │
+        │  - createSubagent()     │
         │  - runAgent()           │
-        │  - steerAgent()         │
         │  - compaction logic     │
         │  - permission inherit   │
         └────────────┬────────────┘
@@ -82,19 +82,19 @@
 
 ---
 
-## Key Modules
+## // CORE MODULES
 
 ### `src/agent-types.ts` — Permission Model
 
-The core permission model determines which tools an agent can use:
+Execution constraints enforce rigid boundaries:
 
-1. **Base tools** from agent config (`builtinToolNames`)
-2. **Parent restrictions** — if spawned by another agent, parent's `allowedTools`/`disallowedTools` are intersected
-3. **Partition filter** — some tools are restricted based on memory partition
-4. **Disallow floor** — `disallowedTools` is a hard floor that can only shrink, never grow
+1. **Base primitive array:** Declared in config (`builtinToolNames`).
+2. **Parent restriction intersection:** Child agents strictly inherit parent constraint matrices.
+3. **Memory partition filtration:** Isolation boundary filter rules applied.
+4. **Disallow floor:** Absolute nullification list; constraints scale downward only.
 
 ```ts
-// Pseudocode of tool resolution
+// Structural execution constraint logic
 function resolveAgentTools(config, parentConfig) {
   const base = config.builtinToolNames;
   const filtered = applyPartitionFilter(base, config.contextMode);
@@ -104,9 +104,9 @@ function resolveAgentTools(config, parentConfig) {
 }
 ```
 
-### `src/agent-runner.ts` — Agent Lifecycle
+### `src/agent-runner.ts` — Lifecycle Execution
 
-```
+```text
 spawn → build context → create session → run loop
   │          │              │              │
   │          │              │              └── tool calls, compaction, hooks
@@ -115,165 +115,188 @@ spawn → build context → create session → run loop
   └── resolveModel, getConfig, apply partition + parent restrictions
 ```
 
-### `src/context.ts` + `src/context-mode-bridge.ts` — Context Building
+### `src/context.ts` + `src/context-mode-bridge.ts` — Context Pipeline
 
-- **Phase 1:** Gather parent agent context (`buildParentContext`)
-- **Phase 2:** Add context-mode tools (`buildCtxInjection`) for `ctx_read`, `ctx_write`, etc.
-- **Phase 3:** Deferred context engine saves 15-48% tokens on queued agents by building context at session creation boundary
+- **Phase 1:** Aggregation of parent execution log (`buildParentContext`).
+- **Phase 2:** Sandbox boundary injection (`buildCtxInjection`).
+- **Phase 3:** Deferred calculation blocks. Generates 15-48% token reduction by executing precisely at session spawn point.
 
-### `src/schedule.ts` + `src/schedule-store.ts` — Scheduling
+### `src/schedule.ts` + `src/schedule-store.ts` — Temporal Processing
 
-- `SubagentScheduler` manages cron-like recurring agent jobs
-- `ScheduleStore` persists schedules to `.pi/subagent-schedules/<sessionId>.json`
-- Disabled jobs do not fire; jobs are cleaned up on completion
+- `SubagentScheduler`: Core chronometer engine.
+- `ScheduleStore`: File-backed block persistence (`.pi/subagent-schedules/<sessionId>.json`).
+- Disabled blocks isolated; completed blocks explicitly pruned.
 
-### `src/ui/agent-dashboard.ts` — Interactive Agent Dashboard
+### `src/ui/agent-dashboard.ts` — Telemetry Dashboard
 
-Rich interactive TUI dashboard replacing the old agent widget:
-- **Vim-style hotkeys**: `j/k` navigate, `Enter` steer, `K` kill, `?` help overlay
-- **Visual mode**: `v` multi-select + bulk operations
-- **Permissions view**: `p` toggles tool permissions per agent
-- **Swarm visibility**: `w` toggles swarm status, live join/leave
-- **Live spinners**: 5 animation styles for running agents (`dots`, `pulse`, `wave`, `bar`, `clock`)
-- **Auto-refresh**: Configurable dashboard refresh interval
+High-density interactive metrics overlay:
+- **Vim primitives**: `j/k` traversal, `Enter` intervene, `K` terminate, `?` overlay.
+- **Visual multiselection**: `v` operator block operations.
+- **Permission inspection**: `p` execution matrix view.
+- **Swarm topology**: `w` real-time dynamic node join/leave view.
+- **Telemetry rendering**: 5 rendering modes (`dots`, `pulse`, `wave`, `bar`, `clock`).
+- **Refresh interval**: Programmable MS delay.
 
-### `src/swarm-join.ts` — Swarm Coordinator
+### `src/swarm-join.ts` — Swarm Protocol
 
-Manages collaborative multi-agent swarms:
-- Agents dynamically join/leave swarms at runtime
-- Real-time status visible in dashboard via `w` hotkey
-- Coordination logic for parallel swarm tasks
-- Swarm state persisted alongside agent records
+Dynamic cluster topology control:
+- Runtime dynamic node join/leave operations.
+- State telemetry surfaced via `w` operator.
+- Parallel processing state machine.
+- Registry persistence bound to agent lifecycle memory.
 
-### `src/ui/agent-widget.ts` — Widget (Legacy, superseded by agent-dashboard)
+### `src/ui/agent-widget.ts` — Above-Editor Widget
 
-A compact above-editor widget that shows running/finished agents as a tree. Superseded by the full `agent-dashboard`, retained for the lightweight inline status line.
+The persistent widget above the editor shows running/queued/finished agents with:
+- Virtual scrolling with pagination
+- Thinking level display (🧠)
+- Compact batch rendering (3+ queued agents of same type)
+- Activity heatmap indicator
+- Adaptive refresh (200ms active / 1000ms idle)
 
 ---
 
-## Data Flow: Running an Agent
+## // EXECUTION DATA FLOW
 
-```
-User command / scheduled trigger
+```text
+Input command / temporal trigger
   │
   ▼
 ExtensionCommand (src/index.ts)
   │
   ▼
-resolveModel() ──→ runAgent()
+resolveModel() ──→ createSubagent() ──→ runAgent()
+  │                      │                  │
+  │                      │                  ├── Tool invoke matrix
+  │                      │                  │      └── Runtime boundary validation
+  │                      │                  ├── Memory compaction prune
+  │                      │                  ├── Interrupt hooks
+  │                      │                  └── Handoff JSON payload struct
   │                      │
-  │                      ├── tool call loop
-  │                      │      └── validate tool against resolved tools
-  │                      ├── compaction (prune old tool outputs)
-  │                      ├── hooks (subagent:start, turn:end, ...)
-  │                      └── handoff (structured chain-of-agents JSON)
+  │                      └── Context payload construction
+  │                            ├── Parent vector stack
+  │                            └── Sandbox primitives
   │
-  └── model label → ExtensionAPI.createAgentSession(model)
+  └── Hardware identifier → ExtensionAPI.createAgentSession(model)
 ```
 
 ---
 
-## File Overview
+## // FILE MAP
 
-| File | Responsibility |
-|------|----------------|
-| `src/index.ts` | Extension entry point, tool/command registration |
-| `src/agent-tree.ts` | Mermaid agent execution tree builder |
-| `src/audit-logger.ts` | Audit logging for agent operations |
-| `src/estimate.ts` | Token estimation utilities |
-| `src/logger.ts` | Structured logger |
-| `src/tool-result-helpers.ts` | Notification formatting helpers |
-| `src/agent-types.ts` | Tool resolution, permission inheritance, partition filtering |
-| `src/agent-runner.ts` | Agent lifecycle, session creation, run loop |
-| `src/agent-manager.ts` | Manager wrapper around ExtensionAPI's AgentManager |
-| `src/agent-registry.ts` | Load default + custom agents, settings getters |
-| `src/custom-agents.ts` | Parse `.pi/agents/*.md` frontmatter into AgentConfig |
-| `src/default-agents.ts` | Embedded defaults: general-purpose, Explore, Plan, Analysis |
-| `src/compaction.ts` | Prune old tool outputs to free context window |
-| `src/context.ts` | Build parent context, extract text from messages |
-| `src/context-mode-bridge.ts` | Inject `ctx_*` tools when contextMode is enabled |
-| `src/handoff.ts` | Structured JSON handoff between agents |
-| `src/hooks.ts` | Lifecycle hook registry with timeout protection |
-| `src/memory.ts` | Memory partition types and resolution |
-| `src/model-resolver.ts` | Resolve model aliases to full model names |
-| `src/output-handler.ts` | `/agents` menu, settings, conversation viewer |
-| `src/schedule.ts` | Scheduler for recurring agent jobs |
-| `src/schedule-store.ts` | File-backed persistence for schedules |
-| `src/settings.ts` | Typed settings with defaults and change emission |
-| `src/swarm-join.ts` | SwarmCoordinator: live join/leave collaborative swarms |
-| `src/types.ts` | Shared interfaces: AgentConfig, AgentRecord, JoinMode |
-| `src/usage.ts` | Token and turn tracking, session context percentage |
-| `src/validators.ts` | Post-completion adversarial validation |
-| `src/worktree.ts` | Git worktree creation and cleanup |
-| `src/cross-extension-rpc.ts` | RPC between pi extensions |
-| `src/env.ts` | Environment detection and feature gating |
-| `src/group-join.ts` | Batch/group manager for background agent coordination |
-| `src/invocation-config.ts` | Per-invocation configuration resolution |
-| `src/output-file.ts` | Output file generation for completed agents |
-| `src/prompts.ts` | Prompt template system with placeholders |
-| `src/skill-loader.ts` | Skill loading for agent contexts |
-| `src/telemetry.ts` | Telemetry and metrics collection |
-| `src/ui/agent-dashboard.ts` | Rich interactive dashboard with vim hotkeys & swarm view |
-| `src/ui/agent-widget.ts` | Legacy persistent widget |
-| `src/ui/conversation-viewer.ts` | Live conversation overlay |
-| `src/ui/schedule-menu.ts` | Schedule management menu |
-| `src/ui/animation.ts` | Shared animation utilities (spinners, timing) |
-| `src/ui/theme.ts` | Theme system for dashboard/widget rendering |
-| `src/ui/agent-format.ts` | Formatting utilities for tokens, turns, durations |
-| `src/ui/agent-ui-types.ts` | Shared UI type definitions |
-| `src/ui/agent-widget-renderer.ts` | Widget rendering logic (delegated from agent-widget.ts) |
-| `src/ui/agent-dashboard-renderer.ts` | Dashboard rendering logic (delegated from agent-dashboard.ts) |
-| `src/ui/agent-detail.ts` | Single-agent detail view |
-| `src/ui/agent-actions.ts` | Dashboard action handlers |
-| `src/ui/agent-list-views.ts` | List rendering for dashboard |
-| `src/ui/agent-file-helpers.ts` | File path helpers for UI |
-| `src/ui/agent-wizards.ts` | Interactive wizards |
-| `src/ui/agent-viewer.ts` | Agent output viewer |
-| `src/ui/settings-snapshot.ts` | Settings snapshot for UI |
+| Module Path | Structural Responsibility |
+|---|---|
+| `src/index.ts` | Execution bootstrap, hook registration |
+| `src/agent-types.ts` | Matrix resolution, capability scaling, partitioning |
+| `src/agent-runner.ts` | Process instantiation, lifecycle loop |
+| `src/agent-manager.ts` | Abstraction envelope for host AgentManager |
+| `src/agent-registry.ts` | Definition ingestion, memory lookup, in-memory settings state (incl. `getPromptCompressionLevel` / `setPromptCompressionLevel`) |
+| `src/custom-agents.ts` | Markdown frontmatter extraction and validation |
+| `src/default-agents.ts` | Built-in primitive definitions + lazy prompt regeneration via `READONLY_PROMPT_PARAMS` (compression levels) |
+| `src/compaction.ts` | Aggressive context window compression |
+| `src/context.ts` | Vector stack payload creation |
+| `src/context-mode-bridge.ts` | Sandbox execution primitives |
+| `src/handoff.ts` | Unstructured data to JSON state boundary; `buildHandoffPrompt(level)` selects one of 3 prompt variants (full/balanced/aggressive) matching the compression level |
+| `src/hooks.ts` | Execution interrupt bus |
+| `src/memory.ts` | Physical boundary isolation definitions |
+| `src/model-resolver.ts` | Identifier normalization layer |
+| `src/output-handler.ts` | CLI standard output routines |
+| `src/schedule.ts` | Chronometric execution pipeline |
+| `src/schedule-store.ts` | Temporal persistent state blocks |
+| `src/settings.ts` | Parameter dictionary |
+| `src/swarm-join.ts` | Swarm node linkage state |
+| `src/types.ts` | Type primitives (`AgentConfig`, `AgentRecord`) |
+| `src/usage.ts` | Cost and threshold metrics |
+| `src/validators.ts` | Adversarial output logic checks |
+| `src/worktree.ts` | Disk partition handling |
+| `src/cross-extension-rpc.ts` | Inter-module bus interface |
+| `src/env.ts` | Target platform capability detection |
+| `src/group-join.ts` | Batch synchronization protocol |
+| `src/invocation-config.ts` | Override context definition |
+| `src/output-file.ts` | Physical report generation |
+| `src/prompts.ts` | Template block constants, prompt assembly with `compressionLevel` parameter (handoff variant + lazy read-only regen for default agents) |
+| `src/skill-loader.ts` | External module ingestion |
+| `src/telemetry.ts` | Activity datalogging pipeline |
+| `src/batch-orchestrator.ts` | Manages smart/group/swarm batch finalization and update debouncing |
+| `src/agent-tree.ts` | Mermaid chart and JSON tree visualization for agent swarms |
+| `src/audit-logger.ts` | Structured RPC audit logging with in-memory ring buffer and telemetry emission |
+| `src/estimate.ts` | Token estimation for agent prompts (char/4 heuristic) |
+| `src/globals.ts` | Typed `Symbol.for()` contracts for cross-extension `globalThis` access (hooks, manager, widget metrics, telemetry) |
+| `src/logger.ts` | Structured logging with configurable levels via `PI_SUBAGENTS_LOG_LEVEL` env var |
+| `src/readonly-helpers.ts` | Consolidated read-only tool constants (`READ_ONLY_TOOLS`, `READONLY_MEMORY_TOOL_NAMES`) |
+| `src/template-registry.ts` | Agent template indexing, filtering, and search over loaded custom agents |
+| `src/tool-result-helpers.ts` | Shared tool result formatting and notification helpers used by `/agents` commands |
+| `src/events.ts` | Typed event catalog for `pi.events` lifecycle contracts (started, completed, failed, compacted, budget_warning, scheduler_ready) |
+| `src/commands/agents.ts` | `/agents` command registration and argument parsing |
+| `src/commands/hooks.ts` | `/hooks` command registration and argument parsing |
+| `src/tools/agent.ts` | Sub-agent tool implementations (spawn, get result, steer, list, history) |
+| `src/tools/context.ts` | Context mode sandbox tools (`ctx_read`, `ctx_write`, `ctx_list`) |
+| `src/tools/get-result.ts` | Sub-agent result retrieval with telemetry cancellation |
+| `src/tools/steer.ts` | Agent steering tool — send messages to running sub-agents |
+| `src/ui/agent-actions.ts` | Action button handlers for agent lifecycle operations |
+| `src/ui/agent-detail.ts` | Individual agent detail view with status, tokens, and duration |
+| `src/ui/agent-file-helpers.ts` | File operation helpers for agent outputs and logs |
+| `src/ui/agent-list-views.ts` | List view rendering variants (compact, expanded, sorted) |
+| `src/ui/agent-viewer.ts` | Agent details viewer with full metadata display |
+| `src/ui/agent-wizards.ts` | Agent creation wizard UI with step-by-step configuration |
+| `src/ui/settings-snapshot.ts` | Settings snapshot builder for UI rendering and persistence |
+| `src/ui/agent-dashboard.ts` | Primary interactive telemetry view with list and top modes |
+| `src/ui/agent-top-renderer.ts` | Columns rendering, sorting, and pagination logic for resource top view |
+| `src/ui/agent-widget.ts` | Running subagents widget overlay above the editor |
+| `src/ui/conversation-viewer.ts` | Stream block trace |
+| `src/ui/schedule-menu.ts` | Temporal task list view |
+| `src/ui/animation.ts` | Execution feedback visual primitives |
+| `src/ui/theme.ts` | Constant mapping for visual output |
+| `src/ui/agent-format.ts` | Standard output data formatting |
+| `src/ui/agent-ui-types.ts` | Display constraints definition |
+| `src/ui/agent-widget-renderer.ts` | Widget render sequence with virtual scrolling and batch safety caps |
+| `src/ui/agent-dashboard-renderer.ts` | Dashboard render sequence with details panel, help, and empty states |
+| `src/ui/notification-renderer.ts` | State change visual logic |
+| `src/ui/dashboard/` | Directory containing modular dashboard components (compact rows, progress bars, etc.) |
 
 ---
 
-## Batch/Nudge State Machine
+## // SYNCHRONIZATION STATE MACHINE
 
-The extension uses a debounced notification system to avoid spamming the main agent with individual completion messages when multiple agents finish in quick succession.
+Batched telemetry protocol avoids execution-thread blockages when concurrent children terminate.
 
 ### Components
 
-- **pendingNudges** (in `src/index.ts`): Map of agent IDs to setTimeout handles, holds notifications for 200ms to allow cancellation
-- **GroupJoinManager** (`src/group-join.ts`): Batches agents registered as a group, delivers single consolidated notification
-- **SwarmCoordinator** (`src/swarm-join.ts`): Similar to GroupJoinManager but for dynamic collaborative swarms
-- **currentBatchAgents** (in `src/index.ts`): Tracks agents spawned in the current tool call for debounced finalization
+- **pendingNudges** (`src/index.ts`): Pointer array with 200ms flush boundary.
+- **GroupJoinManager** (`src/group-join.ts`): Sync barrier block. Emits single matrix on resolve.
+- **SwarmCoordinator** (`src/swarm-join.ts`): Dynamic runtime node state logic.
+- **currentBatchAgents** (`src/index.ts`): Execution window buffer array.
 
 ### State Diagram
 
-```
+```text
 Agent completes
   │
-  ├─→ Is result already consumed?
-  │    └─ Yes → Skip notification, mark finished
+  ├─→ Result already consumed?
+  │    └─ Yes → Halt propagation
   │
-  ├─→ Is in pending batch (currentBatchAgents)?
-  │    └─ Yes → Wait for finalizeBatch (debounce window)
+  ├─→ Existing in currentBatchAgents window?
+  │    └─ Yes → Hold for finalizeBatch
   │
-  ├─→ Is in a registered group?
-  │    └─ Yes → GroupJoinManager.onAgentComplete()
-  │              ├─ All complete? → Deliver immediately
-  │              └─ Partial? → Start 30s timeout (or 15s straggler timeout)
+  ├─→ Member of GroupJoinManager barrier?
+  │    └─ Yes → Execute barrier logic
+  │              ├─ Full clear? → Emit immediately
+  │              └─ Partial? → Reset 30s hardware timeout
   │
-  ├─→ Is in a swarm?
-  │    └─ Yes → SwarmCoordinator.onAgentComplete()
-  │              (similar logic to GroupJoinManager)
+  ├─→ Member of SwarmCoordinator topology?
+  │    └─ Yes → Execute node check
   │
-  └─→ Otherwise → scheduleNudge(200ms) → emitIndividualNudge()
+  └─→ Else → scheduleNudge(200ms) → Flush single payload
 ```
 
-### Debounce Flow
+### Debounce Pipeline
 
-1. **Parallel tool calls**: When the main agent calls `Agent` multiple times in parallel, all spawned agents are added to `currentBatchAgents`
-2. **Batch finalization**: After the tool call returns, a 100ms `batchFinalizeTimer` fires, calling `finalizeBatch()`
-3. **Retroactive delivery**: `finalizeBatch()` checks which agents in the batch are already complete and sends a consolidated notification
-4. **Straggler handling**: If an agent completes after the batch window, it falls through to individual or group notification paths
+1. **Parallel tool invokes**: Rapid-fire instructions bind to `currentBatchAgents`.
+2. **Buffer lock**: Return block forces a 100ms `batchFinalizeTimer`.
+3. **Retroactive dispatch**: `finalizeBatch()` computes diff against pending results and pushes single unified object.
+4. **Latency bleed handling**: Process completion post-buffer hits fallback paths.
 
-### Notification Cancellation
+### Telemetry Interruption
 
-The `get_subagent_result` tool can cancel pending notifications by calling `cancelNudge(agentId)` before the 200ms hold expires. This prevents duplicate notifications when the main agent explicitly polls for results.
+Calling `get_subagent_result` triggers explicit `cancelNudge(agentId)`. Telemetry object explicitly deleted before 200ms tick executes. Prevents state-feedback loop on manual read operations.
+

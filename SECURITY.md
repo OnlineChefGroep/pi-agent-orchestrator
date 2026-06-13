@@ -2,50 +2,35 @@
 
 ## Supported Versions
 
-This project is pre-1.0 and follows a rolling-release model: only the latest
-published `0.x` release receives security fixes.
+| Version | Supported          |
+| ------- | ------------------ |
+| 0.12.x  | :white_check_mark: |
+| < 0.12  | :x:                |
 
-| Version | Supported |
-| ------- | --------- |
-| latest `0.x` | ✅ |
-| older `0.x` | ❌ |
+This project is a **pi extension** — it runs inside the Pi coding agent host, not as a standalone service. Security reports should scope concerns to the extension's behavior within that host context.
 
 ## Reporting a Vulnerability
 
-Please **do not** open a public issue for security vulnerabilities.
+We take security seriously. To report a vulnerability:
 
-Report privately through GitHub's
-[private vulnerability reporting](https://github.com/OnlineChefGroep/pi-agent-orchestrator/security/advisories/new)
-(the **Security → Report a vulnerability** tab on the repository). This keeps
-the report confidential until a fix is available.
+1. **Do not open a public issue.** Instead, email security concerns to the maintainers.
+2. We aim to acknowledge reports within **5 business days** and provide an initial assessment.
+3. We will keep you informed of progress and coordinate disclosure timing.
 
-When reporting, please include:
+**What to include in your report:**
+- Description of the vulnerability
+- Steps to reproduce or a proof of concept
+- Affected version(s)
+- Any potential mitigations you've identified
 
-- A description of the vulnerability and its impact.
-- Steps to reproduce (a minimal proof of concept is ideal).
-- The affected version(s) and environment.
+## Security Audits
 
-We aim to acknowledge reports within a few days and to provide a remediation
-timeline after triage. Coordinated disclosure is appreciated — please give us a
-reasonable window to ship a fix before any public disclosure.
+Past security audits and CVE fixes are documented in:
+- [Security Audit Report](docs/SECURITY_AUDIT_REPORT.md)
+- [Security Audit Verification (2026-05-23)](docs/SECURITY_AUDIT_VERIFICATION_2026-05-23.md)
 
-## Security Model
+Known CVEs (CVE-002 through CVE-005) have been addressed in the current release. These fixes include input validation, size limits, and control character sanitization — do not weaken these guards when contributing.
 
-This extension runs **inside the trusted Pi coding-agent host** and inherits the
-host's tool-execution sandbox. It is not a standalone networked service. Its
-threat surface is primarily:
+## Scope
 
-1. **Untrusted custom-agent definitions** (`.pi/agents/*.md`). The loader in
-   `src/custom-agents.ts` validates agent names against an unsafe-name pattern,
-   skips symlinks to prevent directory traversal, enforces size limits, and
-   strips control characters from parsed fields.
-2. **Cross-extension RPC** (`src/cross-extension-rpc.ts`). Mutating calls
-   (`spawn`, `stop`) are rate-limited and, when an `authProvider` is configured
-   by the host, authenticated — payload-provided identity is never trusted. The
-   global symbol registry exposes read-only methods only.
-3. **Recursive agent spawning**. Depth (`levelLimit`) and task budgets bound
-   runaway agent trees; read-only agents enforce a directional parent → child
-   permission floor so a restricted parent cannot spawn a more-privileged child.
-
-If you believe any of these controls can be bypassed, please report it using the
-process above.
+This policy covers the `@onlinechefgroep/pi-agent-orchestrator` package, its source code, and its published artifacts. The pi host platform (`@earendil-works/pi-*` packages) is maintained separately.

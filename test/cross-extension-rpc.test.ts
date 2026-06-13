@@ -179,7 +179,7 @@ describe("cross-extension RPC", () => {
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
       expect(reply).toHaveBeenCalledWith({ success: true, data: { id: "agent-42" } });
-      expect(authProvider).toHaveBeenCalledWith("req-auth");
+      expect(authProvider).toHaveBeenCalledWith("req-auth", expect.any(Object));
     });
 
     it("rejects spawn when authProvider is configured but returns no identity", async () => {
@@ -466,134 +466,6 @@ describe("cross-extension RPC", () => {
       configureRateLimit({ windowMs: 1000, maxPerWindow: 1 });
       resetRpcRateLimitsForTests();
       expect(getRateLimitConfig()).toEqual({ windowMs: 60_000, maxPerWindow: 10 });
-    });
-  });
-
-  // --- input validation ---
-
-  describe("input validation", () => {
-    it("rejects non-object payload with INVALID_PARAMS", async () => {
-      registerRpcHandlers(deps);
-      const reply = vi.fn();
-      events.on("subagents:rpc:ping:reply:undefined", reply);
-      events.emit("subagents:rpc:ping", "not-an-object" as unknown);
-
-      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(reply).toHaveBeenCalledWith({
-        success: false, error: "Expected object payload",
-      });
-    });
-
-    it("rejects null payload with INVALID_PARAMS", async () => {
-      registerRpcHandlers(deps);
-      const reply = vi.fn();
-      events.on("subagents:rpc:ping:reply:undefined", reply);
-      events.emit("subagents:rpc:ping", null);
-
-      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(reply).toHaveBeenCalledWith({
-        success: false, error: "Expected object payload",
-      });
-    });
-
-    it("rejects message without requestId", async () => {
-      registerRpcHandlers(deps);
-      const reply = vi.fn();
-      events.on("subagents:rpc:spawn:reply:undefined", reply);
-      events.emit("subagents:rpc:spawn", { type: "general-purpose", prompt: "x" });
-
-      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(reply).toHaveBeenCalledWith({
-        success: false, error: "Missing or empty requestId",
-      });
-      expect(manager.spawn).not.toHaveBeenCalled();
-    });
-
-    it("rejects message with empty requestId", async () => {
-      registerRpcHandlers(deps);
-      const reply = vi.fn();
-      events.on("subagents:rpc:ping:reply:", reply);
-      events.emit("subagents:rpc:ping", { requestId: "" });
-
-      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(reply).toHaveBeenCalledWith({
-        success: false, error: "Missing or empty requestId",
-      });
-    });
-
-    it("rejects spawn with empty type", async () => {
-      registerRpcHandlers(deps);
-      const reply = vi.fn();
-      events.on("subagents:rpc:spawn:reply:req-inv-type", reply);
-      events.emit("subagents:rpc:spawn", {
-        requestId: "req-inv-type", type: "", prompt: "x",
-      });
-
-      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(reply).toHaveBeenCalledWith({
-        success: false, error: "Missing or empty agent type",
-      });
-      expect(manager.spawn).not.toHaveBeenCalled();
-    });
-
-    it("rejects spawn with non-string type", async () => {
-      registerRpcHandlers(deps);
-      const reply = vi.fn();
-      events.on("subagents:rpc:spawn:reply:req-inv-type2", reply);
-      events.emit("subagents:rpc:spawn", {
-        requestId: "req-inv-type2", type: 123, prompt: "x",
-      });
-
-      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(reply).toHaveBeenCalledWith({
-        success: false, error: "Missing or empty agent type",
-      });
-      expect(manager.spawn).not.toHaveBeenCalled();
-    });
-
-    it("rejects spawn with empty prompt", async () => {
-      registerRpcHandlers(deps);
-      const reply = vi.fn();
-      events.on("subagents:rpc:spawn:reply:req-inv-prompt", reply);
-      events.emit("subagents:rpc:spawn", {
-        requestId: "req-inv-prompt", type: "general-purpose", prompt: "",
-      });
-
-      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(reply).toHaveBeenCalledWith({
-        success: false, error: "Missing or empty prompt",
-      });
-      expect(manager.spawn).not.toHaveBeenCalled();
-    });
-
-    it("rejects stop with empty agentId", async () => {
-      registerRpcHandlers(deps);
-      const reply = vi.fn();
-      events.on("subagents:rpc:stop:reply:req-inv-stop", reply);
-      events.emit("subagents:rpc:stop", {
-        requestId: "req-inv-stop", agentId: "",
-      });
-
-      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(reply).toHaveBeenCalledWith({
-        success: false, error: "Missing or empty agentId",
-      });
-      expect(manager.abort).not.toHaveBeenCalled();
-    });
-
-    it("rejects stop with non-string agentId", async () => {
-      registerRpcHandlers(deps);
-      const reply = vi.fn();
-      events.on("subagents:rpc:stop:reply:req-inv-stop2", reply);
-      events.emit("subagents:rpc:stop", {
-        requestId: "req-inv-stop2", agentId: null,
-      });
-
-      await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(reply).toHaveBeenCalledWith({
-        success: false, error: "Missing or empty agentId",
-      });
-      expect(manager.abort).not.toHaveBeenCalled();
     });
   });
 

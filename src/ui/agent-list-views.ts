@@ -71,7 +71,7 @@ export async function showRunningAgents(
 
   const options = agents.map(a => {
     const dn = getDisplayName(a.type);
-    const dur = formatDuration(a.startedAt, a.completedAt);
+    const dur = formatDuration(a.startedAt ?? 0, a.completedAt);
     return `${dn} (${a.description}) · ${a.toolUses} tools · ${a.status} · ${dur}`;
   });
 

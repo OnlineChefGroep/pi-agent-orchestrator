@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BUILTIN_TOOL_NAMES } from "../src/agent-types.js";
-import { loadCustomAgents } from "../src/custom-agents.js";
+import { loadCustomAgents, parseBooleanOptional, parseBooleanWithDefault } from "../src/custom-agents.js";
 import { onTelemetry } from "../src/telemetry.js";
 
 describe("loadCustomAgents", () => {
@@ -450,6 +450,72 @@ Bad isolation.`);
     expect(result.get("bad-isolation")!.isolation).toBeUndefined();
   });
 
+  it("handoff: \"false\" (string) parses as false (regression — was truthy before strict parsing)", async () => {
+    writeAgent("string-false", `---\nhandoff: "false"\n---\n\nString false.`);
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("string-false")!.handoff).toBe(false);
+  });
+
+  it("handoff: false (boolean) parses as false", async () => {
+    writeAgent("bool-false", `---\nhandoff: false\n---\n\nBoolean false.`);
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("bool-false")!.handoff).toBe(false);
+  });
+
+  it("handoff defaults to false when omitted from frontmatter", async () => {
+    writeAgent("no-handoff-key", `---\ndescription: Missing handoff key\n---\n\nDefault.`);
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("no-handoff-key")!.handoff).toBe(false);
+  });
+
+  it("parses prompt_compression: aggressive into AgentConfig.promptCompressionLevel", async () => {
+    writeAgent("aggressive-agent", `---\nprompt_compression: aggressive\n---\n\nAggressive agent.`);
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("aggressive-agent")!.promptCompressionLevel).toBe("aggressive");
+  });
+
+  describe("parseBooleanOptional", () => {
+    it("returns undefined for null", () => {
+      expect(parseBooleanOptional(null)).toBeUndefined();
+    });
+    it("returns undefined for undefined", () => {
+      expect(parseBooleanOptional(undefined)).toBeUndefined();
+    });
+    it("returns undefined for empty string", () => {
+      expect(parseBooleanOptional("")).toBeUndefined();
+    });
+    it("parses 'TRUE' (uppercase) as true", () => {
+      expect(parseBooleanOptional("TRUE")).toBe(true);
+    });
+    it("parses 'False' (mixed case) as false", () => {
+      expect(parseBooleanOptional("False")).toBe(false);
+    });
+    it("parses native boolean true", () => {
+      expect(parseBooleanOptional(true)).toBe(true);
+    });
+    it("parses native boolean false", () => {
+      expect(parseBooleanOptional(false)).toBe(false);
+    });
+  });
+
+  describe("parseBooleanWithDefault", () => {
+    it("returns default for null", () => {
+      expect(parseBooleanWithDefault(null, true)).toBe(true);
+    });
+    it("returns default for undefined", () => {
+      expect(parseBooleanWithDefault(undefined, false)).toBe(false);
+    });
+    it("returns default for empty string", () => {
+      expect(parseBooleanWithDefault("", false)).toBe(false);
+    });
+    it("throws on number 42 (invalid type)", () => {
+      expect(() => parseBooleanWithDefault(42, false)).toThrow();
+    });
+    it("throws on string 'maybe' (unrecognised)", () => {
+      expect(() => parseBooleanWithDefault("maybe", true)).toThrow();
+    });
+  });
+
   it("honors PI_CODING_AGENT_DIR for global custom agent discovery", async () => {
     const altAgentDir = mkdtempSync(join(tmpdir(), "pi-alt-agent-"));
     const originalEnv = process.env.PI_CODING_AGENT_DIR;
@@ -483,6 +549,87 @@ Unsafe agent.`);
 
     const result = await loadCustomAgents(tmpDir);
     expect(result.get("agent..traversal")!.enabled).toBe(false);
+  });
+
+  it("parses validators frontmatter as an array of {agentId, criteria}", async () => {
+    writeAgent("chain-validator", `---
+description: Chain validator
+validators:
+  - agentId: security-check
+    criteria:
+      - "no secrets in output"
+      - "input is sanitized"
+  - agentId: style-check
+    criteria:
+      - "uses project linter"
+      - "no eslint disable comments"
+---
+
+You are a chain validator.`);
+    const result = await loadCustomAgents(tmpDir);
+    const agent = result.get("chain-validator")!;
+    expect(agent.validators).toEqual([
+      { agentId: "security-check", criteria: ["no secrets in output", "input is sanitized"] },
+      { agentId: "style-check", criteria: ["uses project linter", "no eslint disable comments"] },
+    ]);
+  });
+
+  it("validators defaults to undefined when omitted from frontmatter", async () => {
+    writeAgent("no-validators", `---
+description: No validators
+---
+
+Plain agent.`);
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("no-validators")!.validators).toBeUndefined();
+  });
+
+  it("validators: [] (empty array) parses as undefined (no validators)", async () => {
+    writeAgent("empty-validators", `---
+description: Empty validators
+validators: []
+---
+
+Plain agent.`);
+    const result = await loadCustomAgents(tmpDir);
+    expect(result.get("empty-validators")!.validators).toBeUndefined();
+  });
+
+  it("strict-rejects validator with non-string agentId (whole array dropped, agent remains enabled)", async () => {
+    writeAgent("bad-validator", `---
+description: Malformed validator
+validators:
+  - agentId: 42
+    criteria:
+      - "some criterion"
+---
+
+Malformed.`);
+    const result = await loadCustomAgents(tmpDir);
+    const agent = result.get("bad-validator")!;
+    expect(agent.validators).toBeUndefined();
+    // Permissive parser — does NOT disable the agent; validateAgentConfig handles security flags separately.
+    expect(agent.enabled).toBe(true);
+  });
+
+  it("strict-rejects mixed valid/invalid validator entries (whole array dropped)", async () => {
+    writeAgent("mixed-validators", `---
+description: One good, one bad
+validators:
+  - agentId: good
+    criteria:
+      - "ok"
+  - agentId: 42
+    criteria:
+      - "bad entry"
+---
+
+Mixed.`);
+    const result = await loadCustomAgents(tmpDir);
+    const agent = result.get("mixed-validators")!;
+    // Strict-reject: the bad entry drops the whole array (conscious design choice,
+    // see parseValidators JSDoc).
+    expect(agent.validators).toBeUndefined();
   });
 
 });

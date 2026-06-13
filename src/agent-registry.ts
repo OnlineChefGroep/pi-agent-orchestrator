@@ -10,7 +10,7 @@
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getAgentConfig, getDefaultAgentNames, getUserAgentNames, registerAgents } from "./agent-types.js";
 import { loadCustomAgents } from "./custom-agents.js";
-import type { JoinMode } from "./types.js";
+import type { JoinMode, PromptCompressionLevel } from "./types.js";
 
 // ---- Join mode configuration ----
 
@@ -127,6 +127,20 @@ export function isShowTurnProgress(): boolean {
 }
 export function setShowTurnProgress(b: boolean): void {
   showTurnProgress = b;
+}
+
+// ---- Prompt compression level ----
+
+let promptCompressionLevel: PromptCompressionLevel = "balanced";
+
+/** Get the current prompt compression level. */
+export function getPromptCompressionLevel(): PromptCompressionLevel {
+  return promptCompressionLevel;
+}
+
+/** Set the prompt compression level. */
+export function setPromptCompressionLevel(level: PromptCompressionLevel): void {
+  promptCompressionLevel = level;
 }
 
 // ---- Custom agent reloading ----

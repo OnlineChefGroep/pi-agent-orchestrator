@@ -17,7 +17,7 @@ import { type ModelRegistry, resolveModel } from "./model-resolver.js";
 // fragile string matching.
 // ---------------------------------------------------------------------------
 
-export type RpcErrorCode = "RATE_LIMITED" | "UNAUTHORIZED" | "ERROR" | "INVALID_PARAMS";
+export type RpcErrorCode = "RATE_LIMITED" | "UNAUTHORIZED" | "INVALID_PARAMS" | "ERROR";
 
 export class RpcError extends Error {
   readonly code: RpcErrorCode;
@@ -47,6 +47,24 @@ export interface SpawnCapable {
   abort(id: string): boolean;
 }
 
+export interface SessionCapable extends SpawnCapable {
+  getSessionUsage(): { spawnedAgents: number; totalTurns: number };
+  getSessionMaxSpawns(): number;
+  getSessionMaxTurns(): number;
+}
+
+export interface SwarmCapable {
+  listSwarms(): Array<{ swarmId: string; name: string; agentCount: number; strategy: string; leaderId?: string }>;
+  getSwarmMetrics(swarmId?: string): {
+    totalDeliveries: number;
+    totalRecordsDelivered: number;
+    partialDeliveries: number;
+    timedOutDeliveries: number;
+    averageLatencyMs?: number;
+    bySwarm: Record<string, { deliveries: number; records: number; partials: number; timeouts: number }>;
+  };
+}
+
 // Host-provided authentication context for RPC calls.
 export interface AuthContext {
   extensionId: string;
@@ -63,6 +81,11 @@ export interface StopRpcRequest {
   agentId: string;
 }
 
+export interface SessionUsageRpcReply {
+  usage: { spawnedAgents: number; totalTurns: number };
+  limits: { maxAgents: number; maxTurns: number };
+}
+
 export interface PingRpcReply {
   version: number;
 }
@@ -71,6 +94,7 @@ export interface SubagentsRpcClient {
   ping(): Promise<PingRpcReply>;
   spawn(request: SpawnRpcRequest): Promise<{ id: string }>;
   stop(request: StopRpcRequest): Promise<void>;
+  sessionUsage(): Promise<SessionUsageRpcReply>;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,12 +146,20 @@ export function configureRateLimit(config: RateLimitConfig): void {
   }
 }
 
+const MAX_RATE_LIMIT_ENTRIES = 1000;
+
 function checkRateLimit(extensionId: string, operation: string): boolean {
+  if (typeof extensionId !== "string" || extensionId.length > 200) return false;
+
   const now = Date.now();
   const key = `${extensionId}:${operation}`;
   const entry = rateLimitMap.get(key);
 
   if (!entry || now > entry.resetAt) {
+    if (rateLimitMap.size >= MAX_RATE_LIMIT_ENTRIES) {
+      const oldestKey = rateLimitMap.keys().next().value;
+      if (oldestKey) rateLimitMap.delete(oldestKey);
+    }
     rateLimitMap.set(key, { count: 1, resetAt: now + rateLimitWindow });
     return true;
   }
@@ -169,15 +201,22 @@ export interface RpcDeps {
   pi: unknown;                    // passed through to manager.spawn
   getCtx: () => unknown | undefined;  // returns current ExtensionContext
   manager: SpawnCapable;
-  authProvider?: (requestId: string) => AuthContext | undefined;
+  authProvider?: (requestId: string, payload: any) => AuthContext | undefined;
   /** Optional rate-limit tunables applied at registration time. */
   rateLimit?: RateLimitConfig;
+  /** Optional session-capable manager for session usage RPC. */
+  sessionManager?: SessionCapable;
+  /** Optional swarm coordinator for swarm health RPC. */
+  swarmCoordinator?: SwarmCapable;
 }
 
 export interface RpcHandle {
   unsubPing: () => void;
   unsubSpawn: () => void;
   unsubStop: () => void;
+  unsubSessionUsage: () => void;
+  /** No-op when swarmCoordinator was not provided to registerRpcHandlers. */
+  unsubSwarmHealth?: () => void;
 }
 
 /**
@@ -242,32 +281,33 @@ function requestRpc<T>(
 
 export function createSubagentsRpcClient(
   events: EventBus,
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; extensionId?: string } = {},
 ): SubagentsRpcClient {
   const timeoutMs = options.timeoutMs ?? 30_000;
   return {
-    ping: () => requestRpc<PingRpcReply>(events, "subagents:rpc:ping", {}, timeoutMs),
-    spawn: (request) => requestRpc<{ id: string }>(events, "subagents:rpc:spawn", request, timeoutMs),
+    ping: () => requestRpc<PingRpcReply>(events, "subagents:rpc:ping", { authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs),
+    spawn: (request) => requestRpc<{ id: string }>(events, "subagents:rpc:spawn", { ...request, authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs),
     stop: async (request) => {
-      await requestRpc<void>(events, "subagents:rpc:stop", request, timeoutMs);
+      await requestRpc<void>(events, "subagents:rpc:stop", { ...request, authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs);
     },
+    sessionUsage: () => requestRpc<SessionUsageRpcReply>(events, "subagents:rpc:sessionUsage", { authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs),
   };
 }
 
-function resolveAuth(deps: RpcDeps, requestId: string): AuthContext {
+function resolveAuth(deps: RpcDeps, requestId: string, payload: any): AuthContext {
   if (!deps.authProvider) {
     return { extensionId: "legacy" };
   }
 
-  const auth = deps.authProvider(requestId);
+  const auth = deps.authProvider(requestId, payload);
   if (!auth?.extensionId) {
     throw new RpcError("UNAUTHORIZED", "Unauthorized RPC request");
   }
   return auth;
 }
 
-function authorizeRpcMutation(deps: RpcDeps, requestId: string, operation: string): AuthContext {
-  const auth = resolveAuth(deps, requestId);
+function authorizeRpcMutation(deps: RpcDeps, requestId: string, operation: string, payload: any): AuthContext {
+  const auth = resolveAuth(deps, requestId, payload);
   if (!checkRateLimit(auth.extensionId, operation)) {
     throw new RpcError("RATE_LIMITED", `Rate limit exceeded for extension ${auth.extensionId}`);
   }
@@ -278,7 +318,7 @@ function authorizeRpcMutation(deps: RpcDeps, requestId: string, operation: strin
 // Audit-trail helper — wraps an RPC handler to capture outcome and duration.
 // ---------------------------------------------------------------------------
 
-type AuditableOperation = "ping" | "spawn" | "stop";
+type AuditableOperation = "ping" | "spawn" | "stop" | "sessionUsage" | "swarmHealth";
 
 function auditedRpc<P extends { requestId: string }>(
   deps: RpcDeps,
@@ -292,7 +332,7 @@ function auditedRpc<P extends { requestId: string }>(
     // even when the handler throws (rate-limit, unauthorized, etc.).
     let auth: AuthContext;
     try {
-      auth = resolveAuth(deps, params.requestId);
+      auth = resolveAuth(deps, params.requestId, params);
     } catch {
       auth = { extensionId: "unknown" };
     }
@@ -329,7 +369,7 @@ function auditedRpc<P extends { requestId: string }>(
 }
 
 /**
- * Register ping, spawn, and stop RPC handlers on the event bus.
+ * Register ping, spawn, stop, and sessionUsage RPC handlers on the event bus.
  * Returns unsub functions for cleanup.
  *
  * **Global rate-limit state:** Calling this function with `deps.rateLimit` will
@@ -340,7 +380,7 @@ function auditedRpc<P extends { requestId: string }>(
  * times should be aware of the side effect.
  */
 export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
-  const { events, pi, getCtx, manager } = deps;
+  const { events, pi, getCtx, manager, sessionManager, swarmCoordinator } = deps;
 
   // Apply caller-provided rate-limit tunables (if any).
   if (deps.rateLimit) configureRateLimit(deps.rateLimit);
@@ -349,7 +389,7 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
     events,
     "subagents:rpc:ping",
     auditedRpc<{ requestId: string }>(deps, "ping", ({ requestId }) => {
-      const auth = resolveAuth(deps, requestId);
+      const auth = resolveAuth(deps, requestId, { requestId });
       return { auth, result: { version: PROTOCOL_VERSION } };
     }),
   );
@@ -361,16 +401,10 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
       deps,
       "spawn",
       ({ requestId, type, prompt, options }) => {
-        if (typeof type !== "string" || !type) {
-          throw new RpcError("INVALID_PARAMS", "Missing or empty agent type");
-        }
-        if (typeof prompt !== "string" || !prompt) {
-          throw new RpcError("INVALID_PARAMS", "Missing or empty prompt");
-        }
         const ctx = getCtx();
         if (!ctx) throw new Error("No active session");
 
-        const auth = authorizeRpcMutation(deps, requestId, "spawn");
+        const auth = authorizeRpcMutation(deps, requestId, "spawn", { requestId, type, prompt, options });
 
         // Cross-extension RPC callers (e.g. pi-tasks TaskExecute) naturally
         // forward serializable values, so options.model can be a string like
@@ -403,14 +437,48 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
     events,
     "subagents:rpc:stop",
     auditedRpc<{ requestId: string; agentId: string }>(deps, "stop", ({ requestId, agentId }) => {
-      if (typeof agentId !== "string" || !agentId) {
-        throw new RpcError("INVALID_PARAMS", "Missing or empty agentId");
-      }
-      const auth = authorizeRpcMutation(deps, requestId, "stop");
+      const auth = authorizeRpcMutation(deps, requestId, "stop", { requestId, agentId });
       if (!manager.abort(agentId)) throw new Error("Agent not found");
       return { auth, result: undefined };
     }),
   );
 
-  return { unsubPing, unsubSpawn, unsubStop };
+  const unsubSessionUsage = sessionManager
+    ? handleRpc(
+        events,
+        "subagents:rpc:sessionUsage",
+        auditedRpc<{ requestId: string }>(deps, "sessionUsage", ({ requestId }) => {
+          const auth = resolveAuth(deps, requestId, { requestId });
+          return {
+            auth,
+            result: {
+              usage: sessionManager!.getSessionUsage(),
+              limits: {
+                maxAgents: sessionManager!.getSessionMaxSpawns(),
+                maxTurns: sessionManager!.getSessionMaxTurns(),
+              },
+            },
+          };
+        }),
+      )
+    : () => {};
+
+  const unsubSwarmHealth = swarmCoordinator
+    ? handleRpc(
+        events,
+        "subagents:rpc:swarmHealth",
+        auditedRpc<{ requestId: string }>(deps, "swarmHealth", ({ requestId }) => {
+          const auth = resolveAuth(deps, requestId, { requestId });
+          return {
+            auth,
+            result: {
+              swarms: swarmCoordinator!.listSwarms(),
+              metrics: swarmCoordinator!.getSwarmMetrics(),
+            },
+          };
+        }),
+      )
+    : () => {};
+
+  return { unsubPing, unsubSpawn, unsubStop, unsubSessionUsage, unsubSwarmHealth };
 }
