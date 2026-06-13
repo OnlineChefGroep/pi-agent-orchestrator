@@ -145,10 +145,10 @@ Settings are managed via `/agents` → Settings or by editing `.pi/subagents.jso
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `maxConcurrent` | `3` | Maximum parallel agents |
+| `maxConcurrent` | `4` | Maximum parallel agents |
 | `defaultMaxTurns` | unlimited (`0`) | Default turn limit per agent (`0` = unlimited) |
-| `graceTurns` | `3` | Extra turns after wrap-up steer before forced stop |
-| `defaultJoinMode` | `async` | Default join mode: `async`, `group`, `smart`, or `swarm` |
+| `graceTurns` | `5` | Extra turns after wrap-up steer before forced stop |
+| `defaultJoinMode` | `smart` | Default join mode: `async`, `group`, `smart`, or `swarm` |
 | `orchestrationMode` | `auto` | Coordination mode: `auto`, `single`, `swarm`, or `crew` |
 | `schedulingEnabled` | `true` | Enable cron/interval scheduled agent jobs |
 | `animationStyle` | `braille` | Dashboard spinner: `braille`, `dots`, `lines`, `classic`, `none` |
