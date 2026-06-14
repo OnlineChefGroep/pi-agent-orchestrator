@@ -29,9 +29,9 @@
     "LICENSE"
   ],
   "peerDependencies": {
-    "@earendil-works/pi-ai": ">=0.72.0",
-    "@earendil-works/pi-coding-agent": ">=0.72.0",
-    "@earendil-works/pi-tui": ">=0.78.0"
+    "@earendil-works/pi-ai": ">=0.79.0",
+    "@earendil-works/pi-coding-agent": ">=0.79.0",
+    "@earendil-works/pi-tui": ">=0.79.0"
   },
   "peerDependenciesMeta": {
     "@onlinechef/context-mode": {
@@ -67,8 +67,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
-    "@earendil-works/pi-agent-core": "^0.79.1",
-    "@earendil-works/pi-tui": "0.79.3",
+    "@earendil-works/pi-agent-core": "^0.79.3",
+    "@earendil-works/pi-tui": "^0.79.3",
     "@types/node": "^25.9.3",
     "@types/proper-lockfile": "^4.1.4",
     "@vitest/coverage-v8": "^4.1.8",
