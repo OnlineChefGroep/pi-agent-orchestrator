@@ -29,6 +29,11 @@ vi.mock("../src/ui/dashboard/helpers.js", () => ({
 }));
 
 vi.mock("../src/ui/theme.js", () => ({
+  padAndTruncate: vi.fn((s: string, w: number) => {
+    const visible = s.replace(/\u001b\[\d+(;\d+)*m/g, "");
+    if (visible.length > w) return `${visible.slice(0, w - 1)}…`;
+    return s.padEnd(w);
+  }),
   fastTruncate: vi.fn((s: string, w: number) => {
     const visible = s.replace(/\u001b\[\d+(;\d+)*m/g, "");
     if (visible.length > w) return `${visible.slice(0, w - 1)}…`;

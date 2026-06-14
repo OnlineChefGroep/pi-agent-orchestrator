@@ -93,6 +93,13 @@ export function padVisible(content: string, width: number): string {
   return content + " ".repeat(Math.max(0, width - visibleWidth(content)));
 }
 
+export function padAndTruncate(content: string, width: number): string {
+  const vis = visibleWidth(content);
+  if (vis === width) return content;
+  if (vis < width) return content + " ".repeat(width - vis);
+  return truncateToWidth(content, width);
+}
+
 /** Skip expensive truncateToWidth when the string already fits. */
 export function fastTruncate(str: string, maxWidth: number): string {
   if (visibleWidth(str) <= maxWidth) return str;
@@ -100,7 +107,7 @@ export function fastTruncate(str: string, maxWidth: number): string {
 }
 
 export function framedRow(content: string, innerW: number, th: DashboardTheme, box: BoxChars): string {
-  const body = fastTruncate(padVisible(content, innerW), innerW);
+  const body = padAndTruncate(content, innerW);
   return `${th.border}${box.l}${th.reset} ${body} ${th.border}${box.r}${th.reset}`;
 }
 
