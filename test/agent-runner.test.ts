@@ -71,7 +71,7 @@ vi.mock("../src/skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
 }));
 
-import { getGraceTurns, resumeAgent, runAgent, setGraceTurns } from "../src/agent-runner.js";
+import { AgentRunnerError, getGraceTurns, resumeAgent, runAgent, setGraceTurns } from "../src/agent-runner.js";
 
 function createSession(finalText: string) {
   const listeners: Array<(event: any) => void> = [];
@@ -347,5 +347,21 @@ describe("getGraceTurns / setGraceTurns", () => {
 
     setGraceTurns(-5);
     expect(getGraceTurns()).toBe(1);
+  });
+});
+
+describe("AgentRunnerError", () => {
+  it("initializes correctly with message and code", () => {
+    const error = new AgentRunnerError("test message", "timeout");
+    expect(error.message).toBe("test message");
+    expect(error.code).toBe("timeout");
+    expect(error.name).toBe("AgentRunnerError");
+    expect(error.context).toBeUndefined();
+    expect(error).toBeInstanceOf(Error);
+  });
+
+  it("stores optional context", () => {
+    const error = new AgentRunnerError("depth exceeded", "depth_exceeded", { level: 6 });
+    expect(error.context).toEqual({ level: 6 });
   });
 });
