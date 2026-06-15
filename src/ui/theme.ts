@@ -99,8 +99,15 @@ export function fastTruncate(str: string, maxWidth: number): string {
   return truncateToWidth(str, maxWidth);
 }
 
+export function padAndTruncate(str: string, targetWidth: number): string {
+  const vis = visibleWidth(str);
+  if (vis === targetWidth) return str;
+  if (vis < targetWidth) return str + " ".repeat(targetWidth - vis);
+  return fastTruncate(str, targetWidth);
+}
+
 export function framedRow(content: string, innerW: number, th: DashboardTheme, box: BoxChars): string {
-  const body = fastTruncate(padVisible(content, innerW), innerW);
+  const body = padAndTruncate(content, innerW);
   return `${th.border}${box.l}${th.reset} ${body} ${th.border}${box.r}${th.reset}`;
 }
 
