@@ -71,9 +71,9 @@
     "@earendil-works/pi-tui": "0.79.3",
     "@types/node": "^25.9.3",
     "@types/proper-lockfile": "^4.1.4",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.9",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.9"
   },
   "pi": {
     "extensions": [
