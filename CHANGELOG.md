@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.14.0 (2026-06-16)
+
+### Features
+
+- **Execution tree visualization**: `/agents tree` command with three export formats:
+  - **Mermaid** flowchart diagram with `parentId`-based hierarchy + `groupId` dashed edges
+  - **Unicode text tree** with box-drawing characters (`├─`, `└─`, `│`)
+  - **JSON** hierarchical tree with recursive `children` arrays
+  - Dashboard `y` keybinding for live tree view with status-colored nodes (● running, ✓ completed, ✗ error)
+  - New modules: `src/agent-tree.ts` (unified `buildTree()` helper), `src/ui/agent-tree-renderer.ts` (TUI renderer)
+  - `output-handler.ts`: replaced duplicated 60-line `buildExecutionTree` with thin dispatch to `agent-tree.ts`
+
+### Performance
+
+- **Handoff parse micro-optimization**: `safeJsonParse` now tracks max raw string length during the character scan and skips the recursive `truncateStrings` tree walk when no string exceeds `MAX_STRING_LENGTH`. 10x speedup on small handoffs (204µs → 19.7µs).
+
+### Documentation
+
+- `docs/VERVOLG_PLAN.md` updated to v0.14.0: 1429 tests, 81 files, P2 execution tree marked done
+- `.jules/overdrive.md`: performance audit journal with full benchmark report (59/59 OK)
+
+### Metrics
+
+- 1429 tests across 81 test files. Typecheck + lint green. All 59 benchmarks OK (0 FAIL, 0 WARN).
+
+---
+
 ## v0.13.1 (2026-06-12)
 
 ### Fixes
