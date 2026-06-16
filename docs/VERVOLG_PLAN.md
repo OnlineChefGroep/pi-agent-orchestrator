@@ -1,6 +1,6 @@
 # Vervolg Plan — @onlinechefgroep/pi-agent-orchestrator
 
-> Living roadmap for the pi-agent-orchestrator extension. Last updated: 2026-06-04 (v0.10.3).
+> Living roadmap for the pi-agent-orchestrator extension. Last updated: 2026-06-16 (v0.13.1).
 
 ---
 
@@ -8,10 +8,11 @@
 
 | Metric | Value |
 |---|---|
-| **Version** | 0.12.2 |
-| **Tests** | 1390 passing, 58 test files |
+| **Version** | 0.13.1 |
+| **Tests** | 1424 passing, 81 test files |
 | **Typecheck** | ✅ Pass |
 | **Lint** | ✅ Pass (Biome) |
+| **Benchmarks** | ✅ All passing (64/64 under threshold) |
 | **Branch** | `main` |
 
 ---
@@ -50,8 +51,10 @@
 
 ## Medium-Term (P2)
 
-- [ ] **Handoff protocol v2** — Typed artifacts / file references in `AgentHandoff`
-- [ ] **Execution tree visualization** — `/agents tree` command with Mermaid/JSON/text export
+- [x] **Handoff protocol v2** — Typed artifacts / file references in `AgentHandoff` — _released in v0.13.0_
+- [x] **Handoff parse perf** — `safeJsonParse` skip `truncateStrings` tree walk when no strings exceed limit (10x speedup on small handoffs, 204µs → 19.7µs)
+- [x] **Execution tree visualization** — `/agents tree` command met Mermaid/JSON/text export + dashboard `y` keybinding — _implemented 2026-06-16_
+- [ ] **Agent templates registry** — Versioned, updatable templates beyond raw `.md` files
 - [ ] **Agent templates registry** — Versioned, updatable templates beyond raw `.md` files
 - [ ] **Cost estimation mode** — Dry-run token estimate before launching expensive trees
 - [ ] **Cinematic sidecar robustness** — Version handshake, auto-restart, graceful degradation — _tracked in [#1](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues/1)_

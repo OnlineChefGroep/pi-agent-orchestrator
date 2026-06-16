@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentTreeJson, buildAgentTreeMermaid } from "../src/agent-tree.js";
+import { buildAgentTreeJson, buildAgentTreeMermaid, buildAgentTreeText } from "../src/agent-tree.js";
 import type { AgentRecord } from "../src/types.js";
 
 // Helper to create basic mock AgentRecord
@@ -50,10 +50,10 @@ describe("agent-tree", () => {
       expect(result).toContain('my_cool_agent_id["my-cool-agent-id<br/>general-purpose<br/>running<br/>test description"]');
     });
 
-    it("renders parent-child relationships using groupId", () => {
+    it("renders parent-child relationships using parentId", () => {
       const parent = createMockRecord({ id: "parent-1", spawnedAt: 1000 });
-      const child1 = createMockRecord({ id: "child-1", groupId: "parent-1", spawnedAt: 2000 });
-      const child2 = createMockRecord({ id: "child-2", groupId: "parent-1", spawnedAt: 3000 });
+      const child1 = createMockRecord({ id: "child-1", parentId: "parent-1", spawnedAt: 2000 });
+      const child2 = createMockRecord({ id: "child-2", parentId: "parent-1", spawnedAt: 3000 });
 
       const result = buildAgentTreeMermaid([child2, parent, child1]); // Out of order to test sorting
 
@@ -72,20 +72,12 @@ describe("agent-tree", () => {
       expect(result).toBe("[]");
     });
 
-    it("maps agent records to the correct JSON structure", () => {
+    it("maps a single agent record to a root node with empty children", () => {
       const record = createMockRecord({
         id: "agent-123",
         type: "Explore",
         description: "Exploring files",
         status: "completed",
-        spawnedAt: 1000,
-        startedAt: 1001,
-        completedAt: 2000,
-        currentLevel: 1,
-        totalSpawned: 5,
-        groupId: "group-456",
-        swarmId: "swarm-789",
-        joinMode: "async",
       });
 
       const result = buildAgentTreeJson([record]);
@@ -97,15 +89,64 @@ describe("agent-tree", () => {
         type: "Explore",
         description: "Exploring files",
         status: "completed",
-        spawnedAt: 1000,
-        startedAt: 1001,
-        completedAt: 2000,
-        currentLevel: 1,
-        totalSpawned: 5,
-        groupId: "group-456",
-        swarmId: "swarm-789",
-        joinMode: "async",
+        children: [],
       });
+    });
+
+    it("builds a hierarchical tree using parentId relationships", () => {
+      const parent = createMockRecord({ id: "root", type: "Explore", description: "Root", status: "running" });
+      const child = createMockRecord({ id: "child", type: "Plan", description: "Child", status: "completed", parentId: "root" });
+      const grandchild = createMockRecord({ id: "gc", type: "Explore", description: "Grandchild", status: "running", parentId: "child" });
+
+      const result = buildAgentTreeJson([grandchild, parent, child]); // Out of order
+      const parsed = JSON.parse(result);
+
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].id).toBe("root");
+      expect(parsed[0].children).toHaveLength(1);
+      expect(parsed[0].children[0].id).toBe("child");
+      expect(parsed[0].children[0].children).toHaveLength(1);
+      expect(parsed[0].children[0].children[0].id).toBe("gc");
+      expect(parsed[0].children[0].children[0].children).toEqual([]);
+    });
+  });
+
+  describe("buildAgentTreeText", () => {
+    it("returns empty message when records array is empty", () => {
+      const result = buildAgentTreeText([]);
+      expect(result).toBe("No execution tree available.");
+    });
+
+    it("renders a single agent without tree branches", () => {
+      const record = createMockRecord({ id: "agent-1", type: "Explore", status: "running" });
+      const result = buildAgentTreeText([record]);
+      expect(result).toContain("agent-1 (Explore) [running]");
+      expect(result).not.toContain("\u251C");
+      expect(result).not.toContain("\u2514");
+    });
+
+    it("renders a parent-child hierarchy with branch characters", () => {
+      const parent = createMockRecord({ id: "root", type: "Explore", status: "running" });
+      const child1 = createMockRecord({ id: "child-1", type: "Plan", status: "completed", parentId: "root" });
+      const child2 = createMockRecord({ id: "child-2", type: "Plan", status: "queued", parentId: "root" });
+
+      const result = buildAgentTreeText([parent, child1, child2]);
+
+      expect(result).toContain("root (Explore) [running]");
+      expect(result).toContain("\u251C\u2500 child-1 (Plan) [completed]");
+      expect(result).toContain("\u2514\u2500 child-2 (Plan) [queued]");
+    });
+
+    it("renders a deeply nested tree with correct indentation", () => {
+      const root = createMockRecord({ id: "root", type: "Explore", status: "running" });
+      const a = createMockRecord({ id: "a", type: "Plan", status: "completed", parentId: "root" });
+      const b = createMockRecord({ id: "b", type: "Explore", status: "running", parentId: "a" });
+
+      const result = buildAgentTreeText([root, a, b]);
+
+      expect(result).toContain("root (Explore) [running]");
+      expect(result).toContain("\u2514\u2500 a (Plan) [completed]");
+      expect(result).toContain("   \u2514\u2500 b (Explore) [running]");
     });
   });
 });

@@ -141,11 +141,15 @@ function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS, maxDepth:
     throw new Error(`JSON size ${input.length} exceeds maximum ${MAX_JSON_SIZE} bytes`);
   }
 
-  // Calculate depth by counting `{` and `[` without parsing to prevent V8 stack overflow
+  // Single-pass scan: depth, key count, and max raw string length.
+  // Tracking maxStringLen lets us skip the recursive truncateStrings walk
+  // when no string exceeds MAX_STRING_LENGTH — the common case for handoffs.
   let currentDepth = 0;
   let keyCount = 0;
+  let maxStringLen = 0;
   let inString = false;
   let escapeNext = false;
+  let stringStart = -1;
 
   for (let i = 0; i < input.length; i++) {
     const char = input[i];
@@ -157,10 +161,13 @@ function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS, maxDepth:
         escapeNext = true;
       } else if (char === '"') {
         inString = false;
+        const rawLen = i - stringStart;
+        if (rawLen > maxStringLen) maxStringLen = rawLen;
       }
     } else {
       if (char === '"') {
         inString = true;
+        stringStart = i;
       } else if (char === '{' || char === '[') {
         currentDepth++;
         if (currentDepth > maxDepth) {
@@ -179,8 +186,12 @@ function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS, maxDepth:
 
   const parsed = JSON.parse(input);
 
-  // Walk the parsed tree to validate string lengths
-  truncateStrings(parsed);
+  // Only walk the parsed tree if a string might exceed the limit.
+  // Raw string length includes escape sequences (e.g. \\n counts as 2 chars),
+  // so it's a conservative upper bound — we never skip truncation when needed.
+  if (maxStringLen > MAX_STRING_LENGTH) {
+    truncateStrings(parsed);
+  }
 
   return parsed;
 }

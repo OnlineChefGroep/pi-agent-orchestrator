@@ -17,6 +17,7 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import { type Component, matchesKey } from "@earendil-works/pi-tui";
 import type { AgentManager } from "./agent-manager.js";
 import { reloadCustomAgents } from "./agent-registry.js";
+import { buildAgentTreeJson, buildAgentTreeMermaid, buildAgentTreeText } from "./agent-tree.js";
 import { getAllTypes } from "./agent-types.js";
 import type { SubagentScheduler } from "./schedule.js";
 import { uiCreateOrJoinSwarm } from "./swarm-join.js";
@@ -124,79 +125,10 @@ async function launchAgentDashboard(
   await showAgentDashboard(ctx, manager, agentActivity, scheduler, viewConv, onAbort, onSteer, onPerms, onSwarm);
 }
 
-interface TreeNode {
-  id: string;
-  type: string;
-  status: string;
-  description: string;
-  children: TreeNode[];
-}
-
 function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" | "json"): string {
-  if (format === "json") {
-    const roots: TreeNode[] = [];
-    const map = new Map<string, TreeNode>();
-    for (const r of records) {
-      map.set(r.id, { id: r.id, type: r.type, status: r.status, description: r.description, children: [] });
-    }
-    for (const r of records) {
-      const node = map.get(r.id)!;
-      if (r.parentId && map.has(r.parentId)) {
-        map.get(r.parentId)!.children.push(node);
-      } else {
-        roots.push(node);
-      }
-    }
-    return JSON.stringify(roots, null, 2);
-  }
-
-  if (format === "mermaid") {
-    const mermaidParts: string[] = ["graph TD\n"];
-    for (const r of records) {
-      const cleanType = r.type.replace(/"/g, "'");
-      mermaidParts.push(`  ${r.id.replace(/-/g, "_")}["[${cleanType}] ${r.id}"]\n`);
-      if (r.parentId) {
-        mermaidParts.push(`  ${r.parentId.replace(/-/g, "_")} --> ${r.id.replace(/-/g, "_")}\n`);
-      }
-    }
-    return mermaidParts.join("");
-  }
-
-  if (format === "text") {
-    const roots: AgentRecord[] = [];
-    const childrenMap = new Map<string, AgentRecord[]>();
-    const nodeMap = new Map<string, AgentRecord>();
-
-    for (const r of records) {
-      nodeMap.set(r.id, r);
-      if (!r.parentId) {
-        roots.push(r);
-      } else {
-        if (!childrenMap.has(r.parentId)) {
-          childrenMap.set(r.parentId, []);
-        }
-        childrenMap.get(r.parentId)!.push(r);
-      }
-    }
-
-    let out = "";
-    const render = (nodeId: string, indent: string, isLast: boolean) => {
-      const r = nodeMap.get(nodeId);
-      if (!r) return;
-      const branch = indent ? (isLast ? "└─ " : "├─ ") : "";
-      out += `${indent}${branch}${r.id} (${r.type}) [${r.status}]\n`;
-      const children = childrenMap.get(nodeId) || [];
-      for (let i = 0; i < children.length; i++) {
-        render(children[i].id, indent + (indent ? (isLast ? "   " : "│  ") : ""), i === children.length - 1);
-      }
-    };
-    for (let i = 0; i < roots.length; i++) {
-      render(roots[i].id, "", i === roots.length - 1);
-    }
-    return out || "No execution tree available.";
-  }
-
-  return "";
+  if (format === "mermaid") return buildAgentTreeMermaid(records);
+  if (format === "json") return buildAgentTreeJson(records);
+  return buildAgentTreeText(records);
 }
 
 /** TUI component for the live agent top view. */
