@@ -843,7 +843,7 @@ export async function showAgentDashboard(
   await ctx.ui.custom<undefined>(
     (tui, _theme, _keybindings, done) => {
       return new AgentDashboard(
-        tui,
+        tui as any,
         { manager, agentActivity, scheduler, onViewConversation, onAbort, onSteer, onShowPermissions, onSwarmAction },
         done,
       );
