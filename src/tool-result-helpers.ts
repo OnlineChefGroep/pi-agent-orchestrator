@@ -10,7 +10,7 @@ import { addUsage, getLifetimeTotal, getSessionContextPercent, type LifetimeUsag
 
 /** Tool execute return value for a text response. */
 export function textResult(msg: string, details?: AgentDetails) {
-  return { content: [{ type: "text" as const, text: msg }], details: details as any };
+  return { content: [{ type: "text" as const, text: msg }], details };
 }
 
 /** Format an agent's lifetime token total, or "" when zero. */
