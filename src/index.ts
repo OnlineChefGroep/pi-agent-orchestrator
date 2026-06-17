@@ -314,7 +314,7 @@ export default async function (pi: ExtensionAPI) {
       const sessionId = ctx.sessionManager?.getSessionId?.();
       if (!sessionId) return;  // sessionId not yet available — try again on next event
       const path = resolveStorePath(ctx.cwd, sessionId);
-      const store = new ScheduleStore(path);
+      const store = await ScheduleStore.create(path);
       await scheduler.start(pi, ctx, manager, store);
       pi.events.emit("subagents:scheduler_ready", { sessionId, jobCount: store.list().length });
     } catch (err) {

@@ -75,7 +75,7 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
 
   beforeEach(async () => {
     tmp = mkdtempSync(join(tmpdir(), "schedule-e2e-"));
-    store = new ScheduleStore(join(tmp, "schedules.json"));
+    store = await ScheduleStore.create(join(tmp, "schedules.json"));
     scheduler = new SubagentScheduler();
   });
 
@@ -179,7 +179,7 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
 
     // Tear down the live scheduler; re-load from disk
     scheduler.stop();
-    const reloadedStore = new ScheduleStore(join(tmp, "schedules.json"));
+    const reloadedStore = await ScheduleStore.create(join(tmp, "schedules.json"));
     expect(reloadedStore.list()).toHaveLength(1);
     expect(reloadedStore.list()[0].id).toBe(job.id);
     expect(reloadedStore.list()[0].name).toBe("persistent");

@@ -102,7 +102,7 @@ describe("SubagentScheduler — lifecycle", () => {
   beforeEach(async () => {
     vi.useFakeTimers();
     tmp = mkdtempSync(join(tmpdir(), "scheduler-test-"));
-    store = new ScheduleStore(join(tmp, "s.json"));
+    store = await ScheduleStore.create(join(tmp, "s.json"));
     scheduler = new SubagentScheduler();
     manager = makeMockManager();
     pi = makeMockPi();
@@ -330,7 +330,7 @@ describe("SubagentScheduler — fire path", () => {
 
   beforeEach(async () => {
     tmp = mkdtempSync(join(tmpdir(), "scheduler-fire-"));
-    store = new ScheduleStore(join(tmp, "s.json"));
+    store = await ScheduleStore.create(join(tmp, "s.json"));
     scheduler = new SubagentScheduler();
     manager = makeMockManager();
     pi = makeMockPi();
