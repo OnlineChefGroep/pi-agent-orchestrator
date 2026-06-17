@@ -32,7 +32,7 @@ vi.mock("../src/ui/theme.js", () => ({
   padAndTruncate: vi.fn((s: string, w: number) => {
     const visible = s.replace(/\u001b\[\d+(;\d+)*m/g, "");
     if (visible.length > w) return `${visible.slice(0, w - 1)}…`;
-    return s.padEnd(w);
+    return s + " ".repeat(Math.max(0, w - visible.length));
   }),
   fastTruncate: vi.fn((s: string, w: number) => {
     const visible = s.replace(/\u001b\[\d+(;\d+)*m/g, "");
