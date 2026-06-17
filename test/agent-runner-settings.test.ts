@@ -70,6 +70,21 @@ describe("normalizeMaxTurns", () => {
   it("clamps negative values to 1", () => {
     expect(normalizeMaxTurns(-3)).toBe(1);
   });
+
+  it("treats NaN as unlimited", () => {
+    expect(normalizeMaxTurns(NaN)).toBeUndefined();
+  });
+
+  it("treats Infinity as unlimited", () => {
+    expect(normalizeMaxTurns(Infinity)).toBeUndefined();
+    expect(normalizeMaxTurns(-Infinity)).toBeUndefined();
+  });
+
+  it("floors floating point numbers", () => {
+    expect(normalizeMaxTurns(3.5)).toBe(3);
+    expect(normalizeMaxTurns(3.9)).toBe(3);
+  });
+
 });
 
 describe("setGraceTurns / getGraceTurns", () => {

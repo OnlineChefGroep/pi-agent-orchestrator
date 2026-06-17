@@ -97,8 +97,8 @@ export class AgentRunnerError extends Error {
 // ============================================================================
 
 export function normalizeMaxTurns(n: number | undefined): number | undefined {
-  if (n == null || n === 0) return undefined;
-  return Math.max(1, n);
+  if (n == null || typeof n !== "number" || Number.isNaN(n) || !Number.isFinite(n) || n === 0) return undefined;
+  return Math.max(1, Math.floor(n));
 }
 
 export function getDefaultMaxTurns(): number | undefined {
