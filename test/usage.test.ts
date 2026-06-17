@@ -48,6 +48,12 @@ describe("usage", () => {
       };
       expect(getSessionContextPercent(session)).toBe(25);
     });
+
+    it("returns null when session is undefined or stats throw", () => {
+      expect(getSessionContextPercent(undefined)).toBeNull();
+      const broken = { getSessionStats: () => { throw new Error("nope"); } } as any;
+      expect(getSessionContextPercent(broken)).toBeNull();
+    });
   });
 
   describe("getLifetimeTotal", () => {
