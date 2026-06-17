@@ -18,7 +18,7 @@ export async function viewAgentConversation(
 
   await ctx.ui.custom<undefined>(
     (tui, theme, _keybindings, done) => {
-      return new ConversationViewer(tui, session, record, activity, theme, done);
+      return new ConversationViewer(tui as any, session, record, activity, theme, done);
     },
     {
       overlay: true,
