@@ -67,4 +67,22 @@ describe("detectEnv", () => {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it("handles git branch command failure gracefully", async () => {
+    const errorMockPi = {
+      exec: async (_command, args) => {
+        if (args.includes("rev-parse")) {
+          return { stdout: "true", stderr: "", code: 0, killed: false };
+        }
+        if (args.includes("branch")) {
+          throw new Error("Simulated branch failure");
+        }
+        return { stdout: "", stderr: "", code: 1, killed: false };
+      }
+    };
+
+    const env = await detectEnv(errorMockPi, process.cwd());
+    expect(env.isGitRepo).toBe(true);
+    expect(env.branch).toBe("unknown");
+  });
 });
