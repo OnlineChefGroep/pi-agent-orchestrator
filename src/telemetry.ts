@@ -63,7 +63,7 @@ const SECURITY_EVENTS: ReadonlySet<TelemetryEventName> = new Set<TelemetryEventN
 /** Global registry of telemetry handlers (Symbol-based to avoid collisions) */
 const TELEMETRY_REGISTRY_KEY = Symbol.for("pi-subagents:telemetry-handlers");
 
-type HandlerRegistry = Map<TelemetryEventName, Set<TelemetryHandler<any>>>;
+type HandlerRegistry = Map<TelemetryEventName, Set<unknown>>;
 
 function getRegistry(): HandlerRegistry {
   let registry = (globalThis as any)[TELEMETRY_REGISTRY_KEY] as HandlerRegistry | undefined;
@@ -83,7 +83,7 @@ export function onTelemetry<E extends TelemetryEventName>(
   handler: TelemetryHandler<E>,
 ): () => void {
   const registry = getRegistry();
-  let handlers = registry.get(event);
+  let handlers = registry.get(event) as Set<TelemetryHandler<E>> | undefined;
   if (!handlers) {
     handlers = new Set();
     registry.set(event, handlers);
@@ -104,7 +104,7 @@ export function emitTelemetry<E extends TelemetryEventName>(
   payload: TelemetryEvents[E],
 ): void {
   const registry = getRegistry();
-  const handlers = registry.get(event);
+  const handlers = registry.get(event) as Set<TelemetryHandler<E>> | undefined;
 
   if (handlers && handlers.size > 0) {
     for (const handler of handlers) {
