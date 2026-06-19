@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/@onlinechefgroep/pi-agent-orchestrator)](https://www.npmjs.com/package/@onlinechefgroep/pi-agent-orchestrator)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions)
-[![Tests](https://img.shields.io/badge/tests-1619%20passed-brightgreen)](https://github.com/OnlineChefGroep/pi-agent-orchestrator)
+[![Tests](https://img.shields.io/badge/tests-1666%20passed-brightgreen)](https://github.com/OnlineChefGroep/pi-agent-orchestrator)
 
 A Pi extension that adds powerful orchestration capabilities: autonomous sub-agents, structured handoffs, 3-tier prompt compression, cron scheduling, swarm coordination, and a vim-style interactive TUI dashboard.
 
@@ -22,6 +22,10 @@ A Pi extension that adds powerful orchestration capabilities: autonomous sub-age
 - **Swarm Coordination** — Dynamic multi-agent swarm join/leave with real-time status in dashboard (`w` key).
 - **Performance Skills** — `overdrive` skill for performance auditing with benchmark suite (61 benchmarks, adaptive refresh, O(N) rendering).
 - **Showcase Pipelines** — tmux recording, programmatic, Remotion, VHS, and live asciinema pipelines for high-quality demos.
+
+## Opt-in debug capture
+
+For evals and post-mortem debugging, set `debugCapture: true` in `.pi/subagents.json` and the extension writes a strictly-local, append-only folder of agent lifecycle events, error stacks, schedule firings, cross-extension RPC audit entries, and per-agent metrics to `<cwd>/.pi/subagent-debug` + `<agent-dir>/subagent-debug` (both paths overridable via `debugCapturePaths`). **OFF BY DEFAULT.** Per-file **25 MiB tail-aware rotation** keeps disk usage bounded while preserving the most recent activity; rotation is atomic via temp+rename so a crash mid-rotation cannot leave a half-truncated file. The feature is **best-effort** — a capture failure never breaks the agent runtime, dashboard, or scheduler. **PII warning:** captured content includes full agent prompts, error stacks with absolute source paths, and tool arguments that frequently contain pasted-from-clipboard secrets, API tokens, or session-scoped credentials — enable only on workloads where you trust the local filesystem with the captured contents. Full schema, capture folder layout, rotation + atomicity guarantees, and PII implications are documented in the [API Reference → Debug Capture](docs/api-reference.md#debug-capture) section.
 
 ## What's new in v0.14.x
 
@@ -79,7 +83,7 @@ See the `docs/` folder for architecture, custom agent examples, handoff workflow
 ```bash
 npm install
 npm run setup:hooks   # git hooks (opt-in)
-npm test              # 1619 tests across 90 test files
+npm test              # 1666 tests across 93 test files
 npm run lint:fix
 npm run typecheck
 npm run bench:all     # 61 performance benchmarks
