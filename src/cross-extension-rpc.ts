@@ -242,10 +242,10 @@ function handleRpc<P extends { requestId: string }>(
       const reply: { success: true; data?: unknown } = { success: true };
       if (data !== undefined) reply.data = data;
       events.emit(`${channel}:reply:${params.requestId}`, reply);
-    } catch (err: any) {
+    } catch (err: unknown) {
       const requestId = (raw as Record<string, unknown>)?.requestId;
       events.emit(`${channel}:reply:${requestId}`, {
-        success: false, error: err?.message ?? String(err),
+        success: false, error: err instanceof Error ? err.message : String(err),
       });
     }
   });
