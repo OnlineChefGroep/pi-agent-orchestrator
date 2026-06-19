@@ -220,6 +220,12 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/prompts.ts` | Template block constants, prompt assembly with `compressionLevel` parameter (handoff variant + lazy read-only regen for default agents) |
 | `src/skill-loader.ts` | External module ingestion |
 | `src/telemetry.ts` | Activity datalogging pipeline |
+| `src/telemetry-otel.ts` | OpenTelemetry span export bridge (agent lifecycle spans, turn/tool/compaction sub-spans, `correlation.id` attribute) |
+| `src/orchestration-dispatch.ts` | Heuristic dispatch resolver — `single` / `swarm` / `crew` / `auto` with keyword-based prompt analysis and plan builders |
+| `src/dispatch-history.ts` | FIFO ring buffer recording every orchestration decision for the `/agents → Health check` histogram (by kind, by source, auto picks) |
+| `src/health-report.ts` | Structured runtime health snapshot builder for `/agents → Health check` (process, tracing, circuit breaker, schedule, swarm, agents, settings, recent errors, dispatch histogram) |
+| `src/agent-templates.ts` | Agent templates registry — list, install, update, remove versioned templates from `.agents/templates/` with installed manifest tracking |
+| `src/ctx-tool-names.ts` | Context-mode sandbox tool name constants (`ctx_read`, `ctx_write`, `ctx_list`) |
 | `src/batch-orchestrator.ts` | Manages smart/group/swarm batch finalization and update debouncing |
 | `src/agent-tree.ts` | Mermaid chart and JSON tree visualization for agent swarms |
 | `src/audit-logger.ts` | Structured RPC audit logging with in-memory ring buffer and telemetry emission |
@@ -232,6 +238,7 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/events.ts` | Typed event catalog for `pi.events` lifecycle contracts (started, completed, failed, compacted, budget_warning, scheduler_ready) |
 | `src/commands/agents.ts` | `/agents` command registration and argument parsing |
 | `src/commands/hooks.ts` | `/hooks` command registration and argument parsing |
+| `src/commands/templates.ts` | `/agents templates` command — interactive menu to browse, install, update, and remove agent templates |
 | `src/tools/agent.ts` | Sub-agent tool implementations (spawn, get result, steer, list, history) |
 | `src/tools/context.ts` | Context mode sandbox tools (`ctx_read`, `ctx_write`, `ctx_list`) |
 | `src/tools/get-result.ts` | Sub-agent result retrieval with telemetry cancellation |
@@ -254,6 +261,8 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/ui/agent-ui-types.ts` | Display constraints definition |
 | `src/ui/agent-widget-renderer.ts` | Widget render sequence with virtual scrolling and batch safety caps |
 | `src/ui/agent-dashboard-renderer.ts` | Dashboard render sequence with details panel, help, and empty states |
+| `src/ui/agent-tree-renderer.ts` | Execution tree TUI renderer (status-colored nodes, Mermaid/text/JSON export via `/agents tree`) |
+| `src/ui/health-view.ts` | Health check view — renders `HealthReport` as a read-only editor buffer from `/agents → Health check` |
 | `src/ui/notification-renderer.ts` | State change visual logic |
 | `src/ui/dashboard/` | Directory containing modular dashboard components (compact rows, progress bars, etc.) |
 

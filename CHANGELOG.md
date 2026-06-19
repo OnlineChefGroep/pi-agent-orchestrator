@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.14.1 (2026-06-16)
+
+### Features
+
+- **`tracingEnabled` master switch + OTel short-circuit**: New `tracingEnabled` boolean setting in `.pi/subagents.json` (defaults to `true`) controls OpenTelemetry span emission in `agent-runner`. When `false`, every span helper in `src/telemetry-otel.ts` returns a shared `NOOP_SPAN` singleton (chainable no-op methods, `isRecording: () => false`) and the runtime cost is one flag check per span lifecycle call. Useful for users who have configured an OTel `TracerProvider` globally but don't want subagent spans in their traces. Surfaced in `/agents → Settings → Tracing` with an enabled/disabled select + "already set" short-circuit, matching the existing `Scheduling` toggle pattern. Runtime toggles take effect for all subsequent spans; in-flight agent spans keep their real span and end normally.
+  - New `isTracingEnabled()` / `setTracingEnabled(b)` getters/setters in `src/agent-registry.ts` (default `true`).
+  - New `tracingEnabled` field on `SubagentsSettings` + sanitize + `SettingsAppliers.setTracingEnabled` wiring in `src/settings.ts`.
+  - 4 new short-circuit tests in `test/telemetry-otel.test.ts` (no real spans created, `isRecording` returns `false`, end helpers don't throw, re-enabling restores creation).
+  - 2 new round-trip + sanitize + 3 new `applySettings` wiring tests in `test/settings.test.ts`.
+
+### Refactor
+
+- **Settings UI args → `SettingsGetters` + `SettingsSetters` objects**: Stop the 14-positional-arg spiral on `showSettings()` and 11-positional-arg spiral on `notifyApplied()`. New `SettingsGetters` (5 read fns: default max turns, grace turns, default join mode, scheduling, tracing) and `SettingsSetters` (5 write fns) interfaces in `src/settings.ts`. `showSettings(ctx, manager, pi, scheduler, getters, setters)`, `notifyApplied(ctx, pi, manager, getters, successMsg)`, and `buildSettingsSnapshot(manager, getters)` all take the objects now. `AgentsMenuDeps` shrank from 14 individual getter/setter fields to `settingsGetters` + `settingsSetters`. Adding a new menu-editable setting is now a 3-place change (interface + applier object + handler call) instead of threading a new arg through 5 function signatures.
+  - `src/ui/settings-snapshot.ts`: `buildSettingsSnapshot(manager, getters)` (was 6 positional args).
+  - `src/ui/settings-menu.ts`: `showSettings` 6-arg shape (was 14), `notifyApplied` 5-arg shape (was 11), all 15 internal call sites updated.
+  - `src/output-handler.ts`: `AgentsMenuDeps` now bundles `settingsGetters` + `settingsSetters`.
+  - `src/commands/agents.ts`: builds module-level `settingsGetters` and `settingsSetters` objects once, passes them via `AgentsMenuDeps`.
+  - New `test/settings-snapshot.test.ts` with 14 tests covering the new `(manager, getters)` signature: manager-owned fields, getter-owned fields, agent-registry fields, `defaultMaxTurns: undefined → 0` mapping, partial session limits, call-count invariants (each manager method + each getter called exactly once per snapshot — no double-reads), and snapshot shape (all 13 expected keys present).
+
+### Documentation
+
+- `docs/api-reference.md` — added `tracingEnabled` to the `SubagentsSettings` interface + new `SettingsGetters` / `SettingsSetters` subsections under `// CONFIGURATION SETTINGS` with the type definitions, USAGE notes, and a 3-place-change explanation for adding new menu-editable settings.
+- `docs/agentic-loop-spec.md` — new autonomous agentic loop specification formalizing the fully autonomous agent workflow (trigger → dispatch → spawn → execute → validate → handoff → repeat) with phase-by-phase breakdowns, design invariants, crew/swarm/single dispatch modes, self-healing validation loop, scheduling, and observability.
+- `README.md` — test badges updated to 1619 tests / 90 test files.
+- `ROADMAP.md` — test count updated to 1619; all completed items marked.
+- `docs/VERVOLG_PLAN.md` — updated to v0.14.1 with 1619 tests; added Completed P2 section for v0.13.0–v0.14.1 milestones; reorganized P2/P3 pending items.
+- `docs/index.md` — added Agentic Loop Spec to the core documentation index.
+
 ## v0.14.0 (2026-06-16)
 
 ### Features
