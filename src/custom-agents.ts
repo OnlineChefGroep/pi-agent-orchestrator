@@ -13,6 +13,22 @@ import type { AgentConfig, MemoryScope, PromptCompressionLevel, ThinkingLevel } 
 // CVE-002 FIX: Validation patterns for agent configs
 const UNSAFE_NAME_PATTERN = /[/\\]|\.\.|[\x00-\x1F]/;
 const MAX_NAME_LENGTH = 100;
+
+
+function truncateUnicode(str: string, maxLength: number): string {
+  if (str.length <= maxLength) return str;
+  let count = 0;
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if (code >= 0xD800 && code <= 0xDBFF) i++;
+    count++;
+    if (count >= maxLength) return str.slice(0, i + 1);
+  }
+  return str;
+}
+
+
+
 const MAX_PROMPT_LENGTH = 100000;  // 100KB
 const MAX_TOOLS_COUNT = 100;
 /**
@@ -64,9 +80,9 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
       // Redact potentially sensitive tool names to prevent logging secrets
       // We limit to 50 characters to prevent DOS, and use a safe substring approach
       const sanitizedTools = unknownTools.map(t =>
-        typeof t === 'string' ? (t.length > 50 ? `${Array.from(t).slice(0, 50).join('')}...` : t) : '[INVALID_TYPE]'
+        typeof t === 'string' ? (t.length > 50 ? `${truncateUnicode(t, 50)}...` : t) : '[INVALID_TYPE]'
       );
-      const safeName = typeof name === 'string' ? Array.from(name).slice(0, MAX_NAME_LENGTH).join('') : String(name);
+      const safeName = typeof name === 'string' ? truncateUnicode(name, MAX_NAME_LENGTH) : String(name);
       emitTelemetry("agent:unknown-tools", { name: safeName, tools: sanitizedTools });
     }
   }
@@ -154,7 +170,7 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
     // CVE-002 FIX: Validate agent config before adding
     const validationErrors = validateAgentConfig(name, config);
     if (validationErrors.length > 0) {
-      const safeName = typeof name === 'string' ? Array.from(name).slice(0, MAX_NAME_LENGTH).join('') : String(name);
+      const safeName = typeof name === 'string' ? truncateUnicode(name, MAX_NAME_LENGTH) : String(name);
       // Redact sensitive payload content from error messages
       // We log the type of error, but redact any appended untrusted data
       const redactedErrors = validationErrors.map(e => {
@@ -172,7 +188,7 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
 
     // Emit telemetry for every loaded agent with content hash
     const contentHash = hashContentSync(content);
-    const safeNameLoaded = typeof name === 'string' ? Array.from(name).slice(0, MAX_NAME_LENGTH).join('') : String(name);
+    const safeNameLoaded = typeof name === 'string' ? truncateUnicode(name, MAX_NAME_LENGTH) : String(name);
     emitTelemetry("agent:loaded", { 
       name: safeNameLoaded,
       source, 

@@ -184,8 +184,7 @@ interface SubagentsSettings {
   schedulingEnabled?: boolean;         // Master switch for cron scheduling (default: true)
   tracingEnabled?: boolean;           // Master switch for OpenTelemetry span emission in agent-runner (default: true). When false, every span helper in telemetry-otel.ts short-circuits to a shared no-op span.
   animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";  // Spinner style (default: "braille")
-  uiStyle?: "premium" | "retro" | "plain" | "cinematic";  // UI theme (default: "premium")
-  cinematicEnabled?: boolean;          // Enable cinematic Go TUI sidecar when uiStyle is "cinematic" (default: true)
+  uiStyle?: "premium" | "retro" | "plain";  // UI theme (default: "premium")
   showActivityStream?: boolean;        // Show real-time activity stream in widget (default: true)
   showTokenUsage?: boolean;            // Show token usage and context fill percentage (default: true)
   showTurnProgress?: boolean;          // Show turn progress (current/max) for running agents (default: true)

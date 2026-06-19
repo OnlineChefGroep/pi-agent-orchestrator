@@ -98,7 +98,7 @@ examples/agents/        Example agent definition files
 - **Conventional Commits**: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
 - **`.js` extensions in imports** — required for ESM resolution: `import { foo } from "./bar.js"`
 - **No `any` suppression needed** — `noExplicitAny` is off in Biome config
-- **Memory heap**: `NODE_OPTIONS='--max-old-space-size=4096'` set on build/test/typecheck scripts
+- **Memory heap**: build/test/typecheck scripts run Node with `--max-old-space-size=4096`
 
 ## Common Pitfalls
 
@@ -116,7 +116,7 @@ examples/agents/        Example agent definition files
 
 7. **Adding settings.** Update `settings.ts` (interface + defaults + sanitize function) + `output-handler.ts` (buildSettingsSnapshot + settings menu).
 
-8. **Optional peer deps.** `@onlinechef/context-mode` and `@onlinechefgroep/pi-subagents-tui` are optional — code paths are gated behind feature detection, not hard imports. `pi-subagents-tui` is a Go-based Bubble Tea TUI sidecar (see sibling repos `pi-subagents-tui` and `bubbletea-cinematic`). The cinematic Go binary spawning was removed in v0.9.1; re-integration is tracked in issue #1.
+8. **Optional peer deps.** `@onlinechef/context-mode` is optional — its code path is gated behind feature detection, not a hard import.
 
 9. **Security fixes.** CVE-002 through CVE-005 fixes are in place (input validation, size limits, control char sanitization). Don't weaken these guards.
 

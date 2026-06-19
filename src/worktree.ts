@@ -61,6 +61,29 @@ export async function createWorktree(cwd: string, agentId: string): Promise<Work
   }
 }
 
+
+/**
+ * Safely truncates a string to a maximum length without splitting surrogate pairs
+ * or using O(N) array spread operations.
+ */
+function safeTruncate(str: string, maxLen: number): string {
+  if (typeof str !== "string") return "";
+  if (str.length <= maxLen) return str;
+  let validLen = 0;
+  for (let i = 0; i < maxLen; i++) {
+    const code = str.charCodeAt(i);
+    // High surrogate check
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      if (i + 1 >= maxLen) break;
+      validLen += 2;
+      i++; // Skip low surrogate
+    } else {
+      validLen += 1;
+    }
+  }
+  return str.slice(0, validLen);
+}
+
 /**
  * Clean up a worktree after agent completion.
  * - If no changes: remove worktree entirely.
@@ -94,12 +117,14 @@ export function cleanupWorktree(
     
     // CVE-001 FIX: Sanitize commit message to prevent git hook injection
     // Remove newlines, carriage returns, control characters, and shell metacharacters
-    const safeDesc = agentDescription
+    const rawDesc = typeof agentDescription === "string" ? agentDescription : String(agentDescription);
+    const safeDescStr = rawDesc
       .replace(/[\r\n\x00-\x1F]/g, ' ')  // Remove newlines and control chars
       .replace(/["`$\\]/g, '')            // Remove shell metacharacters
       .replace(/\s+/g, ' ')               // Normalize whitespace
-      .trim()
-      .slice(0, 200);
+      .trim();
+
+    const safeDesc = safeTruncate(safeDescStr, 200);
     
     const commitMsg = `pi-agent: ${safeDesc}`;
     

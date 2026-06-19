@@ -17,7 +17,6 @@ vi.mock("../src/agent-registry.js", () => ({
   isTracingEnabled: vi.fn(() => true),
   reloadCustomAgents: vi.fn(async () => {}),
   setAnimationStyle: vi.fn(),
-  setCinematicEnabled: vi.fn(),
   setDashboardRefreshInterval: vi.fn(),
   setDefaultJoinMode: vi.fn(),
   setOrchestrationMode: vi.fn(),

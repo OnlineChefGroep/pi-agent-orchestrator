@@ -48,16 +48,9 @@ export interface SubagentsSettings {
   tracingEnabled?: boolean;
   animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";
   /**
-   * UI rendering style. "cinematic" enables the Go TUI sidecar with plasma background.
-   * Defaults to "premium" (TypeScript-only with tree view).
+   * UI rendering style. Defaults to "premium" (truecolor gradients + rounded connectors).
    */
-  uiStyle?: "premium" | "retro" | "plain" | "cinematic";
-  /**
-   * Enable the cinematic Go TUI sidecar (plasma background + advanced animations).
-   * Requires `uiStyle: "cinematic"` to take effect.
-   * Defaults to `true` when uiStyle is "cinematic", `false` otherwise.
-   */
-  cinematicEnabled?: boolean;
+  uiStyle?: "premium" | "retro" | "plain";
   /**
    * Show real-time activity stream (tool calls, responses) in the widget.
    * Defaults to `true`.
@@ -103,8 +96,7 @@ export interface SettingsAppliers {
   setSchedulingEnabled: (b: boolean) => void;
   setTracingEnabled: (b: boolean) => void;
   setAnimationStyle: (style: "braille" | "dots" | "lines" | "classic" | "none") => void;
-  setUiStyle: (style: "premium" | "retro" | "plain" | "cinematic") => void;
-  setCinematicEnabled: (b: boolean) => void;
+  setUiStyle: (style: "premium" | "retro" | "plain") => void;
   setShowActivityStream: (b: boolean) => void;
   setShowTokenUsage: (b: boolean) => void;
   setShowTurnProgress: (b: boolean) => void;
@@ -152,7 +144,7 @@ export type SettingsEmit = (event: string, payload: unknown) => void;
 const VALID_JOIN_MODES = ["async", "group", "smart", "swarm"] as const;
 const VALID_ORCHESTRATION_MODES = ["auto", "single", "swarm", "crew"] as const;
 const VALID_ANIMATION_STYLES = ["braille", "dots", "lines", "classic", "none"] as const;
-const VALID_UI_STYLES = ["premium", "retro", "plain", "cinematic"] as const;
+const VALID_UI_STYLES = ["premium", "retro", "plain"] as const;
 const VALID_COMPRESSION_LEVELS = ["minimal", "balanced", "aggressive"] as const;
 
 // Sanity ceilings — prevent hand-edited configs from asking for values that
@@ -217,7 +209,7 @@ function sanitize(raw: unknown): SubagentsSettings {
     if (v) (out as Record<string, unknown>)[key] = v;
   }
 
-  for (const key of ["schedulingEnabled", "tracingEnabled", "cinematicEnabled", "showActivityStream", "showTokenUsage", "showTurnProgress"] as const) {
+  for (const key of ["schedulingEnabled", "tracingEnabled", "showActivityStream", "showTokenUsage", "showTurnProgress"] as const) {
     if (typeof r[key] === "boolean") {
       out[key] = validateBool(r, key, false);
     }
@@ -287,7 +279,6 @@ export function applySettings(s: SubagentsSettings, appliers: SettingsAppliers):
   if (typeof s.tracingEnabled === "boolean") appliers.setTracingEnabled(s.tracingEnabled);
   if (s.animationStyle) appliers.setAnimationStyle(s.animationStyle);
   if (s.uiStyle) appliers.setUiStyle(s.uiStyle);
-  if (typeof s.cinematicEnabled === "boolean") appliers.setCinematicEnabled(s.cinematicEnabled);
   if (typeof s.showActivityStream === "boolean") appliers.setShowActivityStream(s.showActivityStream);
   if (typeof s.showTokenUsage === "boolean") appliers.setShowTokenUsage(s.showTokenUsage);
   if (typeof s.showTurnProgress === "boolean") appliers.setShowTurnProgress(s.showTurnProgress);

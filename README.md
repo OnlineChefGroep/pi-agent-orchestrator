@@ -1,6 +1,6 @@
 # @onlinechefgroep/pi-agent-orchestrator
 
-> Multi-agent orchestrator for Pi coding agents — sub-agents, handoffs, prompt compression, scheduling, and cinematic TUI dashboard.
+> Multi-agent orchestrator for Pi coding agents — sub-agents, handoffs, prompt compression, scheduling, and an interactive TUI dashboard.
 
 [![npm version](https://img.shields.io/npm/v/@onlinechefgroep/pi-agent-orchestrator)](https://www.npmjs.com/package/@onlinechefgroep/pi-agent-orchestrator)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -36,7 +36,9 @@ A Pi extension that adds powerful orchestration capabilities: autonomous sub-age
 
 ## Showcase
 
-![Dashboard Preview](docs/images/showcase_dashboard.gif)
+![Dashboard Preview](docs/images/dashboard_preview.svg)
+
+Rendered from the extension's actual dashboard renderers via `npm run screenshots` (real terminal output, not a mockup).
 
 The project includes a full showcase pipeline that generates high-quality terminal recordings:
 

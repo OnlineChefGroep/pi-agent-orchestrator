@@ -126,6 +126,19 @@ describe("parseValidationResult", () => {
     expect(result.passed).toBe(false);
     expect(result.summary).toBe("Could not parse validator output");
   });
+
+  describe("security limits", () => {
+    it("throws an error when validator output JSON exceeds MAX_OUTPUT_SIZE", () => {
+      // Create a massive JSON payload
+      const massiveString = "A".repeat(100000 + 1);
+      const jsonPayload = `{"criteria": [{"criterion": "size", "passed": true, "feedback": "${massiveString}"}]}`;
+      const validatorOutput = `\`\`\`json\n${jsonPayload}\n\`\`\``;
+
+      const result = parseValidationResult(validatorOutput, "agent-1");
+      expect(result.passed).toBe(false);
+      expect(result.summary).toBe("Could not parse validator output");
+    });
+  });
 });
 
 describe("hasValidators", () => {

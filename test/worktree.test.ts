@@ -185,6 +185,47 @@ describe("worktree", () => {
       try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
     });
 
+
+    it("truncates commit message at 200 chars safely, without splitting surrogate pairs or crashing on non-strings", async () => {
+      const wt = (await createWorktree(repoDir, "surrogate-msg"))!;
+      writeFileSync(join(wt.path, "change.txt"), "something");
+
+      // Construct a string that is 199 regular characters + 1 emoji (which is 2 code units)
+      // Standard .slice(0, 200) would split the emoji
+      const longDesc = `${"a".repeat(199)}😀`;
+      const result = cleanupWorktree(repoDir, wt, longDesc);
+      expect(result.hasChanges).toBe(true);
+
+      const log = execFileSync("git", ["log", "--format=%s", "-1", result.branch!], {
+        cwd: repoDir, stdio: "pipe",
+      }).toString().trim();
+
+      // Expected length: "pi-agent: ".length (10) + 199 "a"s = 209 chars total
+      expect(log.length).toBe(209);
+      expect(log).not.toContain("\uFFFD"); // Ensure no broken surrogate character
+      expect(log).toContain("a".repeat(199));
+
+      try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+    });
+
+    it("defensively handles non-string agentDescription without crashing", async () => {
+      const wt = (await createWorktree(repoDir, "non-string-msg"))!;
+      writeFileSync(join(wt.path, "change.txt"), "something");
+
+      // Force pass an array (this simulates a runtime bypass)
+      const badDesc = ["hello", "world"] as any;
+      const result = cleanupWorktree(repoDir, wt, badDesc);
+      expect(result.hasChanges).toBe(true);
+
+      const log = execFileSync("git", ["log", "--format=%s", "-1", result.branch!], {
+        cwd: repoDir, stdio: "pipe",
+      }).toString().trim();
+
+      expect(log).toContain("hello,world"); // String conversion of array
+
+      try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+    });
+
     it("truncates commit message at 200 chars", async () => {
       const wt = (await createWorktree(repoDir, "long-msg"))!;
       writeFileSync(join(wt.path, "change.txt"), "something");

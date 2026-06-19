@@ -11,6 +11,9 @@ export const personalAgentsDir = () => join(getAgentDir(), "agents");
 
 /** Find the file path of a custom agent by name (project first, then global). */
 export function findAgentFile(name: string): { path: string; location: "project" | "personal" } | undefined {
+  if (name.includes("..") || name.includes("/") || name.includes("\\")) {
+    return undefined;
+  }
   const projectPath = join(projectAgentsDir(), `${name}.md`);
   if (existsSync(projectPath)) return { path: projectPath, location: "project" };
   const personalPath = join(personalAgentsDir(), `${name}.md`);
