@@ -119,9 +119,9 @@ handoff: parseBooleanWithDefault(fm.handoff, false),
 
 Even though source is TypeScript, imports must use `.js` (not `.ts`). `import { x } from './foo.js'` ✅, `import { x } from './foo'` ❌, `import { x } from './foo.ts'` ❌.
 
-### 3. Type-only imports must use `import type`
+### 3. Type-only imports: prefer `import type`, allow inline `type` modifier
 
-`import type { Foo } from './foo.js'` for types. This is enforced by Biome and prevents accidental runtime imports of type-only modules.
+For modules where ALL imports are types, use the strict form `import type { Foo } from './foo.js'`. When a single import mixes types and runtime values from the same module, the inline form `import { type Foo, bar } from './foo.js'` is equivalent and preferred: the `type` modifier erases the typed binding at build time and prevents accidental runtime bundling. Biome's `assist/source/organizeImports` rule preserves the inline pattern, so a sweep across the codebase shows a healthy mix (current census: 214 strict `import type` lines vs 17 inline-type lines across 11 files). Use the strict form when ALL imports from a module are types; use the inline form when mixing type and value imports from the same module.
 
 ### 4. Host platform packages are NEVER direct deps
 

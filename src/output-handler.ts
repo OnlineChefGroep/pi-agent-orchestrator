@@ -108,8 +108,8 @@ async function launchAgentDashboard(
         const { steerAgent } = await import("./agent-runner.js");
         await steerAgent(record.session, trimmed);
         ctx.ui.notify(`Steering message sent to ${id}.`, "info");
-      } catch (e: any) {
-        ctx.ui.notify(`Steer failed: ${e?.message ?? e}`, "error");
+      } catch (e) {
+        ctx.ui.notify(`Steer failed: ${e instanceof Error ? e.message : String(e)}`, "error");
       }
     }
 
