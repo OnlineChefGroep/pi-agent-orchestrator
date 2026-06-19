@@ -11,7 +11,6 @@
 | [API Reference](./api-reference.md) | Settings schema, CLI commands, tool interface, hook lifecycle |
 | [Architecture](./architecture.md) | System topology, data flow, permission model, file map |
 | [Custom Agents](./custom-agents.md) | Markdown frontmatter format, custom agent definitions, handoff protocol |
-| [Agentic Loop Spec](./agentic-loop-spec.md) | Autonomous agent loop specification — dispatch → execute → validate → handoff → repeat |
 | [Troubleshooting](./troubleshooting.md) | Common issues, diagnostic commands, environment checks |
 
 ## // OPERATIONS
@@ -33,6 +32,7 @@
 | Document | Description |
 |---|---|
 | [Review & Future](./REVIEW_AND_FUTURE.md) | Architecture review summary, identified gaps, improvement proposals |
+| [Simplify Plan](./SIMPLIFY_PLAN.md) | Over-engineering reduction proposals, complexity analysis |
 | [Continuation Plan](./VERVOLG_PLAN.md) | Upcoming features, work-in-progress, deferred items |
 
 ## // REPO INDEX

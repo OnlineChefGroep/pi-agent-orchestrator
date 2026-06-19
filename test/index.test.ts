@@ -14,7 +14,6 @@ vi.mock("../src/agent-runner.js", () => ({
 // Mock agent-registry
 vi.mock("../src/agent-registry.js", () => ({
   isSchedulingEnabled: vi.fn(() => false),
-  isTracingEnabled: vi.fn(() => true),
   reloadCustomAgents: vi.fn(async () => {}),
   setAnimationStyle: vi.fn(),
   setDashboardRefreshInterval: vi.fn(),
@@ -25,7 +24,6 @@ vi.mock("../src/agent-registry.js", () => ({
   setShowActivityStream: vi.fn(),
   setShowTokenUsage: vi.fn(),
   setShowTurnProgress: vi.fn(),
-  setTracingEnabled: vi.fn(),
   setUiStyle: vi.fn(),
 }));
 

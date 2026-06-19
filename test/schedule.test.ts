@@ -485,33 +485,6 @@ describe("SubagentScheduler — fire path", () => {
       await waitFor(() => scheduler.list().find(j => j.id === job.id)?.lastStatus === "success");
     });
 
-
-    it("records lastStatus 'error' when the manager's runAgent promise rejects", async () => {
-      const future = new Date(Date.now() + 1000).toISOString();
-      let rejectPromise: (reason?: any) => void;
-      const promise = new Promise((_, r) => { rejectPromise = r; });
-
-      // Prevent unhandled promise rejection warnings in the test runner
-      promise.catch(() => {});
-
-      manager.spawn.mockImplementationOnce(() => "agent-reject");
-      manager.getRecord.mockImplementation((id) => {
-        if (id === "agent-reject") return { promise, status: "running" };
-        return { promise: Promise.resolve("") };
-      });
-
-      const job = await scheduler.addJob({
-        name: "reject-job", description: "x", schedule: future,
-        subagent_type: "general-purpose", prompt: "x",
-      });
-
-      await waitFor(() => manager.spawn.mock.calls.length === 1);
-
-      rejectPromise(new Error("runAgent promise rejection"));
-
-      await waitFor(() => scheduler.list().find(j => j.id === job.id)?.lastStatus === "error");
-    });
-
     it("treats aborted and stopped as errors (terminal failure states)", async () => {
       const records = installFaithfulMock();
       const futureA = new Date(Date.now() + 1000).toISOString();

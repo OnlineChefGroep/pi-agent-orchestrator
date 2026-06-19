@@ -32,7 +32,6 @@ import {
   renderDashboardPerf,
 } from "./agent-dashboard-renderer.js";
 import { getAgentTopEntries, renderTopTable, type SortKey, sortEntries } from "./agent-top-renderer.js";
-import { renderTreeFooter, renderTreeView } from "./agent-tree-renderer.js";
 import type { AgentActivity } from "./agent-ui-types.js";
 import { renderSchedulesSection } from "./dashboard/schedules-section.js";
 import { RenderMetrics, type RenderMetricsSnapshot } from "./render-metrics.js";
@@ -94,7 +93,6 @@ export class AgentDashboard implements Component {
   private topPage = 0;
   private topPageSize = 12;
   private showSchedules = false;
-  private showTree = false;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   // ── Performance: debounce & rate limiting ──
@@ -571,23 +569,18 @@ export class AgentDashboard implements Component {
       this.showHelp = !this.showHelp;
       this.dirty = true;
       this.requestRender();
-    } else if (matchesKey(data, "t")) {
+    } else if (matchesKey(data, "t") || matchesKey(data, "shift+t")) {
       this.topViewMode = !this.topViewMode;
-      if (this.topViewMode) { this.topPage = 0; this.showSchedules = false; this.showTree = false; }
+      if (this.topViewMode) { this.topPage = 0; this.showSchedules = false; }
       this.dirty = true;
       this.requestRender();
     } else if (matchesKey(data, "z") || matchesKey(data, "shift+z")) {
       if (this.options.scheduler?.isActive()) {
         this.showSchedules = !this.showSchedules;
-        if (this.showSchedules) { this.topViewMode = false; this.showHelp = false; this.showPerf = false; this.showTree = false; }
+        if (this.showSchedules) { this.topViewMode = false; this.showHelp = false; this.showPerf = false; }
         this.dirty = true;
         this.requestRender();
       }
-    } else if (matchesKey(data, "y")) {
-      this.showTree = !this.showTree;
-      if (this.showTree) { this.topViewMode = false; this.showSchedules = false; this.showHelp = false; this.showPerf = false; }
-      this.dirty = true;
-      this.requestRender();
     } else if (matchesKey(data, "w") || matchesKey(data, "shift+w")) {
       const targets = this.selectedIds.size > 0
         ? (() => {
@@ -740,10 +733,7 @@ export class AgentDashboard implements Component {
     const state = this.renderState();
     const lines = renderDashboardHeader(safeWidth, th, box, state, this.options.manager);
 
-    if (this.showTree) {
-      lines.push(...renderTreeView(innerW, th, box, this.agents));
-      lines.push(...renderTreeFooter(innerW, th, box));
-    } else if (this.showSchedules && this.options.scheduler?.isActive()) {
+    if (this.showSchedules && this.options.scheduler?.isActive()) {
       lines.push(...renderSchedulesSection(innerW, th, box, this.options.scheduler));
     } else if (this.showHelp) {
       lines.push(...renderDashboardHelp(innerW, th, box));
@@ -853,7 +843,7 @@ export async function showAgentDashboard(
   await ctx.ui.custom<undefined>(
     (tui, _theme, _keybindings, done) => {
       return new AgentDashboard(
-        tui as any,
+        tui,
         { manager, agentActivity, scheduler, onViewConversation, onAbort, onSteer, onShowPermissions, onSwarmAction },
         done,
       );

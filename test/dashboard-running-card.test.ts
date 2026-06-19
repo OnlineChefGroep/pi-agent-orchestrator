@@ -18,12 +18,6 @@ vi.mock("../src/ui/theme.js", () => ({
     return s;
   }),
   padVisible: vi.fn((s: string, w: number) => s.padEnd(w)),
-  padAndTruncate: vi.fn((s: string, w: number) => {
-    const visible = s.replace(/\u001b\[\d+(;\d+)*m/g, "");
-    if (visible.length > w) return `${visible.slice(0, w - 1)}…`;
-    if (visible.length < w) return s.padEnd(w + (s.length - visible.length));
-    return s;
-  }),
 }));
 
 vi.mock("../src/ui/dashboard/helpers.js", () => ({

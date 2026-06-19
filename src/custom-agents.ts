@@ -163,8 +163,6 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
       promptCompressionLevel: parseCompressionLevel(fm.prompt_compression),
       validators: parseValidators(fm.validators),
       enabled: parseBooleanWithDefault(fm.enabled, true),
-      version: parseString(fm.version),
-      template: parseBooleanWithDefault(fm.template, false),
       source,
     };
     // CVE-002 FIX: Validate agent config before adding

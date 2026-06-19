@@ -12,16 +12,6 @@ export type { ThinkingLevel };
 /** Agent type: any string name (built-in defaults or user-defined). */
 export type SubagentType = string;
 
-/** Lifecycle status of an `AgentRecord`. Drives dashboard grouping, health counts, and cleanup gating. */
-export type AgentStatus =
-  | "queued"
-  | "running"
-  | "completed"
-  | "steered"
-  | "aborted"
-  | "stopped"
-  | "error";
-
 /** Names of the four embedded default agents. */
 export const DEFAULT_AGENT_NAMES = [
     "general-purpose",
@@ -79,10 +69,6 @@ export interface AgentConfig {
     isDefault?: boolean;
     /** false = agent is hidden from the registry */
     enabled?: boolean;
-    /** Template version (from frontmatter `version` field). */
-    version?: string;
-    /** Whether this agent was installed from the template registry. */
-    template?: boolean;
     /** Where this agent was loaded from */
     source?: "default" | "project" | "global";
     /** true = produce a structured JSON handoff at end of response for chain-of-agents */
@@ -108,7 +94,14 @@ export interface AgentRecord {
     parentId?: string;
     type: SubagentType;
     description: string;
-    status: AgentStatus;
+    status:
+        | "queued"
+        | "running"
+        | "completed"
+        | "steered"
+        | "aborted"
+        | "stopped"
+        | "error";
     result?: string;
     error?: string;
     toolUses: number;
@@ -162,13 +155,6 @@ export interface AgentRecord {
     contextInputs?: { inheritContext: boolean };
     /** Active partition for this agent (first partition from invocation.partitions). */
     activePartition?: string;
-    /**
-     * Short (8-hex-char) correlation id shared across the agent's spans +
-     * log lines. Generated at spawn time and preserved across
-     * `resumeAgent`, so re-running an agent keeps the same id and traces
-     * line up in the OTel exporter and the `/agents health` report.
-     */
-    correlationId?: string;
 }
 
 /** Result of a single validator pass. */

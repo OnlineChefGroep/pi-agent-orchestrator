@@ -127,7 +127,7 @@ export function formatTaskNotification(record: AgentRecord, resultMaxLen: number
 /** Build AgentDetails from a base + record-specific fields. */
 export function buildDetails(
   base: Pick<AgentDetails, "displayName" | "description" | "subagentType" | "modelName" | "tags">,
-  record: Pick<AgentRecord, "toolUses" | "startedAt" | "completedAt" | "status" | "error" | "id" | "session" | "lifetimeUsage" | "validated">,
+  record: { toolUses: number; startedAt: number; completedAt?: number; status: string; error?: string; id?: string; session?: any; lifetimeUsage: LifetimeUsage; validated?: boolean },
   activity?: AgentActivity,
   overrides?: Partial<AgentDetails>,
 ): AgentDetails {

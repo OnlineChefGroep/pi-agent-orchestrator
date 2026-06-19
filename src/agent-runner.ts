@@ -37,16 +37,6 @@ import { buildAgentPrompt, type PromptExtras } from "./prompts.js";
 import { preloadSkills } from "./skill-loader.js";
 import { getSwarmCoordinator } from "./swarm-join.js";
 import { emitTelemetry } from "./telemetry.js";
-import {
-  endAgentSpan,
-  endCompactionSpan,
-  endToolSpan,
-  endTurnSpan,
-  startAgentSpan,
-  startCompactionSpan,
-  startToolSpan,
-  startTurnSpan,
-} from "./telemetry-otel.js";
 import type { SubagentType, ThinkingLevel, ValidationResult } from "./types.js";
 import {
   buildValidatorPrompt,
@@ -259,13 +249,6 @@ export interface RunOptions {
   levelLimit?: number;
   parentConfig?: EffectiveConfig;
   partitions?: readonly string[];
-  /**
-   * Short correlation id (8 hex chars) shared by every span the agent
-   * emits. If absent, `startAgentSpan` simply omits the `correlation.id`
-   * attribute. The manager sets this on every spawn so the id is stable
-   * across `resumeAgent` calls and is queryable from the agent record.
-   */
-  correlationId?: string;
   hooks?: HookRegistry;
   spawnedAt?: number;
   onContextBuilt?: (timestamp: number) => void;
@@ -591,18 +574,6 @@ export async function runAgent(
 
   options.onSessionCreated?.(session);
 
-  // OpenTelemetry span — created after all throwable setup completes.
-  // If session creation or hook dispatch throws, no span leaks.
-  const { span: agentSpan, ctx: agentCtx } = startAgentSpan(options.agentId ?? "unknown", type, {
-    description: agentConfig?.description,
-    depth: currentLevel,
-    model: `${model.provider}/${model.id}`,
-    correlationId: options.correlationId,
-  });
-  const activeToolSpans = new Map<string, import("@opentelemetry/api").Span>();
-  let currentTurnSpan: import("@opentelemetry/api").Span | undefined;
-  let toolSpanSeq = 0;
-
   // Turn tracking and quotas
   let turnCount = 0;
   let toolCallCount = 0;
@@ -627,9 +598,6 @@ export async function runAgent(
     }
 
     if (event.type === "turn_end") {
-      // End previous turn span
-      if (currentTurnSpan) { endTurnSpan(currentTurnSpan); currentTurnSpan = undefined; }
-
       options.hooks
         ?.dispatch("turn:end", options.agentId ?? "unknown")
         .catch((err) => {
@@ -649,11 +617,6 @@ export async function runAgent(
     }
 
     if (event.type === "turn_start") {
-      // End any prior turn span (safety)
-      if (currentTurnSpan) { endTurnSpan(currentTurnSpan); currentTurnSpan = undefined; }
-      // Start new turn span
-      currentTurnSpan = startTurnSpan(options.agentId ?? "unknown", turnCount + 1, agentCtx);
-
       options.hooks
         ?.dispatch("turn:start", options.agentId ?? "unknown")
         .catch((err) => {
@@ -675,11 +638,6 @@ export async function runAgent(
 
     if (event.type === "tool_execution_start") {
       toolCallCount++;
-      // Start tool span
-      const toolSpanKey = `${event.toolName}-${++toolSpanSeq}`;
-      const toolSpan = startToolSpan(options.agentId ?? "unknown", event.toolName, agentCtx);
-      activeToolSpans.set(toolSpanKey, toolSpan);
-
       if (toolCallCount > quotas.maxToolCalls) {
         logger.warn(`Tool call quota exceeded`, { agentId: options.agentId, toolCallCount, maxToolCalls: quotas.maxToolCalls });
         session.abort();
@@ -690,15 +648,6 @@ export async function runAgent(
     }
 
     if (event.type === "tool_execution_end") {
-      // End tool span — iterate in reverse for most-recent matching span
-      for (const [key, ts] of [...activeToolSpans.entries()].reverse()) {
-        if (key.startsWith(`${event.toolName}-`)) {
-          endToolSpan(ts);
-          activeToolSpans.delete(key);
-          break;
-        }
-      }
-
       options.onToolActivity?.({ type: "end", toolName: event.toolName });
     }
 
@@ -718,14 +667,6 @@ export async function runAgent(
     }
 
     if (event.type === "compaction_end" && !event.aborted && event.result) {
-      const compactionSpan = startCompactionSpan(
-        options.agentId ?? "unknown",
-        event.reason,
-        event.result.tokensBefore,
-        agentCtx,
-      );
-      endCompactionSpan(compactionSpan);
-
       options.hooks
         ?.dispatch("compaction:end", options.agentId ?? "unknown", {
           reason: event.reason,
@@ -762,19 +703,6 @@ export async function runAgent(
         logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
       });
   } catch (err) {
-    // End agent span with error status
-    const errDuration = Date.now() - startTime;
-    endAgentSpan(agentSpan, {
-      status: "error",
-      durationMs: errDuration,
-      turns: turnCount,
-      toolCalls: toolCallCount,
-      tokensIn,
-      tokensOut,
-      tokensCacheWrite,
-      error: err instanceof Error ? err.message : String(err),
-    });
-
     options.hooks
       ?.dispatch("subagent:error", options.agentId ?? "unknown", {
         error: err instanceof Error ? err.message : String(err),
@@ -787,10 +715,6 @@ export async function runAgent(
     unsubTurns();
     collector.unsubscribe();
     cleanupAbort();
-    // Clean up any dangling turn/tool spans
-    if (currentTurnSpan) { endTurnSpan(currentTurnSpan); currentTurnSpan = undefined; }
-    for (const ts of activeToolSpans.values()) { endToolSpan(ts); }
-    activeToolSpans.clear();
     if (heartbeatInterval) clearInterval(heartbeatInterval);
     if (messagePollInterval) clearInterval(messagePollInterval);
   }
@@ -891,19 +815,6 @@ export async function runAgent(
     type,
     duration,
     validatorResults: validationResults?.map((r) => ({ passed: r.passed, summary: r.summary })),
-  });
-
-  // End OpenTelemetry agent span
-  const finalStatus = aborted ? "aborted" : softLimitReached ? "steered" : "completed";
-  endAgentSpan(agentSpan, {
-    status: finalStatus,
-    durationMs: duration,
-    turns: turnCount,
-    toolCalls: toolCallCount,
-    tokensIn,
-    tokensOut,
-    tokensCacheWrite,
-    validated,
   });
 
   const metrics: RunMetrics = {

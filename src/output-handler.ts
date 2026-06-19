@@ -17,13 +17,10 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import { type Component, matchesKey } from "@earendil-works/pi-tui";
 import type { AgentManager } from "./agent-manager.js";
 import { reloadCustomAgents } from "./agent-registry.js";
-import { buildAgentTreeJson, buildAgentTreeMermaid, buildAgentTreeText } from "./agent-tree.js";
 import { getAllTypes } from "./agent-types.js";
-import { showTemplatesMenu } from "./commands/templates.js";
 import type { SubagentScheduler } from "./schedule.js";
-import type { SettingsGetters, SettingsSetters } from "./settings.js";
-import { type SwarmCoordinator, uiCreateOrJoinSwarm } from "./swarm-join.js";
-import type { AgentRecord } from "./types.js";
+import { uiCreateOrJoinSwarm } from "./swarm-join.js";
+import type { AgentRecord, JoinMode } from "./types.js";
 import { showAgentDashboard } from "./ui/agent-dashboard.js";
 import { showAgentPermissions } from "./ui/agent-detail.js";
 import { showAllAgentsList, showRunningAgents } from "./ui/agent-list-views.js";
@@ -31,7 +28,6 @@ import { getAgentTopEntries, renderTopTable, type SortKey, sortEntries } from ".
 import type { AgentActivity } from "./ui/agent-ui-types.js";
 import { viewAgentConversation } from "./ui/agent-viewer.js";
 import { showCreateWizard } from "./ui/agent-wizards.js";
-import { showHealth } from "./ui/health-view.js";
 import { showSchedulesMenu } from "./ui/schedule-menu.js";
 import { showSettings } from "./ui/settings-menu.js";
 import { getThemeColors } from "./ui/theme.js";
@@ -42,25 +38,14 @@ export interface AgentsMenuDeps {
   manager: AgentManager;
   scheduler: SubagentScheduler;
   agentActivity: Map<string, AgentActivity>;
-  /**
-   * Optional swarm coordinator — present when the swarm peer is wired in
-   * (default for `index.ts`). The health check uses it to surface swarm
-   * counts + delivery totals; the rest of the menu ignores it. Absent
-   * (e.g. in unit tests that build a minimal `AgentsMenuDeps`) the
-   * health report marks the swarm section as "not configured".
-   */
-  swarmJoin?: SwarmCoordinator | null;
-  /**
-   * Read-side accessors for the settings that the /agents menu can change
-   * (default max turns, grace turns, join mode, scheduling, tracing).
-   * Bundled to stop the 14-positional-arg spiral on `showSettings` — when
-   * a new menu-editable setting is added, update `SettingsGetters` and
-   * `SettingsSetters` in `settings.ts` and the call site in
-   * `commands/agents.ts`; no other signatures need to change.
-   */
-  settingsGetters: SettingsGetters;
-  /** Write-side counterpart of `settingsGetters`. */
-  settingsSetters: SettingsSetters;
+  isSchedulingEnabled: () => boolean;
+  getDefaultMaxTurns: () => number | undefined;
+  getGraceTurns: () => number;
+  getDefaultJoinMode: () => JoinMode;
+  setDefaultMaxTurns: (n: number | undefined) => void;
+  setGraceTurns: (n: number) => void;
+  setDefaultJoinMode: (mode: JoinMode) => void;
+  setSchedulingEnabled: (b: boolean) => void;
 }
 
 /** Re-open the agents menu after a sub-flow completes. */
@@ -139,10 +124,79 @@ async function launchAgentDashboard(
   await showAgentDashboard(ctx, manager, agentActivity, scheduler, viewConv, onAbort, onSteer, onPerms, onSwarm);
 }
 
+interface TreeNode {
+  id: string;
+  type: string;
+  status: string;
+  description: string;
+  children: TreeNode[];
+}
+
 function buildExecutionTree(records: AgentRecord[], format: "text" | "mermaid" | "json"): string {
-  if (format === "mermaid") return buildAgentTreeMermaid(records);
-  if (format === "json") return buildAgentTreeJson(records);
-  return buildAgentTreeText(records);
+  if (format === "json") {
+    const roots: TreeNode[] = [];
+    const map = new Map<string, TreeNode>();
+    for (const r of records) {
+      map.set(r.id, { id: r.id, type: r.type, status: r.status, description: r.description, children: [] });
+    }
+    for (const r of records) {
+      const node = map.get(r.id)!;
+      if (r.parentId && map.has(r.parentId)) {
+        map.get(r.parentId)!.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+    return JSON.stringify(roots, null, 2);
+  }
+
+  if (format === "mermaid") {
+    const mermaidParts: string[] = ["graph TD\n"];
+    for (const r of records) {
+      const cleanType = r.type.replace(/"/g, "'");
+      mermaidParts.push(`  ${r.id.replace(/-/g, "_")}["[${cleanType}] ${r.id}"]\n`);
+      if (r.parentId) {
+        mermaidParts.push(`  ${r.parentId.replace(/-/g, "_")} --> ${r.id.replace(/-/g, "_")}\n`);
+      }
+    }
+    return mermaidParts.join("");
+  }
+
+  if (format === "text") {
+    const roots: AgentRecord[] = [];
+    const childrenMap = new Map<string, AgentRecord[]>();
+    const nodeMap = new Map<string, AgentRecord>();
+
+    for (const r of records) {
+      nodeMap.set(r.id, r);
+      if (!r.parentId) {
+        roots.push(r);
+      } else {
+        if (!childrenMap.has(r.parentId)) {
+          childrenMap.set(r.parentId, []);
+        }
+        childrenMap.get(r.parentId)!.push(r);
+      }
+    }
+
+    let out = "";
+    const render = (nodeId: string, indent: string, isLast: boolean) => {
+      const r = nodeMap.get(nodeId);
+      if (!r) return;
+      const branch = indent ? (isLast ? "└─ " : "├─ ") : "";
+      out += `${indent}${branch}${r.id} (${r.type}) [${r.status}]\n`;
+      const children = childrenMap.get(nodeId) || [];
+      for (let i = 0; i < children.length; i++) {
+        render(children[i].id, indent + (indent ? (isLast ? "   " : "│  ") : ""), i === children.length - 1);
+      }
+    };
+    for (let i = 0; i < roots.length; i++) {
+      render(roots[i].id, "", i === roots.length - 1);
+    }
+    return out || "No execution tree available.";
+  }
+
+  return "";
 }
 
 /** TUI component for the live agent top view. */
@@ -273,8 +327,6 @@ export async function showAgentsMenu(
   }
 
   options.push("Create new agent");
-  options.push("Agent templates (browse & install)");
-  options.push("Health check (tracing, scheduler, swarm, agents, settings)");
   options.push("Settings");
   options.push("Agent top (live stats — CPU, tokens, turns)");
 
@@ -320,21 +372,12 @@ export async function showAgentsMenu(
     await reopenMenu(ctx, deps);
   } else if (choice === "Create new agent") {
     await showCreateWizard(ctx, deps.pi, deps.manager);
-  } else if (choice === "Agent templates (browse & install)") {
-    await showTemplatesMenu(ctx);
-    await reopenMenu(ctx, deps);
-  } else if (choice.startsWith("Health check")) {
-    await showHealth(ctx, {
-      manager: deps.manager,
-      scheduler: deps.scheduler,
-      swarmJoin: deps.swarmJoin ?? null,
-      getters: deps.settingsGetters,
-    });
-    await reopenMenu(ctx, deps);
   } else if (choice === "Settings") {
     await showSettings(
-      ctx, deps.manager, deps.pi, deps.scheduler,
-      deps.settingsGetters, deps.settingsSetters,
+      ctx, deps.manager, deps.pi,
+      deps.getDefaultMaxTurns, deps.getGraceTurns, deps.getDefaultJoinMode,
+      deps.isSchedulingEnabled, deps.setDefaultMaxTurns, deps.setGraceTurns,
+      deps.setDefaultJoinMode, deps.setSchedulingEnabled, deps.scheduler,
     );
     await reopenMenu(ctx, deps);
   } else if (choice === "Agent top (live stats — CPU, tokens, turns)") {

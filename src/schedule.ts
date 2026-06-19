@@ -220,7 +220,7 @@ export class SubagentScheduler {
     const existing = store.get(id);
     if (existing) {
       // Validate bounds on the merged object to ensure updates don't bypass limits
-      const merged: NewJobInput = { ...existing, ...patch };
+      const merged: NewJobInput = { ...existing, ...patch } as any;
       const errors = this.validateScheduleInput(merged);
       if (errors.length > 0) {
         throw new Error(`Invalid schedule update: ${errors.join(', ')}`);

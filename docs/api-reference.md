@@ -182,7 +182,6 @@ interface SubagentsSettings {
   graceTurns?: number;                // Wrap-up turns before forced kill (default 5)
   defaultJoinMode?: JoinMode;          // Agent join topology (default: "smart")
   schedulingEnabled?: boolean;         // Master switch for cron scheduling (default: true)
-  tracingEnabled?: boolean;           // Master switch for OpenTelemetry span emission in agent-runner (default: true). When false, every span helper in telemetry-otel.ts short-circuits to a shared no-op span.
   animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";  // Spinner style (default: "braille")
   uiStyle?: "premium" | "retro" | "plain";  // UI theme (default: "premium")
   showActivityStream?: boolean;        // Show real-time activity stream in widget (default: true)
@@ -223,40 +222,6 @@ Controls the verbosity of system prompts injected into agents. Lower compression
 **FILE:** `src/settings.ts`
 
 Persists configuration map to block storage and triggers state reload.
-
-### `SettingsGetters`
-
-**FILE:** `src/settings.ts`
-
-Read-side accessors for the settings that the `/agents` menu can change at runtime. The menu uses these to display "current:" labels and `buildSettingsSnapshot` reads from them when persisting the next state. Mirrors the runtime contract that `index.ts` exposes to the menu — keep the two in sync when adding a new menu-editable setting.
-
-```ts
-interface SettingsGetters {
-  getDefaultMaxTurns: () => number | undefined;
-  getGraceTurns: () => number;
-  getDefaultJoinMode: () => JoinMode;
-  isSchedulingEnabled: () => boolean;
-  isTracingEnabled: () => boolean;
-}
-```
-
-### `SettingsSetters`
-
-**FILE:** `src/settings.ts`
-
-Write-side counterpart to `SettingsGetters`. The `/agents` menu calls these after each user mutation. The setter shape diverges slightly from `SettingsAppliers` because the menu accepts a wider input (e.g. `undefined` for defaultMaxTurns to mean "unmark the default" — a value that `applySettings` would never feed in).
-
-```ts
-interface SettingsSetters {
-  setDefaultMaxTurns: (n: number | undefined) => void;
-  setGraceTurns: (n: number) => void;
-  setDefaultJoinMode: (mode: JoinMode) => void;
-  setSchedulingEnabled: (b: boolean) => void;
-  setTracingEnabled: (b: boolean) => void;
-}
-```
-
-**USAGE:** The `registerAgentsCommand` factory in `src/commands/agents.ts` builds a single `SettingsGetters` and a single `SettingsSetters` object at module load and passes both via `AgentsMenuDeps`. `showSettings(ctx, manager, pi, scheduler, getters, setters)` and `notifyApplied(ctx, pi, manager, getters, successMsg)` consume them — adding a new menu-editable setting is now a 3-place change (interface + applier object + handler call) instead of threading a new arg through 5 function signatures.
 
 ---
 

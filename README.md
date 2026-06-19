@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/@onlinechefgroep/pi-agent-orchestrator)](https://www.npmjs.com/package/@onlinechefgroep/pi-agent-orchestrator)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions)
-[![Tests](https://img.shields.io/badge/tests-1619%20passed-brightgreen)](https://github.com/OnlineChefGroep/pi-agent-orchestrator)
+[![Tests](https://img.shields.io/badge/tests-1035%20passed-brightgreen)](https://github.com/OnlineChefGroep/pi-agent-orchestrator)
 
 A Pi extension that adds powerful orchestration capabilities: autonomous sub-agents, structured handoffs, 3-tier prompt compression, cron scheduling, swarm coordination, and a vim-style interactive TUI dashboard.
 
@@ -22,17 +22,6 @@ A Pi extension that adds powerful orchestration capabilities: autonomous sub-age
 - **Swarm Coordination** — Dynamic multi-agent swarm join/leave with real-time status in dashboard (`w` key).
 - **Performance Skills** — `overdrive` skill for performance auditing with benchmark suite (61 benchmarks, adaptive refresh, O(N) rendering).
 - **Showcase Pipelines** — tmux recording, programmatic, Remotion, VHS, and live asciinema pipelines for high-quality demos.
-
-## What's new in v0.14.x
-
-- **Agentic Loop (fully autonomous)**: The orchestrator now runs fully autonomous agent workflows — trigger (user/schedule/handoff) → heuristic dispatch (single/swarm/crew/auto) → spawn with permission inheritance → execute with resource quotas → self-healing validation → structured handoff → repeat. See [`docs/agentic-loop-spec.md`](docs/agentic-loop-spec.md) for the full specification.
-- **Orchestration dispatch**: New `auto` mode runs keyword-based prompt analysis to pick `single` / `swarm` / `crew` without human intervention. Crew mode spawns 3 role-specialized agents (planner → executor → reviewer). 35 unit tests + e2e integration tests.
-- **Health check command**: `/agents → Health check` snapshots the full runtime — process, tracing, circuit breaker, schedule, swarm, agents by status with correlation ids, settings, recent errors, and a dispatch-decision histogram so you can audit the auto-heuristic.
-- **Tracing master switch (OpenTelemetry)**: New `tracingEnabled` setting (default `true`). When disabled, every span helper short-circuits to a shared no-op span. Toggle from `/agents → Settings → Tracing`.
-- **Agent templates**: `/agents templates` command — browse, install, update, and remove versioned agent templates from the built-in registry. 6 templates ship out of the box.
-- **Execution tree visualization**: `/agents tree` command with Mermaid/Unicode/JSON export + dashboard `y` keybinding.
-- **Settings UI args refactor**: `showSettings()` and `notifyApplied()` now take `SettingsGetters` + `SettingsSetters` objects instead of 14/11 positional args.
-- **1619 tests** across **90 test files**. Typecheck ✅, lint ✅.
 
 ## Showcase
 
@@ -79,7 +68,7 @@ See the `docs/` folder for architecture, custom agent examples, handoff workflow
 ```bash
 npm install
 npm run setup:hooks   # git hooks (opt-in)
-npm test              # 1619 tests across 90 test files
+npm test              # 1035 tests across 58 test files
 npm run lint:fix
 npm run typecheck
 npm run bench:all     # 61 performance benchmarks

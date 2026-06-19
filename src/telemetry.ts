@@ -25,26 +25,6 @@ export interface TelemetryEvents {
     durationMs: number;
     metadata?: Record<string, unknown>;
   };
-  /**
-   * Emitted by `dispatch-history.ts` on every call to
-   `recordDispatchDecision(...)`. Lets downstream consumers (sentry,
-   splunk, the Go cinematic sidecar) reconstruct the same
-   single/swarm/crew + auto/explicit histogram that the in-memory
-   ring buffer feeds into `/agents → Health check`. Note the event
-   carries the resolved `kind` already (so a `auto → crew` decision
-   surfaces as `kind: "crew"` AND `configuredMode: "auto"` +
-   `source: "auto-heuristic"`), not the heuristic's intermediate
-   `analyzePrompt` output — consumers wanting the raw signals can
-   subscribe to a separate (not-yet-emitted) `subagent:dispatch_signals`
-   event if/when that becomes useful.
-   */
-  "subagent:dispatch_decision": {
-    kind: "single" | "swarm" | "crew";
-    configuredMode: "auto" | "single" | "swarm" | "crew";
-    source: "explicit" | "auto-heuristic";
-    promptLength: number;
-    description: string;
-  };
 }
 
 /** Event names as a union type */

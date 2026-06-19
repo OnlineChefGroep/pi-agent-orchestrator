@@ -1,6 +1,6 @@
 {
   "name": "@onlinechefgroep/pi-agent-orchestrator",
-  "version": "0.14.0",
+  "version": "0.13.2",
   "description": "Pi extension for orchestrating autonomous coding agents with TUI dashboard, scheduling, swarms, handoffs, and prompt compression.",
   "author": "OnlineChef",
   "license": "MIT",
@@ -39,7 +39,6 @@
     }
   },
   "dependencies": {
-    "@opentelemetry/api": "^1.9.1",
     "@sinclair/typebox": "^0.34.49",
     "croner": "^10.0.1",
     "nanoid": "^5.0.0",
@@ -69,7 +68,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
     "@earendil-works/pi-agent-core": "^0.79.1",
-    "@earendil-works/pi-tui": "0.79.6",
+    "@earendil-works/pi-tui": "0.79.1",
     "@types/node": "^25.9.3",
     "@types/proper-lockfile": "^4.1.4",
     "@vitest/coverage-v8": "^4.1.8",
