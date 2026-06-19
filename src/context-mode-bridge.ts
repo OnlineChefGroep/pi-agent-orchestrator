@@ -6,7 +6,7 @@
  * When not installed, all functions gracefully return null/empty — no errors.
  */
 
-import { CTX_TOOL_NAMES } from "./agent-types.js";
+import { CTX_TOOL_NAMES } from "./ctx-tool-names.js";
 
 /** Cached availability check — lazy, checked once per process lifetime. */
 let _contextModeAvailable: boolean | null = null;

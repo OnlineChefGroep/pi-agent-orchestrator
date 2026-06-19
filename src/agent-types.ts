@@ -6,6 +6,10 @@
  */
 
 import { isContextModeAvailable } from "./context-mode-bridge.js";
+import { CTX_TOOL_NAMES } from "./ctx-tool-names.js";
+
+export { CTX_TOOL_NAMES } from "./ctx-tool-names.js";
+
 import { DEFAULT_AGENTS } from "./default-agents.js";
 import { getReadOnlyMemoryToolNames, READ_ONLY_TOOLS } from "./readonly-helpers.js";
 import type { AgentConfig } from "./types.js";
@@ -121,14 +125,7 @@ export function normalizeBuiltinToolNames(names: readonly string[] | undefined):
 }
 
 /** Context-mode sandbox tool names from @onlinechef/context-mode (optional dependency). */
-export const CTX_TOOL_NAMES: string[] = [
-  "ctx_execute",
-  "ctx_execute_file",
-  "ctx_search",
-  "ctx_index",
-  "ctx_batch_execute",
-  "ctx_stats",
-];
+
 
 /** Unified runtime registry of all agents (defaults + user-defined). */
 const agents = new Map<string, AgentConfig>();
