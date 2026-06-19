@@ -293,32 +293,40 @@ describe("debug-capture — directory-name sanitization", () => {
   });
 });
 
-describe("debug-capture — rotation (tail-trim when size > 25 MiB)", () => {
-  it("truncates to tail half when stat size exceeds ceiling", () => {
+describe("debug-capture — rotation (tail-trim when file exceeds ceiling)", () => {
+  // We avoid the natural `vi.spyOn(fs, "statSync")` approach because ESM
+  // module-namespace objects are frozen and reject property redefinition
+  // (TypeError: Cannot redefine property: statSync). Instead, we feed
+  // the rotation logic real bytes via the public append API and assert
+  // the post-trim file size + that the rotation never throws.
+  it("keeps the tail when the captured file exceeds the per-file ceiling", () => {
     const ws = newWorkspace();
     try {
       debugCapture.enable({ projectPath: ws.projectRoot }, "s");
-      const path = join(ws.projectRoot, "rpc", "audit.jsonl");
-      // Pre-create the rpc/ subdir so writeFileSync can land without ENOENT.
-      // (Setup mirrors production: enable() creates only the root; per-event
-      // appendAtomicWithRotate creates its own subdir lazily on first write.)
-      mkdirSync(dirname(path), { recursive: true });
-      // Seed a real file so readFileSync has something to trim.
-      writeFileSync(path, "AAAA", "utf-8");
-      // Spy on statSync so rotation sees a fake size > 25 MiB.
-      const statSpy = vi.spyOn(fs, "statSync").mockReturnValue({ size: 30 * 1024 * 1024 } as fs.Stats);
-      try {
-        debugCapture.appendRpcAudit({ surrogate: true });
-        const after = readFileSync(path).length;
-        expect(after).toBeLessThanOrEqual(25 * 1024 * 1024);
-        // Original marker still present in tail half (deterministic tail is the most
-        // recent data we appended).
-        expect(after).toBeGreaterThan(0);
-      } finally {
-        statSpy.mockRestore();
-      }
-      // Sanity: statSync returns to normal mode (real size is small).
-      expect(statSync(path).size).toBe(after);
+      const dirPath = join(ws.projectRoot, "agents", "rotate-me");
+      mkdirSync(dirPath, { recursive: true, recursive: true });
+      const eventPath = join(dirPath, "events.jsonl");
+      // Append enough distinct events to push the file past the 25 MiB
+      // ceiling. Each line is ~80 bytes, so 350_000 lines gives ~28 MiB,
+      // comfortably past the threshold under any reasonable overhead.
+      // Rotating the tail keeps the last half (≈ 12.5 MiB) which means
+      // the post-rotation file is dominated by the most recent lines.
+      const line = JSON.stringify({ ts: "2026-01-01T00:00:00Z", seq: 0 }) + "\n";
+      const big = line.repeat(350_000);
+      writeFileSync(eventPath, big, "utf-8");
+      // Sanity: file is now well over the threshold.
+      expect(statSync(eventPath).size).toBeGreaterThan(25 * 1024 * 1024);
+      // A subsequent append must (a) not throw, (b) succeed at writing,
+      // and (c) leave the file smaller than the original ceiling.
+      expect(() => debugCapture.appendAgentEvent("rotate-me", "subagent:start", { seq: 1 })).not.toThrow();
+      const afterSize = statSync(eventPath).size;
+      expect(afterSize).toBeGreaterThan(0);
+      expect(afterSize).toBeLessThan(25 * 1024 * 1024);
+      // The rotation keeps the tail — the most recent appended line
+      // should be present in the surviving content.
+      const lines = readFileSync(eventPath, "utf-8").trim().split("\n");
+      const last = JSON.parse(lines[lines.length - 1]);
+      expect(last.seq).toBe(1);
     } finally { ws.cleanup(); }
   });
 });
