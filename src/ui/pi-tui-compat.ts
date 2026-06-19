@@ -71,21 +71,26 @@ export interface TUI {
 /**
  * Any object we return from a `ctx.ui.custom(factory)` callback conforms to
  * this. The host's runtime calls `render(width)` synchronously to draw the
- * current frame and may call `handleInput(data)` for key events.
+ * current frame, may call `handleInput(data)` for key events, and may call
+ * `invalidate()` when the theme changes or a fresh render is needed (cached
+ * renderers should drop their cache here).
+ *
+ * Mirrors the host's `Component` exactly, no more — TypeScript's structural
+ * typing needs every REQUIRED member present on implementors in order for
+ * `new Text(...)` / our agent-dashboard classes to be assignable to the
+ * host's `Component` type at the boundary (e.g. `defineTool({ renderCall })`,
+ * `registerMessageRenderer`). If you add an optional member here, you must
+ * also have a no-op default on every class implementing this contract.
  */
 export interface Component {
   /** Render the current frame as an array of pre-wrapped lines. One line per array element. */
   render(width: number): string[];
   /** Optional key-event handler. */
   handleInput?(data: string): void;
-  /** Optional: ask the framework to call `render` again on the next tick. */
-  invalidate?(): void;
-  /** Optional: framework signals the component is gone (close, navigate away). */
-  dispose?(): void;
-  /** Optional: tell the framework whether this component owns key-release events. */
+  /** Optional: tell the framework whether this component owns key-release events (Kitty protocol). */
   wantsKeyRelease?: boolean;
-  /** Optional: whether the component currently holds focus. */
-  focused?: boolean;
+  /** Required: invalidate any cached rendering state. Called when theme changes or the framework needs a fresh render. */
+  invalidate(): void;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -122,6 +127,11 @@ export class Text implements Component {
       out.push(visibleWidth(line) > width ? truncateToWidth(line, width) : line);
     }
     return out;
+  }
+
+  /** Invalidate: `Text` doesn't cache, so this is a no-op. */
+  invalidate(): void {
+    // no-op: render() walks content fresh each time
   }
 }
 

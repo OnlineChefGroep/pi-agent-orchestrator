@@ -123,15 +123,17 @@ Even though source is TypeScript, imports must use `.js` (not `.ts`). `import { 
 
 `import type { Foo } from './foo.js'` for types. This is enforced by Biome and prevents accidental runtime imports of type-only modules.
 
-### 4. The `@earendil-works/pi-*` packages are NEVER direct deps
+### 4. Host platform packages are NEVER direct deps
 
-They are the host platform (the parent pi coding agent). Never `import` from them in a way that assumes they exist at runtime.
+> **Scope:** This rule covers `@earendil-works/pi-*` (three packages: `pi-ai`, `pi-coding-agent`, `pi-tui`). The optional peer `@onlinechef/context-mode` is unrelated to that scope and falls under the third category below.
 
-Two distinct sub-rules:
+The host platform packages are libraries **used by** the host runtime, not the host itself. Never `import` from them in a way that assumes the package is present at runtime.
 
-- **Avoidable host types → local compat module.** `@earendil-works/pi-tui` must never be imported: every shape this extension consumes (`Component`, `TUI`, `Text`, `visibleWidth`, `truncateToWidth`, `wrapTextWithAnsi`, `matchesKey`) is declared locally in `src/ui/pi-tui-compat.ts`. Do not re-introduce any direct import of `@earendil-works/pi-tui`.
-- **Unavoidable host types → `import type` at single, named sites.** `@earendil-works/pi-coding-agent` and `@earendil-works/pi-ai` ARE the host runtime, so their type surfaces (`ExtensionCommandContext`, `AgentSession`, `Model`, `TextContent`, the `defineTool` / `registerMessageRenderer` / `registerTool` signatures) are unavoidable. Import those types directly with `import type` at the call sites that need them. They are required, not optional — feature detection is reserved for OPTIONAL peers (see rule below).
-- **Optional peer → feature detection.** `@onlinechef/context-mode` is an optional peer that gates the `ctx_*` tools; that case DOES use the dynamic-import / feature-detection pattern, kept in `src/context-mode-bridge.ts`.
+Three distinct categories:
+
+- **Category A — Avoidable platform types → local compat shim.** `@earendil-works/pi-tui` must never be imported: every shape this extension consumes (`Component`, `TUI`, `Text`, `visibleWidth`, `truncateToWidth`, `wrapTextWithAnsi`, `matchesKey`) is declared locally in `src/ui/pi-tui-compat.ts`. The shim mirrors the host's `Component` exactly so structural typing aligns at boundary sites (e.g. `defineTool({ renderCall })`, `registerMessageRenderer`, `ctx.ui.custom(factory)`). Do not re-introduce any direct import of `@earendil-works/pi-tui`.
+- **Category B — Unavoidable platform types → `import type` at named sites.** `@earendil-works/pi-coding-agent` and `@earendil-works/pi-ai` are required deps of this extension, so their type surfaces (`ExtensionCommandContext`, `AgentSession`, `Model`, `TextContent`, the `defineTool` / `registerMessageRenderer` / `registerTool` signatures) are unavoidable. Import those types directly with `import type` at the call sites that need them. They are required, not optional.
+- **Category C — Optional peer → feature detection.** `@onlinechef/context-mode` is an OPTIONAL peer (separate scope, `@onlinechef/*`) that gates the `ctx_*` tools. That case DOES use the dynamic-import / feature-detection pattern, kept in `src/context-mode-bridge.ts`. This category is the only one where feature detection is appropriate — do not apply it to Category B packages.
 
 ### 5. Windows schedule tests are known-flaky
 
