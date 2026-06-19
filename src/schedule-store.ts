@@ -10,7 +10,7 @@
  * temp+rename, releases.
  */
 
-import { existsSync, promises as fs, readFileSync } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { lock } from "proper-lockfile";
 import type { ScheduledSubagent, ScheduleStoreData } from "./types.js";
@@ -40,28 +40,17 @@ export class ScheduleStore {
   constructor(filePath: string) {
     this.filePath = filePath;
     this.lockPath = `${filePath}.lock`;
+  }
 
-    this.loadSync();
+  static async create(filePath: string): Promise<ScheduleStore> {
+    const store = new ScheduleStore(filePath);
+    await store.load();
+    return store;
   }
 
   /** Create the backing directory lazily — only when we're about to persist. */
   private async ensureDir(): Promise<void> {
     await fs.mkdir(dirname(this.filePath), { recursive: true });
-  }
-
-  /** Synchronous initial load from disk for the constructor. */
-  private loadSync(): void {
-    if (!existsSync(this.filePath)) return;
-    try {
-      const content = readFileSync(this.filePath, "utf-8");
-      // CVE-005 FIX: Enforce max payload size to prevent DoS via JSON.parse
-      if (content.length > 5 * 1024 * 1024) throw new Error("Schedule store payload too large");
-      const data: ScheduleStoreData = JSON.parse(content);
-      this.jobs.clear();
-      for (const j of data.jobs ?? []) this.jobs.set(j.id, j);
-    } catch {
-      /* corrupt — start fresh, next save rewrites */
-    }
   }
 
   /** Reload from disk into the in-memory cache (async). */

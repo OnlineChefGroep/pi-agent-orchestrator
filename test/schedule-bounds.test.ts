@@ -15,7 +15,7 @@ describe("SubagentScheduler Bounds Checks", () => {
 
   beforeEach(async () => {
     tmp = mkdtempSync(join(tmpdir(), "scheduler-test-bounds-"));
-    store = new ScheduleStore(join(tmp, "store.json"));
+    store = await ScheduleStore.create(join(tmp, "store.json"));
     scheduler = new SubagentScheduler();
     pi = { events: { emit: () => {} } };
     ctx = { modelRegistry: {} };
