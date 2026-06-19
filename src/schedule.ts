@@ -15,6 +15,7 @@
  *   - Result delivery is implicit: spawn → background completion → existing
  *     `subagent-notification` followUp path. No new delivery code.
  */
+import type { Model } from "@earendil-works/pi-ai";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Cron } from "croner";
@@ -324,7 +325,7 @@ export class SubagentScheduler {
     // Resolve model at fire time — registry contents may have changed since the
     // job was created (auth added/removed). Fall back silently to spawn-default
     // if resolution fails; the spawn path handles undefined model gracefully.
-    let resolvedModel: any | undefined;
+    let resolvedModel: Model<any> | undefined;
     if (job.model) {
       const r = resolveModel(job.model, ctx.modelRegistry);
       if (typeof r !== "string") resolvedModel = r;
