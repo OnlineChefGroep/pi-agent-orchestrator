@@ -1,4 +1,4 @@
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { visibleWidth } from "../pi-tui-compat.js";
 import type { AgentManager } from "../../agent-manager.js";
 import { type BoxChars, borderLine, type DashboardTheme, framedRow } from "../theme.js";
 import { activityText, agentStats, getDisplayName } from "./helpers.js";

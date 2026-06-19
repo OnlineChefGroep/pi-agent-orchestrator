@@ -19,8 +19,10 @@ import type { AgentActivity } from "../src/ui/agent-ui-types.js";
 
 // ── Mocks ───────────────────────────────────────────────────────────────────
 
-vi.mock("@earendil-works/pi-tui", () => ({
-  truncateToWidth: (str: string) => str,
+vi.mock(
+    "../src/ui/pi-tui-compat.js",
+    () => ({
+    truncateToWidth: (str: string) => str,
   visibleWidth: (str: string) => str.length,
   matchesKey: (data: string, key: string) => {
     const keyMap: Record<string, string[]> = {
@@ -32,7 +34,10 @@ vi.mock("@earendil-works/pi-tui", () => ({
     };
     return (keyMap[key] ?? [key]).includes(data);
   },
-}));
+    wrapTextWithAnsi: (text) => text.split(/\n/),
+    Text: class { constructor(c) { this.content = c; } render() { return [this.content]; } },
+    })
+  );
 
 vi.mock("../src/agent-registry.js", () => ({
   getUiStyle: () => "premium",

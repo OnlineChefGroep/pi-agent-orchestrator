@@ -6,7 +6,7 @@
  */
 
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { type Component, matchesKey, type TUI, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { type Component, matchesKey, type TUI, visibleWidth, wrapTextWithAnsi } from "./pi-tui-compat.js";
 import { getUiStyle } from "../agent-registry.js";
 import { extractText } from "../context.js";
 import type { AgentRecord } from "../types.js";

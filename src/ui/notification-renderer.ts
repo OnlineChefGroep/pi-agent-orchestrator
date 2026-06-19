@@ -5,7 +5,7 @@
  * result preview and output-file links.
  */
 
-import { Text } from "@earendil-works/pi-tui";
+import { Text } from "./pi-tui-compat.js";
 import type { NotificationDetails } from "../types.js";
 import { formatMs, formatTokens, formatTurns } from "./agent-format.js";
 

@@ -123,9 +123,15 @@ Even though source is TypeScript, imports must use `.js` (not `.ts`). `import { 
 
 `import type { Foo } from './foo.js'` for types. This is enforced by Biome and prevents accidental runtime imports of type-only modules.
 
-### 4. The three `@earendil-works/pi-*` packages are NEVER direct deps
+### 4. The `@earendil-works/pi-*` packages are NEVER direct deps
 
-They are the host platform (the parent pi coding agent). Reference them via feature detection, never `import` from them in a way that assumes they exist. See `src/context-mode-bridge.ts` for the pattern.
+They are the host platform (the parent pi coding agent). Never `import` from them in a way that assumes they exist at runtime.
+
+Two distinct sub-rules:
+
+- **Avoidable host types → local compat module.** `@earendil-works/pi-tui` must never be imported: every shape this extension consumes (`Component`, `TUI`, `Text`, `visibleWidth`, `truncateToWidth`, `wrapTextWithAnsi`, `matchesKey`) is declared locally in `src/ui/pi-tui-compat.ts`. Do not re-introduce any direct import of `@earendil-works/pi-tui`.
+- **Unavoidable host types → `import type` at single, named sites.** `@earendil-works/pi-coding-agent` and `@earendil-works/pi-ai` ARE the host runtime, so their type surfaces (`ExtensionCommandContext`, `AgentSession`, `Model`, `TextContent`, the `defineTool` / `registerMessageRenderer` / `registerTool` signatures) are unavoidable. Import those types directly with `import type` at the call sites that need them. They are required, not optional — feature detection is reserved for OPTIONAL peers (see rule below).
+- **Optional peer → feature detection.** `@onlinechef/context-mode` is an optional peer that gates the `ctx_*` tools; that case DOES use the dynamic-import / feature-detection pattern, kept in `src/context-mode-bridge.ts`.
 
 ### 5. Windows schedule tests are known-flaky
 

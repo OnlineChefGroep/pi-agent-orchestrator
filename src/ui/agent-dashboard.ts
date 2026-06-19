@@ -16,7 +16,7 @@ import {
   type Component,
   matchesKey,
   type TUI,
-} from "@earendil-works/pi-tui";
+} from "./pi-tui-compat.js";
 import type { AgentManager } from "../agent-manager.js";
 import { getDashboardRefreshInterval, getUiStyle } from "../agent-registry.js";
 import type { SubagentScheduler } from "../schedule.js";

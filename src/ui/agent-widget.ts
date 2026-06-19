@@ -12,7 +12,7 @@
  * UI styles: premium (default), retro, plain
  */
 
-import type { TUI } from "@earendil-works/pi-tui";
+import type { TUI } from "./pi-tui-compat.js";
 import type { AgentManager } from "../agent-manager.js";
 import type { AgentRecord } from "../types.js";
 import type { AgentActivity, UICtx } from "./agent-ui-types.js";

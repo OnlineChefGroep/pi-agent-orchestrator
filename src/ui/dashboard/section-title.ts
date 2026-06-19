@@ -1,4 +1,4 @@
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { visibleWidth } from "../pi-tui-compat.js";
 import type { BoxChars, DashboardTheme } from "../theme.js";
 
 export function renderSectionTitle(

@@ -1,4 +1,4 @@
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth } from "./pi-tui-compat.js";
 import { getUiStyle } from "../agent-registry.js";
 
 export type Theme = {

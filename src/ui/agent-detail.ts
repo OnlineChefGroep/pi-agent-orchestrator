@@ -1,6 +1,6 @@
 import { readFile, unlink, writeFile } from "node:fs/promises";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { matchesKey } from "@earendil-works/pi-tui";
+import { matchesKey } from "./pi-tui-compat.js";
 import { reloadCustomAgents } from "../agent-registry.js";
 import { getAgentConfig } from "../agent-types.js";
 import { disableAgent, ejectAgent, enableAgent } from "./agent-actions.js";
