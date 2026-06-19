@@ -110,6 +110,19 @@ vi.mock("../src/hooks.js", () => ({
   }),
 }));
 
+// Mock telemetry
+// Defensive: src/index.ts's debug-capture wiring calls
+// `onTelemetry(event, callback)` at extensionInit time and pushes the
+// returned unsub function into `debugTelemetryUnsubs`. The wiring on
+// session_shutdown iterates that array and invokes each unsub. Mirroring
+// the false-positive safety of the agent-registry + HookRegistry mocks
+// above so an analogous import-shape regression in a future commit can't
+// trip the same `TypeError: onTelemetry is not a function` pattern during
+// extension-init tests.
+vi.mock("../src/telemetry.js", () => ({
+  onTelemetry: vi.fn(() => () => {}),
+}));
+
 // Mock settings
 vi.mock("../src/settings.js", () => ({ applyAndEmitLoaded: vi.fn() }));
 
