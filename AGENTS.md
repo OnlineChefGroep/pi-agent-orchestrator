@@ -76,7 +76,7 @@ npm test -- --watch                             # watch mode
 
 ## Project nature
 
-This is a **pi extension** — it runs inside a pi coding agent host, not standalone. The three peer dependencies (`@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`) are the host platform and are never direct dependencies. The entry point is declared in `package.json` → `pi.extensions` as `./src/index.ts`.
+This is a **pi extension** — it runs inside a pi coding agent host, not standalone. The `@earendil-works/pi-*` host-platform packages are never direct dependencies. (`@earendil-works/pi-tui` is no longer a direct dependency — its API surface is mirrored locally in `src/ui/pi-tui-compat.ts`. See Common Mistake #4 below for the full rule.) The entry point is declared in `package.json` → `pi.extensions` as `./src/index.ts`.
 
 Published to **GitHub Packages** (`npm.pkg.github.com`), not npmjs.
 
@@ -125,7 +125,7 @@ Even though source is TypeScript, imports must use `.js` (not `.ts`). `import { 
 
 ### 4. Host platform packages are NEVER direct deps
 
-> **Scope:** This rule covers `@earendil-works/pi-*` (three packages: `pi-ai`, `pi-coding-agent`, `pi-tui`). The optional peer `@onlinechef/context-mode` is unrelated to that scope and falls under the third category below.
+> **Scope:** This rule covers `@earendil-works/pi-*` host-platform packages. The optional peer `@onlinechef/context-mode` is unrelated to that scope and falls under the third category below.
 
 The host platform packages are libraries **used by** the host runtime, not the host itself. Never `import` from them in a way that assumes the package is present at runtime.
 

@@ -16,7 +16,7 @@ npm run typecheck && npm run lint && npm test   # full verification
 
 ## What This Is
 
-A **Pi extension** (not standalone) that adds autonomous sub-agent orchestration to `pi-coding-agent`. It runs inside the Pi host platform — the three peer dependencies (`@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`) are the host runtime and are never bundled.
+A **Pi extension** (not standalone) that adds autonomous sub-agent orchestration to `pi-coding-agent`. It runs inside the Pi host platform — the `@earendil-works/pi-*` host-platform packages are never bundled with this extension. `@earendil-works/pi-tui` is no longer a direct dependency — its API surface is mirrored locally in `src/ui/pi-tui-compat.ts` (see Common Mistake #4 in `AGENTS.md` for the rule across all three categories).
 
 Entry point is declared in `package.json` → `pi.extensions` as `./src/index.ts`. Published to **GitHub Packages** (`npm.pkg.github.com`), not npmjs.
 
@@ -58,7 +58,7 @@ src/
   output-handler.ts     /agents menu, settings UI, conversation viewer
   usage.ts              Token and turn tracking, session context percentage
 
-  ui/                   TUI components (built on @earendil-works/pi-tui)
+  ui/                   TUI components (declarative Component-based, see src/ui/pi-tui-compat.ts)
     agent-dashboard.ts      Rich interactive dashboard: list, top, schedules (z), perf (/perf), help (?)
     agent-widget.ts         Above-editor widget with virtual scrolling, thinking level, compact batches
     conversation-viewer.ts  Live conversation overlay
