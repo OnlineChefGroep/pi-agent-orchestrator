@@ -25,13 +25,16 @@ import * as debugCapture from "../src/debug-capture.js";
 
 /** Build a fresh temp-rooted workspace for each test. mkdtempSync ensures
  *  parallel test runs start from a unique directory — safe for vitest's
- *  default parallelism. */
+ *  default parallelism. We pre-create the project + personal roots so
+ *  tests that write sub-paths (e.g. `agents/is-a-file`) before calling
+ *  `enable()` don't trip on ENOENT for the missing parent dir. */
 function newWorkspace(): { projectRoot: string; personalRoot: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "pi-subagents-debug-capture-"));
   const projectRoot = join(dir, "project");
   const personalRoot = join(dir, "personal");
-  // Pre-create parents so enable() can mkdirSync mode 0o700 inside the temp dir.
   mkdirSync(dir, { recursive: true });
+  mkdirSync(projectRoot, { recursive: true });
+  mkdirSync(personalRoot, { recursive: true });
   return {
     projectRoot,
     personalRoot,
@@ -290,6 +293,10 @@ describe("debug-capture — rotation (tail-trim when size > 25 MiB)", () => {
     try {
       debugCapture.enable({ projectPath: ws.projectRoot }, "s");
       const path = join(ws.projectRoot, "rpc", "audit.jsonl");
+      // Pre-create the rpc/ subdir so writeFileSync can land without ENOENT.
+      // (Setup mirrors production: enable() creates only the root; per-event
+      // appendAtomicWithRotate creates its own subdir lazily on first write.)
+      mkdirSync(dirname(path), { recursive: true });
       // Seed a real file so readFileSync has something to trim.
       writeFileSync(path, "AAAA", "utf-8");
       // Spy on statSync so rotation sees a fake size > 25 MiB.
