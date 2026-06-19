@@ -769,6 +769,6 @@ export class AgentManager {
     }
     this.agents.clear();
     // Prune any orphaned git worktrees (crash recovery)
-    try { pruneWorktrees(process.cwd()); } catch { /* ignore */ }
+    try { pruneWorktrees(process.cwd()); } catch (err) { logger.warn("Failed to prune worktrees", { error: err instanceof Error ? err.message : String(err) }); }
   }
 }
