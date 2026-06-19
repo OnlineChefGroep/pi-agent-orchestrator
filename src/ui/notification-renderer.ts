@@ -60,6 +60,10 @@ export function createNotificationRenderer(theme: any) {
     const d = message.details;
     if (!d) return undefined;
     const all = [d, ...(d.others ?? [])];
-    return new Text(all.map(item => renderOne(item, expanded, theme)).join("\n"), 0, 0);
+    const lines: string[] = [];
+    for (let i = 0; i < all.length; i++) {
+      lines.push(renderOne(all[i], expanded, theme));
+    }
+    return new Text(lines.join("\n"), 0, 0);
   };
 }

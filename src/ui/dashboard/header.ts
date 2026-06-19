@@ -1,7 +1,7 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { AgentManager } from "../../agent-manager.js";
 import { getUiStyle } from "../../agent-registry.js";
-import { type BoxChars, borderLine, type DashboardTheme, framedRow, padVisible } from "../theme.js";
+import { type BoxChars, borderLine, type DashboardTheme, framedRow, padAndTruncate } from "../theme.js";
 import type { DashboardRenderState } from "./types.js";
 
 function dashboardSummaryBar(
@@ -54,12 +54,12 @@ function dashboardSummaryBar(
       }
 
       if (meterParts.length > 0) {
-        return padVisible(` ${parts.join(sep)}${selected}  ${meterParts.join(sep)}`, innerW - 2);
+        return padAndTruncate(` ${parts.join(sep)}${selected}  ${meterParts.join(sep)}`, innerW - 2);
       }
     }
   }
 
-  return padVisible(` ${parts.join(sep)}${selected}`, innerW - 2);
+  return padAndTruncate(` ${parts.join(sep)}${selected}`, innerW - 2);
 }
 
 export function renderDashboardHeader(

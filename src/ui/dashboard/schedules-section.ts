@@ -1,6 +1,6 @@
 import type { SubagentScheduler } from "../../schedule.js";
 import type { BoxChars, DashboardTheme } from "../theme.js";
-import { fastTruncate, framedRow, padVisible } from "../theme.js";
+import { fastTruncate, framedRow, padAndTruncate } from "../theme.js";
 import { renderSectionTitle } from "./section-title.js";
 
 /** Format a single schedule row for the compact dashboard table. */
@@ -31,15 +31,15 @@ function formatScheduleRow(
     const runs = `${job.runCount}×`;
 
     const row = [
-      padVisible(enabled, 14),
+      padAndTruncate(enabled, 14),
       ` ${th.title}${name}${th.reset}`,
-      padVisible(` ${th.muted}${schedule}${th.reset}`, 26),
-      padVisible(` ${th.dim}${type}${th.reset}`, 18),
-      padVisible(` ${th.dim}${runs}${th.reset}`, 8),
-      padVisible(` ${nextRun}`, 18),
+      padAndTruncate(` ${th.muted}${schedule}${th.reset}`, 26),
+      padAndTruncate(` ${th.dim}${type}${th.reset}`, 18),
+      padAndTruncate(` ${th.dim}${runs}${th.reset}`, 8),
+      padAndTruncate(` ${nextRun}`, 18),
     ].join("");
 
-    lines.push(`  ${padVisible(row, contentW - 2)}`);
+    lines.push(`  ${padAndTruncate(row, contentW - 2)}`);
   }
 
   lines.push(`  ${th.muted}${jobs.length} job${jobs.length === 1 ? "" : "s"} total · z to toggle${th.reset}`);

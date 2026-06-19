@@ -89,6 +89,13 @@ export function activeTheme(theme: Theme): Theme {
   return getUiStyle() === "plain" ? plainTheme() : theme;
 }
 
+export function padAndTruncate(str: string, maxWidth: number): string {
+  const vis = visibleWidth(str);
+  if (vis === maxWidth) return str;
+  if (vis < maxWidth) return str + " ".repeat(maxWidth - vis);
+  return fastTruncate(str, maxWidth);
+}
+
 export function padVisible(content: string, width: number): string {
   return content + " ".repeat(Math.max(0, width - visibleWidth(content)));
 }
@@ -100,7 +107,7 @@ export function fastTruncate(str: string, maxWidth: number): string {
 }
 
 export function framedRow(content: string, innerW: number, th: DashboardTheme, box: BoxChars): string {
-  const body = fastTruncate(padVisible(content, innerW), innerW);
+  const body = padAndTruncate(content, innerW);
   return `${th.border}${box.l}${th.reset} ${body} ${th.border}${box.r}${th.reset}`;
 }
 

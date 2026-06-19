@@ -14,7 +14,7 @@ import { getLifetimeTotal, getSessionContextPercent } from "../usage.js";
 import { buildInvocationTags, describeActivity, formatDuration, formatSessionTokens, getDisplayName, getPromptModeLabel } from "./agent-format.js";
 import type { AgentActivity } from "./agent-ui-types.js";
 import { getTimeSpinnerFrame } from "./animation.js";
-import { activeTheme, fastTruncate, getBoxChars, padVisible, type Theme } from "./theme.js";
+import { activeTheme, fastTruncate, getBoxChars, padAndTruncate, type Theme } from "./theme.js";
 
 /** Base lines consumed by chrome: top border + header + header sep + footer sep + footer + bottom border. */
 const CHROME_LINES_BASE = 6;
@@ -139,7 +139,7 @@ export class ConversationViewer implements Component {
     const lines: string[] = [];
 
     const row = (content: string) => {
-      const body = fastTruncate(padVisible(content, innerW), innerW);
+      const body = padAndTruncate(content, innerW);
       if (activeUiStyle === "plain") {
         return `  ${body}  `;
       }
@@ -449,6 +449,10 @@ export class ConversationViewer implements Component {
       lines.push(fastTruncate(runningLineStr, width));
     }
 
-    return lines.map(l => fastTruncate(l, width));
+    const resultLines: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      resultLines.push(padAndTruncate(lines[i] || "", width));
+    }
+    return resultLines;
   }
 }

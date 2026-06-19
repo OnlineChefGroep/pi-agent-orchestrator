@@ -13,7 +13,7 @@ vi.mock("../src/ui/theme.js", () => ({
   framedRow: vi.fn((content: string, innerW: number, _th: unknown, box: { l: string; r: string }) => {
     return `${box.l} ${content.padEnd(innerW)} ${box.r}`;
   }),
-  padVisible: vi.fn((s: string, w: number) => s.padEnd(w)),
+  padAndTruncate: vi.fn((s: string, w: number) => s.padEnd(w)),
   fastTruncate: vi.fn((s: string, w: number) => {
     const visible = s.replace(/\u001b\[\d+(;\d+)*m/g, "");
     if (visible.length > w) return `${visible.slice(0, w - 1)}…`;

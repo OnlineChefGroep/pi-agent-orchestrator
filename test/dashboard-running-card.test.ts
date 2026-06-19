@@ -17,7 +17,7 @@ vi.mock("../src/ui/theme.js", () => ({
     if (visible.length > w) return `${visible.slice(0, w - 1)}…`;
     return s;
   }),
-  padVisible: vi.fn((s: string, w: number) => s.padEnd(w)),
+  padAndTruncate: vi.fn((s: string, w: number) => s.padEnd(w)),
 }));
 
 vi.mock("../src/ui/dashboard/helpers.js", () => ({

@@ -200,7 +200,11 @@ export function renderDashboardHelp(
     key("/perf reset", "Reset performance counters"),
     key("q / Esc", "Close dashboard"),
   ];
-  return helpLines.map(h => framedRow(h ? h : "", innerW, th, box));
+  const resultLines: string[] = [];
+  for (let i = 0; i < helpLines.length; i++) {
+    resultLines.push(framedRow(helpLines[i] || "", innerW, th, box));
+  }
+  return resultLines;
 }
 
 // ── Render Performance Metrics ────────────────────────────────────────────
@@ -262,7 +266,11 @@ export function renderDashboardPerf(
     "",
     `  ${th.dim}[${th.highlight}/perf reset${th.reset}${th.dim}] ${th.reset}${switchHint}  ${th.dim}[${th.highlight}q/esc${th.reset}${th.dim}] close${th.reset}`,
   ];
-  return lines.map(h => framedRow(h ? h : "", innerW, th, box));
+  const resultLines: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    resultLines.push(framedRow(lines[i] || "", innerW, th, box));
+  }
+  return resultLines;
 }
 
 // ── Empty State ─────────────────────────────────────────────────────────────
