@@ -68,3 +68,6 @@ bun.lockb
 
 # Autoresearch state (runtime data, not source)
 .agents/autoresearch/
+
+# Omo run continuations (session data)
+.omo/
