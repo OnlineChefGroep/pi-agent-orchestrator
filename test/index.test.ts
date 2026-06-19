@@ -15,6 +15,8 @@ vi.mock("../src/agent-runner.js", () => ({
 vi.mock("../src/agent-registry.js", () => ({
   isSchedulingEnabled: vi.fn(() => false),
   isTracingEnabled: vi.fn(() => true),
+  isDebugCaptureEnabled: vi.fn(() => false),
+  getDebugCapturePaths: vi.fn(() => ({ project: undefined, personal: undefined })),
   reloadCustomAgents: vi.fn(async () => {}),
   setAnimationStyle: vi.fn(),
   setDashboardRefreshInterval: vi.fn(),
@@ -27,6 +29,8 @@ vi.mock("../src/agent-registry.js", () => ({
   setShowTurnProgress: vi.fn(),
   setTracingEnabled: vi.fn(),
   setUiStyle: vi.fn(),
+  setDebugCapture: vi.fn(),
+  setDebugCapturePaths: vi.fn(),
 }));
 
 // Mock batch-orchestrator
@@ -99,6 +103,10 @@ vi.mock("../src/cross-extension-rpc.js", () => ({
 vi.mock("../src/hooks.js", () => ({
   HookRegistry: vi.fn(function (this: any) {
     this.getHandlers = vi.fn(() => []);
+    // Always-on hook handlers in src/index.ts (debug-capture wiring) call
+    // `hookRegistry.register(event, fn, opts)`. The mock returns undefined,
+    // matching the production HookRegistry contract.
+    this.register = vi.fn();
   }),
 }));
 
