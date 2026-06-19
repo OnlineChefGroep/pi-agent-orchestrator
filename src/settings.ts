@@ -9,6 +9,14 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { OrchestrationMode } from "./agent-registry.js";
 import type { JoinMode, PromptCompressionLevel } from "./types.js";
 
+/** User-supplied override paths for the offline debug-capture feature.
+ *  Empty fields fall back to defaults (cwd/.pi/subagent-debug and
+ *  <agent-dir>/subagent-debug respectively). */
+export interface DebugCapturePathOverrides {
+  project?: string;
+  personal?: string;
+}
+
 /** Prompt compression level: controls verbosity of system prompts. */
 export type { PromptCompressionLevel } from "./types.js";
 
@@ -84,6 +92,30 @@ export interface SubagentsSettings {
   sessionMaxTurns?: number;
   /** Prompt compression level. Defaults to "balanced". */
   promptCompressionLevel?: PromptCompressionLevel;
+  /**
+   * Master switch for the local offline debug-capture feature (defaults to
+   * `false`). When `true`, the extension writes append-only JSONL captures
+   * of agent lifecycle hooks, errors with stack traces, schedule firings,
+   * RPC audit entries, and per-agent metrics snapshots to two roots:
+   * `<cwd>/.pi/subagent-debug` and `<agent-dir>/subagent-debug` (both can be
+   * overridden via `debugCapturePaths`). Capture is strictly local — no
+   * network — and the feature is best-effort: a capture failure never breaks
+   * the agent runtime. The module is implemented in `src/debug-capture.ts`
+   * and is a pure sink; wiring lives in `src/index.ts`.
+   *
+   * **PII warning:** captured content includes full agent prompts, error
+   * stacks with absolute source paths, and tool arguments (which often
+   * contain user-pasted clipboard secrets, API tokens, etc.). Enable the
+   * capture only on workloads where you trust the local filesystem with
+   * the captured content.
+   */
+  debugCapture?: boolean;
+  /** Optional override paths for the debug-capture feature. Missing fields
+   *  fall back to the documented defaults. Path strings may be absolute or
+   *  relative to the project cwd. They are validated at enable-time
+   *  (must be absolute, no `..` traversal, ≤ 4 KiB) — invalid overrides are
+   *  silently dropped so a malformed setting never crashes startup. */
+  debugCapturePaths?: DebugCapturePathOverrides;
 }
 
 /** Setter hooks used by applySettings to wire persisted values into in-memory state. */
@@ -105,6 +137,8 @@ export interface SettingsAppliers {
   setSessionMaxSpawns: (n: number) => void;
   setSessionMaxTurns: (n: number) => void;
   setPromptCompressionLevel: (level: PromptCompressionLevel) => void;
+  setDebugCapture: (enabled: boolean) => void;
+  setDebugCapturePaths: (paths: DebugCapturePathOverrides) => void;
 }
 
 /**
@@ -209,9 +243,26 @@ function sanitize(raw: unknown): SubagentsSettings {
     if (v) (out as Record<string, unknown>)[key] = v;
   }
 
-  for (const key of ["schedulingEnabled", "tracingEnabled", "showActivityStream", "showTokenUsage", "showTurnProgress"] as const) {
+  for (const key of ["schedulingEnabled", "tracingEnabled", "showActivityStream", "showTokenUsage", "showTurnProgress", "debugCapture"] as const) {
     if (typeof r[key] === "boolean") {
       out[key] = validateBool(r, key, false);
+    }
+  }
+
+  // debugCapturePaths is a free-form string→string map. Each key is optional;
+  // missing fields intentionally fall through so the consumer (agent-registry)
+  // can fall back to defaults. We accept any string shape because the
+  // downstream sanitiser (`validateCapturePath` in `src/debug-capture.ts`)
+  // rejects non-absolute / `..`-traversal / oversized values at enable time.
+  const rawPaths = r.debugCapturePaths;
+  if (rawPaths && typeof rawPaths === "object") {
+    const outPaths: DebugCapturePathOverrides = {};
+    const proj = (rawPaths as Record<string, unknown>).project;
+    const pers = (rawPaths as Record<string, unknown>).personal;
+    if (typeof proj === "string" && proj) outPaths.project = proj;
+    if (typeof pers === "string" && pers) outPaths.personal = pers;
+    if (outPaths.project !== undefined || outPaths.personal !== undefined) {
+      out.debugCapturePaths = outPaths;
     }
   }
 
@@ -287,6 +338,11 @@ export function applySettings(s: SubagentsSettings, appliers: SettingsAppliers):
   if (typeof s.sessionMaxSpawns === "number") appliers.setSessionMaxSpawns(s.sessionMaxSpawns);
   if (typeof s.sessionMaxTurns === "number") appliers.setSessionMaxTurns(s.sessionMaxTurns);
   if (s.promptCompressionLevel) appliers.setPromptCompressionLevel(s.promptCompressionLevel);
+  // Always fire debug-capture appliers when their key is present, even when
+  // the values are empty objects, so the in-memory state reflects "user
+  // explicitly overrode with an empty map" vs "user did not provide a value".
+  if (typeof s.debugCapture === "boolean") appliers.setDebugCapture(s.debugCapture);
+  if (s.debugCapturePaths !== undefined) appliers.setDebugCapturePaths(s.debugCapturePaths);
 }
 
 /**

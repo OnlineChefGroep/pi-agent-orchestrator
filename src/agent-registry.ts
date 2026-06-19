@@ -7,6 +7,7 @@
  * - Join mode and scheduling configuration
  */
 
+import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getAgentConfig, getDefaultAgentNames, getUserAgentNames, registerAgents } from "./agent-types.js";
 import { loadCustomAgents } from "./custom-agents.js";
@@ -164,6 +165,50 @@ export function getPromptCompressionLevel(): PromptCompressionLevel {
 /** Set the prompt compression level. */
 export function setPromptCompressionLevel(level: PromptCompressionLevel): void {
   promptCompressionLevel = level;
+}
+
+// ---- Debug-capture switch + path overrides ----
+
+/**
+ * Master switch for the offline debug-capture feature. Defaults to `false`.
+ * When `true`, the extension writes append-only JSONL captures to local
+ * directories for evals and debugging. Capture stays off in production by
+ * default — flip the setting in `<cwd>/.pi/subagent.json` to enable.
+ */
+let debugCaptureEnabled = false;
+
+/** True when the user has toggled on the debug-capture feature. */
+export function isDebugCaptureEnabled(): boolean {
+  return debugCaptureEnabled;
+}
+
+/** Apply persisted `debugCapture` flag. */
+export function setDebugCapture(b: boolean): void {
+  debugCaptureEnabled = b;
+}
+
+/** User-supplied path overrides. When absent the documented defaults apply. */
+let debugCapturePathOverrides: { project?: string; personal?: string } = {};
+
+/** Apply persisted `debugCapturePaths` overrides. Empty/undefined inputs are
+ *  accepted and surface as "no override"; the consumer falls back to
+ *  defaults. */
+export function setDebugCapturePaths(paths: { project?: string; personal?: string }): void {
+  // Defensive copy so the consumer cannot mutate the module-level state.
+  debugCapturePathOverrides = {
+    ...(paths?.project !== undefined ? { project: paths.project } : {}),
+    ...(paths?.personal !== undefined ? { personal: paths.personal } : {}),
+  };
+}
+
+/** Resolve the effective capture paths — override or default. The defaults
+ *  are derived from `process.cwd()` (project) and `getAgentDir()` (personal)
+ *  at call time so they reflect the cwd the extension booted from. */
+export function getDebugCapturePaths(): { project: string; personal: string } {
+  return {
+    project: debugCapturePathOverrides.project ?? join(process.cwd(), ".pi", "subagent-debug"),
+    personal: debugCapturePathOverrides.personal ?? join(getAgentDir(), "subagent-debug"),
+  };
 }
 
 // ---- Custom agent reloading ----
