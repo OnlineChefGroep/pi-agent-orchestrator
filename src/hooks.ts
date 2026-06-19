@@ -151,6 +151,7 @@ async function executeHandler(
 export class HookRegistry {
   private handlers = new Map<HookEvent, HookHandler[]>();
   private metrics = new Map<string, HookMetrics>();
+  private handlerEventMap = new Map<string, HookEvent>();
   private globalMiddleware: Array<(payload: HookPayload, next: () => Promise<HookResponse>) => Promise<HookResponse>> = [];
 
   /** Register a handler for a specific event with priority. */
@@ -195,6 +196,7 @@ export class HookRegistry {
       consecutiveErrors: 0,
       disabled: false,
     });
+    this.handlerEventMap.set(id, event);
 
     return id;
   }
@@ -218,11 +220,16 @@ export class HookRegistry {
 
   /** Remove a previously registered handler by ID. */
   unregisterById(handlerId: string): boolean {
-    for (const [event, list] of this.handlers) {
+    const event = this.handlerEventMap.get(handlerId);
+    if (!event) return false;
+
+    const list = this.handlers.get(event);
+    if (list) {
       const idx = list.findIndex((h) => h.id === handlerId);
       if (idx !== -1) {
         list.splice(idx, 1);
         this.metrics.delete(handlerId);
+        this.handlerEventMap.delete(handlerId);
         if (list.length === 0) this.handlers.delete(event);
         return true;
       }
@@ -237,7 +244,9 @@ export class HookRegistry {
 
     const idx = list.findIndex((h) => h.fn === handler);
     if (idx !== -1) {
-      this.metrics.delete(list[idx].id);
+      const id = list[idx].id;
+      this.metrics.delete(id);
+      this.handlerEventMap.delete(id);
       list.splice(idx, 1);
     }
 
