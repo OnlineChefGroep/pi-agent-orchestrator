@@ -93,13 +93,35 @@ export function padVisible(content: string, width: number): string {
   return content + " ".repeat(Math.max(0, width - visibleWidth(content)));
 }
 
+function isAscii(str: string): boolean {
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    if (c < 32 || c > 126) return false;
+  }
+  return true;
+}
+
 /** Skip expensive truncateToWidth when the string already fits. */
 export function fastTruncate(str: string, maxWidth: number): string {
+  if (maxWidth <= 0) return "";
+  if (isAscii(str)) {
+    if (str.length <= maxWidth) return str;
+    if (maxWidth === 1) return "…";
+    return `${str.slice(0, Math.max(0, maxWidth - 1))}…`;
+  }
   if (visibleWidth(str) <= maxWidth) return str;
   return truncateToWidth(str, maxWidth);
 }
 
 export function padAndTruncate(str: string, targetWidth: number): string {
+  if (targetWidth <= 0) return "";
+  if (isAscii(str)) {
+    const len = str.length;
+    if (len === targetWidth) return str;
+    if (len < targetWidth) return str + " ".repeat(targetWidth - len);
+    if (targetWidth === 1) return "…";
+    return `${str.slice(0, Math.max(0, targetWidth - 1))}…`;
+  }
   const vis = visibleWidth(str);
   if (vis === targetWidth) return str;
   if (vis < targetWidth) return str + " ".repeat(targetWidth - vis);
