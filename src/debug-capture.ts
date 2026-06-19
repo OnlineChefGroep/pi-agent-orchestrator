@@ -421,11 +421,11 @@ function writeJsonAtomic(path: string, payload: unknown): void {
  *  write the tail half to a sibling `.tmp`, then `renameSync` it over the
  *  destination so a crash mid-rotation cannot leave a half-truncated file.
  *  Lossy by design (older events discarded) but crash-safe. */
-function rotateIfNeeded(path: string): void {
+function rotateIfNeeded(path: string, maxBytes: number = MAX_BYTES_PER_FILE): void {
   try {
     const st = statSync(path);
-    if (st.size <= MAX_BYTES_PER_FILE) return;
-    const keep = Math.floor(MAX_BYTES_PER_FILE / 2);
+    if (st.size <= maxBytes) return;
+    const keep = Math.floor(maxBytes / 2);
     const fd = readFileSync(path);
     if (fd.length <= keep) return;
     const tail = fd.subarray(fd.length - keep);
@@ -437,6 +437,15 @@ function rotateIfNeeded(path: string): void {
     // means the next append will fail and log the same way. Capture is
     // designed never to crash the runtime.
   }
+}
+
+/** Test-only entry point: trigger the same rotation logic as the
+ *  per-append call site, but with a caller-supplied byte threshold.
+ *  Lets tests exercise the rotation codepath with a few KiB of seed
+ *  data instead of writing 25+ MiB on disk. Production code never
+ *  calls this — keep the surface narrow (one arg, no callbacks). */
+export function __test_rotateIfNeeded(path: string, maxBytes: number): void {
+  rotateIfNeeded(path, maxBytes);
 }
 
 /** Build an `{ [key]: value }` object only when `value` is defined.

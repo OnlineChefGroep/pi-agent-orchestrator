@@ -15,11 +15,10 @@
  *   - Resilience: a sink-level error does not propagate to the caller.
  */
 
-import * as fs from "node:fs";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import * as debugCapture from "../src/debug-capture.js";
 
@@ -294,43 +293,64 @@ describe("debug-capture — directory-name sanitization", () => {
 });
 
 describe("debug-capture — rotation (tail-trim when file exceeds ceiling)", () => {
-  // We avoid the natural `vi.spyOn(fs, "statSync")` approach because ESM
-  // module-namespace objects are frozen and reject property redefinition
-  // (TypeError: Cannot redefine property: statSync). Instead, we feed
-  // the rotation logic real bytes via the public append API and assert
-  // the post-trim file size + that the rotation never throws.
-  it("keeps the tail when the captured file exceeds the per-file ceiling", () => {
+  // The rotation logic is exercised through the `__test_rotateIfNeeded`
+  // test-only wrapper with a small threshold. This avoids writing 25+ MiB
+  // of seed data on every run (which made an earlier variant slow and
+  // flaky on JSON-overhead variance) and also sidesteps the brittle
+  // `vi.spyOn(fs, "statSync")` pattern that TypeErrors on frozen ESM
+  // module-namespace objects.
+  it("keeps the tail when the file exceeds the caller-supplied threshold", () => {
     const ws = newWorkspace();
     try {
-      debugCapture.enable({ projectPath: ws.projectRoot }, "s");
-      const dirPath = join(ws.projectRoot, "agents", "rotate-me");
-      mkdirSync(dirPath, { recursive: true });
-      const eventPath = join(dirPath, "events.jsonl");
-      // Write enough real bytes to push the file comfortably past the
-      // 25 MiB ceiling. Each line is ~150 bytes (50 bytes of fields +
-      // ~80 bytes of padding + newline), so 200_000 lines gives ~30 MiB
-      // — comfortably above the threshold with margin for JSON-overhead.
-      // The rotation then keeps the last half (≈ 12.5 MiB), so the
-      // surviving content is dominated by the most recent lines.
-      const line = JSON.stringify({
-        ts: "2026-01-01T00:00:00Z",
-        seq: 0,
-        pad: "x".repeat(80),
-      }) + "\n";
-      writeFileSync(eventPath, line.repeat(200_000), "utf-8");
-      // Sanity: file is now well over the threshold.
-      expect(statSync(eventPath).size).toBeGreaterThan(25 * 1024 * 1024);
-      // A subsequent append must (a) not throw, (b) succeed at writing,
-      // and (c) leave the file smaller than the original ceiling.
-      expect(() => debugCapture.appendAgentEvent("rotate-me", "subagent:start", { seq: 1 })).not.toThrow();
+      const eventPath = join(ws.projectRoot, "agents", "rotate-me", "events.jsonl");
+      mkdirSync(dirname(eventPath), { recursive: true });
+      // Seed a file with monotonically-increasing seq values 0..19.
+      // Each line is the same shape; only the seq digit-count varies, so
+      // byte-aligned byte counts of the seed are predictable (~810 B).
+      const seed = (seq: number) =>
+        `${JSON.stringify({ ts: "2026-01-01T00:00:00Z", seq })}\n`;
+      const lines = Array.from({ length: 20 }, (_, i) => seed(i)).join("");
+      writeFileSync(eventPath, lines, "utf-8");
+      expect(statSync(eventPath).size).toBeGreaterThan(200);
+      // Drive rotation with a 100-byte threshold; keep=50 bytes.
+      debugCapture.__test_rotateIfNeeded(eventPath, 100);
       const afterSize = statSync(eventPath).size;
       expect(afterSize).toBeGreaterThan(0);
-      expect(afterSize).toBeLessThan(25 * 1024 * 1024);
-      // The rotation keeps the tail — the most recent appended line
-      // should be present in the surviving content.
-      const lines = readFileSync(eventPath, "utf-8").trim().split("\n");
-      const last = JSON.parse(lines[lines.length - 1]);
-      expect(last.seq).toBe(1);
+      expect(afterSize).toBeLessThanOrEqual(100);
+      // Tail-keeps contract: at least one parseable JSON line survives.
+      // The rotation keeps the LAST maxBytes/2 raw bytes — these are
+      // not line-aligned, so the first surviving bytes may be a mid-
+      // line truncation that JSON.parse rejects. We parse cautiously:
+      // a try/catch wrapper ignores truncated lines, then we assert at
+      // least one well-formed record survived (proves the tail half is
+      // not entirely corrupt) AND the most recent seq:19 is in there
+      // (proves the very last appended line is preserved).
+      const surviving = readFileSync(eventPath, "utf-8");
+      const parsed = surviving
+        .split("\n")
+        .map((l) => { try { return JSON.parse(l) as { seq: number }; } catch { return null; }})
+        .filter((p): p is { seq: number } => p !== null && typeof p?.seq === "number");
+      expect(parsed.length).toBeGreaterThan(0);
+      expect(parsed.some((p) => p.seq === 19)).toBe(true);
+      // And the surviving seq values are monotonically newer than the
+      // dropped range — proves we kept the TAIL not the HEAD.
+      const maxSuvSeq = Math.max(...parsed.map((p) => p.seq));
+      const minSuvSeq = Math.min(...parsed.map((p) => p.seq));
+      expect(maxSuvSeq).toBe(19);
+      expect(minSuvSeq).toBeGreaterThanOrEqual(15);
+    } finally { ws.cleanup(); }
+  });
+
+  it("does nothing when the file is under the threshold", () => {
+    const ws = newWorkspace();
+    try {
+      const eventPath = join(ws.projectRoot, "agents", "no-rotate", "events.jsonl");
+      mkdirSync(dirname(eventPath), { recursive: true });
+      const line = `${JSON.stringify({ ts: "2026-01-01T00:00:00Z", seq: 0 })}\n`;
+      writeFileSync(eventPath, line.repeat(5), "utf-8");
+      const beforeSize = statSync(eventPath).size;
+      debugCapture.__test_rotateIfNeeded(eventPath, 4096);
+      expect(statSync(eventPath).size).toBe(beforeSize);
     } finally { ws.cleanup(); }
   });
 });
