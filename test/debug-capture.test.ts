@@ -18,7 +18,7 @@
 import * as fs from "node:fs";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as debugCapture from "../src/debug-capture.js";
@@ -99,14 +99,20 @@ describe("debug-capture — enable / disable lifecycle", () => {
     } finally { ws.cleanup(); }
   });
 
-  it("enable() drops a path that fails to mkdir", () => {
+  it("enable() drops a path whose mkdir would fail", () => {
     const ws = newWorkspace();
     try {
-      // Personal points at a path under a non-directory parent so mkdir fails.
-      const bad = join(ws.projectRoot, "is-a-file", "..", "xxx");
-      writeFileSync(join(ws.projectRoot, "is-a-file"), "x", "utf-8");
+      // Block the mkdir by putting a regular FILE in place of a directory
+      // the personal path would have to descend through. `validateCapturePath`
+      // cannot catch this (the path is a perfectly valid-looking absolute path
+      // with no `..` segments), so the rejection has to come from
+      // `safeEnsureDir`'s try/catch around mkdirSync.
+      const blocker = join(ws.projectRoot, "is-a-file");
+      writeFileSync(blocker, "x", "utf-8");
+      const bad = join(blocker, "xxx", "personal");
       const m = debugCapture.enable({ projectPath: ws.projectRoot, personalPath: bad }, "session-bad");
-      // Project writes OK, personal skipped silently — capture still enabled.
+      // Project writes OK (mkdir succeeds); personal mkdir fails (ENOTDIR
+      // because parent is a regular file) and is silently dropped.
       expect(m?.paths.project).toBe(ws.projectRoot);
       expect(m?.paths.personal).toBeNull();
     } finally { ws.cleanup(); }
