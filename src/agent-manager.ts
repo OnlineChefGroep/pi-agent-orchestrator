@@ -17,6 +17,7 @@ import type { AgentSession, ExtensionAPI, ExtensionContext } from "@earendil-wor
 import { resumeAgent, runAgent, type ToolActivity } from "./agent-runner.js";
 import { getConfig } from "./agent-types.js";
 import { type HookRegistry } from "./hooks.js";
+import { generateCorrelationId } from "./telemetry-otel.js";
 import type { AgentInvocation, AgentRecord, IsolationMode, SubagentType, ThinkingLevel } from "./types.js";
 import { addUsage } from "./usage.js";
 import { cleanupWorktree, createWorktree, pruneWorktrees, } from "./worktree.js";
@@ -79,6 +80,13 @@ interface SpawnOptions {
   onCompaction?: (info: CompactionInfo) => void;
   /** Nesting depth for this spawn (0 = root). Passed through to the agent record and runner. */
   currentLevel?: number;
+  /**
+   * Optional override for the auto-generated 8-hex-char correlation id.
+   * When omitted, `AgentManager.spawn` calls `generateCorrelationId()` so
+   * every record is guaranteed to have one. Pass a deterministic value in
+   * tests to make span assertions stable.
+   */
+  correlationId?: string;
 }
 
 export class AgentManager {
@@ -257,6 +265,10 @@ export class AgentManager {
     }
 
     const id = randomUUID().slice(0, 17);
+    // Honor a caller-supplied correlation id (used by tests and by
+    // any future code path that wants a deterministic id) but always
+    // fall back to a fresh one so the record is never missing one.
+    const correlationId = options.correlationId ?? generateCorrelationId();
     const abortController = new AbortController();
     const record: AgentRecord = {
       id,
@@ -274,6 +286,7 @@ export class AgentManager {
       currentLevel: childLevel,
       totalSpawned: 0,
       contextInputs: { inheritContext: options.inheritContext ?? false },
+      correlationId,
     };
     this.agents.set(id, record);
     this.sessionUsage.spawnedAgents++;
@@ -369,6 +382,7 @@ export class AgentManager {
         levelLimit: record.invocation?.levelLimit,
         parentConfig,
         partitions: childPartitions ? [...childPartitions] : undefined,
+        correlationId: record.correlationId,
         cwd: worktreeCwd,
         signal: record.abortController!.signal,
         hooks: this.hooks,
@@ -601,6 +615,16 @@ export class AgentManager {
     return [...this.agents.values()].sort(
       (a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0),
     );
+  }
+
+  /**
+   * Get the correlation id of a previously-spawned agent. Returns
+   * `undefined` if the id is unknown or the record was created before
+   * the `correlationId` field was added. Safe to call from the UI, log
+   * helpers, and the `/agents health` report.
+   */
+  getCorrelationId(id: string): string | undefined {
+    return this.agents.get(id)?.correlationId;
   }
 
   abort(id: string): boolean {

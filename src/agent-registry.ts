@@ -78,6 +78,29 @@ export function setSchedulingEnabled(b: boolean): void {
   schedulingEnabled = b;
 }
 
+// ---- Tracing switch ----
+
+/**
+ * Master switch for OpenTelemetry span emission in agent-runner. Defaults to
+ * enabled. When `false`: every public function in `telemetry-otel.ts`
+ * (`startAgentSpan`, `endAgentSpan`, `startToolSpan`, etc.) short-circuits to
+ * a shared no-op span, so no TracerProvider is consulted and the cost of
+ * creating/ending spans is one flag check + a function call. Runtime
+ * toggles via /agents → Settings take effect immediately for subsequent
+ * spans (already-running agent spans keep their real span and end normally).
+ */
+let tracingEnabled = true;
+
+/** Check if OpenTelemetry tracing is enabled. */
+export function isTracingEnabled(): boolean {
+  return tracingEnabled;
+}
+
+/** Enable or disable OpenTelemetry tracing. */
+export function setTracingEnabled(b: boolean): void {
+  tracingEnabled = b;
+}
+
 // ---- Animation & UI/UX Style configuration ----
 
 export type AnimationStyle = "braille" | "dots" | "lines" | "classic" | "none";

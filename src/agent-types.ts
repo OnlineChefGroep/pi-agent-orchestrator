@@ -6,6 +6,12 @@
  */
 
 import { isContextModeAvailable } from "./context-mode-bridge.js";
+// `CTX_TOOL_NAMES` is intentionally imported (and re-exported below) from its
+// canonical home `./ctx-tool-names.ts` — NOT defined locally here. That breaks
+// the historical agent-types.ts ↔ context-mode-bridge.ts circular import:
+// the bridge no longer needs to import from this file, so the agent-types.ts
+// dependency on `isContextModeAvailable` becomes one-way.
+import { CTX_TOOL_NAMES as CTX_TOOL_NAMES_SRC } from "./ctx-tool-names.js";
 import { DEFAULT_AGENTS } from "./default-agents.js";
 import { getReadOnlyMemoryToolNames, READ_ONLY_TOOLS } from "./readonly-helpers.js";
 import type { AgentConfig } from "./types.js";
@@ -120,15 +126,15 @@ export function normalizeBuiltinToolNames(names: readonly string[] | undefined):
   return [...names];
 }
 
-/** Context-mode sandbox tool names from @onlinechef/context-mode (optional dependency). */
-export const CTX_TOOL_NAMES: string[] = [
-  "ctx_execute",
-  "ctx_execute_file",
-  "ctx_search",
-  "ctx_index",
-  "ctx_batch_execute",
-  "ctx_stats",
-];
+/**
+ * Context-mode sandbox tool names from @onlinechef/context-mode (optional dependency).
+ *
+ * Re-exported here from `./ctx-tool-names.ts` for back-compat — pre-existing
+ * consumers (notably `test/e2e-chain.test.ts`) import `CTX_TOOL_NAMES` from
+ * `./agent-types.js`. The canonical definition lives in `src/ctx-tool-names.ts`;
+ * treat this export as a stable alias, not as the source of truth.
+ */
+export const CTX_TOOL_NAMES: readonly string[] = CTX_TOOL_NAMES_SRC;
 
 /** Unified runtime registry of all agents (defaults + user-defined). */
 const agents = new Map<string, AgentConfig>();

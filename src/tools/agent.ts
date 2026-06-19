@@ -1,13 +1,19 @@
 import type { Model, TextContent } from "@earendil-works/pi-ai";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type AgentToolResult, defineTool, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { buildTypeListText, getDefaultJoinMode, isSchedulingEnabled, reloadCustomAgents } from "../agent-registry.js";
+import type { AgentManager } from "../agent-manager.js";
+import { buildTypeListText, getDefaultJoinMode, getOrchestrationMode, isSchedulingEnabled, reloadCustomAgents } from "../agent-registry.js";
 import { getDefaultMaxTurns, normalizeMaxTurns } from "../agent-runner.js";
 import { getAgentConfig, getAvailableTypes, resolveType } from "../agent-types.js";
+import type { BatchOrchestrator } from "../batch-orchestrator.js";
+import { recordDispatchDecision } from "../dispatch-history.js";
 import { buildAgentEstimate } from "../estimate.js";
 import { resolveAgentInvocationConfig, resolveJoinMode } from "../invocation-config.js";
+import { logger } from "../logger.js";
 import { resolveModel } from "../model-resolver.js";
+import { type OrchestrationDecision, resolveOrchestrationMode } from "../orchestration-dispatch.js";
 import { createOutputFilePath, streamToOutputFile, writeInitialEntry } from "../output-file.js";
 import {
   buildDetails, createActivityTracker, formatLifetimeTokens,
@@ -174,6 +180,209 @@ export function buildSpawnOptions(input: CommonSpawnOptions): {
     isolation: input.isolation,
     invocation: input.invocation,
   };
+}
+
+/**
+ * Materialize a non-single `OrchestrationDecision` into actual agent spawns
+ * and return a single aggregated `textResult`.
+ *
+ * Strategy:
+ * - Always spawn each member as a background agent (so the existing
+ *   batch/swarm/group pipeline handles join coordination). The
+ *   BatchOrchestrator routes members by `joinMode` (swarm | group | smart | async).
+ * - When the caller's `runInBackground` is true, return immediately with a
+ *   summary listing all spawned agent IDs. Members will be delivered via the
+ *   normal group/swarm notification path when they complete.
+ * - When the caller's `runInBackground` is false, await each member's
+ *   `record.promise` and aggregate the results into a single text block.
+ *
+ * Pure orchestration glue — no I/O, no LLM calls of its own. The dispatcher
+ * itself is in `orchestration-dispatch.ts` and is unit-tested independently.
+ */
+type ActivityTrackerState = ReturnType<typeof createActivityTracker>["state"];
+
+interface OrchestratedDispatchArgs {
+  detailBase: {
+    displayName: string;
+    description: string;
+    subagentType: string;
+    modelName?: string;
+    tags?: string[];
+  };
+  subagentType: SubagentType;
+  displayName: string;
+  rawType: string;
+  fellBack: boolean;
+  runInBackground: boolean;
+  effectiveMaxTurns: number | undefined;
+  model: Model<any> | undefined;
+  isolated: boolean;
+  inheritContext: boolean;
+  thinking: ThinkingLevel | undefined;
+  isolation: IsolationMode | undefined;
+  agentInvocation: AgentInvocation;
+  manager: AgentManager;
+  batchOrchestrator: BatchOrchestrator;
+  agentActivity: Map<string, ActivityTrackerState>;
+  widget: { ensureTimer: () => void; debouncedUpdate: () => void };
+  pi: ExtensionAPI;
+  piCtx: ExtensionContext;
+  toolCallId: string;
+}
+
+/**
+ * Materialize a non-single `OrchestrationDecision` into actual agent spawns
+ * and return a single aggregated `textResult`.
+ *
+ * Strategy:
+ * - Always spawn each member as a background agent (so the existing
+ *   batch/swarm/group pipeline handles join coordination). The
+ *   BatchOrchestrator routes members by `joinMode` (swarm | group | smart | async).
+ *   In foreground mode we `flush()` immediately after the fan-out so
+ *   the swarm/group is created before members can complete (the 100ms
+ *   debounce would otherwise drop stragglers).
+ * - When the caller's `runInBackground` is true, return immediately with a
+ *   summary listing all spawned agent IDs. Members will be delivered via the
+ *   normal group/swarm notification path when they complete.
+ * - When the caller's `runInBackground` is false, await each member's
+ *   `record.promise` and aggregate the results into a single text block.
+ *
+ * Pure orchestration glue — no I/O, no LLM calls of its own. The dispatcher
+ * itself is in `orchestration-dispatch.ts` and is unit-tested independently.
+ */
+async function runOrchestratedDispatch(
+  dispatch: Extract<OrchestrationDecision, { kind: "swarm" | "crew" }>,
+  args: OrchestratedDispatchArgs,
+): Promise<AgentToolResult<unknown>> {
+  const members =
+    dispatch.kind === "crew"
+      ? dispatch.roles.map((r) => ({ description: r.description, prompt: r.prompt, role: r.role as string | undefined }))
+      : dispatch.agents.map((a) => ({ description: a.description, prompt: a.prompt, role: undefined }));
+
+  const spawned: { id: string; description: string; role?: string }[] = [];
+  for (const member of members) {
+    const { state: bgState, callbacks: bgCallbacks } = createActivityTracker(args.effectiveMaxTurns);
+    const spawnOptions = {
+      ...buildSpawnOptions({
+        description: member.description,
+        model: args.model,
+        maxTurns: args.effectiveMaxTurns,
+        isolated: args.isolated,
+        inheritContext: args.inheritContext,
+        thinking: args.thinking,
+        isolation: args.isolation,
+        invocation: args.agentInvocation,
+      }),
+      isBackground: true,
+      ...bgCallbacks,
+    };
+    let id: string;
+    try {
+      id = args.manager.spawn(args.pi, args.piCtx, args.subagentType, member.prompt, spawnOptions);
+    } catch (err) {
+      // Partial-failure surface: list the IDs we DID spawn, then the error.
+      return textResult(
+        `Orchestration dispatch failed mid-fanout: ${err instanceof Error ? err.message : String(err)}\n` +
+          `Spawned ${spawned.length}/${members.length} before failure: ${spawned.map((s) => s.id).join(", ")}`,
+      );
+    }
+    const record = args.manager.getRecord(id);
+    if (record) {
+      record.joinMode = dispatch.joinMode;
+      record.toolCallId = args.toolCallId;
+    }
+    args.batchOrchestrator.addToBatch(id, dispatch.joinMode);
+    args.agentActivity.set(id, bgState);
+    spawned.push({ id, description: member.description, role: member.role });
+  }
+
+  args.widget.ensureTimer();
+  args.widget.debouncedUpdate();
+
+  // Background mode: fire-and-forget flush (so the swarm/group is created
+  // before any member can complete during the 100ms debounce window). Don't
+  // await — callers expect the agent IDs to be returned immediately.
+  // Foreground mode: flush synchronously below.
+  if (args.runInBackground) {
+    void args.batchOrchestrator.flush().catch((err) => {
+      logger.warn?.(`BatchOrchestrator flush failed after dispatch`, {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+    const label = dispatch.kind === "crew" ? "crew" : "swarm";
+    const ids = spawned.map((s) => s.id).join(", ");
+    return textResult(
+      `${label} dispatched in background (${spawned.length} members).\n` +
+        `Agent IDs: ${ids}\n` +
+        `Join mode: ${dispatch.joinMode}\n\n` +
+        `You will be notified when all members complete.`,
+      {
+        ...args.detailBase,
+        toolUses: 0,
+        tokens: "",
+        durationMs: 0,
+        status: "background" as const,
+        agentId: spawned[0]?.id ?? "",
+      },
+    );
+  }
+
+  // Foreground mode: finalize the batch synchronously so the swarm/group is
+  // live before we start awaiting any member's record.promise — otherwise a
+  // fast-finishing member's `onAgentComplete` could miss the swarm/group and
+  // end up delivered as an individual nudge.
+  await args.batchOrchestrator.flush();
+
+  // Foreground mode: await each member and aggregate.
+  // Every spawned id MUST have a record (spawn stores synchronously). If
+  // some id is missing it's a bookkeeping bug worth surfacing, not hiding.
+  const records = spawned.map((s) => {
+    const r = args.manager.getRecord(s.id);
+    if (!r) throw new Error(`orchestrated dispatch: missing record for ${s.id}`);
+    return r;
+  });
+  // `AgentRecord.promise` is typed as optional because the agent manager
+  // // populates it asynchronously in startAgent. After `manager.spawn`
+  // returns, startAgent is scheduled and the promise is set on the next
+  // microtask. We assert non-null at this point: if it ever IS null we're
+  // already broken and want to surface it.
+  const settled = await Promise.allSettled(
+    records.map((r) => r.promise as Promise<string>),
+  );
+  const aggregate = formatOrchestratedAggregate(args, dispatch, spawned, records, settled);
+  return textResult(aggregate);
+}
+
+function formatOrchestratedAggregate(
+  args: OrchestratedDispatchArgs,
+  dispatch: Extract<OrchestrationDecision, { kind: "swarm" | "crew" }>,
+  spawned: { id: string; description: string; role?: string }[],
+  records: (AgentRecord | undefined)[],
+  settled: PromiseSettledResult<string>[],
+): string {
+  const fallbackNote = args.fellBack ? `Note: Unknown agent type "${args.rawType}" — using ${args.displayName}.\n\n` : "";
+  const label = dispatch.kind === "crew" ? "Crew" : "Swarm";
+  const header = `${label} completed (${spawned.length} members, join mode: ${dispatch.joinMode}).\n\n`;
+  const sections = spawned.map((s, i) => {
+    const r = settled[i];
+    const record = records[i];
+    let body: string;
+    if (r.status === "rejected") {
+      body = `Error: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`;
+    } else if (record?.status === "error" && record.error) {
+      // fulfilled but record has an error — surface it instead of "(no output)".
+      body = `Error: ${record.error}`;
+    } else if (record?.status === "aborted") {
+      body = "(aborted — hit max turns)";
+    } else if (record?.status === "stopped") {
+      body = "(stopped by user)";
+    } else {
+      body = (r.value ?? "").trim() || "(no output)";
+    }
+    const roleTag = s.role ? ` (${s.role})` : "";
+    return `### ${s.description}${roleTag}\n${body}`;
+  });
+  return `${fallbackNote + header + sections.join("\n\n")}\n`;
 }
 
 /**
@@ -462,6 +671,55 @@ Guidelines:
           record.result?.trim() || record.error?.trim() || "No output.",
           buildDetails(detailBase, { ...record, startedAt: record.startedAt ?? 0 }),
         );
+      }
+
+      // Orchestration dispatch: single / swarm / crew fan-out
+      // — runs before the background/foreground branch so the dispatch can
+      // spawn N background agents (or N foreground-awaited background agents)
+      // and return an aggregated result. If the dispatch says "single", we
+      // fall through to the existing background/foreground paths.
+      const configuredOrchestrationMode = getOrchestrationMode();
+      const dispatch = resolveOrchestrationMode({
+        mode: configuredOrchestrationMode,
+        prompt: params.prompt as string,
+        description: params.description as string,
+        subagentType,
+        runInBackground,
+      });
+      // Record the decision for the /agents → Health check histogram so the
+      // user can see whether the auto-heuristic is firing on prompts they
+      // expected to be one-shots. The configuredMode + promptLength fields
+      // give the user context when they go hunting later.
+      recordDispatchDecision({
+        kind: dispatch.kind,
+        configuredMode: configuredOrchestrationMode,
+        source: configuredOrchestrationMode === "auto" ? "auto-heuristic" : "explicit",
+        promptLength: (params.prompt as string).length,
+        description: (params.description as string) ?? "",
+      });
+      if (dispatch.kind !== "single") {
+        return await runOrchestratedDispatch(dispatch, {
+          detailBase,
+          subagentType,
+          displayName,
+          rawType,
+          fellBack,
+          runInBackground,
+          effectiveMaxTurns,
+          model,
+          isolated,
+          inheritContext,
+          thinking,
+          isolation,
+          agentInvocation,
+          manager,
+          batchOrchestrator,
+          agentActivity,
+          widget,
+          pi,
+          piCtx,
+          toolCallId,
+        });
       }
 
       // Background execution

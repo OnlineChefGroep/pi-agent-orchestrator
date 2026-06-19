@@ -4,6 +4,7 @@ import type { AgentManager } from "../agent-manager.js";
 
 type Ctx = ExtensionCommandContext;
 
+import type { OrchestrationMode } from "../agent-registry.js";
 import {
   getAnimationStyle,
   getDashboardRefreshInterval,
@@ -15,6 +16,7 @@ import {
   setUiStyle
 } from "../agent-registry.js";
 import type { SubagentScheduler } from "../schedule.js";
+import type { SettingsGetters, SettingsSetters } from "../settings.js";
 import { saveAndEmitChanged } from "../settings.js";
 import type { JoinMode, PromptCompressionLevel } from "../types.js";
 import { buildSettingsSnapshot } from "./settings-snapshot.js";
@@ -23,26 +25,20 @@ export async function showSettings(
   ctx: ExtensionCommandContext,
   manager: AgentManager,
   pi: ExtensionAPI,
-  getDefaultMaxTurns: () => number | undefined,
-  getGraceTurns: () => number,
-  getDefaultJoinMode: () => JoinMode,
-  isSchedulingEnabled: () => boolean,
-  setDefaultMaxTurns: (n: number | undefined) => void,
-  setGraceTurns: (n: number) => void,
-  setDefaultJoinMode: (mode: JoinMode) => void,
-  setSchedulingEnabled: (b: boolean) => void,
   scheduler: SubagentScheduler,
+  getters: SettingsGetters,
+  setters: SettingsSetters,
 ): Promise<void> {
   const choice = await ctx.ui.select("Settings", [
     `Max concurrency (current: ${manager.getMaxConcurrent()})`,
     `Session limits (agents: ${manager.getSessionLimits().maxAgentsPerSession ?? "unlimited"}, turns: ${manager.getSessionLimits().maxTotalTurnsPerSession ?? "unlimited"})`,
-    `Default max turns (current: ${getDefaultMaxTurns() ?? "unlimited"})`,
-    `Grace turns (current: ${getGraceTurns()})`,
-    `Join mode (current: ${getDefaultJoinMode()})`,
-    `Scheduling (current: ${isSchedulingEnabled() ? "enabled" : "disabled"})`,
+    `Default max turns (current: ${getters.getDefaultMaxTurns() ?? "unlimited"})`,
+    `Grace turns (current: ${getters.getGraceTurns()})`,
+    `Coordination (join: ${getters.getDefaultJoinMode()}, orch: ${getOrchestrationMode()})`,
+    `Scheduling (current: ${getters.isSchedulingEnabled() ? "enabled" : "disabled"})`,
+    `Tracing (current: ${getters.isTracingEnabled() ? "enabled" : "disabled"})`,
     `Animation Style (current: ${getAnimationStyle()})`,
     `UI/UX Style (current: ${getUiStyle()})`,
-    `Orchestration mode (current: ${getOrchestrationMode()})`,
     `Dashboard refresh interval (current: ${getDashboardRefreshInterval()}ms)`,
     `Session spawn limit (current: ${manager.getSessionMaxSpawns()})`,
     `Session turn limit (current: ${manager.getSessionMaxTurns()})`,
@@ -56,7 +52,7 @@ export async function showSettings(
       const n = parseInt(val, 10);
       if (n >= 1) {
         manager.setMaxConcurrent(n);
-        notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Max concurrency set to ${n}`);
+        notifyApplied(ctx, pi, manager, getters, `Max concurrency set to ${n}`);
       } else {
         ctx.ui.notify("Must be a positive integer.", "warning");
       }
@@ -76,45 +72,35 @@ export async function showSettings(
         maxAgentsPerSession: maxAgents === 0 ? undefined : maxAgents,
         maxTotalTurnsPerSession: maxTurns === 0 ? undefined : maxTurns,
       });
-      notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, "Session limits updated");
+      notifyApplied(ctx, pi, manager, getters, "Session limits updated");
     }
   } else if (choice.startsWith("Default max turns")) {
-    const val = await ctx.ui.input("Default max turns before wrap-up (0 = unlimited)", String(getDefaultMaxTurns() ?? 0));
+    const val = await ctx.ui.input("Default max turns before wrap-up (0 = unlimited)", String(getters.getDefaultMaxTurns() ?? 0));
     if (val) {
       const n = parseInt(val, 10);
       if (n === 0) {
-        setDefaultMaxTurns(undefined);
-        notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, "Default max turns set to unlimited");
+        setters.setDefaultMaxTurns(undefined);
+        notifyApplied(ctx, pi, manager, getters, "Default max turns set to unlimited");
       } else if (n >= 1) {
-        setDefaultMaxTurns(n);
-        notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Default max turns set to ${n}`);
+        setters.setDefaultMaxTurns(n);
+        notifyApplied(ctx, pi, manager, getters, `Default max turns set to ${n}`);
       } else {
         ctx.ui.notify("Must be 0 (unlimited) or a positive integer.", "warning");
       }
     }
   } else if (choice.startsWith("Grace turns")) {
-    const val = await ctx.ui.input("Grace turns after wrap-up steer", String(getGraceTurns()));
+    const val = await ctx.ui.input("Grace turns after wrap-up steer", String(getters.getGraceTurns()));
     if (val) {
       const n = parseInt(val, 10);
       if (n >= 1) {
-        setGraceTurns(n);
-        notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Grace turns set to ${n}`);
+        setters.setGraceTurns(n);
+        notifyApplied(ctx, pi, manager, getters, `Grace turns set to ${n}`);
       } else {
         ctx.ui.notify("Must be a positive integer.", "warning");
       }
     }
-  } else if (choice.startsWith("Join mode")) {
-    const val = await ctx.ui.select("Default join mode for background agents", [
-      "smart — auto-group 2+ agents in same turn (default)",
-      "async — always notify individually",
-      "group — always group background agents",
-      "swarm — dynamic collaborative group (agents can join at runtime)",
-    ]);
-    if (val) {
-      const mode = val.split(" ")[0] as JoinMode;
-      setDefaultJoinMode(mode);
-      notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Default join mode set to ${mode}`);
-    }
+  } else if (choice.startsWith("Coordination")) {
+    await showCoordinationMenu(ctx, pi, manager, getters, setters);
   } else if (choice.startsWith("Scheduling")) {
     const val = await ctx.ui.select(
       "Schedule subagent feature",
@@ -125,20 +111,40 @@ export async function showSettings(
     );
     if (val) {
       const enabled = val.startsWith("enabled");
-      if (enabled === isSchedulingEnabled()) {
+      if (enabled === getters.isSchedulingEnabled()) {
         ctx.ui.notify(`Scheduling already ${enabled ? "enabled" : "disabled"}.`, "info");
       } else {
-        setSchedulingEnabled(enabled);
+        setters.setSchedulingEnabled(enabled);
         if (!enabled) scheduler.stop();  // immediate kill — outstanding fires stop ticking
         notifyApplied(
           ctx,
           pi,
           manager,
-          getDefaultMaxTurns,
-          getGraceTurns,
-          getDefaultJoinMode,
-          isSchedulingEnabled,
+          getters,
           `Scheduling ${enabled ? "enabled" : "disabled"}. Tool spec change takes effect on next pi session.`,
+        );
+      }
+    }
+  } else if (choice.startsWith("Tracing")) {
+    const val = await ctx.ui.select(
+      "OpenTelemetry span emission",
+      [
+        "enabled — agent lifecycle spans are emitted to the configured TracerProvider (default)",
+        "disabled — span helpers short-circuit to a shared no-op; no TracerProvider is consulted",
+      ],
+    );
+    if (val) {
+      const enabled = val.startsWith("enabled");
+      if (enabled === getters.isTracingEnabled()) {
+        ctx.ui.notify(`Tracing already ${enabled ? "enabled" : "disabled"}.`, "info");
+      } else {
+        setters.setTracingEnabled(enabled);
+        notifyApplied(
+          ctx,
+          pi,
+          manager,
+          getters,
+          `Tracing ${enabled ? "enabled" : "disabled"}.`,
         );
       }
     }
@@ -155,7 +161,7 @@ export async function showSettings(
       setAnimationStyle(style);
       const { setSpinnerStyle } = await import("./animation.js");
       setSpinnerStyle(style);
-      notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Animation style set to ${style}`);
+      notifyApplied(ctx, pi, manager, getters, `Animation style set to ${style}`);
     }
   } else if (choice.startsWith("UI/UX Style")) {
     const val = await ctx.ui.select("UI/UX Style", [
@@ -167,19 +173,7 @@ export async function showSettings(
     if (val) {
       const style = val.split(" ")[0] as "premium" | "retro" | "plain" | "cinematic";
       setUiStyle(style);
-      notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `UI/UX style set to ${style}`);
-    }
-  } else if (choice.startsWith("Orchestration mode")) {
-    const val = await ctx.ui.select("Orchestration mode", [
-      "auto — smart selection based on task complexity (default)",
-      "single — one agent at a time",
-      "swarm — dynamic collaborative groups",
-      "crew — structured team coordination",
-    ]);
-    if (val) {
-      const mode = val.split(" ")[0] as "auto" | "single" | "swarm" | "crew";
-      setOrchestrationMode(mode);
-      notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Orchestration mode set to ${mode}`);
+      notifyApplied(ctx, pi, manager, getters, `UI/UX style set to ${style}`);
     }
   } else if (choice.startsWith("Dashboard refresh interval")) {
     const val = await ctx.ui.input("Dashboard refresh interval in milliseconds (100-60000)", String(getDashboardRefreshInterval()));
@@ -187,7 +181,7 @@ export async function showSettings(
       const n = parseInt(val, 10);
       if (n >= 100 && n <= 60000) {
         setDashboardRefreshInterval(n);
-        notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Dashboard refresh interval set to ${n}ms`);
+        notifyApplied(ctx, pi, manager, getters, `Dashboard refresh interval set to ${n}ms`);
       } else {
         ctx.ui.notify("Must be between 100 and 60000 milliseconds.", "warning");
       }
@@ -198,7 +192,7 @@ export async function showSettings(
       const n = parseInt(val, 10);
       if (n >= 1) {
         manager.setSessionMaxSpawns(n);
-        notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Session spawn limit set to ${n}`);
+        notifyApplied(ctx, pi, manager, getters, `Session spawn limit set to ${n}`);
       } else {
         ctx.ui.notify("Must be a positive integer.", "warning");
       }
@@ -209,7 +203,7 @@ export async function showSettings(
       const n = parseInt(val, 10);
       if (n >= 1) {
         manager.setSessionMaxTurns(n);
-        notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Session turn limit set to ${n}`);
+        notifyApplied(ctx, pi, manager, getters, `Session turn limit set to ${n}`);
       } else {
         ctx.ui.notify("Must be a positive integer.", "warning");
       }
@@ -241,9 +235,85 @@ export async function showSettings(
       }
       setPromptCompressionLevel(level);
       const savingsLabel = level === "aggressive" ? " (~386 tok less across all prompt components vs balanced)" : level === "minimal" ? " (~609 more tok across all prompt components vs balanced)" : "";
-      notifyApplied(ctx, pi, manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled, `Prompt compression set to ${level}${savingsLabel}`);
+      notifyApplied(ctx, pi, manager, getters, `Prompt compression set to ${level}${savingsLabel}`);
       return;
     }
+  }
+}
+
+// Inline picker options for the coordination submenu. Keep these as constants
+// rather than building the arrays inline so the test fixture and the prod menu
+// always quote the exact same set of modes in the exact same order.
+const JOIN_MODE_OPTIONS: ReadonlyArray<{ mode: JoinMode; desc: string }> = [
+  { mode: "smart", desc: "auto-group 2+ agents in same turn (default)" },
+  { mode: "async", desc: "always notify individually" },
+  { mode: "group", desc: "always group background agents" },
+  { mode: "swarm", desc: "dynamic collaborative group (agents can join at runtime)" },
+];
+
+const ORCH_MODE_OPTIONS: ReadonlyArray<{ mode: OrchestrationMode; desc: string }> = [
+  { mode: "auto",   desc: "smart selection based on task complexity (default)" },
+  { mode: "single", desc: "one agent at a time" },
+  { mode: "swarm",  desc: "dynamic collaborative groups" },
+  { mode: "crew",   desc: "structured team coordination (planner/executor/reviewer)" },
+];
+
+/**
+ * Combined inline picker for join mode + orchestration mode. Reached from the
+ * single `Coordination` entry in the top-level Settings menu. Both pickers are
+ * surfaced in one ctx.ui.select call so users see the live `◀ current` marker
+ * on whichever mode is active now, and so toggling either one re-renders the
+ * other immediately (each option re-reads the getters/getOrchestrationMode
+ * inside the loop). Persists via `notifyApplied` on every accepted change.
+ *
+ * Cancelling (empty selection) exits the submenu without saving — the top
+ * Settings menu re-shows on the caller's next action.
+ */
+export async function showCoordinationMenu(
+  ctx: ExtensionCommandContext,
+  pi: ExtensionAPI,
+  manager: AgentManager,
+  getters: SettingsGetters,
+  setters: SettingsSetters,
+): Promise<void> {
+  const mark = (current: string, candidate: string): string => candidate === current ? " ◀ current" : "";
+
+  while (true) {
+    const curJoin = getters.getDefaultJoinMode();
+    const curOrch = getOrchestrationMode();
+    const options: string[] = [
+      ...JOIN_MODE_OPTIONS.map(({ mode, desc }) => `JOIN: ${mode} — ${desc}${mark(curJoin, mode)}`),
+      ...ORCH_MODE_OPTIONS.map(({ mode, desc }) => `ORCH: ${mode} — ${desc}${mark(curOrch, mode)}`),
+    ];
+    const val = await ctx.ui.select("Coordination (join + orchestration mode)", options);
+    if (!val) return;
+
+    if (val.startsWith("JOIN: ")) {
+      const mode = val.slice("JOIN: ".length).split(" ")[0] as JoinMode;
+      if (mode === curJoin) {
+        ctx.ui.notify(`Join mode already ${mode}.`, "info");
+        continue;
+      }
+      setters.setDefaultJoinMode(mode);
+      notifyApplied(ctx, pi, manager, getters, `Join mode set to ${mode}`);
+      continue;
+    }
+
+    if (val.startsWith("ORCH: ")) {
+      const mode = val.slice("ORCH: ".length).split(" ")[0] as OrchestrationMode;
+      if (mode === curOrch) {
+        ctx.ui.notify(`Orchestration mode already ${mode}.`, "info");
+        continue;
+      }
+      setOrchestrationMode(mode);
+      notifyApplied(ctx, pi, manager, getters, `Orchestration mode set to ${mode}`);
+      continue;
+    }
+
+    // Unreachable in tree (we only ever emit JOIN:/ORCH: prefixed options),
+    // but if a future refactor breaks the prefix we'd rather show a friendly
+    // message than silently no-op.
+    ctx.ui.notify("Unexpected coordination option — please report this.", "warning");
   }
 }
 
@@ -297,13 +367,10 @@ export function notifyApplied(
   ctx: ExtensionCommandContext,
   pi: ExtensionAPI,
   manager: AgentManager,
-  getDefaultMaxTurns: () => number | undefined,
-  getGraceTurns: () => number,
-  getDefaultJoinMode: () => JoinMode,
-  isSchedulingEnabled: () => boolean,
+  getters: SettingsGetters,
   successMsg: string,
 ): void {
-  const snapshot = buildSettingsSnapshot(manager, getDefaultMaxTurns, getGraceTurns, getDefaultJoinMode, isSchedulingEnabled);
+  const snapshot = buildSettingsSnapshot(manager, getters);
   const { message, level } = saveAndEmitChanged(
     snapshot,
     successMsg,

@@ -1,16 +1,41 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AgentManager } from "../agent-manager.js";
-import { getDefaultJoinMode, isSchedulingEnabled, setDefaultJoinMode, setSchedulingEnabled } from "../agent-registry.js";
+import { getDefaultJoinMode, isSchedulingEnabled, isTracingEnabled, setDefaultJoinMode, setSchedulingEnabled, setTracingEnabled } from "../agent-registry.js";
 import { getDefaultMaxTurns, getGraceTurns, setDefaultMaxTurns, setGraceTurns } from "../agent-runner.js";
 import { showAgentsMenu } from "../output-handler.js";
 import type { SubagentScheduler } from "../schedule.js";
+import type { SettingsGetters, SettingsSetters } from "../settings.js";
+import type { SwarmCoordinator } from "../swarm-join.js";
 import type { AgentActivity } from "../ui/agent-ui-types.js";
+
+/**
+ * Read-side accessors for the /agents menu. Snapshot of the current runtime
+ * state — passed as a single object so the menu signature stays stable when
+ * new menu-editable settings are added.
+ */
+const settingsGetters: SettingsGetters = {
+  getDefaultMaxTurns,
+  getGraceTurns,
+  getDefaultJoinMode,
+  isSchedulingEnabled,
+  isTracingEnabled,
+};
+
+/** Write-side counterpart of `settingsGetters`. */
+const settingsSetters: SettingsSetters = {
+  setDefaultMaxTurns,
+  setGraceTurns,
+  setDefaultJoinMode,
+  setSchedulingEnabled,
+  setTracingEnabled,
+};
 
 export function registerAgentsCommand(
   pi: ExtensionAPI,
   manager: AgentManager,
   scheduler: SubagentScheduler,
   agentActivity: Map<string, AgentActivity>,
+  swarmJoin?: SwarmCoordinator | null,
 ) {
   pi.registerCommand("agents", {
     description: "Manage agents",
@@ -20,14 +45,9 @@ export function registerAgentsCommand(
         manager,
         scheduler,
         agentActivity,
-        isSchedulingEnabled,
-        getDefaultMaxTurns,
-        getGraceTurns,
-        getDefaultJoinMode,
-        setDefaultMaxTurns,
-        setGraceTurns,
-        setDefaultJoinMode,
-        setSchedulingEnabled,
+        swarmJoin: swarmJoin ?? null,
+        settingsGetters,
+        settingsSetters,
       });
     },
   });

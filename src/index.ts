@@ -14,11 +14,12 @@ import { logger } from "./logger.js";
 
 import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { AgentManager } from "./agent-manager.js";
-import { isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setCinematicEnabled, setDashboardRefreshInterval, setDefaultJoinMode, setOrchestrationMode, setPromptCompressionLevel, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setUiStyle } from "./agent-registry.js";
+import { isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setCinematicEnabled, setDashboardRefreshInterval, setDefaultJoinMode, setOrchestrationMode, setPromptCompressionLevel, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setTracingEnabled, setUiStyle } from "./agent-registry.js";
 import { setDefaultMaxTurns, setGraceTurns } from "./agent-runner.js";
 import { BatchOrchestrator } from "./batch-orchestrator.js";
 import { registerAgentsCommand } from "./commands/agents.js";
 import { registerHooksCommand } from "./commands/hooks.js";
+import { registerTemplatesCommand } from "./commands/templates.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
 import { GroupJoinManager } from "./group-join.js";
 import { HookRegistry } from "./hooks.js";
@@ -424,6 +425,7 @@ export default async function (pi: ExtensionAPI) {
       setGraceTurns,
       setDefaultJoinMode,
       setSchedulingEnabled,
+      setTracingEnabled,
       setAnimationStyle: (style) => {
         setAnimationStyle(style);
         setSpinnerStyle(style);
@@ -453,6 +455,7 @@ export default async function (pi: ExtensionAPI) {
   pi.registerTool(createGetResultTool(toolCtx));
   pi.registerTool(createSteerTool(toolCtx));
 
-  registerAgentsCommand(pi, manager, scheduler, agentActivity);
+  registerAgentsCommand(pi, manager, scheduler, agentActivity, swarmJoin);
   registerHooksCommand(pi, hookRegistry);
+  registerTemplatesCommand(pi);
 }

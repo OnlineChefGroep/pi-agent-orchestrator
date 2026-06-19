@@ -8,8 +8,10 @@ vi.mock("../src/agent-manager.js", () => ({}));
 vi.mock("../src/agent-registry.js", () => ({
   getDefaultJoinMode: vi.fn().mockReturnValue("smart"),
   isSchedulingEnabled: vi.fn().mockReturnValue(true),
+  isTracingEnabled: vi.fn().mockReturnValue(true),
   setDefaultJoinMode: vi.fn(),
   setSchedulingEnabled: vi.fn(),
+  setTracingEnabled: vi.fn(),
 }));
 vi.mock("../src/agent-runner.js", () => ({
   getDefaultMaxTurns: vi.fn().mockReturnValue(undefined),

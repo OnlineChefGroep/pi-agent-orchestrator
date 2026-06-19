@@ -35,6 +35,17 @@ export interface SubagentsSettings {
    * (next pi session); runtime menu/runtime-fire short-circuit is immediate.
    */
   schedulingEnabled?: boolean;
+  /**
+   * Master switch for OpenTelemetry span emission in agent-runner. Defaults
+   * to `true`. When `false`: every span helper in `telemetry-otel.ts`
+   * short-circuits to a shared no-op span, so no TracerProvider is consulted
+   * and the runtime cost is one flag check per span lifecycle call. Useful
+   * for users who have configured an OTel TracerProvider globally but don't
+   * want subagent spans to show up in their traces. Runtime toggles via
+   * /agents → Settings take effect for all subsequent spans; in-flight
+   * agent spans keep their real span and end normally.
+   */
+  tracingEnabled?: boolean;
   animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";
   /**
    * UI rendering style. "cinematic" enables the Go TUI sidecar with plasma background.
@@ -90,6 +101,7 @@ export interface SettingsAppliers {
   setGraceTurns: (n: number) => void;
   setDefaultJoinMode: (mode: JoinMode) => void;
   setSchedulingEnabled: (b: boolean) => void;
+  setTracingEnabled: (b: boolean) => void;
   setAnimationStyle: (style: "braille" | "dots" | "lines" | "classic" | "none") => void;
   setUiStyle: (style: "premium" | "retro" | "plain" | "cinematic") => void;
   setCinematicEnabled: (b: boolean) => void;
@@ -101,6 +113,37 @@ export interface SettingsAppliers {
   setSessionMaxSpawns: (n: number) => void;
   setSessionMaxTurns: (n: number) => void;
   setPromptCompressionLevel: (level: PromptCompressionLevel) => void;
+}
+
+/**
+ * Read-side accessors for the settings that the /agents menu can change at
+ * runtime. The UI reads these to display "current:" labels and the
+ * buildSettingsSnapshot helper pulls from them to persist the next state.
+ * Mirrors the runtime contract that `index.ts` exposes to the menu — keep
+ * the two in sync when adding a new menu-editable setting.
+ */
+export interface SettingsGetters {
+  getDefaultMaxTurns: () => number | undefined;
+  getGraceTurns: () => number;
+  getDefaultJoinMode: () => JoinMode;
+  isSchedulingEnabled: () => boolean;
+  isTracingEnabled: () => boolean;
+}
+
+/**
+ * Write-side accessors for the same settings. The /agents menu calls these
+ * after each user mutation. Setter shape diverges slightly from
+ * `SettingsAppliers` because the menu accepts a wider input (e.g. 0/unlimited
+ * for defaultMaxTurns, which `applySettings` would reject as 0 means
+ * "unlimited" but here it means "unmark the default" so the call is
+ * `setDefaultMaxTurns(undefined)`).
+ */
+export interface SettingsSetters {
+  setDefaultMaxTurns: (n: number | undefined) => void;
+  setGraceTurns: (n: number) => void;
+  setDefaultJoinMode: (mode: JoinMode) => void;
+  setSchedulingEnabled: (b: boolean) => void;
+  setTracingEnabled: (b: boolean) => void;
 }
 
 /** Emit callback — a subset of `pi.events.emit` to keep helpers testable. */
@@ -174,7 +217,7 @@ function sanitize(raw: unknown): SubagentsSettings {
     if (v) (out as Record<string, unknown>)[key] = v;
   }
 
-  for (const key of ["schedulingEnabled", "cinematicEnabled", "showActivityStream", "showTokenUsage", "showTurnProgress"] as const) {
+  for (const key of ["schedulingEnabled", "tracingEnabled", "cinematicEnabled", "showActivityStream", "showTokenUsage", "showTurnProgress"] as const) {
     if (typeof r[key] === "boolean") {
       out[key] = validateBool(r, key, false);
     }
@@ -241,6 +284,7 @@ export function applySettings(s: SubagentsSettings, appliers: SettingsAppliers):
   if (typeof s.graceTurns === "number") appliers.setGraceTurns(s.graceTurns);
   if (s.defaultJoinMode) appliers.setDefaultJoinMode(s.defaultJoinMode);
   if (typeof s.schedulingEnabled === "boolean") appliers.setSchedulingEnabled(s.schedulingEnabled);
+  if (typeof s.tracingEnabled === "boolean") appliers.setTracingEnabled(s.tracingEnabled);
   if (s.animationStyle) appliers.setAnimationStyle(s.animationStyle);
   if (s.uiStyle) appliers.setUiStyle(s.uiStyle);
   if (typeof s.cinematicEnabled === "boolean") appliers.setCinematicEnabled(s.cinematicEnabled);

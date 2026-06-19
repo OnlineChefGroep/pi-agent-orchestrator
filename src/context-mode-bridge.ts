@@ -6,7 +6,12 @@
  * When not installed, all functions gracefully return null/empty — no errors.
  */
 
-import { CTX_TOOL_NAMES } from "./agent-types.js";
+// Import from `./ctx-tool-names.js` rather than from `./agent-types.js`.
+// This breaks the circular dependency: `agent-types.ts` already pulls in
+// `isContextModeAvailable` from this file, so the only way to avoid the cycle
+// is to keep CTX_TOOL_NAMES in a third, dependency-free module that both sides
+// import from. See `src/ctx-tool-names.ts` for the canonical definition.
+import { CTX_TOOL_NAMES } from "./ctx-tool-names.js";
 
 /** Cached availability check — lazy, checked once per process lifetime. */
 let _contextModeAvailable: boolean | null = null;

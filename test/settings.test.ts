@@ -106,6 +106,25 @@ describe("settings persistence", () => {
     expect(loadSettings(projectDir)).toEqual({});
   });
 
+  it("round-trips tracingEnabled (true and false), and absence stays absent", () => {
+    saveSettings({ tracingEnabled: false }, projectDir);
+    expect(loadSettings(projectDir)).toEqual({ tracingEnabled: false });
+
+    saveSettings({ tracingEnabled: true }, projectDir);
+    expect(loadSettings(projectDir)).toEqual({ tracingEnabled: true });
+
+    // Absence — caller's "use default" signal — must not become a stored false.
+    saveSettings({}, projectDir);
+    expect(loadSettings(projectDir)).toEqual({});
+  });
+
+  it("sanitize drops non-boolean tracingEnabled silently", async () => {
+    writeProject({ tracingEnabled: "yes" } as any);
+    expect(loadSettings(projectDir)).toEqual({});
+    writeProject({ tracingEnabled: 1 } as any);
+    expect(loadSettings(projectDir)).toEqual({});
+  });
+
   it("sanitize drops non-boolean schedulingEnabled silently", async () => {
     writeProject({ schedulingEnabled: "yes" } as any);
     expect(loadSettings(projectDir)).toEqual({});
@@ -351,6 +370,7 @@ describe("settings persistence", () => {
         setGraceTurns: vi.fn(),
         setDefaultJoinMode: vi.fn(),
         setSchedulingEnabled: vi.fn(),
+        setTracingEnabled: vi.fn(),
         setAnimationStyle: vi.fn(),
         setUiStyle: vi.fn(),
         setCinematicEnabled: vi.fn(),
@@ -457,6 +477,21 @@ describe("settings persistence", () => {
       expect(appliers.setSchedulingEnabled).not.toHaveBeenCalled();
     });
 
+    it("calls setTracingEnabled(true) when tracingEnabled is true", () => {
+      applySettings({ tracingEnabled: true }, appliers);
+      expect(appliers.setTracingEnabled).toHaveBeenCalledWith(true);
+    });
+
+    it("calls setTracingEnabled(false) when tracingEnabled is false", () => {
+      applySettings({ tracingEnabled: false }, appliers);
+      expect(appliers.setTracingEnabled).toHaveBeenCalledWith(false);
+    });
+
+    it("does not call setTracingEnabled when the field is absent", () => {
+      applySettings({ maxConcurrent: 4 }, appliers);
+      expect(appliers.setTracingEnabled).not.toHaveBeenCalled();
+    });
+
     it("applies cinematic boolean settings correctly", () => {
       applySettings({ cinematicEnabled: false, showActivityStream: true, showTokenUsage: false, showTurnProgress: true }, appliers);
       expect(appliers.setCinematicEnabled).toHaveBeenCalledWith(false);
@@ -511,6 +546,7 @@ describe("settings persistence", () => {
         setGraceTurns: vi.fn(),
         setDefaultJoinMode: vi.fn(),
         setSchedulingEnabled: vi.fn(),
+        setTracingEnabled: vi.fn(),
         setAnimationStyle: vi.fn(),
         setUiStyle: vi.fn(),
         setCinematicEnabled: vi.fn(),

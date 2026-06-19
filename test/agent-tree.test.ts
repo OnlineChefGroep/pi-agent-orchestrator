@@ -64,6 +64,79 @@ describe("agent-tree", () => {
       expect(result).toContain("parent_1 --> child_1");
       expect(result).toContain("parent_1 --> child_2");
     });
+
+    it("adds dashed edges for groupId distinct from parentId", () => {
+      const group = createMockRecord({ id: "swarm-leader", spawnedAt: 1000 });
+      const member = createMockRecord({
+        id: "swarm-member",
+        parentId: "other-parent",
+        groupId: "swarm-leader",
+        spawnedAt: 2000,
+      });
+      const otherParent = createMockRecord({ id: "other-parent", spawnedAt: 500 });
+
+      const result = buildAgentTreeMermaid([group, member, otherParent]);
+
+      // parentId edge (solid)
+      expect(result).toContain("other_parent --> swarm_member");
+      // groupId edge (dashed)
+      expect(result).toContain("swarm_leader -.-> swarm_member");
+      // Two roots (group + otherParent) → Session node should appear
+      expect(result).toContain('session["Session"]');
+    });
+
+    it("skips dashed groupId edge when it duplicates parentId", () => {
+      const parent = createMockRecord({ id: "parent", spawnedAt: 1000 });
+      const child = createMockRecord({
+        id: "child",
+        parentId: "parent",
+        groupId: "parent",  // same as parentId → no duplicate dashed edge
+        spawnedAt: 2000,
+      });
+
+      const result = buildAgentTreeMermaid([parent, child]);
+
+      // Solid parentId edge should exist
+      expect(result).toContain("parent --> child");
+      // Dashed edge must NOT appear (would be a duplicate)
+      expect(result).not.toContain("parent -.-> child");
+    });
+
+    it("adds a virtual Session node when there are multiple roots", () => {
+      const root1 = createMockRecord({ id: "root-1", spawnedAt: 1000 });
+      const root2 = createMockRecord({ id: "root-2", spawnedAt: 2000 });
+      const root3 = createMockRecord({ id: "root-3", spawnedAt: 3000 });
+
+      const result = buildAgentTreeMermaid([root1, root2, root3]);
+
+      // Virtual session node
+      expect(result).toContain('session["Session"]');
+      expect(result).toContain("session --> root_1");
+      expect(result).toContain("session --> root_2");
+      expect(result).toContain("session --> root_3");
+    });
+
+    it("does not add Session node for a single root", () => {
+      const root = createMockRecord({ id: "only-root", spawnedAt: 1000 });
+
+      const result = buildAgentTreeMermaid([root]);
+
+      expect(result).not.toContain('session["Session"]');
+      expect(result).not.toContain("session -->");
+    });
+
+    it("adds Session node for roots with parents outside the tree", () => {
+      // Two agents with parentId pointing to an agent NOT in this record set —
+      // they become roots, so Session connects them.
+      const orphan1 = createMockRecord({ id: "orphan-1", parentId: "deleted-parent", spawnedAt: 1000 });
+      const orphan2 = createMockRecord({ id: "orphan-2", parentId: "deleted-parent", spawnedAt: 2000 });
+
+      const result = buildAgentTreeMermaid([orphan1, orphan2]);
+
+      expect(result).toContain('session["Session"]');
+      expect(result).toContain("session --> orphan_1");
+      expect(result).toContain("session --> orphan_2");
+    });
   });
 
   describe("buildAgentTreeJson", () => {
