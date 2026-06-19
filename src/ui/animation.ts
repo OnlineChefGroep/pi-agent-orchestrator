@@ -1,3 +1,5 @@
+import { logger } from "../logger.js";
+
 /**
  * Ultimate CLI Spinner & Animation Engine
  * Een minimalistisch, elegant en professioneel animatie-framework voor terminal-applicaties.
@@ -290,7 +292,7 @@ export function getAlternateFrame(
  * Handige demonstratietool om alle minimalistische stijlen direct live te testen in de terminal.
  */
 export function runShowcase() {
-    console.log("=== THE ULTIMATE SPINNER SHOWCASE ===");
+    logger.info("=== THE ULTIMATE SPINNER SHOWCASE ===");
     const keys = Object.keys(SPINNER_FRAMES) as SpinnerStyle[];
     let currentKeyIndex = 0;
 
