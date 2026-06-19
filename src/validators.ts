@@ -121,7 +121,9 @@ export function parseValidationResult(text: string, agentId: string): Validation
     if (jsonMatch) {
       const jsonText = jsonMatch[1].trim();
       if (jsonText.length > MAX_OUTPUT_SIZE) {
-        throw new Error("JSON payload exceeds maximum size");
+        throw new Error(
+          `JSON payload exceeds maximum size (${jsonText.length} bytes > ${MAX_OUTPUT_SIZE} max)`,
+        );
       }
       const parsed = JSON.parse(jsonText);
       const criteria: ValidationCriterion[] = Array.isArray(parsed.criteria)
