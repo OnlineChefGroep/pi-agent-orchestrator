@@ -482,9 +482,8 @@ describe("settings persistence", () => {
       expect(appliers.setTracingEnabled).not.toHaveBeenCalled();
     });
 
-    it("applies cinematic boolean settings correctly", () => {
-      applySettings({ cinematicEnabled: false, showActivityStream: true, showTokenUsage: false, showTurnProgress: true }, appliers);
-      expect(appliers.setCinematicEnabled).toHaveBeenCalledWith(false);
+    it("applies display boolean settings correctly", () => {
+      applySettings({ showActivityStream: true, showTokenUsage: false, showTurnProgress: true }, appliers);
       expect(appliers.setShowActivityStream).toHaveBeenCalledWith(true);
       expect(appliers.setShowTokenUsage).toHaveBeenCalledWith(false);
       expect(appliers.setShowTurnProgress).toHaveBeenCalledWith(true);
