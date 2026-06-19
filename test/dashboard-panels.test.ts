@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 // Mock the external dependencies
 vi.mock(
-    "../src/ui/pi-tui-compat.js",
+    "../src/ui/tui-shim.js",
     () => ({
     visibleWidth: (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").length,
     truncateToWidth: (text) => text,

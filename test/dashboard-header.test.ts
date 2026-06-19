@@ -4,7 +4,7 @@ import type { AgentRecord } from "../src/types.js";
 
 // Mock external dependencies
 vi.mock(
-    "../src/ui/pi-tui-compat.js",
+    "../src/ui/tui-shim.js",
     () => ({
     visibleWidth: vi.fn((s: string) => {
     // Strip ANSI codes for width calculation

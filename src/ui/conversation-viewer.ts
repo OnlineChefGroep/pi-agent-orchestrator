@@ -6,7 +6,6 @@
  */
 
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { type Component, matchesKey, type TUI, visibleWidth, wrapTextWithAnsi } from "./pi-tui-compat.js";
 import { getUiStyle } from "../agent-registry.js";
 import { extractText } from "../context.js";
 import type { AgentRecord } from "../types.js";
@@ -15,6 +14,7 @@ import { buildInvocationTags, describeActivity, formatDuration, formatSessionTok
 import type { AgentActivity } from "./agent-ui-types.js";
 import { getTimeSpinnerFrame } from "./animation.js";
 import { activeTheme, fastTruncate, getBoxChars, padAndTruncate, type Theme } from "./theme.js";
+import { type Component, matchesKey, type TUI, visibleWidth, wrapTextWithAnsi } from "./tui-shim.js";
 
 /** Base lines consumed by chrome: top border + header + header sep + footer sep + footer + bottom border. */
 const CHROME_LINES_BASE = 6;

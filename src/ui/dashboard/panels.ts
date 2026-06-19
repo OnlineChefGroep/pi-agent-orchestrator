@@ -1,6 +1,6 @@
-import { visibleWidth } from "../pi-tui-compat.js";
 import type { AgentManager } from "../../agent-manager.js";
 import { type BoxChars, borderLine, type DashboardTheme, framedRow } from "../theme.js";
+import { visibleWidth } from "../tui-shim.js";
 import { activityText, agentStats, getDisplayName } from "./helpers.js";
 import { renderTurnProgress } from "./progress.js";
 import type { DashboardRenderState } from "./types.js";

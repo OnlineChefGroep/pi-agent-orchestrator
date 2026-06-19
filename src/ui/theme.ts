@@ -1,5 +1,5 @@
-import { truncateToWidth, visibleWidth } from "./pi-tui-compat.js";
 import { getUiStyle } from "../agent-registry.js";
+import { truncateToWidth, visibleWidth } from "./tui-shim.js";
 
 export type Theme = {
   fg(color: string, text: string): string;

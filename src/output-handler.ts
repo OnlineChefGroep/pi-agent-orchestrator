@@ -14,7 +14,6 @@
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { type Component, matchesKey } from "./ui/pi-tui-compat.js";
 import type { AgentManager } from "./agent-manager.js";
 import { reloadCustomAgents } from "./agent-registry.js";
 import { buildAgentTreeJson, buildAgentTreeMermaid, buildAgentTreeText } from "./agent-tree.js";
@@ -35,6 +34,7 @@ import { showHealth } from "./ui/health-view.js";
 import { showSchedulesMenu } from "./ui/schedule-menu.js";
 import { showSettings } from "./ui/settings-menu.js";
 import { getThemeColors } from "./ui/theme.js";
+import { type Component, matchesKey } from "./ui/tui-shim.js";
 
 /** Dependencies injected into the agents menu so callers don't pass 11 positional args. */
 export interface AgentsMenuDeps {

@@ -14,7 +14,7 @@ import type { AgentActivity } from "../src/ui/agent-ui-types.js";
 
 // Mock truncateToWidth / visibleWidth from pi-tui
 vi.mock(
-    "../src/ui/pi-tui-compat.js",
+    "../src/ui/tui-shim.js",
     () => ({
     truncateToWidth: (str: string) => str,
   visibleWidth: (str: string) => str.length,

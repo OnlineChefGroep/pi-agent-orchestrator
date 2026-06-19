@@ -1,7 +1,7 @@
-import { visibleWidth } from "../pi-tui-compat.js";
 import type { AgentManager } from "../../agent-manager.js";
 import { getUiStyle } from "../../agent-registry.js";
 import { type BoxChars, borderLine, type DashboardTheme, framedRow, padVisible } from "../theme.js";
+import { visibleWidth } from "../tui-shim.js";
 import type { DashboardRenderState } from "./types.js";
 
 function dashboardSummaryBar(

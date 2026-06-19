@@ -76,7 +76,7 @@ npm test -- --watch                             # watch mode
 
 ## Project nature
 
-This is a **pi extension** — it runs inside a pi coding agent host, not standalone. The `@earendil-works/pi-*` host-platform packages are never direct dependencies. (`@earendil-works/pi-tui` is no longer a direct dependency — its API surface is mirrored locally in `src/ui/pi-tui-compat.ts`. See Common Mistake #4 below for the full rule.) The entry point is declared in `package.json` → `pi.extensions` as `./src/index.ts`.
+This is a **pi extension** — it runs inside a pi coding agent host, not standalone. The `@earendil-works/pi-*` host-platform packages are never direct dependencies. (`@earendil-works/pi-tui` is no longer a direct dependency — its API surface is mirrored locally in `src/ui/tui-shim.ts`. See Common Mistake #4 below for the full rule.) The entry point is declared in `package.json` → `pi.extensions` as `./src/index.ts`.
 
 Published to **GitHub Packages** (`npm.pkg.github.com`), not npmjs.
 
@@ -131,8 +131,8 @@ The host platform packages are libraries **used by** the host runtime, not the h
 
 Three distinct categories:
 
-- **Category A — Avoidable platform types → local compat shim.** `@earendil-works/pi-tui` must never be imported: every shape this extension consumes (`Component`, `TUI`, `Text`, `visibleWidth`, `truncateToWidth`, `wrapTextWithAnsi`, `matchesKey`) is declared locally in `src/ui/pi-tui-compat.ts`. The shim mirrors the host's `Component` exactly so structural typing aligns at boundary sites (e.g. `defineTool({ renderCall })`, `registerMessageRenderer`, `ctx.ui.custom(factory)`). Do not re-introduce any direct import of `@earendil-works/pi-tui`.
-- **Category B — Unavoidable platform types → `import type` at named sites.** `@earendil-works/pi-coding-agent` and `@earendil-works/pi-ai` are required deps of this extension, so their type surfaces (`ExtensionCommandContext`, `AgentSession`, `Model`, `TextContent`, the `defineTool` / `registerMessageRenderer` / `registerTool` signatures) are unavoidable. Import those types directly with `import type` at the call sites that need them. They are required, not optional.
+- **Category A — Avoidable platform types → local compat shim.** `@earendil-works/pi-tui` must never be imported: every shape this extension consumes (`Component`, `TUI`, `Text`, `visibleWidth`, `truncateToWidth`, `wrapTextWithAnsi`, `matchesKey`) is declared locally in `src/ui/tui-shim.ts`. The shim mirrors the host's `Component` exactly so structural typing aligns at boundary sites (e.g. `defineTool({ renderCall })`, `registerMessageRenderer`, `ctx.ui.custom(factory)`). Do not re-introduce any direct import of `@earendil-works/pi-tui`.
+- **Category B — Unavoidable platform types → `import type` at named sites.** `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, and `@earendil-works/pi-agent-core` (`pi-agent-core` is in `devDependencies` for the `ThinkingLevel` type currently consumed at `src/types.ts:5`, plus the agent-loop + session type family for future use) are required deps of this extension, so their type surfaces (`ExtensionCommandContext`, `AgentSession`, `Model`, `TextContent`, `ThinkingLevel`, the `defineTool` / `registerMessageRenderer` / `registerTool` signatures) are unavoidable. Import those types directly with `import type` at the call sites that need them. They are required, not optional.
 - **Category C — Optional peer → feature detection.** `@onlinechef/context-mode` is an OPTIONAL peer (separate scope, `@onlinechef/*`) that gates the `ctx_*` tools. That case DOES use the dynamic-import / feature-detection pattern, kept in `src/context-mode-bridge.ts`. This category is the only one where feature detection is appropriate — do not apply it to Category B packages.
 
 ### 5. Windows schedule tests are known-flaky

@@ -20,7 +20,7 @@ import type { AgentActivity } from "../src/ui/agent-ui-types.js";
 // ── Mocks ───────────────────────────────────────────────────────────────────
 
 vi.mock(
-    "../src/ui/pi-tui-compat.js",
+    "../src/ui/tui-shim.js",
     () => ({
     truncateToWidth: (str: string) => str,
   visibleWidth: (str: string) => str.length,

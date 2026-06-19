@@ -4,7 +4,7 @@ import type { AgentRecord } from "../src/types.js";
 
 // Mock external dependencies
 vi.mock(
-    "../src/ui/pi-tui-compat.js",
+    "../src/ui/tui-shim.js",
     () => ({
     visibleWidth: vi.fn((s: string) => s.replace(/\u001b\[\d+(;\d+)*m/g, "").length),
     truncateToWidth: (text) => text,

@@ -5,9 +5,9 @@
  * result preview and output-file links.
  */
 
-import { Text } from "./pi-tui-compat.js";
 import type { NotificationDetails } from "../types.js";
 import { formatMs, formatTokens, formatTurns } from "./agent-format.js";
+import { Text } from "./tui-shim.js";
 
 /** Build a single notification line from NotificationDetails. */
 function renderOne(d: NotificationDetails, expanded: boolean, theme: any): string {
