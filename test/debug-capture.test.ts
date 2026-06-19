@@ -304,16 +304,20 @@ describe("debug-capture — rotation (tail-trim when file exceeds ceiling)", () 
     try {
       debugCapture.enable({ projectPath: ws.projectRoot }, "s");
       const dirPath = join(ws.projectRoot, "agents", "rotate-me");
-      mkdirSync(dirPath, { recursive: true, recursive: true });
+      mkdirSync(dirPath, { recursive: true });
       const eventPath = join(dirPath, "events.jsonl");
-      // Append enough distinct events to push the file past the 25 MiB
-      // ceiling. Each line is ~80 bytes, so 350_000 lines gives ~28 MiB,
-      // comfortably past the threshold under any reasonable overhead.
-      // Rotating the tail keeps the last half (≈ 12.5 MiB) which means
-      // the post-rotation file is dominated by the most recent lines.
-      const line = JSON.stringify({ ts: "2026-01-01T00:00:00Z", seq: 0 }) + "\n";
-      const big = line.repeat(350_000);
-      writeFileSync(eventPath, big, "utf-8");
+      // Write enough real bytes to push the file comfortably past the
+      // 25 MiB ceiling. Each line is ~150 bytes (50 bytes of fields +
+      // ~80 bytes of padding + newline), so 200_000 lines gives ~30 MiB
+      // — comfortably above the threshold with margin for JSON-overhead.
+      // The rotation then keeps the last half (≈ 12.5 MiB), so the
+      // surviving content is dominated by the most recent lines.
+      const line = JSON.stringify({
+        ts: "2026-01-01T00:00:00Z",
+        seq: 0,
+        pad: "x".repeat(80),
+      }) + "\n";
+      writeFileSync(eventPath, line.repeat(200_000), "utf-8");
       // Sanity: file is now well over the threshold.
       expect(statSync(eventPath).size).toBeGreaterThan(25 * 1024 * 1024);
       // A subsequent append must (a) not throw, (b) succeed at writing,
