@@ -95,7 +95,7 @@ describe("buildHealthReport — basic shape", () => {
   it("process section reports node version, platform, uptime, and memory", () => {
     const r = buildHealthReport(makeDeps());
     expect(r.process.nodeVersion).toBe(process.version);
-    expect(r.process.platform).toMatch(/^[a-z]+\/[a-z0-9]+$/);
+    expect(r.process.platform).toMatch(/^[a-z0-9]+\/[a-z0-9]+$/);
     expect(r.process.uptimeMs).toBeGreaterThanOrEqual(0);
     expect(r.process.memoryRssMB).toBeGreaterThan(0);
     expect(r.process.memoryHeapUsedMB).toBeGreaterThan(0);
