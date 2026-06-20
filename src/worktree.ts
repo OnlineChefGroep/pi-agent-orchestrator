@@ -136,17 +136,25 @@ export function cleanupWorktree(
 
     // Create a branch pointing to the worktree's HEAD.
     // If the branch already exists, append a suffix to avoid overwriting previous work.
-    let branchName = worktree.branch;
+
+    // Sanitize branch name to prevent command injection and ensure valid git branch format
+    const safeBranchName = worktree.branch
+      .replace(/[\r\n\x00-\x1F]/g, "")
+      .replace(/[~^:?*[\\\];"'`$\s]/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    let branchName = safeBranchName || "pi-agent-update";
+
     try {
-      execFileSync("git", ["branch", branchName], {
+      execFileSync("git", ["branch", "--", branchName], {
         cwd: worktree.path,
         stdio: "pipe",
         timeout: 5000,
       });
     } catch {
       // Branch already exists — use a unique suffix
-      branchName = `${worktree.branch}-${Date.now()}`;
-      execFileSync("git", ["branch", branchName], {
+      branchName = `${branchName}-${Date.now()}`;
+      execFileSync("git", ["branch", "--", branchName], {
         cwd: worktree.path,
         stdio: "pipe",
         timeout: 5000,

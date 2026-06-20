@@ -258,4 +258,17 @@ describe("worktree", () => {
       }
     });
   });
+
+  describe("CVE-001 mitigations for branch names", () => {
+    it("sanitizes branch names to prevent command injection", async () => {
+      const unsafeBranchName = "feature/$(touch /tmp/pwned)-`whoami`-;echo 'hacked'";
+      const safeBranchName = unsafeBranchName
+        .replace(/[\r\n\x00-\x1F]/g, "")
+        .replace(/[~^:?*[\\\];"'`$\s]/g, "-")
+        .replace(/^-+|-+$/g, "");
+      expect(safeBranchName).not.toContain("`");
+      expect(safeBranchName).not.toContain(";");
+      expect(safeBranchName).toBe("feature/-(touch-/tmp/pwned)--whoami---echo--hacked");
+    });
+  });
 });
