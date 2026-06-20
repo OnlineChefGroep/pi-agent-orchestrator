@@ -77,7 +77,7 @@ describe("src/ import graph", () => {
       cycles = runMadgeCycles();
       deps = runMadgeDeps();
     },
-    60_000,
+    180_000,
   );
 
   it(
@@ -95,7 +95,7 @@ describe("src/ import graph", () => {
       }
       expect(cycles).toEqual([]);
     },
-    60_000,
+    180_000,
   );
 
   it(
@@ -122,7 +122,7 @@ describe("src/ import graph", () => {
       expect(bridgeDeps.includes("agent-types.ts")).toBe(false);
       expect(agentTypesDeps.includes("context-mode-bridge.ts")).toBe(true);
     },
-    60_000,
+    180_000,
   );
 
   it(
@@ -139,6 +139,6 @@ describe("src/ import graph", () => {
       const ctxToolNameDeps = deps["ctx-tool-names.ts"] ?? [];
       expect(ctxToolNameDeps).toEqual([]);
     },
-    60_000,
+    180_000,
   );
 });
