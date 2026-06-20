@@ -42,7 +42,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 /** Cycles list (path is `src/a.ts → src/b.ts → ... → src/a.ts`). One call: `--circular --json`. */
 function runMadgeCycles(): readonly (readonly string[])[] {
   const stdout = execFileSync(
-    "npx",
+    process.platform === "win32" ? "npx.cmd" : "npx",
     ["--yes", "madge", "--circular", "--extensions", "ts", "--json", "src/"],
     { encoding: "utf8" },
   );
@@ -52,7 +52,7 @@ function runMadgeCycles(): readonly (readonly string[])[] {
 /** Deps map keyed by BARE filenames within src/. One call: `--json` only. */
 function runMadgeDeps(): Readonly<Record<string, readonly string[]>> {
   const stdout = execFileSync(
-    "npx",
+    process.platform === "win32" ? "npx.cmd" : "npx",
     ["--yes", "madge", "--extensions", "ts", "--json", "src/"],
     { encoding: "utf8" },
   );
