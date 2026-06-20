@@ -43,7 +43,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 function runMadgeCycles(): readonly (readonly string[])[] {
   const stdout = execFileSync(
-    "npx",
+    process.platform === "win32" ? "npx.cmd" : "npx",
     ["--yes", "madge", "--circular", "--extensions", "ts", "--json", "src/"],
     { encoding: "utf8", shell: platform() === "win32" },
   );
@@ -53,7 +53,7 @@ function runMadgeCycles(): readonly (readonly string[])[] {
 /** Deps map keyed by BARE filenames within src/. One call: `--json` only. */
 function runMadgeDeps(): Readonly<Record<string, readonly string[]>> {
   const stdout = execFileSync(
-    "npx",
+    process.platform === "win32" ? "npx.cmd" : "npx",
     ["--yes", "madge", "--extensions", "ts", "--json", "src/"],
     { encoding: "utf8", shell: platform() === "win32" },
   );
