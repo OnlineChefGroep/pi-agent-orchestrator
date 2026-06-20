@@ -37,10 +37,9 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { beforeAll, describe, expect, it } from "vitest";
-
 /** Cycles list (path is `src/a.ts → src/b.ts → ... → src/a.ts`). One call: `--circular --json`. */
 import { platform } from "node:os";
+import { beforeAll, describe, expect, it } from "vitest";
 
 function runMadgeCycles(): readonly (readonly string[])[] {
   const stdout = execFileSync(
