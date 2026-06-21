@@ -74,7 +74,7 @@
     "@types/proper-lockfile": "^4.1.4",
     "@vitest/coverage-v8": "^4.1.8",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.9"
   },
   "pi": {
     "extensions": [
