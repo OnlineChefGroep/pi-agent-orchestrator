@@ -45,7 +45,7 @@ function runMadgeCycles(): readonly (readonly string[])[] {
   const stdout = execFileSync(
     npx,
     ["--yes", "madge", "--circular", "--extensions", "ts", "--json", "src/"],
-    { encoding: "utf8" },
+    { encoding: "utf8", shell: process.platform === "win32" },
   );
   return JSON.parse(stdout) as readonly (readonly string[])[];
 }
@@ -56,7 +56,7 @@ function runMadgeDeps(): Readonly<Record<string, readonly string[]>> {
   const stdout = execFileSync(
     npx,
     ["--yes", "madge", "--extensions", "ts", "--json", "src/"],
-    { encoding: "utf8" },
+    { encoding: "utf8", shell: process.platform === "win32" },
   );
   return JSON.parse(stdout) as Readonly<Record<string, readonly string[]>>;
 }
