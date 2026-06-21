@@ -717,11 +717,12 @@ export async function runAgent(
       }
     }
 
-    if (event.type === "compaction_end" && !event.aborted && event.result) {
+    if (event.type === "compaction_end" && !event.aborted) {
+      const tokensBefore = event.result?.tokensBefore ?? 0;
       const compactionSpan = startCompactionSpan(
         options.agentId ?? "unknown",
         event.reason,
-        event.result.tokensBefore,
+        tokensBefore,
         agentCtx,
       );
       endCompactionSpan(compactionSpan);
@@ -729,12 +730,12 @@ export async function runAgent(
       options.hooks
         ?.dispatch("compaction:end", options.agentId ?? "unknown", {
           reason: event.reason,
-          tokensBefore: event.result.tokensBefore,
+          tokensBefore: tokensBefore,
         })
         .catch((err) => {
           logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
         });
-      options.onCompaction?.({ reason: event.reason, tokensBefore: event.result.tokensBefore });
+      options.onCompaction?.({ reason: event.reason, tokensBefore: tokensBefore });
     }
 
     if (event.type === "compaction_start") {
@@ -947,8 +948,8 @@ export async function resumeAgent(
           const u = msg.usage;
           if (u) options.onAssistantUsage?.({ input: u.input ?? 0, output: u.output ?? 0, cacheWrite: u.cacheWrite ?? 0 });
         }
-        if (event.type === "compaction_end" && !event.aborted && event.result) {
-          options.onCompaction?.({ reason: event.reason, tokensBefore: event.result.tokensBefore });
+        if (event.type === "compaction_end" && !event.aborted) {
+          options.onCompaction?.({ reason: event.reason, tokensBefore: event.result?.tokensBefore ?? 0 });
         }
       })
     : () => {};
