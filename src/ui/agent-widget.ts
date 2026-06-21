@@ -170,57 +170,70 @@ export class AgentWidget {
   }
 
   /** Get the agents for the current scroll page. */
-  private getVisibleWindow(agents: AgentRecord[]): AgentRecord[] {
-    // Categorize agents by display priority: running first, then queued, then finished.
-    const running: AgentRecord[] = [];
-    const queued: AgentRecord[] = [];
-    const finished: AgentRecord[] = [];
+private getVisibleWindow(agents: AgentRecord[]): AgentRecord[] {
+    let runningCount = 0;
+    let queuedCount = 0;
+    let finishedCount = 0;
+
     for (let i = 0; i < agents.length; i++) {
-      const a = agents[i];
-      if (a.status === "running") running.push(a);
-      else if (a.status === "queued") queued.push(a);
-      else finished.push(a);
+      const status = agents[i].status;
+      if (status === "running") runningCount++;
+      else if (status === "queued") queuedCount++;
+      else finishedCount++;
     }
 
-    // Compute total lines without allocating a wrapper array.
-    // running=2 lines, queued=1, finished=1.
-    const totalLines = running.length * 2 + queued.length + finished.length;
-
+    const totalLines = runningCount * 2 + queuedCount + finishedCount;
     this.maxPages = Math.max(1, Math.ceil(totalLines / PAGE_SIZE));
 
-    // Clamp scroll page
     if (this.scrollPage >= this.maxPages) {
       this.scrollPage = Math.max(0, this.maxPages - 1);
     }
 
-    // Compute visible window without wrapper objects: iterate categories directly.
     const visible: AgentRecord[] = [];
     let remainingLines = PAGE_SIZE;
     let skipped = this.scrollPage * PAGE_SIZE;
 
-    const processCategory = (arr: AgentRecord[], linesPerAgent: number) => {
-      for (let i = 0; i < arr.length; i++) {
-        if (skipped > 0) {
-          if (linesPerAgent <= skipped) {
-            skipped -= linesPerAgent;
-            continue;
-          }
-          // Agent starts mid-page after partial skip.
-          skipped = 0;
-          visible.push(arr[i]);
-          remainingLines -= linesPerAgent;
-        } else if (remainingLines >= linesPerAgent) {
-          visible.push(arr[i]);
-          remainingLines -= linesPerAgent;
-        } else {
-          return; // No more room in this page
+    const processItem = (a: AgentRecord, linesPerAgent: number) => {
+      if (remainingLines <= 0) return false;
+      if (skipped > 0) {
+        if (linesPerAgent <= skipped) {
+          skipped -= linesPerAgent;
+          return true;
         }
+        skipped = 0;
+        visible.push(a);
+        remainingLines -= linesPerAgent;
+      } else if (remainingLines >= linesPerAgent) {
+        visible.push(a);
+        remainingLines -= linesPerAgent;
+      } else {
+        return false;
       }
+      return true;
     };
 
-    processCategory(running, 2);
-    processCategory(queued, 1);
-    processCategory(finished, 1);
+    for (let i = 0; i < agents.length; i++) {
+      const a = agents[i];
+      if (a.status === "running") {
+        if (!processItem(a, 2)) break;
+      }
+    }
+    if (remainingLines > 0) {
+      for (let i = 0; i < agents.length; i++) {
+        const a = agents[i];
+        if (a.status === "queued") {
+          if (!processItem(a, 1)) break;
+        }
+      }
+    }
+    if (remainingLines > 0) {
+      for (let i = 0; i < agents.length; i++) {
+        const a = agents[i];
+        if (a.status !== "running" && a.status !== "queued") {
+          if (!processItem(a, 1)) break;
+        }
+      }
+    }
 
     return visible;
   }
