@@ -37,14 +37,15 @@
  */
 
 import { execFileSync } from "node:child_process";
+/** Cycles list (path is `src/a.ts → src/b.ts → ... → src/a.ts`). One call: `--circular --json`. */
+import { platform } from "node:os";
 import { beforeAll, describe, expect, it } from "vitest";
 
-/** Cycles list (path is `src/a.ts → src/b.ts → ... → src/a.ts`). One call: `--circular --json`. */
 function runMadgeCycles(): readonly (readonly string[])[] {
   const stdout = execFileSync(
     "npx",
     ["--yes", "madge", "--circular", "--extensions", "ts", "--json", "src/"],
-    { encoding: "utf8" },
+    { encoding: "utf8", shell: platform() === "win32" },
   );
   return JSON.parse(stdout) as readonly (readonly string[])[];
 }
@@ -54,7 +55,7 @@ function runMadgeDeps(): Readonly<Record<string, readonly string[]>> {
   const stdout = execFileSync(
     "npx",
     ["--yes", "madge", "--extensions", "ts", "--json", "src/"],
-    { encoding: "utf8" },
+    { encoding: "utf8", shell: platform() === "win32" },
   );
   return JSON.parse(stdout) as Readonly<Record<string, readonly string[]>>;
 }
