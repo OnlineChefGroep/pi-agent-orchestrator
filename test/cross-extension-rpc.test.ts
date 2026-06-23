@@ -116,7 +116,12 @@ describe("cross-extension RPC", () => {
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(reply).toHaveBeenCalledWith({ success: false, error: "No active session" });
+      expect(reply).toHaveBeenCalledWith({
+        success: false,
+        error: expect.stringMatching(
+          /^No active session for rpc:spawn \(type=general-purpose, requestId=[^)]+\)$/,
+        ),
+      });
       expect(manager.spawn).not.toHaveBeenCalled();
     });
 
@@ -531,7 +536,9 @@ describe("cross-extension RPC", () => {
       const log = getAuditLog();
       expect(log).toHaveLength(1);
       expect(log[0].outcome).toBe("error");
-      expect(log[0].metadata?.error).toBe("No active session");
+      expect(log[0].metadata?.error).toMatch(
+        /^No active session for rpc:spawn \(type=general-purpose, requestId=[^)]+\)$/,
+      );
     });
 
     it("records rate_limited outcome", async () => {

@@ -8,7 +8,7 @@
 
 ### `npm install` fails with peer dependency errors
 
-**CAUSE:** Hard peer constraints on `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui`.
+**CAUSE:** Hard peer constraints on `@earendil-works/pi-*` packages. (`@earendil-works/pi-tui` is no longer declared — it resolves transparently as a transitive of `pi-coding-agent`.)
 
 **RECOVERY:** Execute installation inside pi-coding-agent environment boundary, or override constraint checks:
 

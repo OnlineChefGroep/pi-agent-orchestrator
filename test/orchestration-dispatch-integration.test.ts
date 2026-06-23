@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@earendil-works/pi-ai", () => ({}));
 
-vi.mock("@earendil-works/pi-tui", () => {
+vi.mock("../src/ui/tui-shim.js", () => {
   class MockText {
     content: string;
     constructor(content: string, _x: unknown, _y: unknown) {

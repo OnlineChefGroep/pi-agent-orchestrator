@@ -3,9 +3,16 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentRecord } from "../src/types.js";
 
 // Mock external dependencies
-vi.mock("@earendil-works/pi-tui", () => ({
-  visibleWidth: vi.fn((s: string) => s.replace(/\u001b\[\d+(;\d+)*m/g, "").length),
-}));
+vi.mock(
+    "../src/ui/tui-shim.js",
+    () => ({
+    visibleWidth: vi.fn((s: string) => s.replace(/\u001b\[\d+(;\d+)*m/g, "").length),
+    truncateToWidth: (text) => text,
+    wrapTextWithAnsi: (text) => text.split(/\n/),
+    matchesKey: (data, keyId) => data === keyId,
+    Text: class { constructor(c) { this.content = c; } render() { return [this.content]; } },
+    })
+  );
 
 vi.mock("../src/ui/agent-format.js", () => ({
   getDisplayName: vi.fn((type: string) => (type === "Explore" ? "🔍 Explore" : `${type}`)),

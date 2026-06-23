@@ -402,7 +402,9 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
       "spawn",
       ({ requestId, type, prompt, options }) => {
         const ctx = getCtx();
-        if (!ctx) throw new Error("No active session");
+        if (!ctx) {
+          throw new Error(`No active session for rpc:spawn (type=${type}, requestId=${requestId})`);
+        }
 
         const auth = authorizeRpcMutation(deps, requestId, "spawn", { requestId, type, prompt, options });
 

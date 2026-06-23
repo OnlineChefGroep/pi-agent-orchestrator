@@ -358,7 +358,7 @@ describe("activityText", () => {
 
 // Mock getUiStyle to return "premium" for consistent tests
 const { renderDashboardHeader } = await import("../src/ui/dashboard/header.js");
-const { visibleWidth } = await import("@earendil-works/pi-tui");
+const { visibleWidth } = await import("../src/ui/tui-shim.js");
 
 function mockState(agents: AgentRecord[] = [], selectedIds = new Set<string>(), selectedIndex = 0) {
   return {

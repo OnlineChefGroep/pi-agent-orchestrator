@@ -8,10 +8,10 @@
  */
 
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { visibleWidth } from "@earendil-works/pi-tui";
 import { getUiStyle } from "../agent-registry.js";
 import type { SubagentScheduler } from "../schedule.js";
 import type { ScheduledSubagent } from "../types.js";
+import { visibleWidth } from "./tui-shim.js";
 
 /** Helper to pad a string to a specific visible width, accounting for ANSI codes. */
 function padVisible(s: string, targetLen: number, padChar = " "): string {

@@ -30,8 +30,7 @@
   ],
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.72.0",
-    "@earendil-works/pi-coding-agent": ">=0.72.0",
-    "@earendil-works/pi-tui": ">=0.78.0"
+    "@earendil-works/pi-coding-agent": ">=0.72.0"
   },
   "peerDependenciesMeta": {
     "@onlinechef/context-mode": {
@@ -42,7 +41,7 @@
     "@opentelemetry/api": "^1.9.1",
     "@sinclair/typebox": "^0.34.49",
     "croner": "^10.0.1",
-    "nanoid": "^5.1.15",
+    "nanoid": "^5.0.0",
     "proper-lockfile": "^4.1.2"
   },
   "scripts": {
@@ -68,13 +67,12 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
-    "@earendil-works/pi-agent-core": "^0.79.9",
-    "@earendil-works/pi-tui": "0.79.9",
-    "@types/node": "^25.9.4",
+    "@earendil-works/pi-agent-core": "^0.79.1",
+    "@types/node": "^25.9.3",
     "@types/proper-lockfile": "^4.1.4",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.8",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.7"
   },
   "pi": {
     "extensions": [

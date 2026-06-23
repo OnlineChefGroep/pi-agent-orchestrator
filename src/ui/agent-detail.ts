@@ -1,11 +1,11 @@
 import { readFile, unlink, writeFile } from "node:fs/promises";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { matchesKey } from "@earendil-works/pi-tui";
 import { reloadCustomAgents } from "../agent-registry.js";
 import { getAgentConfig } from "../agent-types.js";
 import { disableAgent, ejectAgent, enableAgent } from "./agent-actions.js";
 import { findAgentFile } from "./agent-file-helpers.js";
 import { borderLine, framedRow, getBoxChars, getThemeColors } from "./theme.js";
+import { matchesKey } from "./tui-shim.js";
 
 export async function showAgentPermissions(ctx: ExtensionCommandContext, record: import("../types.js").AgentRecord): Promise<void> {
   const cfg = getAgentConfig(record.type);

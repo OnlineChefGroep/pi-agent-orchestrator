@@ -12,13 +12,13 @@
  * UI styles: premium (default), retro, plain
  */
 
-import type { TUI } from "@earendil-works/pi-tui";
 import type { AgentManager } from "../agent-manager.js";
 import type { AgentRecord } from "../types.js";
 import type { AgentActivity, UICtx } from "./agent-ui-types.js";
 import { ERROR_STATUSES, renderAgentWidget } from "./agent-widget-renderer.js";
 import { RenderMetrics } from "./render-metrics.js";
 import type { Theme } from "./theme.js";
+import type { TUI } from "./tui-shim.js";
 
 // ---- Constants ----
 

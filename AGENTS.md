@@ -76,7 +76,7 @@ npm test -- --watch                             # watch mode
 
 ## Project nature
 
-This is a **pi extension** — it runs inside a pi coding agent host, not standalone. The three peer dependencies (`@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`) are the host platform and are never direct dependencies. The entry point is declared in `package.json` → `pi.extensions` as `./src/index.ts`.
+This is a **pi extension** — it runs inside a pi coding agent host, not standalone. The `@earendil-works/pi-*` host-platform packages are never direct dependencies. (`@earendil-works/pi-tui` is no longer a direct dependency — its API surface is mirrored locally in `src/ui/tui-shim.ts`. See Common Mistake #4 below for the full rule.) The entry point is declared in `package.json` → `pi.extensions` as `./src/index.ts`.
 
 Published to **GitHub Packages** (`npm.pkg.github.com`), not npmjs.
 
@@ -119,13 +119,21 @@ handoff: parseBooleanWithDefault(fm.handoff, false),
 
 Even though source is TypeScript, imports must use `.js` (not `.ts`). `import { x } from './foo.js'` ✅, `import { x } from './foo'` ❌, `import { x } from './foo.ts'` ❌.
 
-### 3. Type-only imports must use `import type`
+### 3. Type-only imports: prefer `import type`, allow inline `type` modifier
 
-`import type { Foo } from './foo.js'` for types. This is enforced by Biome and prevents accidental runtime imports of type-only modules.
+For modules where ALL imports are types, use the strict form `import type { Foo } from './foo.js'`. When a single import mixes types and runtime values from the same module, the inline form `import { type Foo, bar } from './foo.js'` is equivalent and preferred: the `type` modifier erases the typed binding at build time and prevents accidental runtime bundling. Biome's `assist/source/organizeImports` rule preserves the inline pattern, so a sweep across the codebase shows a healthy mix (current census: 214 strict `import type` lines vs 17 inline-type lines across 11 files). Use the strict form when ALL imports from a module are types; use the inline form when mixing type and value imports from the same module.
 
-### 4. The three `@earendil-works/pi-*` packages are NEVER direct deps
+### 4. Host platform packages are NEVER direct deps
 
-They are the host platform (the parent pi coding agent). Reference them via feature detection, never `import` from them in a way that assumes they exist. See `src/context-mode-bridge.ts` for the pattern.
+> **Scope:** This rule covers `@earendil-works/pi-*` host-platform packages. The optional peer `@onlinechef/context-mode` is unrelated to that scope and falls under the third category below.
+
+The host platform packages are libraries **used by** the host runtime, not the host itself. Never `import` from them in a way that assumes the package is present at runtime.
+
+Three distinct categories:
+
+- **Category A — Avoidable platform types → local compat shim.** `@earendil-works/pi-tui` must never be imported: every shape this extension consumes (`Component`, `TUI`, `Text`, `visibleWidth`, `truncateToWidth`, `wrapTextWithAnsi`, `matchesKey`) is declared locally in `src/ui/tui-shim.ts`. The shim mirrors the host's `Component` exactly so structural typing aligns at boundary sites (e.g. `defineTool({ renderCall })`, `registerMessageRenderer`, `ctx.ui.custom(factory)`). Do not re-introduce any direct import of `@earendil-works/pi-tui`.
+- **Category B — Unavoidable platform types → `import type` at named sites.** `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, and `@earendil-works/pi-agent-core` (`pi-agent-core` is in `devDependencies` for the `ThinkingLevel` type currently consumed at `src/types.ts:5`, plus the agent-loop + session type family for future use) are required deps of this extension, so their type surfaces (`ExtensionCommandContext`, `AgentSession`, `Model`, `TextContent`, `ThinkingLevel`, the `defineTool` / `registerMessageRenderer` / `registerTool` signatures) are unavoidable. Import those types directly with `import type` at the call sites that need them. They are required, not optional.
+- **Category C — Optional peer → feature detection.** `@onlinechef/context-mode` is an OPTIONAL peer (separate scope, `@onlinechef/*`) that gates the `ctx_*` tools. That case DOES use the dynamic-import / feature-detection pattern, kept in `src/context-mode-bridge.ts`. This category is the only one where feature detection is appropriate — do not apply it to Category B packages.
 
 ### 5. Windows schedule tests are known-flaky
 

@@ -193,6 +193,8 @@ interface SubagentsSettings {
   sessionMaxSpawns?: number;           // Guardrail: max agents spawned per session
   sessionMaxTurns?: number;            // Guardrail: max cumulative turns per session
   promptCompressionLevel?: PromptCompressionLevel;  // "minimal" | "balanced" | "aggressive" (default: "balanced")
+  debugCapture?: boolean;               // **OFF BY DEFAULT.** Master switch for the offline capture sink (default: false). Captures agent events, errors + stacks, schedule executions, RPC audit, and per-agent metrics to a local folder. See the `### DEBUG CAPTURE` section below.
+  debugCapturePaths?: DebugCapturePathOverrides;  // Override the two capture roots (default: `<cwd>/.pi/subagent-debug` + `<agent-dir>/subagent-debug`). Absolute paths only; failed validation is silently dropped at enable-time (does not crash startup).
 }
 ```
 
@@ -257,6 +259,58 @@ interface SettingsSetters {
 ```
 
 **USAGE:** The `registerAgentsCommand` factory in `src/commands/agents.ts` builds a single `SettingsGetters` and a single `SettingsSetters` object at module load and passes both via `AgentsMenuDeps`. `showSettings(ctx, manager, pi, scheduler, getters, setters)` and `notifyApplied(ctx, pi, manager, getters, successMsg)` consume them — adding a new menu-editable setting is now a 3-place change (interface + applier object + handler call) instead of threading a new arg through 5 function signatures.
+
+### DEBUG CAPTURE
+
+**FILE:** `src/debug-capture.ts`
+
+**OFF BY DEFAULT.** Opt-in local capture of agent lifecycle events, error stacks, schedule firings, cross-extension RPC audit entries, and per-agent metrics snapshots to a writable folder on the local filesystem. When `debugCapture` is `false`, every public `append*` function in this module is a strict no-op — no directories created, no files written, zero runtime cost beyond one boolean check per event.
+
+**ACTIVATION:** Set `debugCapture: true` in `.pi/subagents.json`. The sink activates on `session_start` for both the project cwd root and the agent dir root (unless one or both are overridden via `debugCapturePaths`). `disable()` runs on `session_shutdown` and writes `index.json` next to `manifest.json` so the two roots are cross-checkable offline.
+
+**CAPTURE FOLDER LAYOUT:**
+
+```
+<root>/
+├── manifest.json            # enable-time snapshot: paths, sessionUuid, options.maxBytesPerFile
+├── agents/<agent-id>/
+│   ├── events.jsonl         # append-only JSONL: each hook event + payload
+│   ├── errors.log           # append-only JSONL: {name, message, stack} per error
+│   └── metrics.json         # atomic JSON upsert: latest metrics snapshot per agent
+├── schedules/<job-name>/
+│   └── executions.jsonl     # append-only JSONL: schedule firings + errors
+└── rpc/
+    └── audit.jsonl          # append-only JSONL: cross-extension RPC audit trail
+```
+
+**DEFAULT ROOTS** (in priority order — both attempted, both kept):
+
+| Key | Default path | Override via |
+|---|---|---|
+| `project` | `<cwd>/.pi/subagent-debug` | `debugCapturePaths.project` |
+| `personal` | `<getAgentDir()>/subagent-debug` | `debugCapturePaths.personal` |
+
+Both paths are **validated at enable-time**: must be **absolute**, contain no `..` traversal segments, no NUL bytes, and ≤ 4 KiB. Invalid overrides are silently dropped (capture activates for the remaining valid root, or stays disabled if both fail validation) — a malformed setting never crashes startup.
+
+**ROTATION:** Per-file ceiling is **25 MiB**. When a JSONL file exceeds it, the tail half (≈ 12.5 MiB) is preserved and the head dropped. Append-then-rotate is atomic via temp+rename so a crash mid-rotation cannot leave a half-truncated file. `metrics.json`, `manifest.json`, and `index.json` are atomic upserts and are NOT subject to rotation (size stays bounded by the schema).
+
+**GUARANTEES:**
+
+- **OFF BY DEFAULT** — `debugCapture: false` ships. The no-op path costs one boolean check per event.
+- **LOCAL ONLY** — the module writes only to the paths the user/extension explicitly bound. **No network egress.** Ever.
+- **BEST-EFFORT** — every filesystem operation is wrapped in try/catch; a capture failure logs to `logger.debug` and the runtime proceeds. A capture error never breaks the agent, the dashboard, or the scheduler.
+
+**PII WARNING.** Captured content includes full agent prompts, error stacks with absolute source paths, and tool arguments — tool args frequently contain user-pasted clipboard secrets, API tokens, or session-scoped credentials. **Enable only on workloads where you trust the local filesystem with the captured content.** Review the contents of `<root>/agents/` before sharing or committing anything from these folders.
+
+**EXPOSED API:** `enable`, `disable`, `isDebugCaptureEnabled`, `getDebugCaptureManifest`, `resetDebugCapture`, `appendAgentEvent`, `appendError`, `upsertAgentMetrics`, `appendScheduleEvent`, `appendRpcAudit`, plus the `__test_rotateIfNeeded` test-only helper. The module is a pure sink — wiring lives in `src/index.ts` so the public DSL stays dependency-free (testable in isolation without a `HookRegistry` / `HookRuntime`).
+
+**ACTIVATION FLOW:**
+
+1. `applyAndEmitLoaded` reads `debugCapture` + `debugCapturePaths` from `.pi/subagents.json` at extension load.
+2. Always-on hook handlers + telemetry listeners are registered against the `HookRegistry` at extension init (one per `HOOK_EVENTS_TO_CAPTURE`), but each handler short-circuits on `!isDebugCaptureSinkOn()` so the disabled path is zero-cost.
+3. On `session_start`, the wiring calls `enable({ projectPath, personalPath }, sessionId)` once. `disable(true)` runs on `session_shutdown` to write the closing `index.json`.
+
+**TESTING:** `test/debug-capture.test.ts` covers all 12 describe-blocks: off-by-default, enable/disable lifecycle, append sinks (agent events, errors with stacks, metrics upserts, schedule firings, RPC audit), directory-name sanitization, rotation tail-keeps, FS-error resilience (mkdir fail swallowed), and `cloneSafe` payload scrubbing of non-JSON-safe values.
 
 ---
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-// Mock @earendil-works/pi-tui Text class
-vi.mock("@earendil-works/pi-tui", () => {
+// Mock ../src/ui/tui-shim.js Text class
+vi.mock("../src/ui/tui-shim.js", () => {
   class MockText {
     content: string;
     constructor(content: string, _x: number, _y: number) {

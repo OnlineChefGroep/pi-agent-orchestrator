@@ -1,8 +1,8 @@
-import { visibleWidth } from "@earendil-works/pi-tui";
 import type { AgentRecord } from "../../types.js";
 import { getDisplayName } from "../agent-format.js";
 import type { BoxChars, DashboardTheme } from "../theme.js";
 import { fastTruncate, padAndTruncate } from "../theme.js";
+import { visibleWidth } from "../tui-shim.js";
 import { activityText, agentStats, statusColor, statusIcon } from "./helpers.js";
 import { renderTurnProgress } from "./progress.js";
 import type { DashboardRenderState } from "./types.js";

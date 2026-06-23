@@ -12,11 +12,6 @@
  */
 
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import {
-  type Component,
-  matchesKey,
-  type TUI,
-} from "@earendil-works/pi-tui";
 import type { AgentManager } from "../agent-manager.js";
 import { getDashboardRefreshInterval, getUiStyle } from "../agent-registry.js";
 import type { SubagentScheduler } from "../schedule.js";
@@ -44,6 +39,11 @@ import {
   getBoxChars,
   getThemeColors,
 } from "./theme.js";
+import {
+  type Component,
+  matchesKey,
+  type TUI,
+} from "./tui-shim.js";
 
 const MIN_VIEWPORT = 8;
 export const DASHBOARD_HEIGHT_PCT = 92;

@@ -13,10 +13,16 @@ import type { AgentActivity } from "../src/ui/agent-ui-types.js";
 // ── Mocks ───────────────────────────────────────────────────────────────────
 
 // Mock truncateToWidth / visibleWidth from pi-tui
-vi.mock("@earendil-works/pi-tui", () => ({
-  truncateToWidth: (str: string) => str,
+vi.mock(
+    "../src/ui/tui-shim.js",
+    () => ({
+    truncateToWidth: (str: string) => str,
   visibleWidth: (str: string) => str.length,
-}));
+    wrapTextWithAnsi: (text) => text.split(/\n/),
+    matchesKey: (data, keyId) => data === keyId,
+    Text: class { constructor(c) { this.content = c; } render() { return [this.content]; } },
+    })
+  );
 
 // Mock agent-registry — getUiStyle returns "premium"
 vi.mock("../src/agent-registry.js", () => ({

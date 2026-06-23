@@ -1,7 +1,6 @@
 import type { Model, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type AgentToolResult, defineTool, getAgentDir } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
 import { Type } from "@sinclair/typebox";
 import type { AgentManager } from "../agent-manager.js";
 import { buildTypeListText, getDefaultJoinMode, getOrchestrationMode, isSchedulingEnabled, reloadCustomAgents } from "../agent-registry.js";
@@ -24,6 +23,7 @@ import { buildInvocationTags, describeActivity, formatMs, formatTurns, getDispla
 import type { AgentDetails, UICtx } from "../ui/agent-ui-types.js";
 import { getSpinnerFrame } from "../ui/animation.js";
 import type { Theme } from "../ui/theme.js";
+import { Text } from "../ui/tui-shim.js";
 import type { ToolContext } from "./context.js";
 
 // ---- Extracted helpers (testable independently) ----

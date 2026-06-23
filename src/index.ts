@@ -14,20 +14,49 @@ import { logger } from "./logger.js";
 
 import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { AgentManager } from "./agent-manager.js";
-import { isSchedulingEnabled, reloadCustomAgents, setAnimationStyle, setDashboardRefreshInterval, setDefaultJoinMode, setOrchestrationMode, setPromptCompressionLevel, setSchedulingEnabled, setShowActivityStream, setShowTokenUsage, setShowTurnProgress, setTracingEnabled, setUiStyle } from "./agent-registry.js";
+import {
+  getDebugCapturePaths,
+  isDebugCaptureEnabled,
+  isSchedulingEnabled,
+  reloadCustomAgents,
+  setAnimationStyle,
+  setDashboardRefreshInterval,
+  setDebugCapture,
+  setDebugCapturePaths,
+  setDefaultJoinMode,
+  setOrchestrationMode,
+  setPromptCompressionLevel,
+  setSchedulingEnabled,
+  setShowActivityStream,
+  setShowTokenUsage,
+  setShowTurnProgress,
+  setTracingEnabled,
+  setUiStyle,
+} from "./agent-registry.js";
 import { setDefaultMaxTurns, setGraceTurns } from "./agent-runner.js";
 import { BatchOrchestrator } from "./batch-orchestrator.js";
 import { registerAgentsCommand } from "./commands/agents.js";
 import { registerHooksCommand } from "./commands/hooks.js";
 import { registerTemplatesCommand } from "./commands/templates.js";
 import { registerRpcHandlers } from "./cross-extension-rpc.js";
+import {
+  appendAgentEvent,
+  appendError,
+  appendRpcAudit,
+  appendScheduleEvent,
+  disable as disableDebugCapture,
+  enable as enableDebugCapture,
+  isDebugCaptureEnabled as isDebugCaptureSinkOn,
+} from "./debug-capture.js";
 import { GroupJoinManager } from "./group-join.js";
 import { HookRegistry } from "./hooks.js";
 import { clearSubagentsApi, registerSubagentsApi } from "./public-api.js";
+import type { ScheduleChangeEvent } from "./schedule.js";
 import { SubagentScheduler } from "./schedule.js";
 import { resolveStorePath, ScheduleStore } from "./schedule-store.js";
 import { applyAndEmitLoaded } from "./settings.js";
 import { SwarmCoordinator, setActiveSwarmCoordinator } from "./swarm-join.js";
+import { onTelemetry } from "./telemetry.js";
 import {
   buildNotificationDetails, formatTaskNotification,
 } from "./tool-result-helpers.js";
@@ -266,6 +295,95 @@ export default async function (pi: ExtensionAPI) {
   // Attach the global hook registry to the agent manager
   manager.hooks = hookRegistry;
 
+  // ---- Debug-capture wiring ----
+  // Always-on hook/telemetry/pi-event handlers that forward payloads to the
+  // optional local capture sink. Each handler is a no-op when the sink is
+  // disabled so there's no observable runtime cost in the default path.
+  // The sink itself is a pure module (`debug-capture.ts`) — wiring stays
+  // here so the sink stays dependency-free and trivially testable.
+  const HOOK_EVENTS_TO_CAPTURE = [
+    "subagent:start",
+    "subagent:end",
+    "subagent:error",
+    "subagent:spawn",
+    "subagent:steer",
+    "tool:call",
+    "tool:result",
+    "compaction:start",
+    "compaction:end",
+    "turn:start",
+    "turn:end",
+    "swarm:join",
+    "swarm:leave",
+    "validation:start",
+    "validation:end",
+  ] as const;
+  // Always-on hook handlers at background priority. They never block or
+  // modify (would freeze agent syscalls) and gate on `isDebugCaptureSinkOn()`
+  // so the no-op cost is one bool read per event. The handler list is
+  // process-scoped — registered once at extension load, never unregistered.
+  for (const event of HOOK_EVENTS_TO_CAPTURE) {
+    hookRegistry.register(
+      event,
+      (payload) => {
+        if (!isDebugCaptureSinkOn()) return "allow";
+        appendAgentEvent(payload.agentId, payload.event, payload.data);
+        if (payload.event === "subagent:error" && payload.data) {
+          const data = payload.data as { error?: unknown };
+          if (data.error !== undefined) {
+            appendError(payload.agentId, data.error, { hookEvent: payload.event });
+          }
+        }
+        return "allow";
+      },
+      { priority: "background", id: `debug-capture-${event}` },
+    );
+  }
+
+  // Telemetry-driven captures: agent completion metrics + RPC audit mirror.
+  const debugTelemetryUnsubs: Array<() => void> = [];
+  debugTelemetryUnsubs.push(
+    onTelemetry("agent:completed", (payload) => {
+      if (!isDebugCaptureSinkOn()) return;
+      // Use a synthetic agent-id so different runs don't collide under one
+      // `metrics.json` snapshot — the `type` field already disambiguates.
+      const syntheticId = `${payload.type}@${new Date().toISOString().slice(0, 19)}`;
+      appendAgentEvent(syntheticId, "agent:completed", payload);
+    }),
+  );
+  debugTelemetryUnsubs.push(
+    onTelemetry("rpc:audit", (payload) => {
+      if (!isDebugCaptureSinkOn()) return;
+      appendRpcAudit(payload as Record<string, unknown>);
+    }),
+  );
+
+  // Schedule firings + errors arrive on the cross-extension event bus.
+  const scheduleUnsub = pi.events.on("subagents:scheduled", (payload) => {
+    if (!isDebugCaptureSinkOn()) return;
+    const evt = payload as ScheduleChangeEvent;
+    // Discriminated-union narrowing via switch: TS verifies exhaustiveness.
+    let jobId: string;
+    let jobName: string;
+    switch (evt.type) {
+      case "added":
+      case "updated":
+        jobId = evt.job.id;
+        jobName = evt.job.name;
+        break;
+      case "fired":
+        jobId = evt.jobId;
+        jobName = evt.name;
+        break;
+      case "error":
+      case "removed":
+        jobId = evt.jobId;
+        jobName = evt.jobId;
+        break;
+    }
+    appendScheduleEvent(jobId, jobName, evt.type, evt);
+  });
+
   // Session budget warning at 80% — emit a pi.events notification so the
   // user sees it as a non-blocking alert even if the dashboard isn't open.
   manager.setBudgetWarningHandler((type, usage, limits) => {
@@ -330,6 +448,23 @@ export default async function (pi: ExtensionAPI) {
     manager.clearCompleted();
     manager.resetSessionUsage();
     if (isSchedulingEnabled() && !scheduler.isActive()) await startScheduler(ctx);
+
+    // Activate the debug-capture sink if the persisted setting is on. No-op
+    // when off (the default) — every append* call short-circuits internally.
+    if (isDebugCaptureEnabled()) {
+      try {
+        // `getDebugCapturePaths()` returns `{ project, personal }` (the resolved
+        // defaults or user overrides); `enableDebugCapture` accepts the
+        // `{ projectPath, personalPath }` shape. Map deterministically.
+        const resolved = getDebugCapturePaths();
+        enableDebugCapture(
+          { projectPath: resolved.project, personalPath: resolved.personal },
+          ctx.sessionManager?.getSessionId?.(),
+        );
+      } catch (err) {
+        logger.debug(`debug-capture init failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   });
 
   pi.on("session_before_switch", () => {
@@ -376,6 +511,12 @@ export default async function (pi: ExtensionAPI) {
     pendingNudges.clear();
     await batchOrchestrator.dispose();
     manager.dispose();
+    // Tear down debug-capture last so any final events from the dispose
+    // chain above still land in the sink. Best-effort: enable() failures
+    // already swallow errors, and disable() is idempotent.
+    disableDebugCapture(true);
+    for (const unsub of debugTelemetryUnsubs) unsub();
+    if (scheduleUnsub) scheduleUnsub();
   });
 
   // Live widget: show running agents above editor
@@ -439,6 +580,8 @@ export default async function (pi: ExtensionAPI) {
       setSessionMaxSpawns: (n) => manager.setSessionMaxSpawns(n),
       setSessionMaxTurns: (n) => manager.setSessionMaxTurns(n),
       setPromptCompressionLevel,
+      setDebugCapture,
+      setDebugCapturePaths,
     },
     (event, payload) => pi.events.emit(event, payload),
   );

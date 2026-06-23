@@ -14,7 +14,6 @@
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { type Component, matchesKey } from "@earendil-works/pi-tui";
 import type { AgentManager } from "./agent-manager.js";
 import { reloadCustomAgents } from "./agent-registry.js";
 import { buildAgentTreeJson, buildAgentTreeMermaid, buildAgentTreeText } from "./agent-tree.js";
@@ -35,6 +34,7 @@ import { showHealth } from "./ui/health-view.js";
 import { showSchedulesMenu } from "./ui/schedule-menu.js";
 import { showSettings } from "./ui/settings-menu.js";
 import { getThemeColors } from "./ui/theme.js";
+import { type Component, matchesKey } from "./ui/tui-shim.js";
 
 /** Dependencies injected into the agents menu so callers don't pass 11 positional args. */
 export interface AgentsMenuDeps {
@@ -108,8 +108,8 @@ async function launchAgentDashboard(
         const { steerAgent } = await import("./agent-runner.js");
         await steerAgent(record.session, trimmed);
         ctx.ui.notify(`Steering message sent to ${id}.`, "info");
-      } catch (e: any) {
-        ctx.ui.notify(`Steer failed: ${e?.message ?? e}`, "error");
+      } catch (e) {
+        ctx.ui.notify(`Steer failed: ${e instanceof Error ? e.message : String(e)}`, "error");
       }
     }
 
