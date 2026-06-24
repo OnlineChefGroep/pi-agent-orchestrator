@@ -5,27 +5,32 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { EnvInfo } from "./types.js";
 
-export async function detectEnv(pi: ExtensionAPI, cwd: string): Promise<EnvInfo> {
-  let isGitRepo = false;
-  let branch = "";
-
+/**
+ * Run a git command and return its trimmed stdout, or null on any failure:
+ * git not installed, command throws, timeout, or non-zero exit code.
+ */
+async function readGitStdout(
+  pi: ExtensionAPI,
+  cwd: string,
+  args: string[],
+): Promise<string | null> {
   try {
-    const result = await pi.exec("git", ["rev-parse", "--is-inside-work-tree"], { cwd, timeout: 5000 });
-    const trimmedOutput = result.stdout.trim();
-    isGitRepo = result.code === 0 && trimmedOutput === "true";
+    const result = await pi.exec("git", args, { cwd, timeout: 5000 });
+    return result.code === 0 ? result.stdout.trim() : null;
   } catch {
-    // Not a git repo or git not installed
+    return null;
   }
+}
 
-  if (isGitRepo) {
-    try {
-      const result = await pi.exec("git", ["branch", "--show-current"], { cwd, timeout: 5000 });
-      const trimmedBranch = result.stdout.trim();
-      branch = result.code === 0 ? trimmedBranch : "unknown";
-    } catch {
-      branch = "unknown";
-    }
-  }
+export async function detectEnv(pi: ExtensionAPI, cwd: string): Promise<EnvInfo> {
+  const revParse = await readGitStdout(pi, cwd, [
+    "rev-parse",
+    "--is-inside-work-tree",
+  ]);
+  const isGitRepo = revParse === "true";
+  const branch = isGitRepo
+    ? (await readGitStdout(pi, cwd, ["branch", "--show-current"])) ?? "unknown"
+    : "";
 
   return {
     isGitRepo,
