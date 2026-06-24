@@ -13,27 +13,19 @@
  * itself, parameterised over `workspaceContext`), not an escape hatch.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, WorkspaceContext } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import { buildEnvFromContext } from "../src/env-context.js";
-import type { WorkspaceContext } from "../src/types.js";
 
 /** Minimal ExtensionAPI stub whose `workspaceContext` is the given value. */
 function mockPiWithContext(
-  workspaceContext: WorkspaceContext | null | undefined,
+  workspaceContext: WorkspaceContext | null,
 ): ExtensionAPI {
   return { workspaceContext } as unknown as ExtensionAPI;
 }
 
 describe("buildEnvFromContext", () => {
-  // 1. absent → undefined (legacy detectEnv path will be exercised
-  //    by the caller via `?? await detectEnv(...)` in src/agent-runner.ts:410).
-  it("returns undefined when workspaceContext is absent", () => {
-    const pi = mockPiWithContext(undefined);
-    expect(buildEnvFromContext(pi)).toBeUndefined();
-  });
-
-  // 2. isRepo:true + named branch → EnvInfo mapped exactly: cwd/git/branch/platform
+  // 1. isRepo:true + named branch → EnvInfo mapped exactly: cwd/git/branch/platform
   it("returns EnvInfo with branch populated when isRepo is true", () => {
     const pi = mockPiWithContext({
       cwd: "/repo",
@@ -75,7 +67,7 @@ describe("buildEnvFromContext", () => {
     },
   );
 
-  // 5. Explicit-null is a host-misconfiguration edge case: helper
+  // 4. Explicit-null is a host-misconfiguration edge case: helper
   //    must treat `workspaceContext: null` identically to absent —
   //    i.e., return undefined rather than crashing on
   //    `wc.git.isRepo`. Defensive against malformed hosts.
