@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Overdrive PR-7 Knowledge Graph",
+  "description": "Lightweight knowledge graph of the 7 bounded optimization loops of 2026-06-12 (PRs #146-#152). Nodes are PRs, patterns, and code locations; edges connect PRs to the patterns they fix and to the files they touch.",
+  "generated_at": "2026-06-12",
+  "nodes": [
+    {
+      "id": "pr-146",
+      "label": "PR #146 — Dead allocation removal (virtual-scrolling bucketing)",
+      "type": "pr",
+      "sha": "be43158b",
+      "file": "src/ui/dashboard/body.ts",
+      "win": "~20% faster on 50k agents × 100 iter",
+      "patterns": ["P1-dead-allocation"]
+    },
+    {
+      "id": "pr-147",
+      "label": "PR #147 — Queued-line rendering O(K×N) → O(N+K)",
+      "type": "pr",
+      "sha": "2c92696a",
+      "file": "src/ui/agent-widget-renderer.ts",
+      "win": "~27× hot-loop reduction",
+      "patterns": ["P2-nested-loop"]
+    },
+    {
+      "id": "pr-148",
+      "label": "PR #148 — K>>3 individual-line benchmark test",
+      "type": "pr",
+      "sha": "3b97a908",
+      "file": "test/widget-render-perf.test.ts",
+      "win": "made PR #147 CI-visible (0.248ms per render)",
+      "patterns": []
+    },
+    {
+      "id": "pr-149",
+      "label": "PR #149 — BFS sort-once + head-index (skill-loader)",
+      "type": "pr",
+      "sha": "45599a59",
+      "file": "src/skill-loader.ts",
+      "win": "O(B·D²) → O(B·D) algorithmic shift",
+      "patterns": ["P5-shift-in-loop", "P6-sort-every-iter"]
+    },
+    {
+      "id": "pr-150",
+      "label": "PR #150 — Duplicate isHandoffArtifactV2 call eliminated",
+      "type": "pr",
+      "sha": "a21f9a58",
+      "file": "src/handoff.ts",
+      "win": "~10-30% on 50-v2-artifact handoff parse",
+      "patterns": ["P7-duplicate-validation"]
+    },
+    {
+      "id": "pr-151",
+      "label": "PR #151 — truncateStrings micro-opt: Object.keys + skip-noop writes",
+      "type": "pr",
+      "sha": "14fc8583",
+      "file": "src/handoff.ts",
+      "win": "code-clarity micro-opt (within noise)",
+      "patterns": ["P8-forin-hasown"]
+    },
+    {
+      "id": "pr-152",
+      "label": "PR #152 — extractText single-pass + buildParentContext double-trim cache",
+      "type": "pr",
+      "sha": "2ac9620f",
+      "file": "src/context.ts",
+      "win": "~47% faster on 50-message buildParentContext",
+      "patterns": ["P3-filter-map-join", "P4-double-compute"]
+    },
+    {
+      "id": "P1-dead-allocation",
+      "label": "P1 — Dead allocation in hot loops (allocate-and-forget)",
+      "type": "pattern",
+      "severity": "HIGH",
+      "detector": "(manual review)",
+      "description": "Local array declared in loop body, items pushed, never read after the loop"
+    },
+    {
+      "id": "P2-nested-loop",
+      "label": "P2 — O(K×N) nested-loop anti-pattern (interleaved iteration)",
+      "type": "pattern",
+      "severity": "HIGH",
+      "detector": "(manual review)",
+      "description": "Inner loop re-iterates outer collection, filtering by per-element key comparison"
+    },
+    {
+      "id": "P3-filter-map-join",
+      "label": "P3 — .filter().map().join() chain in hot paths",
+      "type": "pattern",
+      "severity": "MEDIUM",
+      "detector": "detect-filter-map-join",
+      "description": "Chained array methods create 3+ intermediate arrays per call"
+    },
+    {
+      "id": "P4-double-compute",
+      "label": "P4 — Double-compute on the same value",
+      "type": "pattern",
+      "severity": "MEDIUM",
+      "detector": "detect-double-compute",
+      "description": "Same method (.trim, .toLowerCase, etc.) called twice on the same value"
+    },
+    {
+      "id": "P5-shift-in-loop",
+      "label": "P5 — queue.shift() in BFS / hot loop",
+      "type": "pattern",
+      "severity": "HIGH",
+      "detector": "detect-shift-in-loop",
+      "description": "shift() is O(N) per pop; turns BFS into O(B·D²)"
+    },
+    {
+      "id": "P6-sort-every-iter",
+      "label": "P6 — Sort on every iteration (cache-detached sort)",
+      "type": "pattern",
+      "severity": "MEDIUM",
+      "detector": "(manual review)",
+      "description": "Array.sort() called on cached data on every loop iteration"
+    },
+    {
+      "id": "P7-duplicate-validation",
+      "label": "P7 — Duplicate validation calls in a pipeline",
+      "type": "pattern",
+      "severity": "MEDIUM",
+      "detector": "(manual review)",
+      "description": "Same validation function called twice on the same value in adjacent pipeline phases"
+    },
+    {
+      "id": "P8-forin-hasown",
+      "label": "P8 — for...in + Object.hasOwn (prototype-chain walk)",
+      "type": "pattern",
+      "severity": "LOW",
+      "detector": "(manual review)",
+      "description": "for...in walks prototype chain; Object.keys is idiomatic"
+    },
+    {
+      "id": "src-ui-dashboard-body",
+      "label": "src/ui/dashboard/body.ts",
+      "type": "file"
+    },
+    {
+      "id": "src-ui-agent-widget-renderer",
+      "label": "src/ui/agent-widget-renderer.ts",
+      "type": "file"
+    },
+    {
+      "id": "test-widget-render-perf",
+      "label": "test/widget-render-perf.test.ts",
+      "type": "file"
+    },
+    {
+      "id": "src-skill-loader",
+      "label": "src/skill-loader.ts",
+      "type": "file"
+    },
+    {
+      "id": "src-handoff",
+      "label": "src/handoff.ts",
+      "type": "file"
+    },
+    {
+      "id": "src-context",
+      "label": "src/context.ts",
+      "type": "file"
+    }
+  ],
+  "edges": [
+    {"source": "pr-146", "target": "P1-dead-allocation", "relation": "fixes", "confidence": "EXTRACTED"},
+    {"source": "pr-146", "target": "src-ui-dashboard-body", "relation": "modifies", "confidence": "EXTRACTED"},
+    {"source": "pr-147", "target": "P2-nested-loop", "relation": "fixes", "confidence": "EXTRACTED"},
+    {"source": "pr-147", "target": "src-ui-agent-widget-renderer", "relation": "modifies", "confidence": "EXTRACTED"},
+    {"source": "pr-148", "target": "pr-147", "relation": "makes_visible", "confidence": "INFERRED", "note": "K>>3 benchmark exposes the O(K×N) win that was invisible at K=3"},
+    {"source": "pr-148", "target": "test-widget-render-perf", "relation": "modifies", "confidence": "EXTRACTED"},
+    {"source": "pr-149", "target": "P5-shift-in-loop", "relation": "fixes", "confidence": "EXTRACTED"},
+    {"source": "pr-149", "target": "P6-sort-every-iter", "relation": "fixes", "confidence": "EXTRACTED"},
+    {"source": "pr-149", "target": "src-skill-loader", "relation": "modifies", "confidence": "EXTRACTED"},
+    {"source": "pr-150", "target": "P7-duplicate-validation", "relation": "fixes", "confidence": "EXTRACTED"},
+    {"source": "pr-150", "target": "src-handoff", "relation": "modifies", "confidence": "EXTRACTED"},
+    {"source": "pr-151", "target": "P8-forin-hasown", "relation": "fixes", "confidence": "EXTRACTED"},
+    {"source": "pr-151", "target": "src-handoff", "relation": "modifies", "confidence": "EXTRACTED"},
+    {"source": "pr-152", "target": "P3-filter-map-join", "relation": "fixes", "confidence": "EXTRACTED"},
+    {"source": "pr-152", "target": "P4-double-compute", "relation": "fixes", "confidence": "EXTRACTED"},
+    {"source": "pr-152", "target": "src-context", "relation": "modifies", "confidence": "EXTRACTED"}
+  ],
+  "god_nodes": [
+    {"id": "src-handoff", "degree": 2, "note": "touched by 2 of 7 PRs (#150, #151) — high-frequency optimization target"},
+    {"id": "P3-filter-map-join", "degree": 1, "note": "well-known anti-pattern with reusable detector"},
+    {"id": "P5-shift-in-loop", "degree": 1, "note": "high-severity pattern with reusable detector"}
+  ],
+  "stats": {
+    "total_nodes": 22,
+    "total_edges": 15,
+    "prs": 7,
+    "patterns": 8,
+    "files": 6,
+    "detectors_implemented": 3,
+    "detectors_pending": 5
+  }
+}

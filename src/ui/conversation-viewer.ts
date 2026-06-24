@@ -332,7 +332,8 @@ export class ConversationViewer implements Component {
       } else if (msg.role === "toolResult") {
         const text = extractText(msg.content);
         const truncated = text.length > 800 ? `${text.slice(0, 800)}\n... (truncated)` : text;
-        if (!truncated.trim()) continue;
+        const trimmedTruncated = truncated.trim();
+        if (!trimmedTruncated) continue;
         
         const innerW = width - 6;
         if (innerW > 10) {
@@ -358,14 +359,14 @@ export class ConversationViewer implements Component {
           }
           
           lines.push(`   ${topBorder}`);
-          for (const line of wrapTextWithAnsi(truncated.trim(), innerW)) {
+          for (const line of wrapTextWithAnsi(trimmedTruncated, innerW)) {
             const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
             lines.push(`   ${leftBorder} ${paddedLine} ${rightBorder}`);
           }
           lines.push(`   ${bottomBorder}`);
         } else {
           lines.push(th.fg("warning", "[Result]"));
-          for (const line of wrapTextWithAnsi(truncated.trim(), width)) {
+          for (const line of wrapTextWithAnsi(trimmedTruncated, width)) {
             lines.push(th.fg("dim", line));
           }
         }

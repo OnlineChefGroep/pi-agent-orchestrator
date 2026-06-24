@@ -11,7 +11,8 @@ export async function detectEnv(pi: ExtensionAPI, cwd: string): Promise<EnvInfo>
 
   try {
     const result = await pi.exec("git", ["rev-parse", "--is-inside-work-tree"], { cwd, timeout: 5000 });
-    isGitRepo = result.code === 0 && result.stdout.trim() === "true";
+    const trimmedOutput = result.stdout.trim();
+    isGitRepo = result.code === 0 && trimmedOutput === "true";
   } catch {
     // Not a git repo or git not installed
   }
@@ -19,7 +20,8 @@ export async function detectEnv(pi: ExtensionAPI, cwd: string): Promise<EnvInfo>
   if (isGitRepo) {
     try {
       const result = await pi.exec("git", ["branch", "--show-current"], { cwd, timeout: 5000 });
-      branch = result.code === 0 ? result.stdout.trim() : "unknown";
+      const trimmedBranch = result.stdout.trim();
+      branch = result.code === 0 ? trimmedBranch : "unknown";
     } catch {
       branch = "unknown";
     }

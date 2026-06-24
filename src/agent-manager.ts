@@ -529,8 +529,10 @@ export class AgentManager {
 
   /** Start queued agents up to the concurrency limit. */
   private drainQueue() {
-    while (this.queue.length > 0 && this.runningBackground < this.maxConcurrent) {
-      const next = this.queue.shift()!;
+    // Use head-index instead of .shift() to avoid O(N²) on large queues (P5).
+    let head = 0;
+    while (head < this.queue.length && this.runningBackground < this.maxConcurrent) {
+      const next = this.queue[head++];
       const record = this.agents.get(next.id);
       if (record?.status !== "queued") continue;
       // startAgent is async — handle late failures via catch
@@ -545,6 +547,7 @@ export class AgentManager {
         this.onComplete?.(record);
       });
     }
+    if (head > 0) this.queue = this.queue.slice(head);
   }
 
   /**
