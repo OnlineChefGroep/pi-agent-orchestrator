@@ -21,6 +21,34 @@ level display, and async performance optimizations. MIT licensed.
 
 ## Planned Features
 
+### CHEF-100: Synchronous WorkspaceContext
+
+Eliminates the 0–10s sequential `pi.exec("git", …)` shell-out in
+`src/env.ts: detectEnv` by reading `cwd` / `git` / `platform` directly from
+the host's `ExtensionAPI` (upstream `@earendil-works/pi-coding-agent`).
+References: `docs/chef-rfcs/CHEF-100-workspace-context.md` (this repo),
+`docs/chef-rfcs/upstream/CHEF-100-host-extension.md` (upstream RFC), tracking
+issue GH #213.
+
+- ✅ **Phase 1 (v0.15.0)** — Dual-read adapter landed in `src/env-context.ts`.
+  Hosts that ship `pi.workspaceContext` are read synchronously; pre-RFC hosts
+  fall back to `detectEnv` async shell-out. Tracking in PR #215 (impl) +
+  PR #217 (parallel tests).
+- ⏳ **Phase 2 (staged; awaiting upstream RFC merge)** — Once upstream
+  `@earendil-works/pi-coding-agent` ships `WorkspaceContext` as a required,
+  non-nullable field on `ExtensionAPI`, drop the dual-read fallback at
+  `src/agent-runner.ts:414`, narrow `buildEnvFromContext`'s signature to
+  `EnvInfo` (no `| undefined`), drop the defensive `if (!wc)` check, add
+  `@deprecated` marker to `src/env.ts: detectEnv` with redirect to
+  `buildEnvFromContext`. End state staged in branch
+  `feat/CHEF-100-phase-2-cleanups` (DRAFT PR pending upstream merge).
+- ⏳ **Phase 3 (deferred; gated on 2 MINOR VERSIONS after Phase 2 ships)** —
+  Atomic deletion of `src/env.ts` + `test/env.test.ts`. Triggered AFTER 2
+  minor versions of dual-read exposure (gives downstream Pi extensions time
+  to migrate off `detectEnv`). Will follow standard
+  `feat/CHEF-100-phase-3-remove-env` branch shape. Until then, do NOT delete
+  `src/env.ts` even if no internal consumer imports it.
+
 ### Orchestration Mode Dispatch
 ✅ **Done (v0.14.1)** — `OrchestrationMode` runtime dispatch is live.
 The Agent tool's execute path calls `resolveOrchestrationMode(...)`

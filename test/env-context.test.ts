@@ -1,11 +1,12 @@
 /**
  * env-context.test.ts — Unit tests for `buildEnvFromContext`.
  *
- * Parallel-test PR for the CHEF-100 Phase 1 dual-read adapter
- * (implementation: PR #215, src/env-context.ts). Covers the
- * synchronous `pi.workspaceContext` read path. The legacy `detectEnv`
- * shell-out path is exercised in test/env.test.ts — these two files
- * together give full coverage of the dual-read's two branches.
+ * Phase 2 shape (post-upstream): the helper always returns `EnvInfo`
+ * because upstream's `ExtensionAPI.workspaceContext` is required +
+ * non-nullable. There is no `undefined` path; the explicit-null
+ * defensive test was retired in this phase. See
+ * `docs/chef-rfcs/CHEF-100-workspace-context.md` Phase 3 plan for the
+ * full dual-read → single-read migration timeline.
  *
  * Mock pattern: minimal `ExtensionAPI`-shaped object cast through
  * `unknown`. Avoids `as any` per AGENTS.md Common Mistake #8 — the
@@ -19,7 +20,7 @@ import { buildEnvFromContext } from "../src/env-context.js";
 
 /** Minimal ExtensionAPI stub whose `workspaceContext` is the given value. */
 function mockPiWithContext(
-  workspaceContext: WorkspaceContext | null,
+  workspaceContext: WorkspaceContext,
 ): ExtensionAPI {
   return { workspaceContext } as unknown as ExtensionAPI;
 }
@@ -39,7 +40,7 @@ describe("buildEnvFromContext", () => {
     });
   });
 
-  // 3. isRepo:false → branch: "" (the discriminated-union narrowing path)
+  // 2. isRepo:false → branch: "" (the discriminated-union narrowing path)
   it("returns EnvInfo with branch '' when isRepo is false", () => {
     const pi = mockPiWithContext({
       cwd: "/not-a-repo",
@@ -53,7 +54,7 @@ describe("buildEnvFromContext", () => {
     });
   });
 
-  // 4. platform flows through for every NodeJS.Platform value.
+  // 3. platform flows through for every NodeJS.Platform value.
   //    Parametrised via it.each; one assertion per platform.
   it.each(["darwin", "linux", "win32", "freebsd"] as const)(
     "preserves platform '%s' through to EnvInfo",
@@ -63,16 +64,7 @@ describe("buildEnvFromContext", () => {
         git: { isRepo: true, branch: "main" },
         platform,
       });
-      expect(buildEnvFromContext(pi)?.platform).toBe(platform);
+      expect(buildEnvFromContext(pi).platform).toBe(platform);
     },
   );
-
-  // 4. Explicit-null is a host-misconfiguration edge case: helper
-  //    must treat `workspaceContext: null` identically to absent —
-  //    i.e., return undefined rather than crashing on
-  //    `wc.git.isRepo`. Defensive against malformed hosts.
-  it("returns undefined when workspaceContext is explicitly null", () => {
-    const pi = mockPiWithContext(null);
-    expect(buildEnvFromContext(pi)).toBeUndefined();
-  });
 });

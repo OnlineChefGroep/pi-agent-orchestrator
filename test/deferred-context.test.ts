@@ -64,9 +64,10 @@ vi.mock("../src/agent-types.js", () => ({
   getToolNamesForType: vi.fn(() => ["read"]),
 }));
 
-vi.mock("../src/env.js", () => ({
-  detectEnv: vi.fn(async () => ({ isGitRepo: false, branch: "", platform: "linux" })),
-}));
+// Phase 2: the dual-read fallback in agent-runner.ts no longer imports
+// detectEnv; buildEnvFromContext reads pi.workspaceContext synchronously.
+// The vi.mock("../src/env.js") block was removed — detectEnv remains in
+// src/env.ts marked @deprecated pending CHEF-100 Phase 3 deletion.
 
 vi.mock("../src/prompts.js", () => ({
   buildAgentPrompt: vi.fn(() => "system prompt"),
@@ -121,7 +122,7 @@ const ctx = {
   sessionManager: { getBranch: vi.fn(() => []) },
 } as any;
 
-const pi = {} as any;
+const pi = { workspaceContext: { cwd: "/repo", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
 describe("deferred context engine", () => {
   it("sets AgentRecord.contextBuiltAt after context build", async () => {

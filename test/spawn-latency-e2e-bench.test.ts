@@ -79,9 +79,10 @@ vi.mock("../src/agent-types.js", () => ({
   getToolNamesForType: vi.fn(() => ["read", "write", "edit", "bash", "grep", "glob", "find"]),
 }));
 
-vi.mock("../src/env.js", () => ({
-  detectEnv: vi.fn(async () => ({ isGitRepo: true, branch: "main", platform: "linux", hasChrome: true })),
-}));
+// Phase 2: the dual-read fallback in agent-runner.ts no longer imports
+// detectEnv; buildEnvFromContext reads pi.workspaceContext synchronously.
+// The vi.mock("../src/env.js") block was removed — detectEnv remains in
+// src/env.ts marked @deprecated pending CHEF-100 Phase 3 deletion.
 
 vi.mock("../src/prompts.js", () => ({
   buildAgentPrompt: vi.fn(() => "system prompt from mock"),
@@ -203,7 +204,7 @@ describe("Benchmark: spawn latency — minimal (no inherit, no context)", () => 
     const { session } = createSession();
     createAgentSession.mockResolvedValue({ session });
     const ctx = buildCtx(0);
-    const pi = {} as any;
+    const pi = { workspaceContext: { cwd: "/tmp", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
     const runs: number[] = [];
     for (let i = 0; i < 5; i++) {
@@ -223,7 +224,7 @@ describe("Benchmark: spawn latency — minimal (no inherit, no context)", () => 
     const { session } = createSession();
     createAgentSession.mockResolvedValue({ session });
     const ctx = buildCtx(0);
-    const pi = {} as any;
+    const pi = { workspaceContext: { cwd: "/tmp", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
     // Register telemetry handler to capture agent:spawned events
     let telemetryPayload: any = null;
@@ -268,7 +269,7 @@ describe("Benchmark: spawn latency — with inheritContext", () => {
     const { session } = createSession();
     createAgentSession.mockResolvedValue({ session });
     const ctx = buildCtx(10);
-    const pi = {} as any;
+    const pi = { workspaceContext: { cwd: "/tmp", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
     const result = await runAgent(ctx, "Explore", "Hello!", {
       pi,
@@ -284,7 +285,7 @@ describe("Benchmark: spawn latency — with inheritContext", () => {
     const { session } = createSession();
     createAgentSession.mockResolvedValue({ session });
     const ctx = buildCtx(50);
-    const pi = {} as any;
+    const pi = { workspaceContext: { cwd: "/tmp", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
     const result = await runAgent(ctx, "Explore", "Hello!", {
       pi,
@@ -317,7 +318,7 @@ describe("Benchmark: spawn latency — agent-manager pipeline", () => {
   it("full AgentManager foreground spawn under 100ms", async () => {
     const manager = new AgentManager();
     const ctx = buildCtx(0);
-    const pi = {} as any;
+    const pi = { workspaceContext: { cwd: "/tmp", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
     const start = performance.now();
     const _record = await manager.spawnAndWait(pi, ctx, "Explore", "Hello!", {
@@ -364,7 +365,7 @@ describe("Benchmark: setup pipeline breakdown (performance.now() precision)", ()
       return { session };
     });
     const ctx = buildCtx(0);
-    const pi = {} as any;
+    const pi = { workspaceContext: { cwd: "/tmp", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
     const setupTimes: number[] = [];
     const wireupTimes: number[] = [];
@@ -412,7 +413,7 @@ describe("Benchmark: setup pipeline breakdown (performance.now() precision)", ()
     });
 
     const ctx = buildCtx(200);
-    const pi = {} as any;
+    const pi = { workspaceContext: { cwd: "/tmp", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
     const start = performance.now();
     await runAgent(ctx, "Explore", "Hello!", { pi, inheritContext: true });
@@ -461,7 +462,7 @@ describe("Benchmark: AgentManager queueing pipeline", () => {
     const { AgentManager } = await import("../src/agent-manager.js");
     const manager = new AgentManager(() => {}, 1); // maxConcurrent = 1
     const ctx = buildCtx(0);
-    const pi = {} as any;
+    const pi = { workspaceContext: { cwd: "/tmp", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
     const t0 = performance.now();
 
@@ -525,7 +526,7 @@ describe("Benchmark: AgentManager worktree isolation", () => {
     const { AgentManager } = await import("../src/agent-manager.js");
     const manager = new AgentManager();
     const ctx = buildCtx(0);
-    const pi = {} as any;
+    const pi = { workspaceContext: { cwd: "/tmp", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
     const start = performance.now();
     // Use spawn() + manual await because spawnAndWait() expects record.promise
@@ -552,7 +553,7 @@ describe("Benchmark: AgentManager worktree isolation", () => {
     const { AgentManager } = await import("../src/agent-manager.js");
     const manager = new AgentManager();
     const ctx = buildCtx(0);
-    const pi = {} as any;
+    const pi = { workspaceContext: { cwd: "/tmp", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
     const start = performance.now();
     await manager.spawnAndWait(pi, ctx, "Explore", "Hello!", {
@@ -586,7 +587,7 @@ describe("Benchmark: AgentManager permission inheritance", () => {
     const { AgentManager } = await import("../src/agent-manager.js");
     const manager = new AgentManager();
     const ctx = buildCtx(0);
-    const pi = {} as any;
+    const pi = { workspaceContext: { cwd: "/tmp", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
     // Push a synthetic parent record onto the active stack so startAgent
     // finds it and computes parentConfig via getConfig(parentRecord.type).

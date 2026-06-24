@@ -28,7 +28,6 @@ import { type EffectiveConfig, getAgentConfig, getConfig, getMemoryToolNames, ge
 import { buildParentContext, extractText } from "./context.js";
 import { buildCtxInjection } from "./context-mode-bridge.js";
 import { DEFAULT_AGENTS } from "./default-agents.js";
-import { detectEnv } from "./env.js";
 import { buildEnvFromContext } from "./env-context.js";
 import { type AgentHandoff, parseHandoff, renderHandoffForParent } from "./handoff.js";
 import { type HookRegistry } from "./hooks.js";
@@ -408,10 +407,12 @@ export async function runAgent(
   });
 
   const effectiveCwd = options.cwd ?? ctx.cwd;
-  // CHEF-100 Phase 1 dual-read: consume host workspaceContext when
-  // available (zero shell-out), fall back to legacy detectEnv on pre-RFC
-  // hosts. See src/env-context.ts and docs/chef-rfcs/CHEF-100-workspace-context.md.
-  const env = buildEnvFromContext(options.pi) ?? await detectEnv(options.pi, effectiveCwd);
+  // CHEF-100 Phase 2: post-upstream, buildEnvFromContext always returns
+  // (host guarantees workspaceContext presence). The legacy detectEnv
+  // fallback is removed; detectEnv remains marked @deprecated in src/env.ts
+  // for downstream consumers until Phase 3 deletion.
+  // See src/env-context.ts and docs/chef-rfcs/CHEF-100-workspace-context.md.
+  const env = buildEnvFromContext(options.pi);
   const parentSystemPrompt = ctx.getSystemPrompt();
 
   // Resolve extensions/skills

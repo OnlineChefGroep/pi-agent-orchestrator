@@ -170,9 +170,10 @@ vi.mock("../src/agent-types.js", () => ({
   getToolNamesForType: vi.fn(() => ["read"]),
 }));
 
-vi.mock("../src/env.js", () => ({
-  detectEnv: vi.fn(async () => ({ isGitRepo: false, branch: "", platform: "linux" })),
-}));
+// Phase 2: the dual-read fallback in agent-runner.ts no longer imports
+// detectEnv; buildEnvFromContext reads pi.workspaceContext synchronously.
+// The vi.mock("../src/env.js") block was removed — detectEnv remains in
+// src/env.ts marked @deprecated pending CHEF-100 Phase 3 deletion.
 
 vi.mock("../src/prompts.js", () => ({
   buildAgentPrompt: vi.fn(() => "system prompt"),
@@ -189,6 +190,8 @@ vi.mock("../src/skill-loader.js", () => ({
 
 import { runAgent } from "../src/agent-runner.js";
 import { resetTracer } from "../src/telemetry-otel.js";
+
+const pi = { workspaceContext: { cwd: "/repo", git: { isRepo: true, branch: "main" }, platform: "linux" } } as any;
 
 // ── Session harness ─────────────────────────────────────────────────────
 
@@ -264,7 +267,10 @@ const ctx = {
   sessionManager: { getBranch: vi.fn(() => []) },
 } as any;
 
-const pi = {} as any;
+// (DELIBERATELY REMOVED) The second `const pi = {} as any;` definition lived
+// further down in agent-runner-otel.test.ts (line ~270 in the prior revision)
+// and has been deleted in this PR — the workspaceContext fixture prepended
+// above the `import { runAgent }` block is the single source of truth.
 
 beforeEach(() => {
   // Reset the library's tracer cache so each test exercises the mock's
