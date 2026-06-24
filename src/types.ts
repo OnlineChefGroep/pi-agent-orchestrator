@@ -228,6 +228,28 @@ export interface EnvInfo {
 }
 
 /**
+ * Local mirror of the upstream `WorkspaceContext` type proposed in CHEF-100.
+ *
+ * Lives here (not in src/env-context.ts) because it is a value shape, not
+ * a function, and the codebase already groups workspace metadata types
+ * together (EnvInfo). When `@earendil-works/pi-coding-agent` ships the
+ * type, replace this definition with:
+ *
+ *   import type { WorkspaceContext } from "@earendil-works/pi-coding-agent";
+ *
+ * Then delete this block. The discriminated `git` shape mirrors the
+ * upstream RFC; `branch: ""` may occur for both detached HEAD and unborn
+ * branch (see docs/chef-rfcs/CHEF-100-workspace-context.md).
+ */
+export interface WorkspaceContext {
+    readonly cwd: string;
+    readonly git:
+        | { readonly isRepo: true; readonly branch: string }
+        | { readonly isRepo: false };
+    readonly platform: NodeJS.Platform;
+}
+
+/**
  * A subagent spawn registered to fire on a schedule.
  */
 export interface ScheduledSubagent {
