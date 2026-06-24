@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.15.0 (2026-06-24)
+
+### Open-Source Public Release
+
+- **Public repo**: Repository made public on GitHub (`OnlineChefGroep/pi-agent-orchestrator`)
+- **publishConfig**: Default registry now points to npmjs.org (was GitHub Packages); CI still dual-publishes
+- **HANDOFF.md**: Removed staging-remote import workflow; repo is directly public
+- **Version consistency**: All files aligned on v0.15.0 (package.json, README, ROADMAP, VERVOLG_PLAN, CHANGELOG)
+- **Test counts**: Updated to 1667 tests across 93 test files
+
+### Metrics
+
+- 1667 tests across 93 test files. Typecheck + lint green. All 61 benchmarks OK.
+
 ## v0.14.1 (2026-06-16)
 
 ### Features
