@@ -2,30 +2,17 @@
 
 ## Current State
 
-**v0.14.1** — Latest stable release on top of v0.12.1. Adds the
-**Tracing master switch** (per-process `tracingEnabled` toggle in
-`/agents → Settings`; runtime short-circuits every OTel span helper to
-a shared no-op so the cost of span creation is one flag check) plus
-**per-agent correlation ids** (8 hex chars from a v4 UUID, generated
-at spawn and preserved across `resumeAgent`, attached to the
-`agent.run:*` span as the OTel `correlation.id` attribute and echoed
-on the helper return value for log helpers to read). Also ships the
-**`/agents → Health check` command** — a TUI overlay (read-only
-editor buffer) that snapshots the runtime: node version + memory,
-tracing state, circuit-breaker state, scheduler (active / job count
-/ feature enabled), swarm coordinator (swarms / agents / deliveries),
-agent counts by status (with the correlation id of each recent
-error), session usage + limits, and the full settings surface —
-including the dispatch-decision histogram (see Planned Features
-below). The v0.14.1 release also bundles the `SettingsGetters` /
-`SettingsSetters` refactor that stops the 14-positional-arg spiral on
-`showSettings` and `notifyApplied` (now with the inline
-`Coordination` menu entry that surfaces both join mode and
-orchestration mode in a single picker — see Planned Features),
-a 200-line reduction in `test/handoff-v2.test.ts` benchmark noise,
-and a `_tracer` cache reset helper for `resetTracer()` (used after a
-`TracerProvider` swap in tests).
-**1619 tests** across **90 test files** pass (typecheck ✅, lint ✅).
+**v0.15.0** — Open-source public release: repository made public,
+publishConfig now defaults to npmjs.org, HANDOFF.md updated for direct
+public access, and all version/doc counts aligned across the project.
+
+Prior release v0.14.1 added the **Tracing master switch**, **per-agent
+correlation ids**, the **Health check command**, **SettingsGetters** /
+**SettingsSetters** refactor, and the **dispatch-decision histogram**.
+v0.14.0 shipped **orchestration dispatch** (single/swarm/crew/auto),
+**execution tree visualization**, and the **agent templates registry**.
+
+**1667 tests** across **93 test files** pass (typecheck ✅, lint ✅).
 
 Prior releases: v0.12.1 — subagent orchestration, TUI dashboard,
 swarm coordination, scheduling engine, hooks, permission inheritance,
@@ -73,7 +60,7 @@ a real `tool.execute(...)` through crew / swarm / single /
 auto→crew / auto→swarm / auto→single and asserts the
 `batchOrchestrator.flush` + `record.promise` ordering (deferred
 `runAgent` proves the swarm is finalized before any record
-resolves). **1612 tests** across **90 test files** pass.
+resolves).
 
 ### Dispatch-Decision Histogram
 ✅ **Done (v0.14.1)** — the `/agents → Health check` report now

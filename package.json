@@ -1,6 +1,6 @@
 {
   "name": "@onlinechefgroep/pi-agent-orchestrator",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "Pi extension for orchestrating autonomous coding agents with TUI dashboard, scheduling, swarms, handoffs, and prompt compression.",
   "author": "OnlineChef",
   "license": "MIT",
@@ -22,7 +22,7 @@
   ],
   "files": [
     "src/",
-    "docs/",
+    "docs/*.md",
     "examples/",
     "README.md",
     "CHANGELOG.md",
@@ -80,6 +80,6 @@
     ]
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://registry.npmjs.org"
   }
 }
