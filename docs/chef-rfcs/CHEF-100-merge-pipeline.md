@@ -4,7 +4,7 @@ Canonical sequence for landing the full CHEF-100 dual-read chain in `main`.
 
 ## Goal
 
-Get the dual-read chain (`src/env-context.ts`, dual-read at `src/agent-runner.ts:410`, full test coverage, post-RFC upstream-import refactor) into `main` — **after** upstream `@earendil-works/pi-coding-agent` ships `WorkspaceContext` in a minor version bump.
+Get the dual-read chain (`src/env-context.ts`, dual-read at `src/agent-runner.ts:414`, full test coverage, post-RFC upstream-import refactor) into `main` — **after** upstream `@earendil-works/pi-coding-agent` ships `WorkspaceContext` in a minor version bump.
 
 ## Pipeline order
 
