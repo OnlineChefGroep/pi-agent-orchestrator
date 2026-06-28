@@ -723,6 +723,7 @@ export async function runAgent(
 
     if (event.type === "compaction_end" && !event.aborted) {
       const tokensBefore = event.result?.tokensBefore ?? 0;
+      options.onCompaction?.({ reason: event.reason, tokensBefore });
       const compactionSpan = startCompactionSpan(
         options.agentId ?? "unknown",
         event.reason,
@@ -739,7 +740,6 @@ export async function runAgent(
         .catch((err) => {
           logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
         });
-      options.onCompaction?.({ reason: event.reason, tokensBefore: tokensBefore });
     }
 
     if (event.type === "compaction_start") {

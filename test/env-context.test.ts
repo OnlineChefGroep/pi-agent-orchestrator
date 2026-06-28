@@ -13,9 +13,10 @@
  * itself, parameterised over `workspaceContext`), not an escape hatch.
  */
 
-import type { ExtensionAPI, WorkspaceContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import { buildEnvFromContext } from "../src/env-context.js";
+import type { WorkspaceContext } from "../src/types.js";
 
 /** Minimal ExtensionAPI stub whose `workspaceContext` is the given value. */
 function mockPiWithContext(

@@ -256,3 +256,9 @@ export interface ScheduleStoreData {
     version: 1;
     jobs: ScheduledSubagent[];
 }
+
+export interface WorkspaceContext {
+  cwd: string;
+  git: { isRepo: true; branch: string } | { isRepo: false };
+  platform: NodeJS.Platform;
+}
