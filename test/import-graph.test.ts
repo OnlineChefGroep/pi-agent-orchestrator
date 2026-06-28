@@ -70,14 +70,14 @@ describe("src/ import graph", () => {
   // madge call fails (npx fetch error, tsconfig parse error), vitest surfaces
   // it as a setup error for this file rather than per-test failures.
   //
-  // 60s hook timeout: npx cold-start of `madge` plus two madge invocations
+  // 120s hook timeout: npx cold-start of `madge` plus two madge invocations
   // (each parses the full src/ tree) can take 15-30s on a fresh CI runner.
   beforeAll(
     () => {
       cycles = runMadgeCycles();
       deps = runMadgeDeps();
     },
-    60_000,
+    120_000,
   );
 
   it(
