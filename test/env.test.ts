@@ -1,88 +1,81 @@
-import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+/**
+ * env.test.ts — Unit tests for `detectEnv`.
+ *
+ * All scenarios mock `pi.exec()` with `vi.fn()` rather than shelling out
+ * to the real git binary. The prior version used `execSync` against a
+ * temp directory for the happy paths, which made the file flaky on
+ * Windows (temp-dir race pattern, AGENTS.md #5) and added a system
+ * dependency for testing pure logic.
+ */
+
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { detectEnv } from "../src/env.js";
 
-/** Minimal mock of pi.exec() that shells out via child_process. */
-function mockPi(): ExtensionAPI {
-  return {
-    exec: async (command: string, args: string[], options?: { cwd?: string; timeout?: number }) => {
-      try {
-        const stdout = execSync(`${command} ${args.join(" ")}`, {
-          cwd: options?.cwd,
-          encoding: "utf-8",
-          stdio: ["pipe", "pipe", "pipe"],
-          timeout: options?.timeout,
-        });
-        return { stdout, stderr: "", code: 0, killed: false };
-      } catch (err: any) {
-        return { stdout: "", stderr: err.stderr ?? "", code: err.status ?? 1, killed: false };
-      }
-    },
-  } as unknown as ExtensionAPI;
+/** Minimal ExtensionAPI stub whose `exec` method is the given `vi.fn`. */
+function mockPi(exec: ReturnType<typeof vi.fn>): ExtensionAPI {
+  return { exec } as unknown as ExtensionAPI;
 }
 
 describe("detectEnv", () => {
-  it("detects git repo in current project", async () => {
-    // Create a temp git repo to avoid issues with bare repos or worktree setups
-    const tmpDir = mkdtempSync(join(tmpdir(), "pi-env-git-"));
-    try {
-      execSync("git init && git config user.email test@test.com && git config user.name Test && git commit --allow-empty -m init", {
-        cwd: tmpDir, stdio: "pipe",
-      });
-      const env = await detectEnv(mockPi(), tmpDir);
-      expect(env.isGitRepo).toBe(true);
-      expect(env.platform).toBe(process.platform);
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
-    }
+  it("returns isGitRepo=false and branch='' when rev-parse reports 'false'", async () => {
+    const exec = vi.fn().mockResolvedValue({ code: 0, stdout: "false" });
+    const env = await detectEnv(mockPi(exec), "/tmp/non-git");
+
+    expect(env.isGitRepo).toBe(false);
+    expect(env.branch).toBe("");
+    expect(typeof env.platform).toBe("string");
+
+    // Branch command must NOT be issued when not in a git repo (early return).
+    expect(exec).toHaveBeenCalledTimes(1);
   });
 
-  it("returns branch name when on a branch", async () => {
-    // Create a temp repo on a known branch to test branch detection
-    const tmpDir = mkdtempSync(join(tmpdir(), "pi-env-branch-"));
-    try {
-      execSync("git init && git config user.email test@test.com && git config user.name Test && git checkout -b test-branch && git commit --allow-empty -m init", {
-        cwd: tmpDir, stdio: "pipe",
-      });
-      const env = await detectEnv(mockPi(), tmpDir);
-      expect(env.isGitRepo).toBe(true);
-      expect(env.branch).toBe("test-branch");
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
+  it("returns branch='unknown' when the branch command throws", async () => {
+    const exec = vi
+      .fn()
+      .mockResolvedValueOnce({ code: 0, stdout: "true" })
+      .mockRejectedValueOnce(new Error("git: broken pipe"));
 
-  it("detects non-git directory", async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "pi-env-test-"));
-    try {
-      const env = await detectEnv(mockPi(), tmpDir);
-      expect(env.isGitRepo).toBe(false);
-      expect(env.branch).toBe("");
-      expect(env.platform).toBe(process.platform);
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
+    const env = await detectEnv(mockPi(exec), "/repo");
 
-  it("handles git branch command failure gracefully", async () => {
-    const errorMockPi = {
-      exec: async (_command, args) => {
-        if (args.includes("rev-parse")) {
-          return { stdout: "true", stderr: "", code: 0, killed: false };
-        }
-        if (args.includes("branch")) {
-          throw new Error("Simulated branch failure");
-        }
-        return { stdout: "", stderr: "", code: 1, killed: false };
-      }
-    };
-
-    const env = await detectEnv(errorMockPi, process.cwd());
     expect(env.isGitRepo).toBe(true);
     expect(env.branch).toBe("unknown");
+  });
+
+  it("returns branch='unknown' when the branch command exits non-zero", async () => {
+    const exec = vi
+      .fn()
+      .mockResolvedValueOnce({ code: 0, stdout: "true" })
+      .mockResolvedValueOnce({ code: 128, stdout: "" });
+
+    const env = await detectEnv(mockPi(exec), "/repo");
+
+    expect(env.isGitRepo).toBe(true);
+    expect(env.branch).toBe("unknown");
+  });
+
+  it("returns branch='' on detached HEAD (empty stdout, code===0)", async () => {
+    const exec = vi
+      .fn()
+      .mockResolvedValueOnce({ code: 0, stdout: "true" })
+      .mockResolvedValueOnce({ code: 0, stdout: "" });
+
+    const env = await detectEnv(mockPi(exec), "/repo");
+
+    expect(env.isGitRepo).toBe(true);
+    // `?? "unknown"` only triggers on null/undefined; empty stdout stays empty.
+    expect(env.branch).toBe("");
+  });
+
+  it("returns the trimmed branch name when on a named branch", async () => {
+    const exec = vi
+      .fn()
+      .mockResolvedValueOnce({ code: 0, stdout: "true" })
+      .mockResolvedValueOnce({ code: 0, stdout: "feat/auth\n  " });
+
+    const env = await detectEnv(mockPi(exec), "/repo");
+
+    expect(env.isGitRepo).toBe(true);
+    expect(env.branch).toBe("feat/auth");
   });
 });
