@@ -27,7 +27,7 @@ import type { EnvInfo } from "./types.js";
  * reported as `""` to match the EnvInfo contract used by `buildAgentPrompt`.
  */
 export function buildEnvFromContext(pi: ExtensionAPI): EnvInfo {
-  const wc = pi.workspaceContext;
+  const wc = (pi as any).workspaceContext;
   return {
     isGitRepo: wc.git.isRepo,
     branch: wc.git.isRepo ? wc.git.branch : "",
