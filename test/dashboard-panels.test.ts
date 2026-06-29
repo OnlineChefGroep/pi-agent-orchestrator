@@ -1,16 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
 // Mock the external dependencies
-vi.mock(
-    "../src/ui/tui-shim.js",
-    () => ({
+vi.mock("../src/ui/tui-shim.js", () => ({
     visibleWidth: (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").length,
     truncateToWidth: (text) => text,
     wrapTextWithAnsi: (text) => text.split(/\n/),
     matchesKey: (data, keyId) => data === keyId,
     Text: class { constructor(c) { this.content = c; } render() { return [this.content]; } },
-    })
-  );
+    getAnsiSequenceLength: (str: string, i: number) => 0 }));
 
 vi.mock("../src/ui/theme.js", () => ({
   framedRow: (text: string, _w: number, _th: unknown, _box: unknown) => `| ${text} |`,
