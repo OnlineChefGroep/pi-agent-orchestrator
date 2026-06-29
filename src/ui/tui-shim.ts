@@ -222,8 +222,9 @@ export function truncateToWidth(
   pad: boolean = false,
 ): string {
   if (maxWidth <= 0) return "";
-  if (visibleWidth(text) <= maxWidth) {
-    return pad ? text + " ".repeat(maxWidth - visibleWidth(text)) : text;
+  const textWidth = visibleWidth(text);
+  if (textWidth <= maxWidth) {
+    return pad ? text + " ".repeat(maxWidth - textWidth) : text;
   }
 
   // Slice character-by-character while tallying visible width, skipping
@@ -296,7 +297,7 @@ export function wrapTextWithAnsi(text: string, width: number): string[] {
         let rest = tok;
         while (visibleWidth(rest) > width) {
           const prefix = takeVisible(rest, width);
-          wrapped.push(truncateToWidth(rest, width));
+          wrapped.push(truncateToWidth(rest, width, ""));
           rest = rest.slice(prefix.length);
         }
         // Whatever's left at the end (still > width would loop again, but
