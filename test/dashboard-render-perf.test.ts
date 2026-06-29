@@ -34,7 +34,7 @@ vi.mock("../src/ui/tui-shim.js", () => ({
   },
     wrapTextWithAnsi: (text) => text.split(/\n/),
     Text: class { constructor(c) { this.content = c; } render() { return [this.content]; } },
-    getAnsiSequenceLength: (str: string, i: number) => 0 }));
+      getAnsiSequenceLength: (_str: string, _i: number) => 0 }));
 
 vi.mock("../src/agent-registry.js", () => ({
   getUiStyle: () => "premium",

@@ -34,12 +34,9 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Match one ANSI escape sequence. SGR only (CSI ... m). Conservative — covers what the UI emits. */
-const ANSI_RE = /\u001b\[[0-9;]*[A-Za-z]/g;
+const _ANSI_RE = /\u001b\[[0-9;]*[A-Za-z]/g;
 
-/** Strip ANSI escape codes from a string. Used internally by width helpers. */
-function _stripAnsi(s: string): string {
-  return s.replace(ANSI_RE, "");
-}
+
 
 // ────────────────────────────────────────────────────────────────────────────
 // TUI — minimal interface for the host's TUI runtime object.
@@ -192,6 +189,32 @@ export function visibleWidth(str: string): number {
 
 const DEFAULT_ELLIPSIS = "…";
 
+/**
+ * Extract the longest prefix of `text` whose visible width is exactly
+ * `maxWidth` (or shorter if `text` doesn't fill that width), preserving
+ * ANSI escapes verbatim. No ellipsis, no ANSI reset appended —
+ * `takeVisible` is meant to be paired with `truncateToWidth` for slicing
+ * arithmetic (consume-the-prefix loops), not for display.
+ */
+function takeVisible(text: string, maxWidth: number): string {
+  if (maxWidth <= 0 || text.length === 0) return "";
+  let out = "";
+  let visLen = 0;
+  let i = 0;
+  while (i < text.length && visLen < maxWidth) {
+    const ansiLen = getAnsiSequenceLength(text, i);
+    if (ansiLen > 0) {
+      out += text.slice(i, i + ansiLen);
+      i += ansiLen;
+      continue;
+    }
+    out += text[i];
+    visLen++;
+    i++;
+  }
+  return out;
+}
+
 export function truncateToWidth(
   text: string,
   maxWidth: number,
@@ -199,38 +222,23 @@ export function truncateToWidth(
   pad: boolean = false,
 ): string {
   if (maxWidth <= 0) return "";
-
-  const ellipsisW = pad ? 0 : visibleWidth(ellipsis);
-  const budget = pad ? maxWidth : Math.max(0, maxWidth - ellipsisW);
-
-  let visLen = 0;
-  let i = 0;
-  let outIndex = -1;
-
-  while (i < text.length) {
-    const ansiLen = getAnsiSequenceLength(text, i);
-    if (ansiLen > 0) {
-      i += ansiLen;
-      continue;
-    }
-
-    if (visLen === budget && outIndex === -1) {
-      outIndex = i;
-    }
-
-    visLen++;
-    i++;
+  if (visibleWidth(text) <= maxWidth) {
+    return pad ? text + " ".repeat(maxWidth - visibleWidth(text)) : text;
   }
 
-  if (visLen <= maxWidth) {
-    return pad ? text + " ".repeat(maxWidth - visLen) : text;
-  }
+  // Slice character-by-character while tallying visible width, skipping
+  // ANSI escape sequences (they have visible width 0). Ellipsis-width is
+  // reserved up-front unless we're padding with spaces.
+  const budget = pad ? maxWidth : Math.max(0, maxWidth - visibleWidth(ellipsis));
+  const prefix = takeVisible(text, budget);
+  let out = prefix;
 
-  if (outIndex === -1) outIndex = i;
-
-  let out = text.slice(0, outIndex);
+  // Append ellipsis (unless padding) and ALWAYS close any ANSI state we left
+  // open — otherwise the next terminal line inherits the truncated color and
+  // the wrapped output looks wrong.
   if (!pad) out += ellipsis;
   out += "\u001b[0m";
+
   return out;
 }
 
@@ -287,19 +295,9 @@ export function wrapTextWithAnsi(text: string, width: number): string[] {
         // and `truncateToWidth` for the displayed line.
         let rest = tok;
         while (visibleWidth(rest) > width) {
-          let visLen = 0;
-          let i = 0;
-          while (i < rest.length && visLen < width) {
-            const ansiLen = getAnsiSequenceLength(rest, i);
-            if (ansiLen > 0) {
-              i += ansiLen;
-              continue;
-            }
-            visLen++;
-            i++;
-          }
+          const prefix = takeVisible(rest, width);
           wrapped.push(truncateToWidth(rest, width));
-          rest = rest.slice(i);
+          rest = rest.slice(prefix.length);
         }
         // Whatever's left at the end (still > width would loop again, but
         // takeVisible already returned a string of visible width <= width

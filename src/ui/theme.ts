@@ -1,5 +1,5 @@
 import { getUiStyle } from "../agent-registry.js";
-import { truncateToWidth, getAnsiSequenceLength } from "./tui-shim.js";
+import { getAnsiSequenceLength, truncateToWidth } from "./tui-shim.js";
 
 export type Theme = {
   fg(color: string, text: string): string;
