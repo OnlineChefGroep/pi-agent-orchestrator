@@ -1,5 +1,5 @@
 import { getUiStyle } from "../agent-registry.js";
-import { truncateToWidth, visibleWidth } from "./tui-shim.js";
+import { getAnsiSequenceLength, truncateToWidth } from "./tui-shim.js";
 
 export type Theme = {
   fg(color: string, text: string): string;
@@ -90,20 +90,52 @@ export function activeTheme(theme: Theme): Theme {
 }
 
 export function padVisible(content: string, width: number): string {
-  return content + " ".repeat(Math.max(0, width - visibleWidth(content)));
+  let visLen = 0;
+  let i = 0;
+  while (i < content.length) {
+    const ansiLen = getAnsiSequenceLength(content, i);
+    if (ansiLen > 0) {
+      i += ansiLen;
+      continue;
+    }
+    visLen++;
+    i++;
+  }
+  return content + " ".repeat(Math.max(0, width - visLen));
 }
 
 /** Skip expensive truncateToWidth when the string already fits. */
 export function fastTruncate(str: string, maxWidth: number): string {
-  if (visibleWidth(str) <= maxWidth) return str;
-  return truncateToWidth(str, maxWidth);
+  let visLen = 0;
+  let i = 0;
+  while (i < str.length) {
+    const ansiLen = getAnsiSequenceLength(str, i);
+    if (ansiLen > 0) {
+      i += ansiLen;
+      continue;
+    }
+    visLen++;
+    if (visLen > maxWidth) return truncateToWidth(str, maxWidth);
+    i++;
+  }
+  return str;
 }
 
 export function padAndTruncate(str: string, targetWidth: number): string {
-  const vis = visibleWidth(str);
-  if (vis === targetWidth) return str;
-  if (vis < targetWidth) return str + " ".repeat(targetWidth - vis);
-  return fastTruncate(str, targetWidth);
+  let visLen = 0;
+  let i = 0;
+  while (i < str.length) {
+    const ansiLen = getAnsiSequenceLength(str, i);
+    if (ansiLen > 0) {
+      i += ansiLen;
+      continue;
+    }
+    visLen++;
+    if (visLen > targetWidth) return truncateToWidth(str, targetWidth);
+    i++;
+  }
+  if (visLen === targetWidth) return str;
+  return str + " ".repeat(targetWidth - visLen);
 }
 
 export function framedRow(content: string, innerW: number, th: DashboardTheme, box: BoxChars): string {

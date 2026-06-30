@@ -34,12 +34,9 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Match one ANSI escape sequence. SGR only (CSI ... m). Conservative — covers what the UI emits. */
-const ANSI_RE = /\u001b\[[0-9;]*[A-Za-z]/g;
+const _ANSI_RE = /\u001b\[[0-9;]*[A-Za-z]/g;
 
-/** Strip ANSI escape codes from a string. Used internally by width helpers. */
-function stripAnsi(s: string): string {
-  return s.replace(ANSI_RE, "");
-}
+
 
 // ────────────────────────────────────────────────────────────────────────────
 // TUI — minimal interface for the host's TUI runtime object.
@@ -144,8 +141,42 @@ export class Text implements Component {
 // (we end up with MORE whitespace, never less).
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Helper to compute length of an ANSI CSI escape sequence at index i.
+ * Valid sequences end with a letter (0x40-0x5A or 0x61-0x7A).
+ * Returns the length of the sequence if valid, 0 otherwise.
+ */
+export function getAnsiSequenceLength(str: string, i: number): number {
+  if (str.charCodeAt(i) === 0x1b && str.charCodeAt(i + 1) === 0x5b) {
+    let j = i + 2;
+    while (j < str.length) {
+      const code = str.charCodeAt(j);
+      // Valid intermediate chars: 0-9, ;
+      if ((code >= 0x30 && code <= 0x39) || code === 0x3b) {
+        j++;
+      } else if ((code >= 0x40 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a)) {
+        return j - i + 1; // Found valid terminator
+      } else {
+        return 0; // Malformed sequence
+      }
+    }
+  }
+  return 0;
+}
+
 export function visibleWidth(str: string): number {
-  return stripAnsi(str).length;
+  let len = 0;
+  let i = 0;
+  while (i < str.length) {
+    const ansiLen = getAnsiSequenceLength(str, i);
+    if (ansiLen > 0) {
+      i += ansiLen;
+      continue;
+    }
+    len++;
+    i++;
+  }
+  return len;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -167,19 +198,15 @@ const DEFAULT_ELLIPSIS = "…";
  */
 function takeVisible(text: string, maxWidth: number): string {
   if (maxWidth <= 0 || text.length === 0) return "";
-  const total = visibleWidth(text);
-  if (total <= maxWidth) return text;
   let out = "";
   let visLen = 0;
   let i = 0;
   while (i < text.length && visLen < maxWidth) {
-    if (text[i] === "\u001b" && text[i + 1] === "[") {
-      const end = text.indexOf("m", i + 2);
-      if (end !== -1) {
-        out += text.slice(i, end + 1);
-        i = end + 1;
-        continue;
-      }
+    const ansiLen = getAnsiSequenceLength(text, i);
+    if (ansiLen > 0) {
+      out += text.slice(i, i + ansiLen);
+      i += ansiLen;
+      continue;
     }
     out += text[i];
     visLen++;
