@@ -95,7 +95,7 @@ export class AgentDashboard implements Component {
   private topPageSize = 12;
   private showSchedules = false;
   private showTree = false;
-  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── Performance: debounce & rate limiting ──
 
@@ -122,11 +122,20 @@ export class AgentDashboard implements Component {
   // ── Performance: dirty detection ──
 
   /**
-   * Lightweight structural snapshot: a hash of agent IDs + statuses.
-   * When this changes, we know the agent list or their states changed.
-   * When it stays the same, only cosmetic things (spinner, activity text) changed.
+   * Lightweight structural snapshot: numeric hash of agent IDs + statuses.
+   * Uses FNV-1a inspired hashing for O(1) comparison instead of O(N) string equality.
    */
-  private agentSnapshot = "";
+  private agentSnapshotHash = 0;
+
+  // ── Performance: body line cache ──
+
+  /**
+   * Cached body lines — only rebuilt when dirty flag is set.
+   * Prevents expensive rebuildDashboardBodyLines() on spinner-only ticks.
+   */
+  private cachedBodyLines: string[] = [];
+  private cachedBodyFocusMap = new Map<string, number>();
+  private cachedBodyLineCount = 0;
 
   /**
    * True when the snapshot changed during the last refreshAgents() call.
@@ -175,11 +184,17 @@ export class AgentDashboard implements Component {
    * Interval adapts to agent count and activity level.
    */
   private startRefreshTimer(): void {
-    if (this.refreshTimer) clearInterval(this.refreshTimer);
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
 
     const interval = this.computeRefreshInterval();
 
-    this.refreshTimer = setInterval(() => {
+    // Use setTimeout (self-rescheduling) instead of setInterval.
+    // Prevents render pileup when a render takes longer than the interval.
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
       if (this.closed) return;
 
       // Always advance spinner for smooth animation even without user input.
@@ -191,11 +206,8 @@ export class AgentDashboard implements Component {
         this.requestRender();
       }
 
-      // Adapt interval: if agent count or activity changed significantly, restart.
-      const newInterval = this.computeRefreshInterval();
-      if (newInterval !== interval) {
-        this.startRefreshTimer();
-      }
+      // Self-reschedule with adaptive interval.
+      this.startRefreshTimer();
     }, interval);
   }
 
@@ -259,7 +271,7 @@ export class AgentDashboard implements Component {
     if (this.closed) return;
     this.closed = true;
     if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
+      clearTimeout(this.refreshTimer);
       this.refreshTimer = null;
     }
     if (this.coalesceTimer) {
@@ -284,11 +296,11 @@ export class AgentDashboard implements Component {
   private refreshAgents(): void {
     this.agents = this.options.manager.listAgents();
 
-    // Build lightweight structural snapshot.
-    const snapshot = this.buildSnapshot();
+    // Build lightweight numeric structural snapshot.
+    const snapshotHash = this.buildSnapshotHash();
 
-    if (snapshot !== this.agentSnapshot) {
-      this.agentSnapshot = snapshot;
+    if (snapshotHash !== this.agentSnapshotHash) {
+      this.agentSnapshotHash = snapshotHash;
       this.dirty = true;
 
       // Clamp selection when agents were removed.
@@ -309,19 +321,31 @@ export class AgentDashboard implements Component {
   }
 
   /**
-   * Build a compact structural hash from agent IDs + statuses.
-   * Only changes when agents are added, removed, or change status.
+   * Build a compact numeric structural hash from agent IDs + statuses.
+   * Uses FNV-1a inspired hashing — O(N) with zero string allocations.
    */
-  private buildSnapshot(): string {
-    // For small agent counts (< 50), this is extremely fast.
-    // For larger counts, we'd use a rolling hash, but listAgents()
-    // already does the heavy sort — this is trivial in comparison.
-    let hash = "";
-    for (let i = 0; i < this.agents.length; i++) {
-      const a = this.agents[i];
-      hash += `${a.id}:${a.status},`;
+  private buildSnapshotHash(): number {
+    const agents = this.agents;
+    if (agents.length === 0) return 0;
+    let hash = 0x811c9dc5; // FNV offset basis
+    for (let i = 0; i < agents.length; i++) {
+      const a = agents[i];
+      const id = a.id;
+      for (let j = 0; j < id.length; j++) {
+        hash ^= id.charCodeAt(j);
+        hash = Math.imul(hash, 0x01000193);
+      }
+      hash ^= 0x3a;
+      hash = Math.imul(hash, 0x01000193);
+      const status = a.status;
+      for (let j = 0; j < status.length; j++) {
+        hash ^= status.charCodeAt(j);
+        hash = Math.imul(hash, 0x01000193);
+      }
+      hash ^= 0x2c;
+      hash = Math.imul(hash, 0x01000193);
     }
-    return hash;
+    return hash | 0;
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -798,17 +822,24 @@ export class AgentDashboard implements Component {
       const entries = sortEntries(getAgentTopEntries(this.agents, this.options.agentActivity), this.topSortKey, this.topSortAsc);
       lines.push(...renderTopTable(entries, this.topSortKey, this.topSortAsc, this.topPage, this.topPageSize, th, safeWidth, "t: back to list"));
     } else {
-      const body = buildDashboardBodyLines(innerW, th, box, state);
-      this.bodyFocusLineByAgentId = body.focusLineByAgentId;
-      this.bodyLineCount = body.lines.length;
+      // Body cache: only rebuild when dirty flag is set (structural change).
+      // Spinner-only ticks reuse the cached body lines.
+      if (this.dirty || this.cachedBodyLines.length === 0) {
+        const body = buildDashboardBodyLines(innerW, th, box, state);
+        this.cachedBodyLines = body.lines;
+        this.cachedBodyFocusMap = body.focusLineByAgentId;
+        this.cachedBodyLineCount = body.lines.length;
+      }
+      this.bodyFocusLineByAgentId = this.cachedBodyFocusMap;
+      this.bodyLineCount = this.cachedBodyLineCount;
       this.keepSelectedBodyLineVisible();
 
       const vh = this.getViewportHeight();
-      const maxScroll = Math.max(0, body.lines.length - vh);
+      const maxScroll = Math.max(0, this.cachedBodyLineCount - vh);
       this.scrollOffset = Math.min(this.scrollOffset, maxScroll);
 
       const start = Math.min(this.scrollOffset, maxScroll);
-      const visible = body.lines.slice(start, start + vh);
+      const visible = this.cachedBodyLines.slice(start, start + vh);
 
       for (const line of visible) lines.push(framedRow(line, innerW, th, box));
       for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
@@ -860,7 +891,7 @@ export class AgentDashboard implements Component {
 
   dispose(): void {
     if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
+      clearTimeout(this.refreshTimer);
       this.refreshTimer = null;
     }
     if (this.coalesceTimer) {

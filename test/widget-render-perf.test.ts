@@ -383,9 +383,9 @@ describe("Benchmark: renderAgentWidget — with activity heatmap data", () => {
   });
 });
 
-// ── 3. AgentWidget.buildSnapshot — Dirty Checking Hash ──────────────────────
+// ── 3. AgentWidget.buildSnapshotHash — Dirty Checking Hash ──────────────────
 
-describe("Benchmark: AgentWidget.buildSnapshot (dirty checking)", () => {
+describe("Benchmark: AgentWidget.buildSnapshotHash (dirty checking)", () => {
   let AgentWidget: typeof import("../src/ui/agent-widget.js").AgentWidget;
 
   beforeEach(async () => {
@@ -394,48 +394,48 @@ describe("Benchmark: AgentWidget.buildSnapshot (dirty checking)", () => {
     AgentWidget = mod.AgentWidget;
   });
 
-  it(`buildSnapshot with ${SMALL} agents under 50\u00b5s`, () => {
+  it(`buildSnapshotHash with ${SMALL} agents under 50\u00b5s`, () => {
     const agents = buildAgentList(SMALL, { running: 50, queued: 25, finished: 25 });
     const widget = new (AgentWidget as any)({}, new Map());
 
     const start = performance.now();
     for (let i = 0; i < 1000; i++) {
-      widget.buildSnapshot(agents);
+      widget.buildSnapshotHash(agents);
     }
     const elapsed = performance.now() - start;
     const perCall = elapsed / 1000;
 
-    benchmarkLog(`buildSnapshot ${SMALL} agents`, perCall, 0.05, "\u00b5s");
+    benchmarkLog(`buildSnapshotHash ${SMALL} agents`, perCall, 0.05, "\u00b5s");
     expect(perCall).toBeLessThan(0.05);
   });
 
-  it(`buildSnapshot with ${MEDIUM} agents under 50\u00b5s`, () => {
+  it(`buildSnapshotHash with ${MEDIUM} agents under 50\u00b5s`, () => {
     const agents = buildAgentList(MEDIUM, { running: 40, queued: 20, finished: 40 });
     const widget = new (AgentWidget as any)({}, new Map());
 
     const start = performance.now();
     for (let i = 0; i < 1000; i++) {
-      widget.buildSnapshot(agents);
+      widget.buildSnapshotHash(agents);
     }
     const elapsed = performance.now() - start;
     const perCall = elapsed / 1000;
 
-    benchmarkLog(`buildSnapshot ${MEDIUM} agents`, perCall, 0.05, "\u00b5s");
+    benchmarkLog(`buildSnapshotHash ${MEDIUM} agents`, perCall, 0.05, "\u00b5s");
     expect(perCall).toBeLessThan(0.05);
   });
 
-  it(`buildSnapshot with ${LARGE} agents under 200\u00b5s`, () => {
+  it(`buildSnapshotHash with ${LARGE} agents under 200\u00b5s`, () => {
     const agents = buildAgentList(LARGE, { running: 33, queued: 33, finished: 34 });
     const widget = new (AgentWidget as any)({}, new Map());
 
     const start = performance.now();
     for (let i = 0; i < 500; i++) {
-      widget.buildSnapshot(agents);
+      widget.buildSnapshotHash(agents);
     }
     const elapsed = performance.now() - start;
     const perCall = elapsed / 500;
 
-    benchmarkLog(`buildSnapshot ${LARGE} agents`, perCall, 0.2, "\u00b5s");
+    benchmarkLog(`buildSnapshotHash ${LARGE} agents`, perCall, 0.2, "\u00b5s");
     expect(perCall).toBeLessThan(0.2);
   });
 });
