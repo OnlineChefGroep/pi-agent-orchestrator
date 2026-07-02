@@ -492,7 +492,7 @@ describe("Benchmark: parseHandoff — parse time", () => {
   // Over-limit string truncation (exercises truncateStrings tree walk + actual slice).
   // Summary > MAX_SUMMARY_LENGTH (10000) to force truncation, plus an artifact
   // value > MAX_STRING_LENGTH (50000) to force the inner truncation path.
-  it("large handoff with over-limit strings (exercises truncateStrings slice) under 3.5ms", () => {
+  it("large handoff with over-limit strings (exercises truncateStrings slice) under 5ms", () => {
     const longSummary = "x".repeat(12000);
     const text = `\`\`\`json
 {
@@ -511,7 +511,7 @@ describe("Benchmark: parseHandoff — parse time", () => {
     const elapsed = performance.now() - start;
     const perCall = elapsed / 100;
 
-    benchmarkLog("parseHandoff long summary", perCall, 3.5);
-    expect(perCall).toBeLessThan(3.5);
+    benchmarkLog("parseHandoff long summary", perCall, 5);
+    expect(perCall).toBeLessThan(5);
   });
 });

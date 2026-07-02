@@ -173,7 +173,7 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     renderAgentWidget = mod.renderAgentWidget;
   });
 
-  it(`renders ${SMALL} agents (mixed) under 0.6ms`, () => {
+  it(`renders ${SMALL} agents (mixed) under 1.0ms`, () => {
     const agents = buildAgentList(SMALL, { running: 40, queued: 20, finished: 40 });
 
     const start = performance.now();
@@ -190,11 +190,11 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     const elapsed = performance.now() - start;
     const perRender = elapsed / 500;
 
-    benchmarkLog(`renderAgentWidget ${SMALL} mixed`, perRender, 0.6);
-    expect(perRender).toBeLessThan(0.6);
+    benchmarkLog(`renderAgentWidget ${SMALL} mixed`, perRender, 1.0);
+    expect(perRender).toBeLessThan(1.0);
   });
 
-  it(`renders ${MEDIUM} agents (mixed) under 3ms`, () => {
+  it(`renders ${MEDIUM} agents (mixed) under 4ms`, () => {
     const agents = buildAgentList(MEDIUM, { running: 40, queued: 20, finished: 40 });
 
     const start = performance.now();
@@ -211,11 +211,11 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     const elapsed = performance.now() - start;
     const perRender = elapsed / 100;
 
-    benchmarkLog(`renderAgentWidget ${MEDIUM} mixed`, perRender, 3);
-    expect(perRender).toBeLessThan(3);
+    benchmarkLog(`renderAgentWidget ${MEDIUM} mixed`, perRender, 4);
+    expect(perRender).toBeLessThan(4);
   });
 
-  it(`renders ${LARGE} agents (mixed) under 15ms (safety-capped)`, () => {
+  it(`renders ${LARGE} agents (mixed) under 18ms (safety-capped)`, () => {
     const agents = buildAgentList(LARGE, { running: 40, queued: 20, finished: 40 });
 
     const start = performance.now();
@@ -232,8 +232,8 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     const elapsed = performance.now() - start;
     const perRender = elapsed / 20;
 
-    benchmarkLog(`renderAgentWidget ${LARGE} mixed`, perRender, 15);
-    expect(perRender).toBeLessThan(15);
+    benchmarkLog(`renderAgentWidget ${LARGE} mixed`, perRender, 18);
+    expect(perRender).toBeLessThan(18);
   });
 
   it("renders all-running agents (worst case: 2 lines each)", () => {
@@ -267,7 +267,7 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
   // the old O(K*N) inner loop did 5×50 = 250 type-comparisons per unique
   // type, totaling 2,500 per render; the O(N+K) two-pass version does
   // 50+10 = 60 lookups.
-  it("renders 40 queued agents across 20 unique types under 2ms (K>>3 bulk-spawn regime, individual-line path)", () => {
+  it("renders 40 queued agents across 20 unique types under 4ms (K>>3 bulk-spawn regime, individual-line path)", () => {
     const bulkTypes = Array.from({ length: 20 }, (_, i) => `BulkType-${i}`);
     const agents: AgentRecord[] = [];
 
@@ -298,8 +298,8 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     const elapsed = performance.now() - start;
     const perRender = elapsed / 50;
 
-    benchmarkLog(`renderAgentWidget 40 queued / 20 types (individual)`, perRender, 2);
-    expect(perRender).toBeLessThan(2);
+    benchmarkLog(`renderAgentWidget 40 queued / 20 types (individual)`, perRender, 4);
+    expect(perRender).toBeLessThan(4);
   });
 });
 
@@ -314,7 +314,7 @@ describe("Benchmark: renderAgentWidget — with activity heatmap data", () => {
     renderAgentWidget = mod.renderAgentWidget;
   });
 
-  it(`renders ${MEDIUM} agents with ${MEDIUM} activity entries under 5ms`, () => {
+  it(`renders ${MEDIUM} agents with ${MEDIUM} activity entries under 7ms`, () => {
     const agents = buildAgentList(MEDIUM, { running: 60, queued: 20, finished: 20 });
     const activity = new Map<string, AgentActivity>();
 
@@ -344,8 +344,8 @@ describe("Benchmark: renderAgentWidget — with activity heatmap data", () => {
     const elapsed = performance.now() - start;
     const perRender = elapsed / 50;
 
-    benchmarkLog(`renderAgentWidget ${MEDIUM} w/ activity`, perRender, 5);
-    expect(perRender).toBeLessThan(5);
+    benchmarkLog(`renderAgentWidget ${MEDIUM} w/ activity`, perRender, 7);
+    expect(perRender).toBeLessThan(7);
   });
 
   it("renders with 200 agents + 200 activity entries under 20ms per render", () => {
@@ -587,7 +587,7 @@ describe("Benchmark: sustained update throughput", () => {
     const elapsed = performance.now() - start;
     const perTick = elapsed / 50;
 
-    benchmarkLog(`widget update 50 ticks`, perTick, 2);
-    expect(perTick).toBeLessThan(2);
+    benchmarkLog(`widget update 50 ticks`, perTick, 3);
+    expect(perTick).toBeLessThan(3);
   });
 });

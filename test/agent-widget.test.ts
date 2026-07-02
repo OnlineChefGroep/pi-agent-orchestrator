@@ -73,31 +73,32 @@ const mockTui = {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// AgentWidget — buildSnapshot (dirty checking)
+// AgentWidget — buildSnapshotHash (dirty checking)
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe("AgentWidget — buildSnapshot (dirty checking)", () => {
+describe("AgentWidget — buildSnapshotHash (dirty checking)", () => {
   let widget: any; // Access private methods via constructor+prototype trick
 
   beforeEach(async () => {
     agentCounter = 0;
-    // Create a minimal widget instance to access buildSnapshot
+    // Create a minimal widget instance to access buildSnapshotHash
     const { AgentWidget } = await import("../src/ui/agent-widget.js");
     widget = new AgentWidget(new MockAgentManager() as any, new Map());
   });
 
-  it("returns empty string for empty agents list", () => {
-    const snapshot = widget.buildSnapshot([]);
-    expect(snapshot).toBe("");
+  it("returns 0 for empty agents list", () => {
+    const hash = widget.buildSnapshotHash([]);
+    expect(hash).toBe(0);
   });
 
-  it("generates hash from agent IDs and statuses", () => {
+  it("returns a non-zero numeric hash from agent IDs and statuses", () => {
     const agents = [
       { id: "a1", status: "running" },
       { id: "a2", status: "queued" },
     ];
-    const snapshot = widget.buildSnapshot(agents);
-    expect(snapshot).toBe("a1:running,a2:queued,");
+    const hash = widget.buildSnapshotHash(agents);
+    expect(hash).toBeTypeOf("number");
+    expect(hash).not.toBe(0);
   });
 
   it("produces same output for same input (deterministic)", () => {
@@ -109,7 +110,7 @@ describe("AgentWidget — buildSnapshot (dirty checking)", () => {
       { id: "a1", status: "completed" },
       { id: "a2", status: "error" },
     ];
-    expect(widget.buildSnapshot(agents1)).toBe(widget.buildSnapshot(agents2));
+    expect(widget.buildSnapshotHash(agents1)).toBe(widget.buildSnapshotHash(agents2));
   });
 
   it("detects status changes", () => {
@@ -119,7 +120,7 @@ describe("AgentWidget — buildSnapshot (dirty checking)", () => {
     const after = [
       { id: "a1", status: "completed" },
     ];
-    expect(widget.buildSnapshot(before)).not.toBe(widget.buildSnapshot(after));
+    expect(widget.buildSnapshotHash(before)).not.toBe(widget.buildSnapshotHash(after));
   });
 
   it("detects agent additions", () => {
@@ -128,7 +129,7 @@ describe("AgentWidget — buildSnapshot (dirty checking)", () => {
       { id: "a1", status: "running" },
       { id: "a2", status: "queued" },
     ];
-    expect(widget.buildSnapshot(before)).not.toBe(widget.buildSnapshot(after));
+    expect(widget.buildSnapshotHash(before)).not.toBe(widget.buildSnapshotHash(after));
   });
 
   it("detects agent removals", () => {
@@ -137,7 +138,7 @@ describe("AgentWidget — buildSnapshot (dirty checking)", () => {
       { id: "a2", status: "completed" },
     ];
     const after = [{ id: "a1", status: "running" }];
-    expect(widget.buildSnapshot(before)).not.toBe(widget.buildSnapshot(after));
+    expect(widget.buildSnapshotHash(before)).not.toBe(widget.buildSnapshotHash(after));
   });
 
   it("handles many agents efficiently (no crash)", () => {
@@ -145,10 +146,9 @@ describe("AgentWidget — buildSnapshot (dirty checking)", () => {
       id: `agent-${i}`,
       status: i % 2 === 0 ? "running" : "queued",
     }));
-    const snapshot = widget.buildSnapshot(agents);
-    expect(snapshot.length).toBeGreaterThan(100);
-    expect(snapshot).toContain("running");
-    expect(snapshot).toContain("queued");
+    const hash = widget.buildSnapshotHash(agents);
+    expect(hash).toBeTypeOf("number");
+    expect(hash).not.toBe(0);
   });
 });
 
