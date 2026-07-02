@@ -18,7 +18,7 @@ npm run typecheck && npm run lint && npm test   # full verification
 
 A **Pi extension** (not standalone) that adds autonomous sub-agent orchestration to `pi-coding-agent`. It runs inside the Pi host platform — the `@earendil-works/pi-*` host-platform packages are never bundled with this extension. `@earendil-works/pi-tui` is no longer a direct dependency — its API surface is mirrored locally in `src/ui/tui-shim.ts` (see Common Mistake #4 in `AGENTS.md` for the rule across all three categories).
 
-Entry point is declared in `package.json` → `pi.extensions` as `./src/index.ts`. Published to **GitHub Packages** (`npm.pkg.github.com`), not npmjs.
+Entry point is declared in `package.json` → `pi.extensions` as `./dist/index.js`. Published to **GitHub Packages** (`npm.pkg.github.com`), not npmjs.
 
 ## Architecture
 

@@ -76,7 +76,7 @@ npm test -- --watch                             # watch mode
 
 ## Project nature
 
-This is a **pi extension** — it runs inside a pi coding agent host, not standalone. The `@earendil-works/pi-*` host-platform packages are never direct dependencies. (`@earendil-works/pi-tui` is no longer a direct dependency — its API surface is mirrored locally in `src/ui/tui-shim.ts`. See Common Mistake #4 below for the full rule.) The entry point is declared in `package.json` → `pi.extensions` as `./src/index.ts`.
+This is a **pi extension** — it runs inside a pi coding agent host, not standalone. The `@earendil-works/pi-*` host-platform packages are never direct dependencies. (`@earendil-works/pi-tui` is no longer a direct dependency — its API surface is mirrored locally in `src/ui/tui-shim.ts`. See Common Mistake #4 below for the full rule.) The entry point is declared in `package.json` → `pi.extensions` as `./dist/index.js`.
 
 Published to **GitHub Packages** (`npm.pkg.github.com`), not npmjs.
 

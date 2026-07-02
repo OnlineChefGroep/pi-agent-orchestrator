@@ -75,9 +75,11 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "pi": {
     "extensions": [
-      "./src/index.ts"
+      "./dist/index.js"
     ]
   },
   "publishConfig": {
