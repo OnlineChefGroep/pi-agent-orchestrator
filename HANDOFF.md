@@ -1,7 +1,7 @@
-# Session Handoff — Open-Source Release (v0.15.0)
+# Session Handoff — Open-Source Release (v0.16.0)
 
-**Date:** 2026-06-24  
-**Package:** `@onlinechefgroep/pi-agent-orchestrator@0.15.0`  
+**Date:** 2026-07-02  
+**Package:** `@onlinechefgroep/pi-agent-orchestrator@0.16.0`  
 **Canonical destination:** https://github.com/OnlineChefGroep/pi-agent-orchestrator (public repo)
 
 ---
@@ -26,8 +26,8 @@ npm run typecheck && npm run lint && npm test
 ## Release
 
 ```bash
-git tag v0.15.0
-git push origin v0.15.0
+git tag v0.16.0
+git push origin v0.16.0
 ```
 
 Tag push triggers:
@@ -40,8 +40,8 @@ Tag push triggers:
 
 | Item | Value |
 |------|-------|
-| Version | 0.15.0 |
-| Verification | typecheck ✅ lint ✅ test ✅ (1667/1667) |
+| Version | 0.16.0 |
+| Verification | typecheck ✅ lint ✅ test ✅ (1694/1694) |
 | Registry | npmjs.org + GitHub Packages |
 
 ---
@@ -57,9 +57,9 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 | P | Task |
 |---|------|
 | ✅ | Repo public gezet |
-| ✅ | Versie consistentie (0.15.0) |
-| ✅ | Test counts geüpdatet (1667/93) |
-| P0 | Tag `v0.15.0` en publish naar npmjs.org + GitHub Packages |
+| ✅ | Versie consistentie (0.16.0) |
+| ✅ | Test counts geüpdatet (1694/95) |
+| P0 | Tag `v0.16.0` en publish naar npmjs.org + GitHub Packages |
 
 ---
 

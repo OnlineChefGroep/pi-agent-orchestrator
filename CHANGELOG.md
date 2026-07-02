@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.16.0 (2026-07-02)
+
+### Features
+
+- **CHEF-100 Workspace Context RFC**: Introduced Phase 1 of the dual-read context adapter (`buildEnvFromContext`), covering 5 distinct environment scenarios.
+- **Overdrive Pattern Catalogue**: Added reusable linter rules (P3, P4, P5) for performance optimization audits.
+
+### Fixes
+
+- **`agent-runner` compaction**: Fixed the `onCompaction` hook in `agent-runner`.
+- **Overdrive false positive**: Defeated an Overdrive P4 detector false positive in environment resolving via helper extraction.
+
+### Maintenance & Chores
+
+- **Version consistency**: All files aligned on v0.16.0 (package.json, README, ROADMAP, VERVOLG_PLAN, CHANGELOG).
+- **Test counts**: Updated to 1694 tests across 95 test files.
+- **Dependencies**: Bumped devDependencies `@types/node` and `@biomejs/biome` to align with the workspace.
+
+### Metrics
+
+- 1694 tests across 95 test files. Typecheck + lint green. All 61 benchmarks OK.
+
 ## v0.15.0 (2026-06-24)
 
 ### Open-Source Public Release

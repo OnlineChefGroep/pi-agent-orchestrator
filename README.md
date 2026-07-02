@@ -27,16 +27,13 @@ A Pi extension that adds powerful orchestration capabilities: autonomous sub-age
 
 For evals and post-mortem debugging, set `debugCapture: true` in `.pi/subagents.json` and the extension writes a strictly-local, append-only folder of agent lifecycle events, error stacks, schedule firings, cross-extension RPC audit entries, and per-agent metrics to `<cwd>/.pi/subagent-debug` + `<agent-dir>/subagent-debug` (both paths overridable via `debugCapturePaths`). **OFF BY DEFAULT.** Per-file **25 MiB tail-aware rotation** keeps disk usage bounded while preserving the most recent activity; rotation is atomic via temp+rename so a crash mid-rotation cannot leave a half-truncated file. The feature is **best-effort** — a capture failure never breaks the agent runtime, dashboard, or scheduler. **PII warning:** captured content includes full agent prompts, error stacks with absolute source paths, and tool arguments that frequently contain pasted-from-clipboard secrets, API tokens, or session-scoped credentials — enable only on workloads where you trust the local filesystem with the captured contents. Full schema, capture folder layout, rotation + atomicity guarantees, and PII implications are documented in the [API Reference → Debug Capture](docs/api-reference.md#debug-capture) section.
 
-## What's new in v0.15.0
+## What's new in v0.16.0
 
-- **Agentic Loop (fully autonomous)**: The orchestrator now runs fully autonomous agent workflows — trigger (user/schedule/handoff) → heuristic dispatch (single/swarm/crew/auto) → spawn with permission inheritance → execute with resource quotas → self-healing validation → structured handoff → repeat. See [`docs/agentic-loop-spec.md`](docs/agentic-loop-spec.md) for the full specification.
-- **Orchestration dispatch**: New `auto` mode runs keyword-based prompt analysis to pick `single` / `swarm` / `crew` without human intervention. Crew mode spawns 3 role-specialized agents (planner → executor → reviewer). 35 unit tests + e2e integration tests.
-- **Health check command**: `/agents → Health check` snapshots the full runtime — process, tracing, circuit breaker, schedule, swarm, agents by status with correlation ids, settings, recent errors, and a dispatch-decision histogram so you can audit the auto-heuristic.
-- **Tracing master switch (OpenTelemetry)**: New `tracingEnabled` setting (default `true`). When disabled, every span helper short-circuits to a shared no-op span. Toggle from `/agents → Settings → Tracing`.
-- **Agent templates**: `/agents templates` command — browse, install, update, and remove versioned agent templates from the built-in registry. 6 templates ship out of the box.
-- **Execution tree visualization**: `/agents tree` command with Mermaid/Unicode/JSON export + dashboard `y` keybinding.
-- **Settings UI args refactor**: `showSettings()` and `notifyApplied()` now take `SettingsGetters` + `SettingsSetters` objects instead of 14/11 positional args.
-- **1667 tests** across **93 test files**. Typecheck ✅, lint ✅.
+- **CHEF-100 Workspace Context RFC**: Introduced Phase 1 of the dual-read context adapter (`buildEnvFromContext`), covering 5 distinct environment scenarios.
+- **Overdrive Pattern Catalogue**: Added reusable linter rules (P3, P4, P5) for performance optimization audits.
+- **`agent-runner` Compaction Hook**: Fixed the `onCompaction` hook in `agent-runner`.
+- **Overdrive False Positive Removal**: Defeated the Overdrive P4 detector false positive through helper extraction in environment resolving.
+- **1694 tests** across **95 test files**. Typecheck ✅, lint ✅.
 
 ## Showcase
 
@@ -83,7 +80,7 @@ See the `docs/` folder for architecture, custom agent examples, handoff workflow
 ```bash
 npm install
 npm run setup:hooks   # git hooks (opt-in)
-npm test              # 1667 tests across 93 test files
+npm test              # 1694 tests across 95 test files
 npm run lint:fix
 npm run typecheck
 npm run bench:all     # 61 performance benchmarks

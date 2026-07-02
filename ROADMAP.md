@@ -2,22 +2,15 @@
 
 ## Current State
 
-**v0.15.0** — Open-source public release: repository made public,
-publishConfig now defaults to npmjs.org, HANDOFF.md updated for direct
-public access, and all version/doc counts aligned across the project.
+**v0.16.0** — CHEF-100 Workspace Context integration (Phase 1), including the dual-read context adapter (`buildEnvFromContext`) and reusable Overdrive linter rules.
 
-Prior release v0.14.1 added the **Tracing master switch**, **per-agent
-correlation ids**, the **Health check command**, **SettingsGetters** /
-**SettingsSetters** refactor, and the **dispatch-decision histogram**.
-v0.14.0 shipped **orchestration dispatch** (single/swarm/crew/auto),
-**execution tree visualization**, and the **agent templates registry**.
+**v0.15.0** — Open-source public release: repository made public, publishConfig now defaults to npmjs.org, HANDOFF.md updated for direct public access, and all version/doc counts aligned across the project.
 
-**1667 tests** across **93 test files** pass (typecheck ✅, lint ✅).
+Prior release v0.14.1 added the **Tracing master switch**, **per-agent correlation ids**, the **Health check command**, **SettingsGetters** / **SettingsSetters** refactor, and the **dispatch-decision histogram**. v0.14.0 shipped **orchestration dispatch** (single/swarm/crew/auto), **execution tree visualization**, and the **agent templates registry**.
 
-Prior releases: v0.12.1 — subagent orchestration, TUI dashboard,
-swarm coordination, scheduling engine, hooks, permission inheritance,
-3-tier prompt compression, daemon integration, schedule UI, thinking
-level display, and async performance optimizations. MIT licensed.
+**1694 tests** across **95 test files** pass (typecheck ✅, lint ✅).
+
+Prior releases: v0.12.1 — subagent orchestration, TUI dashboard, swarm coordination, scheduling engine, hooks, permission inheritance, 3-tier prompt compression, daemon integration, schedule UI, thinking level display, and async performance optimizations. MIT licensed.
 
 ## Planned Features
 

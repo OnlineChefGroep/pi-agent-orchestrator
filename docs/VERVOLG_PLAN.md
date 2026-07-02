@@ -1,6 +1,6 @@
 # Vervolg Plan — @onlinechefgroep/pi-agent-orchestrator
 
-> Living roadmap for the pi-agent-orchestrator extension. Last updated: 2026-06-24 (v0.15.0).
+> Living roadmap for the pi-agent-orchestrator extension. Last updated: 2026-07-02 (v0.16.0).
 
 ---
 
@@ -8,8 +8,8 @@
 
 | Metric | Value |
 |---|---|
-| **Version** | 0.15.0 |
-| **Tests** | 1667 passing, 93 test files |
+| **Version** | 0.16.0 |
+| **Tests** | 1694 passing, 95 test files |
 | **Typecheck** | ✅ Pass |
 | **Lint** | ✅ Pass (Biome) |
 | **Benchmarks** | ✅ All passing (61/61 under threshold) |
