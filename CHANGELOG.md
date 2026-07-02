@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.16.1 (2026-07-02)
+
+### Fixes
+
+- **`agent-runner` circuit breaker**: Fixed the `ModelCircuitBreaker` to reset failures on successful calls in the closed state.
+- **Open-source release cleanup**: Removed private developer log and planning files (`.jules/`, `commit_message.txt`, `VERVOLG_PLAN.md`, `branch-manifest.md`) from Git and ignored them.
+- **Scoped publish access**: Configured publishConfig `"access": "public"` for npmjs.org.
+
 ## v0.16.0 (2026-07-02)
 
 ### Features
