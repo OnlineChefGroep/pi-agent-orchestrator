@@ -1,9 +1,0 @@
-🧪 [testing improvement description]
-
-🎯 What: The testing gap addressed was that `normalizeMaxTurns` didn't have tests for edge cases like `NaN`, `Infinity`, `-Infinity`, and float values.
-
-📊 Coverage: Added tests explicitly asserting that:
-  - `NaN`, `Infinity`, and `-Infinity` are treated as undefined (unlimited).
-  - Floating point numbers are appropriately floored to avoid passing floating counts as maximum turns.
-
-✨ Result: Coverage improved to guarantee `normalizeMaxTurns` securely sanitizes agent boundaries preventing out-of-scope values from disrupting quota limits.

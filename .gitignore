@@ -71,3 +71,8 @@ bun.lockb
 
 # Omo run continuations (session data)
 .omo/
+
+# Internal fleet planning & logs
+docs/VERVOLG_PLAN.md
+docs/branch-manifest.md
+commit_message.txt
