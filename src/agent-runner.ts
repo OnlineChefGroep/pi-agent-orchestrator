@@ -144,8 +144,8 @@ class ModelCircuitBreaker {
       (result) => {
         if (this.state === "half-open") {
           this.state = "closed";
-          this.failures = 0;
         }
+        this.failures = 0;
         return result;
       },
       (err) => {

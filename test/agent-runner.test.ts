@@ -71,7 +71,7 @@ vi.mock("../src/skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
 }));
 
-import { AgentRunnerError, getGraceTurns, resumeAgent, runAgent, setGraceTurns } from "../src/agent-runner.js";
+import { AgentRunnerError, getGraceTurns, globalCircuitBreaker, resumeAgent, runAgent, setGraceTurns } from "../src/agent-runner.js";
 
 function createSession(finalText: string) {
   const listeners: Array<(event: any) => void> = [];
@@ -363,5 +363,26 @@ describe("AgentRunnerError", () => {
   it("stores optional context", () => {
     const error = new AgentRunnerError("depth exceeded", "depth_exceeded", { level: 6 });
     expect(error.context).toEqual({ level: 6 });
+  });
+});
+
+describe("ModelCircuitBreaker", () => {
+  it("resets consecutive failures to 0 on a successful call in closed state", async () => {
+    // Reset/ensure closed state and 0 failures
+    const state = globalCircuitBreaker.getState();
+    if (state.state !== "closed" || state.failures !== 0) {
+      await globalCircuitBreaker.call(() => Promise.resolve("setup"));
+    }
+
+    // Trigger one failure
+    await expect(globalCircuitBreaker.call(() => Promise.reject(new Error("fail")))).rejects.toThrow("fail");
+    expect(globalCircuitBreaker.getState().failures).toBe(1);
+
+    // Trigger a success call
+    const val = await globalCircuitBreaker.call(() => Promise.resolve("ok"));
+    expect(val).toBe("ok");
+
+    // Failures should be reset to 0
+    expect(globalCircuitBreaker.getState().failures).toBe(0);
   });
 });

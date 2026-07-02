@@ -56,11 +56,17 @@ All showcase assets live in `docs/images/`.
 
 ## Installation
 
+To install the extension globally into your Pi environment:
+
 ```bash
-npm install @onlinechefgroep/pi-agent-orchestrator
+pi install npm:@onlinechefgroep/pi-agent-orchestrator
 ```
 
-Requires compatible Pi packages (`@earendil-works/pi-coding-agent` etc.).
+Or to install it locally for the current project only:
+
+```bash
+pi install npm:@onlinechefgroep/pi-agent-orchestrator -l
+```
 
 ## Quick Start
 
