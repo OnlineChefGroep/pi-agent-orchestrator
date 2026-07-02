@@ -170,7 +170,7 @@ class AgentsTopComponent implements Component {
       this.close();
       return;
     }
-    if (matchesKey(data, "left") || matchesKey(data, "shift+left")) {
+    if (matchesKey(data, "left") || matchesKey(data, "shift+left") || matchesKey(data, "h")) {
       this.page = Math.max(0, this.page - 1);
     } else if (matchesKey(data, "right") || matchesKey(data, "shift+right")) {
       const entries = getAgentTopEntries(this.manager.listAgents(), this.activity);
@@ -188,9 +188,9 @@ class AgentsTopComponent implements Component {
       const entries = getAgentTopEntries(this.manager.listAgents(), this.activity);
       const totalPages = Math.max(1, Math.ceil(entries.length / this.pageSize));
       this.page = Math.min(totalPages - 1, this.page + 1);
-    } else if (matchesKey(data, "home")) {
+    } else if (matchesKey(data, "home") || matchesKey(data, "g")) {
       this.page = 0;
-    } else if (matchesKey(data, "end")) {
+    } else if (matchesKey(data, "end") || matchesKey(data, "shift+g")) {
       const entries = getAgentTopEntries(this.manager.listAgents(), this.activity);
       const totalPages = Math.max(1, Math.ceil(entries.length / this.pageSize));
       this.page = totalPages - 1;
@@ -211,9 +211,17 @@ class AgentsTopComponent implements Component {
       else { this.sortKey = "toolUses"; this.sortAsc = false; }
       this.page = 0;
     } else if (matchesKey(data, "l")) {
-      if (this.sortKey === "lastSeen") this.sortAsc = !this.sortAsc;
-      else { this.sortKey = "lastSeen"; this.sortAsc = false; }
-      this.page = 0;
+      // Special case: 'l' is both 'lastSeen' sort and 'right' navigation.
+      // Priority goes to sort. If already sorted by lastSeen, we go right.
+      if (this.sortKey === "lastSeen") {
+        const entries = getAgentTopEntries(this.manager.listAgents(), this.activity);
+        const totalPages = Math.max(1, Math.ceil(entries.length / this.pageSize));
+        this.page = Math.min(totalPages - 1, this.page + 1);
+      } else {
+        this.sortKey = "lastSeen";
+        this.sortAsc = false;
+        this.page = 0;
+      }
     } else if (matchesKey(data, "n")) {
       if (this.sortKey === "name") this.sortAsc = !this.sortAsc;
       else { this.sortKey = "name"; this.sortAsc = false; }
@@ -227,7 +235,7 @@ class AgentsTopComponent implements Component {
     const entries = sortEntries(getAgentTopEntries(this.manager.listAgents(), this.activity), this.sortKey, this.sortAsc);
     const rows = this.tui.terminal.rows;
     this.pageSize = Math.max(5, rows - 5);
-    return renderTopTable(entries, this.sortKey, this.sortAsc, this.page, this.pageSize, th, width, "q: back · t/r/d/u/l/n: sort · ↑/↓: page");
+    return renderTopTable(entries, this.sortKey, this.sortAsc, this.page, this.pageSize, th, width, "q: back · t/r/d/u/l/n: sort · h/l: page · g/G: jump");
   }
 
   invalidate(): void {

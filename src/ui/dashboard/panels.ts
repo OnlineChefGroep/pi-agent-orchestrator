@@ -181,7 +181,7 @@ export function renderDashboardHelp(
     key("↓ / j", "Move selection down"),
     key("PgUp / Shift+↑", "Page up"),
     key("PgDn / Shift+↓", "Page down"),
-    key("Home / End", "Jump to first/last"),
+    key("Home / End / g / G", "Jump to first/last"),
     "",
     section("Actions"),
     key("Enter", "View full conversation"),

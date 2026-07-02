@@ -471,8 +471,8 @@ export class AgentDashboard implements Component {
         else if (matchesKey(data, "down") || matchesKey(data, "j")) this.subViewScrollOffset++;
         else if (matchesKey(data, "pageUp") || matchesKey(data, "shift+up")) this.subViewScrollOffset = Math.max(0, this.subViewScrollOffset - viewportHeight);
         else if (matchesKey(data, "pageDown") || matchesKey(data, "shift+down")) this.subViewScrollOffset += viewportHeight;
-        else if (matchesKey(data, "home")) this.subViewScrollOffset = 0;
-        else if (matchesKey(data, "end")) this.subViewScrollOffset = 9999;
+        else if (matchesKey(data, "home") || matchesKey(data, "g")) this.subViewScrollOffset = 0;
+        else if (matchesKey(data, "end") || matchesKey(data, "shift+g")) this.subViewScrollOffset = 9999;
         this.dirty = true;
         this.requestRender();
       }
@@ -497,20 +497,23 @@ export class AgentDashboard implements Component {
         if (this.topSortKey === "toolUses") this.topSortAsc = !this.topSortAsc;
         else { this.topSortKey = "toolUses"; this.topSortAsc = false; }
         this.topPage = 0;
-      } else if (matchesKey(data, "l")) {
-        if (this.topSortKey === "lastSeen") this.topSortAsc = !this.topSortAsc;
-        else { this.topSortKey = "lastSeen"; this.topSortAsc = false; }
-        this.topPage = 0;
       } else if (matchesKey(data, "n")) {
         if (this.topSortKey === "name") this.topSortAsc = !this.topSortAsc;
         else { this.topSortKey = "name"; this.topSortAsc = false; }
         this.topPage = 0;
-      } else if (matchesKey(data, "left") || matchesKey(data, "shift+left")) {
+      } else if (matchesKey(data, "left") || matchesKey(data, "shift+left") || matchesKey(data, "h")) {
         this.topPage = Math.max(0, this.topPage - 1);
-      } else if (matchesKey(data, "right") || matchesKey(data, "shift+right")) {
-        const entries = sortEntries(getAgentTopEntries(this.agents, this.options.agentActivity), this.topSortKey, this.topSortAsc);
-        const totalPages = Math.max(1, Math.ceil(entries.length / this.topPageSize));
-        this.topPage = Math.min(totalPages - 1, this.topPage + 1);
+      } else if (matchesKey(data, "right") || matchesKey(data, "shift+right") || matchesKey(data, "l")) {
+        // Dual-purpose: 'l' sorts by lastSeen if not already, else pages right.
+        if (matchesKey(data, "l") && this.topSortKey !== "lastSeen") {
+          this.topSortKey = "lastSeen";
+          this.topSortAsc = false;
+          this.topPage = 0;
+        } else {
+          const entries = sortEntries(getAgentTopEntries(this.agents, this.options.agentActivity), this.topSortKey, this.topSortAsc);
+          const totalPages = Math.max(1, Math.ceil(entries.length / this.topPageSize));
+          this.topPage = Math.min(totalPages - 1, this.topPage + 1);
+        }
       } else if (matchesKey(data, "up") || matchesKey(data, "k")) {
         this.topPage = Math.max(0, this.topPage - 1);
       } else if (matchesKey(data, "down") || matchesKey(data, "j")) {
@@ -523,9 +526,9 @@ export class AgentDashboard implements Component {
         const entries = sortEntries(getAgentTopEntries(this.agents, this.options.agentActivity), this.topSortKey, this.topSortAsc);
         const totalPages = Math.max(1, Math.ceil(entries.length / this.topPageSize));
         this.topPage = Math.min(totalPages - 1, this.topPage + 1);
-      } else if (matchesKey(data, "home")) {
+      } else if (matchesKey(data, "home") || matchesKey(data, "g")) {
         this.topPage = 0;
-      } else if (matchesKey(data, "end")) {
+      } else if (matchesKey(data, "end") || matchesKey(data, "shift+g")) {
         const entries = sortEntries(getAgentTopEntries(this.agents, this.options.agentActivity), this.topSortKey, this.topSortAsc);
         const totalPages = Math.max(1, Math.ceil(entries.length / this.topPageSize));
         this.topPage = totalPages - 1;
@@ -544,8 +547,8 @@ export class AgentDashboard implements Component {
       else if (matchesKey(data, "down") || matchesKey(data, "j")) this.subViewScrollOffset++;
       else if (matchesKey(data, "pageUp") || matchesKey(data, "shift+up")) this.subViewScrollOffset = Math.max(0, this.subViewScrollOffset - viewportHeight);
       else if (matchesKey(data, "pageDown") || matchesKey(data, "shift+down")) this.subViewScrollOffset += viewportHeight;
-      else if (matchesKey(data, "home")) this.subViewScrollOffset = 0;
-      else if (matchesKey(data, "end")) this.subViewScrollOffset = 9999;
+      else if (matchesKey(data, "home") || matchesKey(data, "g")) this.subViewScrollOffset = 0;
+      else if (matchesKey(data, "end") || matchesKey(data, "shift+g")) this.subViewScrollOffset = 9999;
       else {
         // Guard: swallow all other keys when Tree/Schedules/Help is active
         // EXCEPT the toggle keys themselves which fall through to the next section
@@ -557,11 +560,6 @@ export class AgentDashboard implements Component {
           this.requestRender();
           return;
         }
-      }
-      if (!matchesKey(data, "?") && !matchesKey(data, "y") && !matchesKey(data, "z") && !matchesKey(data, "shift+z") && !matchesKey(data, "t")) {
-        this.dirty = true;
-        this.requestRender();
-        return;
       }
     }
 
@@ -613,9 +611,9 @@ export class AgentDashboard implements Component {
     } else if (matchesKey(data, "pageDown") || matchesKey(data, "shift+down")) {
       if (this.agents.length === 0) return;
       this.selectedIndex = Math.min(this.agents.length - 1, this.selectedIndex + viewportHeight);
-    } else if (matchesKey(data, "home")) {
+    } else if (matchesKey(data, "home") || matchesKey(data, "g")) {
       this.selectedIndex = 0;
-    } else if (matchesKey(data, "end")) {
+    } else if (matchesKey(data, "end") || matchesKey(data, "shift+g")) {
       if (this.agents.length === 0) return;
       this.selectedIndex = this.agents.length - 1;
     }
@@ -671,49 +669,6 @@ export class AgentDashboard implements Component {
         void this.options.onShowPermissions(rec);
         return;
       }
-    } else if (matchesKey(data, "r") || matchesKey(data, "shift+r")) {
-      this.refreshAgents();
-      this.requestRender();
-    } else if (matchesKey(data, "?")) {
-      this.showHelp = !this.showHelp;
-      if (this.showHelp) this.subViewScrollOffset = 0;
-      this.dirty = true;
-      this.requestRender();
-    } else if (matchesKey(data, "t")) {
-      this.topViewMode = !this.topViewMode;
-      if (this.topViewMode) {
-        this.topPage = 0;
-        this.showSchedules = false;
-        this.showTree = false;
-        this.showHelp = false;
-        this.showPerf = false;
-      }
-      this.dirty = true;
-      this.requestRender();
-    } else if (matchesKey(data, "z") || matchesKey(data, "shift+z")) {
-      if (this.options.scheduler?.isActive()) {
-        this.showSchedules = !this.showSchedules;
-        if (this.showSchedules) {
-          this.subViewScrollOffset = 0;
-          this.topViewMode = false;
-          this.showHelp = false;
-          this.showPerf = false;
-          this.showTree = false;
-        }
-        this.dirty = true;
-        this.requestRender();
-      }
-    } else if (matchesKey(data, "y")) {
-      this.showTree = !this.showTree;
-      if (this.showTree) {
-        this.subViewScrollOffset = 0;
-        this.topViewMode = false;
-        this.showSchedules = false;
-        this.showHelp = false;
-        this.showPerf = false;
-      }
-      this.dirty = true;
-      this.requestRender();
     } else if (matchesKey(data, "w") || matchesKey(data, "shift+w")) {
       if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       const targets = this.selectedIds.size > 0
@@ -868,7 +823,7 @@ export class AgentDashboard implements Component {
       // Table overhead: Title (1), Header (1), Divider (1), Legend (1) = 4 lines minimum
       this.topPageSize = Math.max(5, vh - 4);
       const entries = sortEntries(getAgentTopEntries(this.agents, this.options.agentActivity), this.topSortKey, this.topSortAsc);
-      const topTable = renderTopTable(entries, this.topSortKey, this.topSortAsc, this.topPage, this.topPageSize, th, innerW, "Esc: list · t/r/d/u/l/n: sort · ↑/↓: page");
+      const topTable = renderTopTable(entries, this.topSortKey, this.topSortAsc, this.topPage, this.topPageSize, th, innerW, "Esc: list · t/r/d/u/l/n: sort · h/l: page · g/G: jump");
       for (const line of topTable) lines.push(framedRow(line, innerW, th, box));
       for (let i = topTable.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
     } else {
