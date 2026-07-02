@@ -266,6 +266,10 @@ export class AgentDashboard implements Component {
       clearTimeout(this.coalesceTimer);
       this.coalesceTimer = null;
     }
+    if (this.statusMessageTimer) {
+      clearTimeout(this.statusMessageTimer);
+      this.statusMessageTimer = null;
+    }
     this.done(undefined);
   }
 
@@ -392,6 +396,24 @@ export class AgentDashboard implements Component {
   // ════════════════════════════════════════════════════════════════
   // Input Handling
   // ════════════════════════════════════════════════════════════════
+
+  // ── Status message (temporary, shown in footer, auto-clears) ──
+  private statusMessage = "";
+  private statusMessageTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Show a temporary status message in the dashboard footer. */
+  private showStatus(msg: string): void {
+    this.statusMessage = msg;
+    this.dirty = true;
+    this.requestRender();
+    if (this.statusMessageTimer) clearTimeout(this.statusMessageTimer);
+    this.statusMessageTimer = setTimeout(() => {
+      this.statusMessage = "";
+      this.statusMessageTimer = null;
+      this.dirty = true;
+      this.requestRender();
+    }, 3000);
+  }
 
   handleInput(data: string): void {
     const rec = this.agents[this.selectedIndex];
@@ -535,7 +557,7 @@ export class AgentDashboard implements Component {
         this.dirty = true;
         this.requestRender();
       }
-    } else if (matchesKey(data, "shift+k")) {
+    } else if (matchesKey(data, "shift+k") || matchesKey(data, "K")) {
       const idsToKill = this.selectedIds.size > 0
         ? Array.from(this.selectedIds)
         : rec ? [rec.id] : [];
@@ -553,16 +575,22 @@ export class AgentDashboard implements Component {
         this.requestRender();
       }
     } else if (matchesKey(data, "s") || matchesKey(data, "shift+s")) {
-      if (rec && this.options.onSteer) {
-        this.close();
-        void this.options.onSteer(rec.id);
-        return;
+      if (rec) {
+        if (this.options.onSteer) {
+          this.close();
+          void this.options.onSteer(rec.id);
+          return;
+        }
+        this.showStatus("Steer is not available in this context.");
       }
     } else if (matchesKey(data, "p") || matchesKey(data, "shift+p")) {
-      if (rec && this.options.onShowPermissions) {
-        this.close();
-        void this.options.onShowPermissions(rec);
-        return;
+      if (rec) {
+        if (this.options.onShowPermissions) {
+          this.close();
+          void this.options.onShowPermissions(rec);
+          return;
+        }
+        this.showStatus("Permissions view is not available in this context.");
       }
     } else if (matchesKey(data, "r") || matchesKey(data, "shift+r")) {
       this.refreshAgents();
@@ -599,10 +627,13 @@ export class AgentDashboard implements Component {
           })()
         : rec ? [rec] : [];
 
-      if (targets.length > 0 && this.options.onSwarmAction) {
-        this.close();
-        void this.options.onSwarmAction("create", targets.map((t) => t.id));
-        return;
+      if (targets.length > 0) {
+        if (this.options.onSwarmAction) {
+          this.close();
+          void this.options.onSwarmAction("create", targets.map((t) => t.id));
+          return;
+        }
+        this.showStatus("Swarm actions are not available in this context.");
       }
     }
 
@@ -794,6 +825,10 @@ export class AgentDashboard implements Component {
       lines.push(...renderDashboardFooter(safeWidth, th, box, this.options.agentActivity));
     } else {
       lines.push(...renderDashboardDetailPanel(safeWidth, th, box, state, this.options.manager));
+      // Show temporary status message in the footer.
+      if (this.statusMessage) {
+        lines.push(framedRow(`${th.highlight}⚠ ${this.statusMessage}${th.reset}`, innerW, th, box));
+      }
       lines.push(...renderDashboardFooter(safeWidth, th, box, this.options.agentActivity));
     }
 
@@ -831,6 +866,10 @@ export class AgentDashboard implements Component {
     if (this.coalesceTimer) {
       clearTimeout(this.coalesceTimer);
       this.coalesceTimer = null;
+    }
+    if (this.statusMessageTimer) {
+      clearTimeout(this.statusMessageTimer);
+      this.statusMessageTimer = null;
     }
     this.closed = true;
   }
