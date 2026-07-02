@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/@onlinechefgroep/pi-agent-orchestrator)](https://www.npmjs.com/package/@onlinechefgroep/pi-agent-orchestrator)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/OnlineChefGroep/pi-agent-orchestrator/actions)
-[![Tests](https://img.shields.io/badge/tests-1667%20passed-brightgreen)](https://github.com/OnlineChefGroep/pi-agent-orchestrator)
+[![Tests](https://img.shields.io/badge/tests-1693%20passed-brightgreen)](https://github.com/OnlineChefGroep/pi-agent-orchestrator)
 
 A Pi extension that adds powerful orchestration capabilities: autonomous sub-agents, structured handoffs, 3-tier prompt compression, cron scheduling, swarm coordination, and a vim-style interactive TUI dashboard.
 
@@ -27,13 +27,12 @@ A Pi extension that adds powerful orchestration capabilities: autonomous sub-age
 
 For evals and post-mortem debugging, set `debugCapture: true` in `.pi/subagents.json` and the extension writes a strictly-local, append-only folder of agent lifecycle events, error stacks, schedule firings, cross-extension RPC audit entries, and per-agent metrics to `<cwd>/.pi/subagent-debug` + `<agent-dir>/subagent-debug` (both paths overridable via `debugCapturePaths`). **OFF BY DEFAULT.** Per-file **25 MiB tail-aware rotation** keeps disk usage bounded while preserving the most recent activity; rotation is atomic via temp+rename so a crash mid-rotation cannot leave a half-truncated file. The feature is **best-effort** — a capture failure never breaks the agent runtime, dashboard, or scheduler. **PII warning:** captured content includes full agent prompts, error stacks with absolute source paths, and tool arguments that frequently contain pasted-from-clipboard secrets, API tokens, or session-scoped credentials — enable only on workloads where you trust the local filesystem with the captured contents. Full schema, capture folder layout, rotation + atomicity guarantees, and PII implications are documented in the [API Reference → Debug Capture](docs/api-reference.md#debug-capture) section.
 
-## What's new in v0.16.2
+## What's new in v0.16.3
 
-- **CHEF-100 Workspace Context RFC**: Introduced Phase 1 of the dual-read context adapter (`buildEnvFromContext`), covering 5 distinct environment scenarios.
-- **Overdrive Pattern Catalogue**: Added reusable linter rules (P3, P4, P5) for performance optimization audits.
-- **`agent-runner` Compaction Hook**: Fixed the `onCompaction` hook in `agent-runner`.
-- **Overdrive False Positive Removal**: Defeated the Overdrive P4 detector false positive through helper extraction in environment resolving.
-- **1694 tests** across **95 test files**. Typecheck ✅, lint ✅.
+- **UI render freezes eliminated**: Widget dirty checking uses numeric FNV-1a hashing — zero string allocations in the update hot path.
+- **Adversarial validation extraction**: Validator logic extracted from agent-runner into dedicated module.
+- **Benchmark thresholds calibrated**: 4 thresholds relaxed for realistic CI/local variance.
+- **1693 tests** across **95 test files**. Typecheck ✅, lint ✅.
 
 ## Showcase
 
@@ -86,7 +85,7 @@ See the `docs/` folder for architecture, custom agent examples, handoff workflow
 ```bash
 npm install
 npm run setup:hooks   # git hooks (opt-in)
-npm test              # 1694 tests across 95 test files
+npm test              # 1693 tests across 95 test files
 npm run lint:fix
 npm run typecheck
 npm run bench:all     # 61 performance benchmarks

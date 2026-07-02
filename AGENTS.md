@@ -28,9 +28,8 @@ What each layer injects **before** a sub-agent session runs. Parent-only rows af
 |------|------------|
 | **Codebase graph navigation** | `.agents/skills/graphify/SKILL.md` |
 | **Test / benchmark discipline** | `.agents/skills/testing/SKILL.md` |
-| **Infra / extension packaging** | `.agents/skills/infrastructure/SKILL.md` |
 | **Performance auditing** | `.agents/skills/overdrive/SKILL.md` |
-| **Research loops** | `.agents/skills/autoresearch/SKILL.md` · `.agents/skills/showcase/SKILL.md` (demo video — UI-facing only) |
+| **Research loops** | `.agents/skills/showcase/SKILL.md` (demo video — UI-facing only) |
 | **Global agent patterns** | `~/.agents/skills/agent-explore` · `agent-architect` · `agent-code-reviewer` |
 | **Memory session init** | `~/.agents/skills/agent-memory-hooks` · `../skill-grinder/skills/agent-memory-hooks/SKILL.md` |
 | **Orchestrator dev helper** | `pi-subagents-helper` (see CHANGELOG) |
@@ -214,7 +213,7 @@ See `docs/architecture.md` for the full module map and data-flow diagram.
 ## Verification Suite
 
 Ensure you run `npm run typecheck && npm run lint && npm test` before committing.
-Currently passing: **1035 tests** across **58 test files**, including performance benchmarks for render, snapshot, virtual scrolling, and spawn latency.
+Currently passing: **1693 tests** across **95 test files**, including performance benchmarks for render, snapshot, virtual scrolling, and spawn latency.
 
 ## graphify
 
