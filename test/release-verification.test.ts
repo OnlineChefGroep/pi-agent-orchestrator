@@ -104,30 +104,12 @@ describe("registry URL verification", () => {
     expect(content).toContain("secrets.GITHUB_TOKEN");
   });
 
-  it("publish-npm.yml references npmjs.org registry", () => {
-    expect(fileExists(".github/workflows/publish-npm.yml")).toBe(true);
-    const content = readRoot(".github/workflows/publish-npm.yml");
-    expect(content).toContain("registry.npmjs.org");
-    expect(content).toContain("secrets.NPM_TOKEN");
+  it("publish-npm.yml does not exist", () => {
+    expect(fileExists(".github/workflows/publish-npm.yml")).toBe(false);
   });
 
-  it("publish-npm.yml does NOT contain GitHub Packages URL", () => {
-    const content = readRoot(".github/workflows/publish-npm.yml");
-    expect(content).not.toContain("npm.pkg.github.com");
-  });
-
-  it("package.json publishConfig.registry is set", () => {
+  it("package.json publishConfig.registry points to GitHub Packages", () => {
     const pkg = JSON.parse(readRoot("package.json"));
-    expect(pkg.publishConfig?.registry).toBeDefined();
-  });
-
-  it("the two publish workflows have distinct names", () => {
-    const ghPkg = readRoot(".github/workflows/publish.yml");
-    const npmJs = readRoot(".github/workflows/publish-npm.yml");
-    const ghName = ghPkg.match(/^name:\s*(.+)/m)?.[1] ?? "";
-    const npmName = npmJs.match(/^name:\s*(.+)/m)?.[1] ?? "";
-    expect(ghName).not.toBe(npmName);
-    expect(ghName).toContain("GitHub");
-    expect(npmName).toContain("npm");
+    expect(pkg.publishConfig?.registry).toBe("https://npm.pkg.github.com");
   });
 });
