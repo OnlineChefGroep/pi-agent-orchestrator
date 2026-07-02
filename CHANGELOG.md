@@ -6,6 +6,7 @@
 
 - **Skill ecosystem audit**: Full audit of `.agents/skills/` portfolio. Refactored `graphify/SKILL.md` from 1,299 lines to 68 lines by extracting pipeline steps to `references/pipeline.md` (712 lines) and subcommand docs to `references/subcommands.md` (519 lines). Refactored `showcase/SKILL.md` from 116 to 50 lines and `testing/SKILL.md` from 82 to 57 lines, both with extracted reference docs. All SKILL.md files now under the 80-line limit.
 - **AGENTS.md cleanup**: Removed 2 broken skill references (`infrastructure/SKILL.md`, `autoresearch/SKILL.md`) that pointed to non-existent paths. Updated stale test count from 1,035/58 to 1,693/95.
+- **Stale directory cleanup**: Removed `.agents/autoresearch/` directory (contained only a `.autoresearch-off` flag, no SKILL.md).
 
 ## v0.16.3 (2026-07-02)
 
