@@ -2,7 +2,7 @@
 
 ## Current State
 
-**v0.16.1** — CHEF-100 Workspace Context integration (Phase 1), including the dual-read context adapter (`buildEnvFromContext`) and reusable Overdrive linter rules. Includes ModelCircuitBreaker fixes and open-source file adjustments.
+**v0.16.2** — CHEF-100 Workspace Context integration (Phase 1), including the dual-read context adapter (`buildEnvFromContext`) and reusable Overdrive linter rules. Includes ModelCircuitBreaker fixes, open-source file adjustments, and registry alignment back to GitHub Packages.
 
 **v0.15.0** — Open-source public release: repository made public, publishConfig now defaults to npmjs.org, HANDOFF.md updated for direct public access, and all version/doc counts aligned across the project.
 

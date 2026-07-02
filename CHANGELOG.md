@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.16.2 (2026-07-02)
+
+### Maintenance & Chores
+
+- **NPM registry fallback**: Removed npmjs.org workflow and pointed publishConfig registry back to GitHub Packages (`npm.pkg.github.com`).
+
 ## v0.16.1 (2026-07-02)
 
 ### Fixes
