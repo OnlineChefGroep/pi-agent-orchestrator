@@ -2,13 +2,13 @@
 
 ## Current State
 
-**v0.16.2** — CHEF-100 Workspace Context integration (Phase 1), including the dual-read context adapter (`buildEnvFromContext`) and reusable Overdrive linter rules. Includes ModelCircuitBreaker fixes, open-source file adjustments, and registry alignment back to GitHub Packages.
+**v0.16.3** — UI render-freeze elimination via numeric FNV-1a dirty-checking, adversarial validation extraction, benchmark threshold calibration, and NPM registry fallback to GitHub Packages. Prior v0.16.2 introduced CHEF-100 Workspace Context integration (Phase 1) including the dual-read context adapter (`buildEnvFromContext`) and reusable Overdrive linter rules.
 
 **v0.15.0** — Open-source public release: repository made public, publishConfig now defaults to npmjs.org, HANDOFF.md updated for direct public access, and all version/doc counts aligned across the project.
 
 Prior release v0.14.1 added the **Tracing master switch**, **per-agent correlation ids**, the **Health check command**, **SettingsGetters** / **SettingsSetters** refactor, and the **dispatch-decision histogram**. v0.14.0 shipped **orchestration dispatch** (single/swarm/crew/auto), **execution tree visualization**, and the **agent templates registry**.
 
-**1694 tests** across **95 test files** pass (typecheck ✅, lint ✅).
+**1693 tests** across **95 test files** pass (typecheck ✅, lint ✅).
 
 Prior releases: v0.12.1 — subagent orchestration, TUI dashboard, swarm coordination, scheduling engine, hooks, permission inheritance, 3-tier prompt compression, daemon integration, schedule UI, thinking level display, and async performance optimizations. MIT licensed.
 
