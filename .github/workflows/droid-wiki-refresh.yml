@@ -1,4 +1,4 @@
-name: Docs (GitHub Pages)
+name: Wiki (RepoWiki → Pages)
 
 on:
   push:
@@ -15,28 +15,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy-pages:
+  generate-wiki:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Build docs site
+      - name: Install RepoWiki
+        run: pip install repowiki
+
+      - name: Generate wiki
         run: |
-          mkdir -p _site
-          cp -r docs/* _site/
-          cp README.md _site/
-          cp CHANGELOG.md _site/
+          repowiki scan . \
+            --format html \
+            --output wiki-out/index.html \
+            --model "${REPOWIKI_MODEL:-openai/gpt-4o-mini}"
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+      - name: Add existing docs
+        run: |
+          mkdir -p wiki-out/docs
+          cp -r docs/* wiki-out/docs/ 2>/dev/null || true
+          cp README.md wiki_out/README.md 2>/dev/null || true
+          cp CHANGELOG.md wiki_out/CHANGELOG.md 2>/dev/null || true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: wiki-out
 
       - name: Deploy to GitHub Pages
         id: deployment
