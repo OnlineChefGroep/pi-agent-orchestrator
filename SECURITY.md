@@ -4,8 +4,8 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.12.x  | :white_check_mark: |
-| < 0.12  | :x:                |
+| 0.16.x  | :white_check_mark: |
+| < 0.16  | :x:                |
 
 This project is a **pi extension** — it runs inside the Pi coding agent host, not as a standalone service. Security reports should scope concerns to the extension's behavior within that host context.
 
@@ -13,7 +13,7 @@ This project is a **pi extension** — it runs inside the Pi coding agent host, 
 
 We take security seriously. To report a vulnerability:
 
-1. **Do not open a public issue.** Instead, email security concerns to the maintainers.
+1. **Do not open a public issue.** Instead, email security concerns to **security@chefgroep.nl** or use [GitHub's private security advisories](https://github.com/OnlineChefGroep/pi-agent-orchestrator/security/advisories/new).
 2. We aim to acknowledge reports within **5 business days** and provide an initial assessment.
 3. We will keep you informed of progress and coordinate disclosure timing.
 

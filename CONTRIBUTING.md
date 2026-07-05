@@ -43,6 +43,9 @@ npm run lint
 # Run tests
 npm test
 
+# Run performance benchmarks
+npm run bench:all
+
 # Full verification
 npm run typecheck && npm run lint && npm test
 ```
@@ -53,25 +56,48 @@ npm run typecheck && npm run lint && npm test
 
 ```
 src/
-  index.ts                 # Public API exports
-  agent-*.ts               # Core agent logic (types, runner, registry, manager)
-  custom-agents.ts         # Load user-defined .md agents
-  default-agents.ts        # Embedded default agent configs
-  compaction.ts            # Conversation pruning
-  context*.ts              # Context building and deferred context
-  handoff.ts               # Structured agent handoff protocol
-  hooks.ts                 # Lifecycle hook system
-  memory.ts                # Memory partition management
-  model-resolver.ts        # Model name resolution
-  output-handler.ts        # /agents menu, settings, conversation viewer
-  schedule*.ts             # Subagent scheduling
+  index.ts                 # Extension entry point
+  agent-types.ts           # Permission model
+  agent-runner.ts          # Agent lifecycle
+  agent-manager.ts         # Manager wrapper
+  agent-registry.ts        # Agent registry + settings
+  default-agents.ts        # Built-in agent configs
+  custom-agents.ts         # Custom .md agent loader
   settings.ts              # Persistent settings
-  types.ts                 # Shared type definitions
-  usage.ts                 # Token/turn tracking
-  validators.ts            # Post-completion validation
-  worktree.ts              # Git worktree operations
+  compaction.ts            # Context pruning
+  context.ts               # Parent context
+  handoff.ts               # Handoff protocol
+  hooks.ts                 # Lifecycle hooks
+  memory.ts                # Memory partitions
+  prompts.ts               # Prompt templates
+  schedule*.ts             # Scheduling engine
+  swarm-join.ts            # Swarm coordination
+  group-join.ts            # Batch/group manager
+  batch-orchestrator.ts    # Parallel agent orchestration
+  orchestration-dispatch.ts # Auto mode dispatch
   cross-extension-rpc.ts   # Inter-extension RPC
-  ui/                      # TUI components (widget, menus, viewer)
+  validators.ts            # Post-completion validation
+  worktree.ts              # Git worktree ops
+  debug-capture.ts         # Offline debug capture
+  ui/                     # TUI components
+    agent-dashboard.ts       # Interactive dashboard
+    agent-widget.ts          # Above-editor widget
+    conversation-viewer.ts   # Conversation overlay
+    agent-top-renderer.ts    # Top view table
+    dashboard/               # Dashboard modules
+    theme.ts                 # Theme system
+    animation.ts             # Spinner animations
+    settings-menu.ts         # Settings UI
+    schedule-menu.ts         # Schedule management
+test/                   # Vitest tests (95 files)
+docs/                   # Documentation
+.agents/                # Daemon + skill definitions
+  daemons/
+  skills/
+    graphify/
+    overdrive/
+    showcase/
+    testing/
 ```
 
 ---
@@ -175,6 +201,18 @@ If you add new settings, update:
 
 ---
 
+## Publishing
+
+This package is published to npmjs.org as `@onlinechefgroep/pi-agent-orchestrator`.
+
+1. Ensure you have an `NPM_TOKEN` with publish access for the `@onlinechefgroep` scope.
+2. Bump the version in `package.json` and update `CHANGELOG.md`.
+3. Create a PR, get it reviewed, and merge to `main`.
+4. Tag the release: `git tag v<version> && git push origin v<version>`
+5. CI publishes automatically via `publish-npm.yml` (npmjs.org) and `publish.yml` (GitHub Packages mirror).
+
+---
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
@@ -182,3 +220,10 @@ By contributing, you agree that your contributions will be licensed under the [M
 ## Questions?
 
 Open an issue or refer to `docs/` for architecture, API reference, and troubleshooting guides.
+
+## Branch Protection
+
+The `main` branch has protection rules:
+- CI must pass before merge
+- Branches must be up-to-date before merge
+- At least one review recommended (not strictly required for solo maintainer)

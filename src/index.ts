@@ -67,6 +67,7 @@ import { type AgentRecord, type NotificationDetails } from "./types.js";
 import type { AgentActivity, UICtx } from "./ui/agent-ui-types.js";
 import { AgentWidget } from "./ui/agent-widget.js";
 import { setSpinnerStyle } from "./ui/animation.js";
+import { clearWidgetMetrics, setWidgetMetrics } from "./ui/global-registry.js";
 import { createNotificationRenderer } from "./ui/notification-renderer.js";
 import { getLifetimeTotal } from "./usage.js";
 
@@ -414,9 +415,7 @@ export default async function (pi: ExtensionAPI) {
   registerSubagentsApi(pi.events, hookRegistry, manager);
 
   // Expose widget render metrics via Symbol.for() global registry for dashboard access.
-  // The dashboard reads this lazily via (globalThis as any)[Symbol.for("pi-subagents:widget-metrics")],
-  // so the symbol must be declared before any closure that references it (e.g. session_shutdown).
-  const WIDGET_KEY = Symbol.for("pi-subagents:widget-metrics");
+  // The dashboard reads this lazily via getWidgetMetrics() from global-registry.ts.
 
   // --- Cross-extension RPC via pi.events ---
   let currentCtx: ExtensionContext | undefined;
@@ -480,8 +479,8 @@ export default async function (pi: ExtensionAPI) {
     pi,
     getCtx: () => currentCtx,
     manager,
-    sessionManager: manager as any,
-    swarmCoordinator: swarmJoin as any,
+    sessionManager: manager,
+    swarmCoordinator: swarmJoin,
     authProvider: (_requestId, payload) => {
       const extensionId = payload?.authContext?.extensionId;
       if (extensionId && typeof extensionId === "string") {
@@ -504,7 +503,7 @@ export default async function (pi: ExtensionAPI) {
     unsubSwarmHealthRpc?.();
     currentCtx = undefined;
     clearSubagentsApi();
-    delete (globalThis as any)[WIDGET_KEY];
+    clearWidgetMetrics();
     scheduler.stop();
     manager.abortAll();
     for (const timer of pendingNudges.values()) clearTimeout(timer);
@@ -522,9 +521,9 @@ export default async function (pi: ExtensionAPI) {
   // Live widget: show running agents above editor
   const widget = new AgentWidget(manager, agentActivity);
 
-  (globalThis as any)[WIDGET_KEY] = {
+  setWidgetMetrics({
     getSnapshot: () => widget.getRenderMetrics(),
-  };
+  });
 
   // ---- Batch orchestrator for smart/group/swarm join modes ----
   const batchOrchestrator = new BatchOrchestrator({

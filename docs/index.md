@@ -20,20 +20,7 @@
 |---|---|
 | [Performance](./PERFORMANCE.md) | Benchmarks, spawn latency optimization, compaction efficiency |
 | [How-To: Performance](./HOWTO-perf.md) | Step-by-step profiling, benchmark thresholds, CI interpretation |
-
-## // SECURITY
-
-| Document | Description |
-|---|---|
-| [Security Audit Report](./SECURITY_AUDIT_REPORT.md) | Full CVE audit results, vulnerability classifications, remediation status |
-| [Security Verification](./SECURITY_AUDIT_VERIFICATION_2026-05-23.md) | Independent verification of fixes, test coverage, regression analysis |
-
-## // PLANNING & FUTURE
-
-| Document | Description |
-|---|---|
-| [Review & Future](./REVIEW_AND_FUTURE.md) | Architecture review summary, identified gaps, improvement proposals |
-| [Continuation Plan](./VERVOLG_PLAN.md) | Upcoming features, work-in-progress, deferred items |
+| [Overdrive Patterns](./overdrive-patterns.md) | Performance optimization patterns and linter rules |
 
 ## // REPO INDEX
 
@@ -46,5 +33,5 @@
 | `../CODE_OF_CONDUCT.md` | Contributor Covenant v2.1 |
 | `../ROADMAP.md` | Public roadmap — current state, planned features, out-of-scope |
 | `../LICENSE` | MIT License — full text |
-| `../AGENTS.md` | Agent developer guide — common mistakes, conventions, rules |
-| `../CLAUDE.md` | Pi infrastructure — internal agent configuration reference |
+| `../AGENTS.md` | Developer guide — common mistakes, conventions, rules |
+| `../docs/repository.md` | Repository structure overview |

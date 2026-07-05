@@ -16,6 +16,19 @@ import { getTimeSpinnerFrame } from "./animation.js";
 import { activeTheme, fastTruncate, getBoxChars, padAndTruncate, type Theme } from "./theme.js";
 import { type Component, matchesKey, type TUI, visibleWidth, wrapTextWithAnsi } from "./tui-shim.js";
 
+// ── Type guards ─────────────────────────────────────────────────────────────
+
+interface BashExecutionMessage {
+  role: "bashExecution";
+  command?: string;
+  output?: string;
+  content?: { command: string; stdout: string; stderr: string; exitCode: number };
+}
+
+function isBashExecution(msg: unknown): msg is BashExecutionMessage {
+  return typeof msg === "object" && msg !== null && (msg as Record<string, unknown>).role === "bashExecution";
+}
+
 /** Base lines consumed by chrome: top border + header + header sep + footer sep + footer + bottom border. */
 const CHROME_LINES_BASE = 6;
 const MIN_VIEWPORT = 3;
@@ -42,6 +55,17 @@ export class ConversationViewer implements Component {
 
   /** Minimum gap between consecutive renders (60 fps cap). */
   private static readonly MIN_RENDER_GAP_MS = 16;
+
+  // ── Performance: incremental content cache ──
+
+  /** Cached content lines from the last buildContentLines() call. */
+  private cachedContentLines: string[] = [];
+
+  /** Number of messages processed into cachedContentLines. */
+  private cachedMessageCount = 0;
+
+  /** Width used when building cachedContentLines (invalidates on resize). */
+  private cachedWidth = 0;
 
   constructor(
     private tui: TUI,
@@ -103,7 +127,7 @@ export class ConversationViewer implements Component {
       return;
     }
 
-    const totalLines = this.buildContentLines(this.lastInnerW).length;
+    const totalLines = this.buildContentLinesCached(this.lastInnerW).length;
     const viewportHeight = this.viewportHeight();
     const maxScroll = Math.max(0, totalLines - viewportHeight);
 
@@ -189,8 +213,8 @@ export class ConversationViewer implements Component {
     if (invocationLine) lines.push(row(invocationLine));
     lines.push(hrMid);
 
-    // Content area — rebuild every render (live data, no cache needed)
-    const contentLines = this.buildContentLines(innerW);
+    // Content area — incremental cache: only rebuild when messages change or width changes
+    const contentLines = this.buildContentLinesCached(innerW);
     const viewportHeight = this.viewportHeight();
     const maxScroll = Math.max(0, contentLines.length - viewportHeight);
 
@@ -219,7 +243,12 @@ export class ConversationViewer implements Component {
     return lines;
   }
 
-  invalidate(): void { /* no cached state to clear */ }
+  invalidate(): void {
+    // Clear content cache on theme/style change
+    this.cachedContentLines = [];
+    this.cachedMessageCount = 0;
+    this.cachedWidth = 0;
+  }
 
   dispose(): void {
     this.closed = true;
@@ -231,9 +260,282 @@ export class ConversationViewer implements Component {
       this.unsubscribe();
       this.unsubscribe = undefined;
     }
+    this.cachedContentLines = [];
+    this.cachedMessageCount = 0;
   }
 
   // ---- Private ----
+
+  /**
+   * Incremental content cache: only processes NEW messages since last render.
+   * Falls back to full rebuild when width changes or cache is empty.
+   */
+  private buildContentLinesCached(width: number): string[] {
+    if (width <= 0) return [];
+
+    const messages = this.session.messages;
+    const msgCount = messages.length;
+
+    // Full rebuild needed: width changed, cache empty, or messages were removed
+    if (width !== this.cachedWidth || this.cachedContentLines.length === 0 || msgCount < this.cachedMessageCount) {
+      this.cachedContentLines = this.buildContentLines(width);
+      this.cachedMessageCount = msgCount;
+      this.cachedWidth = width;
+      return this.cachedContentLines;
+    }
+
+    // Incremental: only process new messages and append to cache
+    if (msgCount === this.cachedMessageCount) {
+      // No new messages — just update the spinner line at the end if running
+      this.cachedContentLines = this.updateRunningLine(this.cachedContentLines, width);
+      return this.cachedContentLines;
+    }
+
+    // Remove the old running line (last line) if it exists, before appending new content
+    const cached = this.cachedContentLines;
+    const lastLine = cached.length > 0 ? cached[cached.length - 1] : "";
+    const hasOldRunningLine = lastLine.includes("Hermes is working");
+    const base = hasOldRunningLine ? cached.slice(0, -1) : cached;
+
+    // Process only new messages (from cachedMessageCount to msgCount)
+    const activeUiStyle = getUiStyle();
+    const th = activeTheme(this.theme);
+    const newLines: string[] = [];
+
+    // Track separator state like the original buildContentLines loop.
+    // Only add a blank separator line if the previous message actually produced output.
+    let needsSeparator = base.length > 0;
+    for (let i = this.cachedMessageCount; i < msgCount; i++) {
+      const msg = messages[i];
+      const linesBefore = newLines.length;
+      if (needsSeparator) {
+        newLines.push("");
+      }
+      this.renderMessage(msg, width, activeUiStyle, th, newLines);
+      // If renderMessage added content, future messages need a separator.
+      // If it was skipped (empty/unknown), remove the phantom separator.
+      if (newLines.length === linesBefore + 1 && needsSeparator) {
+        // Only the separator was added — message produced no content. Remove it.
+        newLines.pop();
+      } else if (newLines.length > linesBefore) {
+        needsSeparator = true;
+      }
+    }
+
+    // Apply truncation to new lines
+    const truncatedNew = newLines.map(l => fastTruncate(l, width));
+    const updatedLines = [...base, ...truncatedNew];
+
+    this.cachedContentLines = updatedLines;
+    this.cachedMessageCount = msgCount;
+    this.cachedWidth = width;
+    // Append running line for active agents
+    this.cachedContentLines = this.updateRunningLine(this.cachedContentLines, width);
+    return this.cachedContentLines;
+  }
+
+  /**
+   * Update only the running spinner line at the end (cheap: no message re-processing).
+   */
+  private updateRunningLine(lines: string[], width: number): string[] {
+    if (this.record.status !== "running" || !this.activity) return lines;
+
+    const activeUiStyle = getUiStyle();
+    const spinnerFrame = getTimeSpinnerFrame();
+    const act = describeActivity(this.activity.activeTools, this.activity.responseText);
+
+    let runningLineStr = `  \x1b[38;2;255;165;0m${spinnerFrame}\x1b[0m \x1b[38;2;168;100;255mHermes is working:\x1b[0m \x1b[3m${act}\x1b[0m`;
+    if (activeUiStyle === "retro") {
+      runningLineStr = `  \x1b[33m${spinnerFrame}\x1b[0m \x1b[35;1mHermes is working:\x1b[0m \x1b[3m${act}\x1b[0m`;
+    } else if (activeUiStyle === "plain") {
+      runningLineStr = `  ${spinnerFrame} Hermes is working: ${act}`;
+    }
+
+    // Check if last line is the running line (contains spinner or "working")
+    const last = lines.length > 0 ? lines[lines.length - 1] : "";
+    const isRunningLine = last.includes("Hermes is working");
+
+    const newLine = fastTruncate(runningLineStr, width);
+    if (isRunningLine) {
+      // Replace in-place — avoid array copy
+      lines[lines.length - 1] = newLine;
+      return lines;
+    }
+    // No running line yet — append with separator for visual consistency
+    return [...lines, "", newLine];
+  }
+
+  /**
+   * Render a single message into the output lines array.
+   * Extracted from buildContentLines for incremental reuse.
+   */
+  private renderMessage(
+    msg: any,
+    width: number,
+    activeUiStyle: string,
+    th: ReturnType<typeof activeTheme>,
+    lines: string[],
+  ): void {
+    if (msg.role === "user") {
+      const text = typeof msg.content === "string"
+        ? msg.content
+        : extractText(msg.content);
+      if (!text.trim()) return;
+
+      let header = " \x1b[48;2;0;100;160;38;2;255;255;255;1m 👤 USER \x1b[0m";
+      let border = " \x1b[38;2;0;160;220m│\x1b[0m";
+      if (activeUiStyle === "retro") {
+        header = " \x1b[44;37;1m 👤 USER \x1b[0m";
+        border = " \x1b[36m|\x1b[0m";
+      } else if (activeUiStyle === "plain") {
+        header = " 👤 USER ";
+        border = " |";
+      }
+
+      lines.push(header);
+      for (const line of wrapTextWithAnsi(text.trim(), width - 3)) {
+        lines.push(`${border} ${line}`);
+      }
+    } else if (msg.role === "assistant") {
+      const textParts: string[] = [];
+      const toolCalls: string[] = [];
+      for (const c of msg.content) {
+        if (c.type === "text" && c.text) textParts.push(c.text);
+        else if (c.type === "toolCall") {
+          toolCalls.push((c as any).name ?? (c as any).toolName ?? "unknown");
+        }
+      }
+
+      let header = " \x1b[48;2;100;50;180;38;2;255;255;255;1m 🤖 HERMES \x1b[0m";
+      let border = " \x1b[38;2;150;80;220m│\x1b[0m";
+      if (activeUiStyle === "retro") {
+        header = " \x1b[45;37;1m 🤖 HERMES \x1b[0m";
+        border = " \x1b[35m|\x1b[0m";
+      } else if (activeUiStyle === "plain") {
+        header = " 🤖 HERMES ";
+        border = " |";
+      }
+
+      lines.push(header);
+      if (textParts.length > 0) {
+        for (const line of wrapTextWithAnsi(textParts.join("\n").trim(), width - 3)) {
+          lines.push(`${border} ${line}`);
+        }
+      }
+      for (const name of toolCalls) {
+        let callLine = ` \x1b[38;2;150;80;220m│\x1b[0m   \x1b[38;2;220;120;0m⚡ [Tool Invoke: ${name}]\x1b[0m`;
+        if (activeUiStyle === "retro") {
+          callLine = ` \x1b[35m|\x1b[0m   \x1b[33m⚡ [Tool Invoke: ${name}]\x1b[0m`;
+        } else if (activeUiStyle === "plain") {
+          callLine = ` |   ⚡ [Tool Invoke: ${name}]`;
+        }
+        lines.push(callLine);
+      }
+    } else if (msg.role === "toolResult") {
+      const text = extractText(msg.content);
+      const truncated = text.length > 800 ? `${text.slice(0, 800)}\n... (truncated)` : text;
+      const trimmedTruncated = truncated.trim();
+      if (!trimmedTruncated) return;
+
+      const innerW = width - 6;
+      if (innerW > 10) {
+        const headerText = ` 🔧 Tool Result `;
+        const dashCount = Math.max(2, innerW - headerText.length - 2);
+
+        const box = getBoxChars();
+        let topBorder = `\x1b[38;2;220;120;0m${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}\x1b[0m`;
+        let bottomBorder = `\x1b[38;2;220;120;0m${box.bl}${box.h.repeat(innerW + 2)}${box.br}\x1b[0m`;
+        let leftBorder = "\x1b[38;2;220;120;0m│\x1b[0m";
+        let rightBorder = "\x1b[38;2;220;120;0m│\x1b[0m";
+
+        if (activeUiStyle === "retro") {
+          topBorder = `\x1b[33m${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}\x1b[0m`;
+          bottomBorder = `\x1b[33m${box.bl}${box.h.repeat(innerW + 2)}${box.br}\x1b[0m`;
+          leftBorder = "\x1b[33m|\x1b[0m";
+          rightBorder = "\x1b[33m|\x1b[0m";
+        } else if (activeUiStyle === "plain") {
+          topBorder = `${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}`;
+          bottomBorder = `${box.bl}${box.h.repeat(innerW + 2)}${box.br}`;
+          leftBorder = "|";
+          rightBorder = "|";
+        }
+
+        lines.push(`   ${topBorder}`);
+        for (const line of wrapTextWithAnsi(trimmedTruncated, innerW)) {
+          const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
+          lines.push(`   ${leftBorder} ${paddedLine} ${rightBorder}`);
+        }
+        lines.push(`   ${bottomBorder}`);
+      } else {
+        lines.push(th.fg("warning", "[Result]"));
+        for (const line of wrapTextWithAnsi(trimmedTruncated, width)) {
+          lines.push(th.fg("dim", line));
+        }
+      }
+    } else if (isBashExecution(msg)) {
+      const bash = msg;
+      const command = bash.command || "";
+      const output = bash.output || "";
+
+      const innerW = width - 6;
+      if (innerW > 10) {
+        const headerText = ` 💻 Bash Command `;
+        const dashCount = Math.max(2, innerW - headerText.length - 2);
+
+        let topBorder = `\x1b[38;2;0;160;220m╭──${headerText}${"─".repeat(dashCount)}╮\x1b[0m`;
+        let bottomBorder = `\x1b[38;2;0;160;220m╰${"─".repeat(innerW + 2)}╯\x1b[0m`;
+        let leftBorder = "\x1b[38;2;0;160;220m│\x1b[0m";
+        let rightBorder = "\x1b[38;2;0;160;220m│\x1b[0m";
+        let midBorder = `\x1b[38;2;0;160;220m├${"─".repeat(innerW + 2)}┤\x1b[0m`;
+        let cmdPrefix = "\x1b[1m$ ";
+        let cmdSuffix = "\x1b[0m";
+        let outPrefix = "\x1b[2m";
+        let outSuffix = "\x1b[0m";
+
+        if (activeUiStyle === "retro") {
+          topBorder = `\x1b[36m+--${headerText}${"-".repeat(dashCount)}+\x1b[0m`;
+          bottomBorder = `\x1b[36m+${"-".repeat(innerW + 2)}+\x1b[0m`;
+          leftBorder = "\x1b[36m|\x1b[0m";
+          rightBorder = "\x1b[36m|\x1b[0m";
+          midBorder = `\x1b[36m+${"-".repeat(innerW + 2)}+\x1b[0m`;
+        } else if (activeUiStyle === "plain") {
+          topBorder = `+--${headerText}${"-".repeat(dashCount)}+`;
+          bottomBorder = `+${"-".repeat(innerW + 2)}+`;
+          leftBorder = "|";
+          rightBorder = "|";
+          midBorder = `+${"-".repeat(innerW + 2)}+`;
+          cmdPrefix = "$ ";
+          cmdSuffix = "";
+          outPrefix = "";
+          outSuffix = "";
+        }
+
+        lines.push(`   ${topBorder}`);
+        const cmdLineStr = `${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`;
+        lines.push(`   ${leftBorder} ${cmdLineStr}${" ".repeat(Math.max(0, innerW - visibleWidth(`${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`)))} ${rightBorder}`);
+
+        if (output.trim()) {
+          lines.push(`   ${midBorder}`);
+          const outTrunc = output.length > 800 ? `${output.slice(0, 800)}\n... (truncated)` : output;
+          for (const line of wrapTextWithAnsi(outTrunc.trim(), innerW)) {
+            const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
+            lines.push(`   ${leftBorder} ${outPrefix}${paddedLine}${outSuffix} ${rightBorder}`);
+          }
+        }
+        lines.push(`   ${bottomBorder}`);
+      } else {
+        lines.push(th.fg("accent", `$ ${command}`));
+        const trimmedOutput = output.trim();
+        if (trimmedOutput) {
+          for (const line of wrapTextWithAnsi(trimmedOutput, width)) {
+            lines.push(th.fg("dim", line));
+          }
+        }
+      }
+    } else {
+      return;
+    }
+  }
 
   private viewportHeight(): number {
     // Cap mirrors the overlay's maxHeight — otherwise the viewer would render
@@ -370,8 +672,8 @@ export class ConversationViewer implements Component {
             lines.push(th.fg("dim", line));
           }
         }
-      } else if ((msg as any).role === "bashExecution") {
-        const bash = msg as any;
+      } else if (isBashExecution(msg)) {
+        const bash = msg;
         const command = bash.command || "";
         const output = bash.output || "";
         

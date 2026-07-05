@@ -109,12 +109,12 @@ function reliabilityGauge(j: ScheduledSubagent): string {
     return "100% [\x1b[32m█████\x1b[0m]";
   }
 
-  // premium (default)
-  if (j.runCount === 0) return "100% [\x1b[38;2;40;200;100m🟩🟩🟩🟩🟩\x1b[0m]";
+  // premium (default) — use block chars for consistent terminal width
+  if (j.runCount === 0) return "100% [\x1b[38;2;40;200;100m█████\x1b[0m]";
   if (j.lastStatus === "error") {
-    return " 80% [\x1b[38;2;40;200;100m🟩🟩🟩🟩\x1b[0m\x1b[38;2;220;50;50m🟥\x1b[0m]";
+    return " 80% [\x1b[38;2;40;200;100m████\x1b[0m\x1b[38;2;220;50;50m█\x1b[0m]";
   }
-  return "100% [\x1b[38;2;40;200;100m🟩🟩🟩🟩🟩\x1b[0m]";
+  return "100% [\x1b[38;2;40;200;100m█████\x1b[0m]";
 }
 
 /** Compact selectable row aligned into columns with dividers and headers. */
@@ -184,7 +184,7 @@ function formatDetails(j: ScheduledSubagent, scheduler: SubagentScheduler): stri
   const padLine = (label: string, value: string): string => {
     const cleanValue = value.replace(/\x1b\[[0-9;]*m/g, "");
     const leftText = `  ${labelCol}${label}:\x1b[0m${" ".repeat(Math.max(1, 15 - label.length))}`;
-    const paddingCount = Math.max(1, width - 4 - 15 - cleanValue.length);
+    const paddingCount = Math.max(1, width - 5 - 15 - cleanValue.length);
     const padding = " ".repeat(paddingCount);
     return `${borderCol}${c_l}\x1b[0m${leftText}${value}${padding}${borderCol}${c_r}\x1b[0m`;
   };

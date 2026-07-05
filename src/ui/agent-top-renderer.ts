@@ -93,7 +93,7 @@ export function createTopThemeAdapter(th: DashboardTheme): {
         : color === "accent" ? th.accent
         : color === "success" ? th.success
         : color === "error" ? th.error
-        : color === "warning" ? th.error
+        : color === "warning" ? th.highlight
         : color === "border" ? th.border
         : th.dim
       ) as string;
@@ -173,8 +173,9 @@ export function renderTopTable(
 
   // Column headers
   const renderHeaderCell = (label: string, colW: number) => {
-    const l = sortKey === label.toLowerCase() ? `*${label}` : label;
-    return theme.fg("highlight", l.padEnd(colW));
+    const key: string = label === "TOOLS" ? "toolUses" : label === "LAST" ? "lastSeen" : label.toLowerCase();
+    const marker = sortKey === key ? "*" : "";
+    return theme.fg("highlight", `${marker}${label}`.padEnd(colW));
   };
   lines.push(
     renderHeaderCell(headers[0], colWidths[0]) + " " +

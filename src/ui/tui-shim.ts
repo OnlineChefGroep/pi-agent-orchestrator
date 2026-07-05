@@ -319,12 +319,26 @@ export function wrapTextWithAnsi(text: string, width: number): string[] {
 //
 // The host's input layer normalises raw terminal bytes into a canonical
 // key string ("q", "up", "shift+up", "ctrl+c", "escape", etc.) before
-// invoking our `handleInput(data)`. Our job is therefore trivial: strict
-// equality. Whatever bytes upstream saw, by the time we see them they've
-// already collapsed to a canonical name — so `data === keyId` is the
-// whole function.
+// invoking our `handleInput(data)`. In most cases this means we can rely
+// on strict equality: `data === keyId`.
+//
+// However, some hosts or terminal environments may send the raw Escape
+// byte (`\u001b`) instead of the canonical name "escape" or the short
+// form "esc". This matcher normalises all three variants at the utility
+// level so every consumer benefits without needing to remember extra
+// aliases at each call site.
 // ────────────────────────────────────────────────────────────────────────────
 
 export function matchesKey(data: string, keyId: string): boolean {
-  return data === keyId;
+  // Fast path: direct match handles all keys except Escape variants.
+  if (data === keyId) return true;
+
+  // Escape key: normalise "escape" ↔ "esc" ↔ raw \u001b byte.
+  // The host may send any of these; we accept all three.
+  if ((keyId === "escape" || keyId === "esc") &&
+      (data === "escape" || data === "esc" || data === "\u001b")) {
+    return true;
+  }
+
+  return false;
 }

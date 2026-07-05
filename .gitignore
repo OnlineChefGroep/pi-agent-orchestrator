@@ -1,3 +1,15 @@
+# Internal / developer-only files (removed from git for OSS)
+HANDOFF.md
+INFRASTRUCTURE.md
+CLAUDE.md
+commit_message.txt
+docs/VERVOLG_PLAN.md
+docs/branch-manifest.md
+job_log.txt
+job*_log.txt
+.commandcode/
+droid-wiki/
+
 # Dependencies
 node_modules/
 node_modules/.vite/
@@ -52,9 +64,6 @@ graphify-out/
 .factory/
 
 # Personal planning
-# VERVOLG_PLAN.md - tracked as living roadmap document
-
-
 .npmrc
 .evolve/
 docs/superpowers/plans/
@@ -71,8 +80,3 @@ bun.lockb
 
 # Omo run continuations (session data)
 .omo/
-
-# Internal fleet planning & logs
-docs/VERVOLG_PLAN.md
-docs/branch-manifest.md
-commit_message.txt

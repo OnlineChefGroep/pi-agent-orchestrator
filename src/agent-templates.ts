@@ -114,7 +114,11 @@ async function readInstalledManifest(cwd: string): Promise<InstalledManifest> {
   const path = getInstalledManifestPath(cwd);
   if (!existsSync(path)) return { version: 1, templates: {} };
   const raw = await readFile(path, "utf-8");
-  return JSON.parse(raw) as InstalledManifest;
+  try {
+    return JSON.parse(raw) as InstalledManifest;
+  } catch {
+    return { version: 1, templates: {} };
+  }
 }
 
 async function writeInstalledManifest(cwd: string, manifest: InstalledManifest): Promise<void> {

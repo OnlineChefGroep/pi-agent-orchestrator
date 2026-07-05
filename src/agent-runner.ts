@@ -24,6 +24,9 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { getPromptCompressionLevel } from "./agent-registry.js";
+import {
+  runAdversarialValidation,
+} from "./agent-runner-validator.js";
 import { type EffectiveConfig, getAgentConfig, getConfig, getMemoryToolNames, getReadOnlyMemoryToolNames, getToolNamesForType } from "./agent-types.js";
 import { buildParentContext, extractText } from "./context.js";
 import { buildCtxInjection } from "./context-mode-bridge.js";
@@ -50,10 +53,7 @@ import {
 } from "./telemetry-otel.js";
 import type { SubagentType, ThinkingLevel, ValidationResult } from "./types.js";
 import {
-  buildValidatorPrompt,
-  getAgentDescription,
   hasValidators,
-  parseValidationResult,
 } from "./validators.js";
 
 // ============================================================================
@@ -813,82 +813,33 @@ export async function runAgent(
     }
   }
 
-  // Adversarial validation
+  // Adversarial validation (extracted to agent-runner-validator.ts)
   let validationResults: ValidationResult[] | undefined;
   let validated: boolean | undefined;
 
   if (!options.skipValidators && hasValidators(agentConfig)) {
-    const validators = agentConfig!.validators!;
-    const agentDescription = getAgentDescription(agentConfig);
-    const VALIDATION_MAX_RETRIES = 2;
-    let retries = 0;
-
-    while (retries <= VALIDATION_MAX_RETRIES) {
-      options.hooks?.dispatch("validation:start", options.agentId ?? "unknown", {
-        attempt: retries + 1,
-        validatorCount: validators.length,
-      }).catch(() => {});
-
-      const validatorPromises = validators.map((v) =>
-        runAgent(ctx, v.agentId, buildValidatorPrompt(responseText, v.criteria, agentDescription), {
-          pi: options.pi,
-          model: options.model,
-          isolated: true,
-          skipValidators: true,
-          levelLimit: 0,
-          signal: options.signal,
-          quotas: { maxTokens: 50_000, maxDurationMs: 120_000, maxToolCalls: 10 },
-        })
-          .then((result) => parseValidationResult(result.responseText, v.agentId))
-          .catch((err) => ({
-            agentId: v.agentId,
-            passed: false,
-            criteria: [],
-            summary: `Validator error: ${err instanceof Error ? err.message : String(err)}`,
-          })),
-      );
-
-      validationResults = await Promise.all(validatorPromises);
-      validated = validationResults.every((r) => r.passed);
-
-      options.hooks?.dispatch("validation:end", options.agentId ?? "unknown", {
-        passed: validated,
-        results: validationResults,
-      }).catch(() => {});
-
-      if (validated || retries >= VALIDATION_MAX_RETRIES) {
-        options.onValidationComplete?.(validationResults);
-        break;
-      }
-
-      // Self-healing feedback
-      const failedFeedback = validationResults
-        .filter((r) => !r.passed)
-        .map((r) => {
-          const failedCriteria = r.criteria.filter((c) => !c.passed);
-          const details = failedCriteria.length > 0
-            ? `\n${failedCriteria.map((c) => `  - ${c.criterion}: ${c.feedback}`).join("\n")}`
-            : "";
-          return `[${r.agentId}] ${r.summary}${details}`;
-        })
-        .join("\n\n");
-
-      const fixPrompt = `Validation failed. Please fix the following issues and provide an updated final response:\n\n${failedFeedback}`;
-
-      try {
-        responseText = await resumeAgent(session, fixPrompt, {
-          onToolActivity: options.onToolActivity,
-          onAssistantUsage: options.onAssistantUsage,
-          onCompaction: options.onCompaction,
-          signal: options.signal,
-        });
-      } catch {
-        options.onValidationComplete?.(validationResults);
-        break;
-      }
-
-      retries++;
-    }
+    const result = await runAdversarialValidation(
+      session,
+      ctx,
+      responseText,
+      agentConfig,
+      options.agentId ?? "unknown",
+      {
+        pi: options.pi,
+        model: options.model,
+        signal: options.signal,
+        hooks: options.hooks,
+        onToolActivity: options.onToolActivity,
+        onAssistantUsage: options.onAssistantUsage,
+        onCompaction: options.onCompaction,
+        onValidationComplete: options.onValidationComplete,
+        runAgent,
+        resumeAgent,
+      },
+    );
+    responseText = result.responseText;
+    validationResults = result.validationResults;
+    validated = result.validated;
   }
 
   // Telemetry

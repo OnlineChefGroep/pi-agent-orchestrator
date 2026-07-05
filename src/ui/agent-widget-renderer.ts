@@ -306,9 +306,19 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
 
     if (lines.length > 1) {
       const last = lines.length - 1;
-      lines[last] = lines[last].replace(c_tree, c_angle);
+      {
+        const idx = lines[last].indexOf(c_tree);
+        if (idx >= 0) {
+          lines[last] = lines[last].substring(0, idx) + c_angle + lines[last].substring(idx + c_tree.length);
+        }
+      }
       if (runningLines.length > 0 && totalQueuedLines === 0 && last >= 2) {
-        lines[last - 1] = lines[last - 1].replace(c_tree, c_angle);
+        {
+          const idx = lines[last - 1].indexOf(c_tree);
+          if (idx >= 0) {
+            lines[last - 1] = lines[last - 1].substring(0, idx) + c_angle + lines[last - 1].substring(idx + c_tree.length);
+          }
+        }
         lines[last] = lines[last].replace(c_bar, " ".repeat(c_bar.length));
       }
     }
