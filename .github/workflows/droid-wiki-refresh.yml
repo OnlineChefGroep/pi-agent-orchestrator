@@ -1,19 +1,43 @@
-name: Droid Wiki Refresh
+name: Docs (GitHub Pages)
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
-  wiki-refresh:
+  deploy-pages:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Factory Droid
-        run: curl -fsSL https://app.factory.ai/cli | sh
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
 
-      - name: Generate wiki
-        run: droid exec --auto high "/wiki"
-        env:
-          FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
+      - name: Build docs site
+        run: |
+          mkdir -p _site
+          cp -r docs/* _site/
+          cp README.md _site/
+          cp CHANGELOG.md _site/
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
