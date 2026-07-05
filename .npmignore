@@ -1,1 +1,17 @@
 package-lock.json
+test/
+scripts/
+.github/
+.agents/
+.commandcode/
+showcase/
+droid-wiki/
+graphify-out/
+docs/chef-rfcs/
+examples/agents/*.md
+*.log
+bun.lock
+HANDOFF.md
+INFRASTRUCTURE.md
+CLAUDE.md
+commit_message.txt

@@ -1,6 +1,6 @@
 # AGENTS.md — pi-agent-orchestrator
 
-> **Spawn config SSOT** for the Pi agent stack. Sibling repos (`pi-helios-context-extensie`, `Pi-Helios-Memory-Private`, `pi-agent-control-extension`) cross-link here for sub-agent roles, parallel splits, and ecosystem pre-context.
+> Developer guide for the Pi agent orchestrator extension: conventions, common mistakes, spawn rules, and architecture.
 
 ## Pre-context (read first)
 
@@ -12,30 +12,6 @@ Pi extension — runs inside the pi coding agent host, not standalone. Orchestra
 | **Never** | Import `@earendil-works/pi-*` as direct deps; treat YAML booleans as truthy strings; sort agent lists (Map insertion order is intentional) |
 | **Peer extensions** | `@onlinechef/context-mode` → `ctx_*` tools (optional, feature-gated) |
 
-## Sub-agent pre-context matrix (Pi stack)
-
-What each layer injects **before** a sub-agent session runs. Parent-only rows affect the host agent, not spawned children.
-
-| Layer | Package / repo | Injected at spawn | Hooks / surface |
-|-------|----------------|-------------------|-----------------|
-| **Orchestrator** | `pi-agent-orchestrator` (this repo) | Parent execution log, permission matrix, handoff payload, prompt compression, optional `ctx_*` bridge | `subagent:start` · `subagent:end` · `subagent:spawn` · `subagent:steer` · RPC `subagents:rpc:spawn` |
-| **Memory hooks** | `Pi-Helios-Memory-Private` + `pi-helios-context-extensie` | Timeline `ctx_search`, FTS5 facts, session resume snapshot, failure memories | `PreToolUse` · `PostToolUse` · `PreCompact` · `helios-memory context` |
-| **Control extension** | `pi-agent-control-extension` | Browser/TUI routing (`control_route`), `tctl`, capture drivers, atomized control skills | `/route-control` · `control_browser_command` · WebSocket bridge |
-
-## Skills (install paths)
-
-| Task | Skill path |
-|------|------------|
-| **Codebase graph navigation** | `.agents/skills/graphify/SKILL.md` |
-| **Test / benchmark discipline** | `.agents/skills/testing/SKILL.md` |
-| **Performance auditing** | `.agents/skills/overdrive/SKILL.md` |
-| **Research loops** | `.agents/skills/showcase/SKILL.md` (demo video — UI-facing only) |
-| **Global agent patterns** | `~/.agents/skills/agent-explore` · `agent-architect` · `agent-code-reviewer` |
-| **Memory session init** | `~/.agents/skills/agent-memory-hooks` · `../skill-grinder/skills/agent-memory-hooks/SKILL.md` |
-| **Orchestrator dev helper** | `pi-subagents-helper` (see CHANGELOG) |
-
-**Taste:** No `taste-skill` in this repo — backend extension, no marketing copy. `showcase` is Remotion/demo output only.
-
 ## Spawn rules
 
 **Config SSOT (edit order):** `src/default-agents.ts` → `.pi/agents/<name>.md` override → `src/custom-agents.ts` frontmatter → `/agents → Settings` (`.pi/subagent-settings.json`).
@@ -46,23 +22,6 @@ What each layer injects **before** a sub-agent session runs. Parent-only rows af
 | `Plan` | read-only | Architecture pass before multi-file edits |
 | `Analysis` | read-only + `ctx_*` | Data/compute via sandbox (requires context-mode peer) |
 | `general-purpose` | full tools | Bounded implementation after Plan/Explore land |
-
-**Parallel subagents (this repo):** minimum **4** on cross-module passes (runner + UI + schedule/swarm + custom-agents/handoff). Spawn all in one batch; readonly agents first.
-
-**Site-wide passes (CHEF-98):** when orchestrator work touches public copy or `chefgroep.nl` consumers, follow **minimum 4** parallel subagents per [`chefgroep.nl/AGENTS.md`](../chefgroep.nl/AGENTS.md) — SSOT, pages, chrome/SEO, verify.
-
-## Sub-agents (this repo)
-
-| Role | When | Spawn type | Focus paths |
-|------|------|------------|-------------|
-| **orchestrator-core** | `agent-runner`, permissions, context pipeline | `Explore` | `src/agent-runner.ts` · `src/context.ts` · `src/agent-types.ts` |
-| **orchestrator-ui** | Dashboard, widget, top view, schedules | `Explore` | `src/ui/agent-dashboard.ts` · `src/ui/agent-widget.ts` · `src/ui/dashboard/` |
-| **orchestrator-schedule** | Cron, swarm, handoff, daemons | `Plan` | `src/schedule.ts` · `src/swarm-join.ts` · `src/handoff.ts` · `.agents/daemons/` |
-| **orchestrator-implement** | After readonly agents report | `general-purpose` | Bounded file set from handoff JSON |
-
-## CHEF
-
-Branch `chore/agent-fleet-a4-pi-stack` or `CHEF-<n>-slug` · PR `Fixes CHEF-<n>` · Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 
 ## Quick commands
 
@@ -77,7 +36,7 @@ npm test -- --watch                             # watch mode
 
 This is a **pi extension** — it runs inside a pi coding agent host, not standalone. The `@earendil-works/pi-*` host-platform packages are never direct dependencies. (`@earendil-works/pi-tui` is no longer a direct dependency — its API surface is mirrored locally in `src/ui/tui-shim.ts`. See Common Mistake #4 below for the full rule.) The entry point is declared in `package.json` → `pi.extensions` as `./dist/index.js`.
 
-Published to **GitHub Packages** (`npm.pkg.github.com`), not npmjs.
+Published to **npmjs.org** (`@onlinechefgroep/pi-agent-orchestrator`).
 
 ES modules only (`"type": "module"`). No CommonJS.
 
@@ -120,7 +79,7 @@ Even though source is TypeScript, imports must use `.js` (not `.ts`). `import { 
 
 ### 3. Type-only imports: prefer `import type`, allow inline `type` modifier
 
-For modules where ALL imports are types, use the strict form `import type { Foo } from './foo.js'`. When a single import mixes types and runtime values from the same module, the inline form `import { type Foo, bar } from './foo.js'` is equivalent and preferred: the `type` modifier erases the typed binding at build time and prevents accidental runtime bundling. Biome's `assist/source/organizeImports` rule preserves the inline pattern, so a sweep across the codebase shows a healthy mix (current census: 214 strict `import type` lines vs 17 inline-type lines across 11 files). Use the strict form when ALL imports from a module are types; use the inline form when mixing type and value imports from the same module.
+For modules where ALL imports are types, use the strict form `import type { Foo } from './foo.js'`. When a single import mixes types and runtime values from the same module, the inline form `import { type Foo, bar } from './foo.js'` is equivalent and preferred: the `type` modifier erases the typed binding at build time and prevents accidental runtime bundling. Use the strict form when ALL imports from a module are types; use the inline form when mixing type and value imports from the same module.
 
 ### 4. Host platform packages are NEVER direct deps
 
@@ -205,8 +164,6 @@ All runtime-configurable settings are defined in `src/settings.ts` (`SubagentsSe
 - `src/ui/dashboard/schedules-section.ts` — daemon schedule view in dashboard body
 - `src/swarm-join.ts` — live swarm join/leave coordination
 - `src/schedule.ts` + `src/schedule-store.ts` — cron-style scheduling, persisted to `.pi/subagent-schedules/`
-- `.agents/daemons/` — 4 autonomous daemons (github-activity-digest, js-ts-dependency-upgrades, linear-issue-labeler, pr-check-repair) with Pi Orchestra Integration docs
-- `.agents/skills/overdrive/SKILL.md` — performance auditing skill with benchmark suite
 
 See `docs/architecture.md` for the full module map and data-flow diagram.
 
@@ -214,16 +171,3 @@ See `docs/architecture.md` for the full module map and data-flow diagram.
 
 Ensure you run `npm run typecheck && npm run lint && npm test` before committing.
 Currently passing: **1693 tests** across **95 test files**, including performance benchmarks for render, snapshot, virtual scrolling, and spawn latency.
-
-## graphify
-
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
-When the user types `/graphify`, invoke the `skill` tool with `skill: "graphify"` before doing anything else.
-
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
