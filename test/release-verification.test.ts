@@ -104,12 +104,16 @@ describe("registry URL verification", () => {
     expect(content).toContain("secrets.GITHUB_TOKEN");
   });
 
-  it("publish-npm.yml does not exist", () => {
-    expect(fileExists(".github/workflows/publish-npm.yml")).toBe(false);
+  it("publish-npm.yml exists for npmjs.org publishing", () => {
+    expect(fileExists(".github/workflows/publish-npm.yml")).toBe(true);
+    const content = readRoot(".github/workflows/publish-npm.yml");
+    expect(content).toContain("registry.npmjs.org");
+    expect(content).toContain("secrets.NPM_TOKEN");
   });
 
-  it("package.json publishConfig.registry points to GitHub Packages", () => {
+  it("package.json publishConfig.registry points to npmjs.org", () => {
     const pkg = JSON.parse(readRoot("package.json"));
-    expect(pkg.publishConfig?.registry).toBe("https://npm.pkg.github.com");
+    expect(pkg.publishConfig?.registry).toBe("https://registry.npmjs.org");
+    expect(pkg.publishConfig?.access).toBe("public");
   });
 });

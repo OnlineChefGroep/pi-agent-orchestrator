@@ -447,6 +447,13 @@ export class AgentDashboard implements Component {
         this.requestRender();
         return;
       }
+      // Shift+letter → map to uppercase
+      if (data.startsWith("shift+") && data.length === 7) {
+        this.commandBuffer += data.charAt(6).toUpperCase();
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
       // Single character → append to buffer
       if (data.length === 1 && !data.includes("+")) {
         this.commandBuffer += data;

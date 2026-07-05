@@ -184,7 +184,7 @@ function formatDetails(j: ScheduledSubagent, scheduler: SubagentScheduler): stri
   const padLine = (label: string, value: string): string => {
     const cleanValue = value.replace(/\x1b\[[0-9;]*m/g, "");
     const leftText = `  ${labelCol}${label}:\x1b[0m${" ".repeat(Math.max(1, 15 - label.length))}`;
-    const paddingCount = Math.max(1, width - 4 - 15 - cleanValue.length);
+    const paddingCount = Math.max(1, width - 5 - 15 - cleanValue.length);
     const padding = " ".repeat(paddingCount);
     return `${borderCol}${c_l}\x1b[0m${leftText}${value}${padding}${borderCol}${c_r}\x1b[0m`;
   };

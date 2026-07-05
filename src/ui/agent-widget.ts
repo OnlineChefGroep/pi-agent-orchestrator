@@ -213,9 +213,10 @@ export class AgentWidget {
               continue;
             }
             // Agent starts mid-page after partial skip.
+            const prevSkipped = skipped;
             skipped = 0;
             visible.push(a);
-            remainingLines -= linesPerAgent;
+            remainingLines -= linesPerAgent - prevSkipped;
           } else if (remainingLines >= linesPerAgent) {
             visible.push(a);
             remainingLines -= linesPerAgent;
