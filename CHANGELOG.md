@@ -1,12 +1,59 @@
 # Changelog
 
-## v0.16.4 (2026-07-02)
+## v0.17.0 (2026-07-05)
 
-### Documentation
+### OSS Readiness — Full Public Release
 
-- **Skill ecosystem audit**: Full audit of `.agents/skills/` portfolio. Refactored `graphify/SKILL.md` from 1,299 lines to 68 lines by extracting pipeline steps to `references/pipeline.md` (712 lines) and subcommand docs to `references/subcommands.md` (519 lines). Refactored `showcase/SKILL.md` from 116 to 50 lines and `testing/SKILL.md` from 82 to 57 lines, both with extracted reference docs. All SKILL.md files now under the 80-line limit.
-- **AGENTS.md cleanup**: Removed 2 broken skill references (`infrastructure/SKILL.md`, `autoresearch/SKILL.md`) that pointed to non-existent paths. Updated stale test count from 1,035/58 to 1,693/95.
-- **Stale directory cleanup**: Removed `.agents/autoresearch/` directory (contained only a `.autoresearch-off` flag, no SKILL.md).
+This release transforms the extension from an internal project into a fully accessible open-source package. Every aspect — installation, documentation, code quality, CI/CD, and first-time contributor experience — has been audited and hardened.
+
+#### Installation & Publishing
+
+- **npmjs.org publishing restored**: Recreated `publish-npm.yml` workflow. `NPM_TOKEN` org secret triggers automatic publish to npmjs.org on `v*` tag push.
+- **`package.json`**: `publishConfig.registry` now points to `registry.npmjs.org` (public access). Added `prepublishOnly` script (build + typecheck + lint + test). Expanded `files` array to include `dist/`. Added 8 new keywords for discoverability.
+- **`.npmignore`**: Excludes test/, scripts/, .github/, .agents/, and internal files from published package.
+
+#### Internal Cleanup
+
+- **Removed tracked internal files**: `HANDOFF.md`, `INFRASTRUCTURE.md`, `CLAUDE.md`, `.agents/autoresearch/.autoresearch-off` — all deleted from git.
+- **`.gitignore`**: Extended with internal paths, job logs, `.commandcode/`, `droid-wiki/`.
+- **`AGENTS.md`**: Stripped private repo cross-links (`../chefgroep.nl/`, `../skill-grinder/`, `../OrgBeheer/`), CHEF branching rules, and sibling repo references. Retained all Common Mistakes and conventions.
+- **`docs/index.md`**: Removed 3 broken links (SECURITY_AUDIT_REPORT, REVIEW_AND_FUTURE, SECURITY_AUDIT_VERIFICATION). Added overdrive-patterns and repository.md references.
+
+#### README Rewrite
+
+- **User-first structure**: Installation prerequisites, `/agents` quick start, keyboard cheatsheet table, custom agent example, dynamic CI badge (no hardcoded test counts).
+- **Removed**: showcase pipeline table, "What's new" section, Chain of Agents details, opt-in debug capture wall of text (all moved to docs/).
+
+#### Bug Fixes
+
+- **H2**: Widget `getVisibleWindow()` partial-skip page budget off-by-one — `remainingLines` now decrements by visible portion only.
+- **M4**: Schedule detail card box alignment — padding formula `width-5` instead of `width-4`.
+- **M6**: Shifted keys (`shift+p`, `shift+s`, etc.) no longer cancel command mode — mapped to uppercase in command buffer.
+- **L1**: `agent-widget-renderer.ts` `.replace()` now only replaces first occurrence (tree prefix).
+- **L4**: Top view sort keys (`t/r/d/u/l/n`) added to dashboard help overlay.
+
+#### Type Safety
+
+- **`global-registry.ts`**: New typed accessor module replacing ad-hoc `(globalThis as any)[Symbol.for(...)]` patterns across 3 files (agent-dashboard, index, telemetry).
+- **`isBashExecution()` type guard**: Replaces `(msg as any).role === "bashExecution"` in conversation-viewer.
+- **Removed `as any` casts**: `manager`, `swarmCoordinator`, `tui` boundary casts replaced with proper typed interfaces.
+
+#### Documentation
+
+- **`CONTRIBUTING.md`**: Updated project structure tree (all current modules), added `npm run bench:all`, added Publishing section with release workflow, added Branch Protection section.
+- **`ROADMAP.md`**: Updated to v0.17.0, removed stale CHEF ticket references.
+- **`docs/index.md`**: Cleaned up dead links, added missing document references.
+
+#### CI/CD Hardening
+
+- **Dependabot grouping**: npm and GitHub Actions updates now batched into single PRs.
+- **`FUNDING.yml`**: Added GitHub Sponsors configuration.
+- **CodeQL**: Added commented-out `pull_request` trigger (requires GitHub Advanced Security).
+- **CI**: Biome lint scoped to Node 22 (Node 24 binary resolution issue documented).
+
+#### Metrics
+
+- 1693 tests across 95 test files. Typecheck + lint + test all green.
 
 ## v0.16.3 (2026-07-02)
 
