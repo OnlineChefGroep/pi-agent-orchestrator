@@ -50,7 +50,10 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Lint
-        if: matrix.peer-deps == 'latest'
+        # Biome's native binary loader has a resolution issue on Node 24
+        # (Cannot find module '@biomejs/cli-linux-x64/biome'). Lint only on
+        # Node 22 to avoid the issue; lint results are Node-version-independent.
+        if: matrix.peer-deps == 'latest' && matrix.node == 22
         run: npm run lint
 
       - name: Run tests

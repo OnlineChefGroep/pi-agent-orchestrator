@@ -109,12 +109,12 @@ function reliabilityGauge(j: ScheduledSubagent): string {
     return "100% [\x1b[32m█████\x1b[0m]";
   }
 
-  // premium (default)
-  if (j.runCount === 0) return "100% [\x1b[38;2;40;200;100m🟩🟩🟩🟩🟩\x1b[0m]";
+  // premium (default) — use block chars for consistent terminal width
+  if (j.runCount === 0) return "100% [\x1b[38;2;40;200;100m█████\x1b[0m]";
   if (j.lastStatus === "error") {
-    return " 80% [\x1b[38;2;40;200;100m🟩🟩🟩🟩\x1b[0m\x1b[38;2;220;50;50m🟥\x1b[0m]";
+    return " 80% [\x1b[38;2;40;200;100m████\x1b[0m\x1b[38;2;220;50;50m█\x1b[0m]";
   }
-  return "100% [\x1b[38;2;40;200;100m🟩🟩🟩🟩🟩\x1b[0m]";
+  return "100% [\x1b[38;2;40;200;100m█████\x1b[0m]";
 }
 
 /** Compact selectable row aligned into columns with dividers and headers. */

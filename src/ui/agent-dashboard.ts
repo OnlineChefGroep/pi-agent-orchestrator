@@ -31,6 +31,7 @@ import { renderTreeFooter, renderTreeView } from "./agent-tree-renderer.js";
 import type { AgentActivity } from "./agent-ui-types.js";
 import { renderSchedulesSection } from "./dashboard/schedules-section.js";
 import { RenderMetrics, type RenderMetricsSnapshot } from "./render-metrics.js";
+import { buildSnapshotHash } from "./snapshot-hash.js";
 import {
   type BoxChars,
   borderLine,
@@ -136,6 +137,8 @@ export class AgentDashboard implements Component {
   private cachedBodyLines: string[] = [];
   private cachedBodyFocusMap = new Map<string, number>();
   private cachedBodyLineCount = 0;
+  private cachedSpinnerFrame = -1;
+  private cachedInnerW = 0;
 
   /**
    * True when the snapshot changed during the last refreshAgents() call.
@@ -297,7 +300,7 @@ export class AgentDashboard implements Component {
     this.agents = this.options.manager.listAgents();
 
     // Build lightweight numeric structural snapshot.
-    const snapshotHash = this.buildSnapshotHash();
+    const snapshotHash = buildSnapshotHash(this.agents);
 
     if (snapshotHash !== this.agentSnapshotHash) {
       this.agentSnapshotHash = snapshotHash;
@@ -318,34 +321,6 @@ export class AgentDashboard implements Component {
         if (!currentIds.has(id)) this.selectedIds.delete(id);
       }
     }
-  }
-
-  /**
-   * Build a compact numeric structural hash from agent IDs + statuses.
-   * Uses FNV-1a inspired hashing — O(N) with zero string allocations.
-   */
-  private buildSnapshotHash(): number {
-    const agents = this.agents;
-    if (agents.length === 0) return 0;
-    let hash = 0x811c9dc5; // FNV offset basis
-    for (let i = 0; i < agents.length; i++) {
-      const a = agents[i];
-      const id = a.id;
-      for (let j = 0; j < id.length; j++) {
-        hash ^= id.charCodeAt(j);
-        hash = Math.imul(hash, 0x01000193);
-      }
-      hash ^= 0x3a;
-      hash = Math.imul(hash, 0x01000193);
-      const status = a.status;
-      for (let j = 0; j < status.length; j++) {
-        hash ^= status.charCodeAt(j);
-        hash = Math.imul(hash, 0x01000193);
-      }
-      hash ^= 0x2c;
-      hash = Math.imul(hash, 0x01000193);
-    }
-    return hash | 0;
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -564,8 +539,69 @@ export class AgentDashboard implements Component {
       this.dirty = true;
     }
 
+    // ── Top view mode sort/page keys ──────────────────────────────
+    // Intercept sort keys before global actions to avoid conflicts.
+    // t/r are also global actions (toggle top view / refresh), so they're
+    // handled inline below with topViewMode checks.
+    if (this.topViewMode) {
+      if (matchesKey(data, "d")) {
+        if (this.topSortKey === "duration") this.topSortAsc = !this.topSortAsc;
+        else { this.topSortKey = "duration"; this.topSortAsc = false; }
+        this.topPage = 0;
+        this.dirty = true;
+        this.spinnerFrame++;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "u")) {
+        if (this.topSortKey === "toolUses") this.topSortAsc = !this.topSortAsc;
+        else { this.topSortKey = "toolUses"; this.topSortAsc = false; }
+        this.topPage = 0;
+        this.dirty = true;
+        this.spinnerFrame++;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "l")) {
+        if (this.topSortKey === "lastSeen") this.topSortAsc = !this.topSortAsc;
+        else { this.topSortKey = "lastSeen"; this.topSortAsc = false; }
+        this.topPage = 0;
+        this.dirty = true;
+        this.spinnerFrame++;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "n")) {
+        if (this.topSortKey === "name") this.topSortAsc = !this.topSortAsc;
+        else { this.topSortKey = "name"; this.topSortAsc = false; }
+        this.topPage = 0;
+        this.dirty = true;
+        this.spinnerFrame++;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "left") || matchesKey(data, "shift+left")) {
+        this.topPage = Math.max(0, this.topPage - 1);
+        this.dirty = true;
+        this.spinnerFrame++;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "right") || matchesKey(data, "shift+right")) {
+        const entries = sortEntries(getAgentTopEntries(this.agents, this.options.agentActivity), this.topSortKey, this.topSortAsc);
+        const totalPages = Math.max(1, Math.ceil(entries.length / this.getViewportHeight()));
+        this.topPage = Math.min(totalPages - 1, this.topPage + 1);
+        this.dirty = true;
+        this.spinnerFrame++;
+        this.requestRender();
+        return;
+      }
+      // t, r, and other keys fall through to the action handlers below
+      // which check this.topViewMode inline.
+    }
+
     // Actions
-    else if (matchesKey(data, "enter") || matchesKey(data, "return")) {
+    if (matchesKey(data, "enter")) {
       if (rec && this.options.onViewConversation) {
         this.close();
         void this.options.onViewConversation(rec);
@@ -617,15 +653,30 @@ export class AgentDashboard implements Component {
         this.showStatus("Permissions view is not available in this context.");
       }
     } else if (matchesKey(data, "r") || matchesKey(data, "shift+r")) {
-      this.refreshAgents();
+      if (this.topViewMode) {
+        // In top view: sort by turns
+        if (this.topSortKey === "turns") this.topSortAsc = !this.topSortAsc;
+        else { this.topSortKey = "turns"; this.topSortAsc = false; }
+        this.topPage = 0;
+      } else {
+        this.refreshAgents();
+      }
+      this.dirty = true;
       this.requestRender();
     } else if (matchesKey(data, "?")) {
       this.showHelp = !this.showHelp;
       this.dirty = true;
       this.requestRender();
     } else if (matchesKey(data, "t")) {
-      this.topViewMode = !this.topViewMode;
-      if (this.topViewMode) { this.topPage = 0; this.showSchedules = false; this.showTree = false; }
+      if (this.topViewMode) {
+        // In top view: sort by tokens (pressing t again toggles direction)
+        if (this.topSortKey === "tokens") this.topSortAsc = !this.topSortAsc;
+        else { this.topSortKey = "tokens"; this.topSortAsc = false; }
+        this.topPage = 0;
+      } else {
+        this.topViewMode = !this.topViewMode;
+        if (this.topViewMode) { this.topPage = 0; this.showSchedules = false; this.showTree = false; }
+      }
       this.dirty = true;
       this.requestRender();
     } else if (matchesKey(data, "z") || matchesKey(data, "shift+z")) {
@@ -658,52 +709,6 @@ export class AgentDashboard implements Component {
           return;
         }
         this.showStatus("Swarm actions are not available in this context.");
-      }
-    }
-
-    // ── Top view mode ─────────────────────────────────────────────
-    else if (this.topViewMode) {
-      // Sort keys: t=tokens, r=turns, d=duration, u=toolUses, n=name
-      if (matchesKey(data, "t")) {
-        if (this.topSortKey === "tokens") this.topSortAsc = !this.topSortAsc;
-        else { this.topSortKey = "tokens"; this.topSortAsc = false; }
-        this.topPage = 0;
-        this.requestRender();
-      } else if (matchesKey(data, "r")) {
-        if (this.topSortKey === "turns") this.topSortAsc = !this.topSortAsc;
-        else { this.topSortKey = "turns"; this.topSortAsc = false; }
-        this.topPage = 0;
-        this.requestRender();
-      } else if (matchesKey(data, "d")) {
-        if (this.topSortKey === "duration") this.topSortAsc = !this.topSortAsc;
-        else { this.topSortKey = "duration"; this.topSortAsc = false; }
-        this.topPage = 0;
-        this.requestRender();
-      } else if (matchesKey(data, "u")) {
-        if (this.topSortKey === "toolUses") this.topSortAsc = !this.topSortAsc;
-        else { this.topSortKey = "toolUses"; this.topSortAsc = false; }
-        this.topPage = 0;
-        this.requestRender();
-      } else if (matchesKey(data, "l")) {
-        if (this.topSortKey === "lastSeen") this.topSortAsc = !this.topSortAsc;
-        else { this.topSortKey = "lastSeen"; this.topSortAsc = false; }
-        this.topPage = 0;
-        this.requestRender();
-      } else if (matchesKey(data, "n")) {
-        if (this.topSortKey === "name") this.topSortAsc = !this.topSortAsc;
-        else { this.topSortKey = "name"; this.topSortAsc = false; }
-        this.topPage = 0;
-        this.requestRender();
-      }
-      // Page navigation
-      else if (matchesKey(data, "left") || matchesKey(data, "shift+left")) {
-        this.topPage = Math.max(0, this.topPage - 1);
-        this.requestRender();
-      } else if (matchesKey(data, "right") || matchesKey(data, "shift+right")) {
-        const entries = sortEntries(getAgentTopEntries(this.agents, this.options.agentActivity), this.topSortKey, this.topSortAsc);
-        const totalPages = Math.max(1, Math.ceil(entries.length / this.getViewportHeight()));
-        this.topPage = Math.min(totalPages - 1, this.topPage + 1);
-        this.requestRender();
       }
     }
 
@@ -822,13 +827,16 @@ export class AgentDashboard implements Component {
       const entries = sortEntries(getAgentTopEntries(this.agents, this.options.agentActivity), this.topSortKey, this.topSortAsc);
       lines.push(...renderTopTable(entries, this.topSortKey, this.topSortAsc, this.topPage, this.topPageSize, th, safeWidth, "t: back to list"));
     } else {
-      // Body cache: only rebuild when dirty flag is set (structural change).
-      // Spinner-only ticks reuse the cached body lines.
-      if (this.dirty || this.cachedBodyLines.length === 0) {
+      // Body cache: rebuild when dirty OR when spinner changed (running agents need animation).
+      const needsSpinnerRebuild = this.hasRunningAgents() && this.cachedSpinnerFrame !== this.spinnerFrame;
+      const needsResizeRebuild = this.cachedInnerW !== innerW;
+      if (this.dirty || this.cachedBodyLines.length === 0 || needsSpinnerRebuild || needsResizeRebuild) {
         const body = buildDashboardBodyLines(innerW, th, box, state);
         this.cachedBodyLines = body.lines;
         this.cachedBodyFocusMap = body.focusLineByAgentId;
         this.cachedBodyLineCount = body.lines.length;
+        this.cachedSpinnerFrame = this.spinnerFrame;
+        this.cachedInnerW = innerW;
       }
       this.bodyFocusLineByAgentId = this.cachedBodyFocusMap;
       this.bodyLineCount = this.cachedBodyLineCount;

@@ -348,8 +348,8 @@ export class ConversationViewer implements Component {
       lines[lines.length - 1] = newLine;
       return lines;
     }
-    // No running line yet — append
-    return [...lines, newLine];
+    // No running line yet — append with separator for visual consistency
+    return [...lines, "", newLine];
   }
 
   /**

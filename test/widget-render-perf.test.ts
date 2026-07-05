@@ -383,24 +383,23 @@ describe("Benchmark: renderAgentWidget — with activity heatmap data", () => {
   });
 });
 
-// ── 3. AgentWidget.buildSnapshotHash — Dirty Checking Hash ──────────────────
+// ── 3. buildSnapshotHash — Dirty Checking Hash ──────────────────────────────
 
-describe("Benchmark: AgentWidget.buildSnapshotHash (dirty checking)", () => {
-  let AgentWidget: typeof import("../src/ui/agent-widget.js").AgentWidget;
+describe("Benchmark: buildSnapshotHash (dirty checking)", () => {
+  let buildSnapshotHash: typeof import("../src/ui/snapshot-hash.js").buildSnapshotHash;
 
   beforeEach(async () => {
     agentIdCounter = 0;
-    const mod = await import("../src/ui/agent-widget.js");
-    AgentWidget = mod.AgentWidget;
+    const mod = await import("../src/ui/snapshot-hash.js");
+    buildSnapshotHash = mod.buildSnapshotHash;
   });
 
   it(`buildSnapshotHash with ${SMALL} agents under 50\u00b5s`, () => {
     const agents = buildAgentList(SMALL, { running: 50, queued: 25, finished: 25 });
-    const widget = new (AgentWidget as any)({}, new Map());
 
     const start = performance.now();
     for (let i = 0; i < 1000; i++) {
-      widget.buildSnapshotHash(agents);
+      buildSnapshotHash(agents);
     }
     const elapsed = performance.now() - start;
     const perCall = elapsed / 1000;
@@ -411,11 +410,10 @@ describe("Benchmark: AgentWidget.buildSnapshotHash (dirty checking)", () => {
 
   it(`buildSnapshotHash with ${MEDIUM} agents under 50\u00b5s`, () => {
     const agents = buildAgentList(MEDIUM, { running: 40, queued: 20, finished: 40 });
-    const widget = new (AgentWidget as any)({}, new Map());
 
     const start = performance.now();
     for (let i = 0; i < 1000; i++) {
-      widget.buildSnapshotHash(agents);
+      buildSnapshotHash(agents);
     }
     const elapsed = performance.now() - start;
     const perCall = elapsed / 1000;
@@ -426,11 +424,10 @@ describe("Benchmark: AgentWidget.buildSnapshotHash (dirty checking)", () => {
 
   it(`buildSnapshotHash with ${LARGE} agents under 200\u00b5s`, () => {
     const agents = buildAgentList(LARGE, { running: 33, queued: 33, finished: 34 });
-    const widget = new (AgentWidget as any)({}, new Map());
 
     const start = performance.now();
     for (let i = 0; i < 500; i++) {
-      widget.buildSnapshotHash(agents);
+      buildSnapshotHash(agents);
     }
     const elapsed = performance.now() - start;
     const perCall = elapsed / 500;

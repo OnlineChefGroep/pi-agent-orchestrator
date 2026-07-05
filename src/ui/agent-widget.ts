@@ -100,34 +100,6 @@ export class AgentWidget {
   /** Minimum gap between consecutive update() calls (16ms ~ 60fps). */
   private static readonly SPAWN_BATCH_MS = 16;
 
-  /**
-   * Build a compact numeric hash from agent IDs + statuses.
-   * Uses FNV-1a inspired hashing — O(N) with zero string allocations.
-   * Returns a 32-bit integer for fast equality comparison.
-   */
-  private buildSnapshotHash(agents: { id: string; status: string }[]): number {
-    if (agents.length === 0) return 0;
-    let hash = 0x811c9dc5; // FNV offset basis
-    for (let i = 0; i < agents.length; i++) {
-      const a = agents[i];
-      const id = a.id;
-      for (let j = 0; j < id.length; j++) {
-        hash ^= id.charCodeAt(j);
-        hash = Math.imul(hash, 0x01000193); // FNV prime
-      }
-      hash ^= 0x3a; // ':' separator
-      hash = Math.imul(hash, 0x01000193);
-      const status = a.status;
-      for (let j = 0; j < status.length; j++) {
-        hash ^= status.charCodeAt(j);
-        hash = Math.imul(hash, 0x01000193);
-      }
-      hash ^= 0x2c; // ',' separator
-      hash = Math.imul(hash, 0x01000193);
-    }
-    return hash | 0;
-  }
-
   constructor(
     private manager: AgentManager,
     private agentActivity: Map<string, AgentActivity>,
@@ -397,6 +369,13 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
     }
     const hasActive = runningCount > 0 || queuedCount > 0;
 
+    // Clean up stale finishedTurnAge entries for removed agents (runs every update, not just when idle).
+    const agentIds = new Set<string>();
+    for (let i = 0; i < allAgents.length; i++) agentIds.add(allAgents[i].id);
+    for (const [id] of this.finishedTurnAge) {
+      if (!agentIds.has(id)) this.finishedTurnAge.delete(id);
+    }
+
     // Track active agents and first spawn timestamp
     const totalActive = runningCount + queuedCount;
     if (totalActive > 0 && this.firstSpawnedAt === 0) {
@@ -416,12 +395,6 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
         this.lastStatusText = undefined;
       }
       if (this.widgetInterval) { clearTimeout(this.widgetInterval); this.widgetInterval = undefined; }
-      // Clean up stale entries (O(N) via Set, not O(N*M) via .some).
-      const agentIds = new Set<string>();
-      for (let i = 0; i < allAgents.length; i++) agentIds.add(allAgents[i].id);
-      for (const [id] of this.finishedTurnAge) {
-        if (!agentIds.has(id)) this.finishedTurnAge.delete(id);
-      }
       this.dirty = false;
       return;
     }
@@ -442,6 +415,12 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
 
     // Always advance spinner for smooth animation.
     this.widgetFrame++;
+
+    // Force re-render periodically when running agents exist (spinner animation).
+    // Without this, the dirty-check optimization freezes spinners indefinitely.
+    if (!this.dirty && hasActive && this.widgetFrame % 3 === 0) {
+      this.dirty = true;
+    }
 
     // Dirty check: skip TUI re-render when only the spinner frame advanced.
     // On turn boundaries and structural changes, we always re-render.
