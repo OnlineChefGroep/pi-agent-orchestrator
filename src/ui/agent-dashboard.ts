@@ -96,6 +96,8 @@ export class AgentDashboard implements Component {
   private topPageSize = 12;
   private showSchedules = false;
   private showTree = false;
+  /** Scroll offset for scrollable overlays (help, tree, schedules, perf). */
+  private subViewScrollOffset = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── Performance: debounce & rate limiting ──
@@ -367,15 +369,18 @@ export class AgentDashboard implements Component {
       if (this.showPerf) {
         this.perfView = "dashboard";
         this.showHelp = false;
+        this.subViewScrollOffset = 0;
       }
     } else if (cmd === "/perf widget") {
       this.showPerf = true;
       this.perfView = "widget";
       this.showHelp = false;
+      this.subViewScrollOffset = 0;
     } else if (cmd === "/perf dashboard") {
       this.showPerf = true;
       this.perfView = "dashboard";
       this.showHelp = false;
+      this.subViewScrollOffset = 0;
     } else if (cmd === "/perf reset") {
       if (this.perfView === "widget") {
         // Widget metrics are owned by the AgentWidget instance; this
@@ -507,8 +512,67 @@ export class AgentDashboard implements Component {
     }
 
     if (matchesKey(data, "escape") || matchesKey(data, "q")) {
+      if (this.showHelp || this.showTree || this.showSchedules) {
+        this.showHelp = false;
+        this.showTree = false;
+        this.showSchedules = false;
+        this.subViewScrollOffset = 0;
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      if (this.topViewMode) {
+        this.topViewMode = false;
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
       this.close();
       return;
+    }
+
+    // ── Overlay scroll navigation ─────────────────────────────────
+    // When an overlay (help/tree/schedules) is active, navigation keys scroll
+    // the overlay instead of moving the underlying agent selection.
+    const isSubViewActive = this.showHelp || this.showTree || this.showSchedules;
+    if (isSubViewActive) {
+      const vh = this.getViewportHeight();
+      if (matchesKey(data, "up") || matchesKey(data, "k")) {
+        this.subViewScrollOffset = Math.max(0, this.subViewScrollOffset - 1);
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "down") || matchesKey(data, "j")) {
+        this.subViewScrollOffset += 1;
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "pageUp") || matchesKey(data, "shift+up")) {
+        this.subViewScrollOffset = Math.max(0, this.subViewScrollOffset - vh);
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "pageDown") || matchesKey(data, "shift+down")) {
+        this.subViewScrollOffset += vh;
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "home") || matchesKey(data, "g")) {
+        this.subViewScrollOffset = 0;
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, "end") || matchesKey(data, "shift+g")) {
+        this.subViewScrollOffset = 9999;
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
     }
 
     // Navigation — vim + arrows
@@ -528,11 +592,11 @@ export class AgentDashboard implements Component {
       this.selectedIndex = Math.min(this.agents.length - 1, this.selectedIndex + viewportHeight);
       this.scrollOffset = Math.min(maxScroll, this.scrollOffset + viewportHeight);
       this.dirty = true;
-    } else if (matchesKey(data, "home")) {
+    } else if (matchesKey(data, "home") || matchesKey(data, "g")) {
       this.selectedIndex = 0;
       this.scrollOffset = 0;
       this.dirty = true;
-    } else if (matchesKey(data, "end")) {
+    } else if (matchesKey(data, "end") || matchesKey(data, "shift+g")) {
       if (this.agents.length === 0) return;
       this.selectedIndex = this.agents.length - 1;
       this.scrollOffset = maxScroll;
@@ -602,12 +666,14 @@ export class AgentDashboard implements Component {
 
     // Actions
     if (matchesKey(data, "enter")) {
+      if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       if (rec && this.options.onViewConversation) {
         this.close();
         void this.options.onViewConversation(rec);
         return;
       }
     } else if (matchesKey(data, "space")) {
+      if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       if (rec) {
         if (this.selectedIds.has(rec.id)) {
           this.selectedIds.delete(rec.id);
@@ -618,6 +684,7 @@ export class AgentDashboard implements Component {
         this.requestRender();
       }
     } else if (matchesKey(data, "shift+k") || matchesKey(data, "K")) {
+      if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       const idsToKill = this.selectedIds.size > 0
         ? Array.from(this.selectedIds)
         : rec ? [rec.id] : [];
@@ -635,6 +702,7 @@ export class AgentDashboard implements Component {
         this.requestRender();
       }
     } else if (matchesKey(data, "s") || matchesKey(data, "shift+s")) {
+      if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       if (rec) {
         if (this.options.onSteer) {
           this.close();
@@ -644,6 +712,7 @@ export class AgentDashboard implements Component {
         this.showStatus("Steer is not available in this context.");
       }
     } else if (matchesKey(data, "p") || matchesKey(data, "shift+p")) {
+      if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       if (rec) {
         if (this.options.onShowPermissions) {
           this.close();
@@ -665,6 +734,7 @@ export class AgentDashboard implements Component {
       this.requestRender();
     } else if (matchesKey(data, "?")) {
       this.showHelp = !this.showHelp;
+      if (this.showHelp) this.subViewScrollOffset = 0;
       this.dirty = true;
       this.requestRender();
     } else if (matchesKey(data, "t")) {
@@ -682,16 +752,17 @@ export class AgentDashboard implements Component {
     } else if (matchesKey(data, "z") || matchesKey(data, "shift+z")) {
       if (this.options.scheduler?.isActive()) {
         this.showSchedules = !this.showSchedules;
-        if (this.showSchedules) { this.topViewMode = false; this.showHelp = false; this.showPerf = false; this.showTree = false; }
+        if (this.showSchedules) { this.topViewMode = false; this.showHelp = false; this.showPerf = false; this.showTree = false; this.subViewScrollOffset = 0; }
         this.dirty = true;
         this.requestRender();
       }
     } else if (matchesKey(data, "y")) {
       this.showTree = !this.showTree;
-      if (this.showTree) { this.topViewMode = false; this.showSchedules = false; this.showHelp = false; this.showPerf = false; }
+      if (this.showTree) { this.topViewMode = false; this.showSchedules = false; this.showHelp = false; this.showPerf = false; this.subViewScrollOffset = 0; }
       this.dirty = true;
       this.requestRender();
     } else if (matchesKey(data, "w") || matchesKey(data, "shift+w")) {
+      if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       const targets = this.selectedIds.size > 0
         ? (() => {
             const arr = [];
@@ -801,23 +872,50 @@ export class AgentDashboard implements Component {
     const lines = renderDashboardHeader(safeWidth, th, box, state, this.options.manager);
 
     if (this.showTree) {
-      lines.push(...renderTreeView(innerW, th, box, this.agents));
-      lines.push(...renderTreeFooter(innerW, th, box));
+      const overlayLines = [
+        ...renderTreeView(innerW, th, box, this.agents),
+        ...renderTreeFooter(innerW, th, box),
+      ];
+      const vh = this.getViewportHeight();
+      const maxScroll = Math.max(0, overlayLines.length - vh);
+      this.subViewScrollOffset = Math.min(this.subViewScrollOffset, maxScroll);
+      const visible = overlayLines.slice(this.subViewScrollOffset, this.subViewScrollOffset + vh);
+      for (const line of visible) lines.push(line);
+      for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
     } else if (this.showSchedules && this.options.scheduler?.isActive()) {
-      lines.push(...renderSchedulesSection(innerW, th, box, this.options.scheduler));
+      const overlayLines = renderSchedulesSection(innerW, th, box, this.options.scheduler);
+      const vh = this.getViewportHeight();
+      const maxScroll = Math.max(0, overlayLines.length - vh);
+      this.subViewScrollOffset = Math.min(this.subViewScrollOffset, maxScroll);
+      const visible = overlayLines.slice(this.subViewScrollOffset, this.subViewScrollOffset + vh);
+      for (const line of visible) lines.push(line);
+      for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
     } else if (this.showHelp) {
-      lines.push(...renderDashboardHelp(innerW, th, box));
+      const overlayLines = renderDashboardHelp(innerW, th, box);
+      const vh = this.getViewportHeight();
+      const maxScroll = Math.max(0, overlayLines.length - vh);
+      this.subViewScrollOffset = Math.min(this.subViewScrollOffset, maxScroll);
+      const visible = overlayLines.slice(this.subViewScrollOffset, this.subViewScrollOffset + vh);
+      for (const line of visible) lines.push(line);
+      for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
     } else if (this.showPerf) {
+      let overlayLines: string[];
       if (this.perfView === "widget") {
         const widgetMetrics = this.getWidgetMetrics();
         if (widgetMetrics) {
-          lines.push(...renderDashboardPerf(innerW, th, box, widgetMetrics, "widget"));
+          overlayLines = renderDashboardPerf(innerW, th, box, widgetMetrics, "widget");
         } else {
-          lines.push(...renderDashboardPerf(innerW, th, box, this.renderMetrics.snapshot(), "widget"));
+          overlayLines = renderDashboardPerf(innerW, th, box, this.renderMetrics.snapshot(), "widget");
         }
       } else {
-        lines.push(...renderDashboardPerf(innerW, th, box, this.renderMetrics.snapshot(), "dashboard"));
+        overlayLines = renderDashboardPerf(innerW, th, box, this.renderMetrics.snapshot(), "dashboard");
       }
+      const vh = this.getViewportHeight();
+      const maxScroll = Math.max(0, overlayLines.length - vh);
+      this.subViewScrollOffset = Math.min(this.subViewScrollOffset, maxScroll);
+      const visible = overlayLines.slice(this.subViewScrollOffset, this.subViewScrollOffset + vh);
+      for (const line of visible) lines.push(line);
+      for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
     } else if (this.agents.length === 0) {
       lines.push(...renderDashboardEmpty(innerW, th, box));
     } else if (this.topViewMode) {
