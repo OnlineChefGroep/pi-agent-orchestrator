@@ -2,9 +2,9 @@
 
 ## Current State
 
-**v0.16.3** — UI render-freeze elimination via numeric FNV-1a dirty-checking, adversarial validation extraction, benchmark threshold calibration, and NPM registry fallback to GitHub Packages. Prior v0.16.2 introduced CHEF-100 Workspace Context integration (Phase 1) including the dual-read context adapter (`buildEnvFromContext`) and reusable Overdrive linter rules.
+**v0.16.3** — UI render-freeze elimination via numeric FNV-1a dirty-checking, adversarial validation extraction, benchmark threshold calibration, and NPM registry fallback to GitHub Packages. Prior v0.16.2 introduced Workspace Context integration (Phase 1) including the dual-read context adapter (`buildEnvFromContext`) and reusable Overdrive linter rules.
 
-**v0.15.0** — Open-source public release: repository made public, publishConfig now defaults to npmjs.org, HANDOFF.md updated for direct public access, and all version/doc counts aligned across the project.
+**v0.17.0** — Full OSS readiness: npmjs.org publishing, improved documentation, bug fixes, type safety cleanup, and CI hardening.
 
 Prior release v0.14.1 added the **Tracing master switch**, **per-agent correlation ids**, the **Health check command**, **SettingsGetters** / **SettingsSetters** refactor, and the **dispatch-decision histogram**. v0.14.0 shipped **orchestration dispatch** (single/swarm/crew/auto), **execution tree visualization**, and the **agent templates registry**.
 

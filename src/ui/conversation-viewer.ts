@@ -16,6 +16,19 @@ import { getTimeSpinnerFrame } from "./animation.js";
 import { activeTheme, fastTruncate, getBoxChars, padAndTruncate, type Theme } from "./theme.js";
 import { type Component, matchesKey, type TUI, visibleWidth, wrapTextWithAnsi } from "./tui-shim.js";
 
+// ── Type guards ─────────────────────────────────────────────────────────────
+
+interface BashExecutionMessage {
+  role: "bashExecution";
+  command?: string;
+  output?: string;
+  content?: { command: string; stdout: string; stderr: string; exitCode: number };
+}
+
+function isBashExecution(msg: unknown): msg is BashExecutionMessage {
+  return typeof msg === "object" && msg !== null && (msg as Record<string, unknown>).role === "bashExecution";
+}
+
 /** Base lines consumed by chrome: top border + header + header sep + footer sep + footer + bottom border. */
 const CHROME_LINES_BASE = 6;
 const MIN_VIEWPORT = 3;
@@ -459,8 +472,8 @@ export class ConversationViewer implements Component {
           lines.push(th.fg("dim", line));
         }
       }
-    } else if ((msg as any).role === "bashExecution") {
-      const bash = msg as any;
+    } else if (isBashExecution(msg)) {
+      const bash = msg;
       const command = bash.command || "";
       const output = bash.output || "";
 
@@ -659,8 +672,8 @@ export class ConversationViewer implements Component {
             lines.push(th.fg("dim", line));
           }
         }
-      } else if ((msg as any).role === "bashExecution") {
-        const bash = msg as any;
+      } else if (isBashExecution(msg)) {
+        const bash = msg;
         const command = bash.command || "";
         const output = bash.output || "";
         

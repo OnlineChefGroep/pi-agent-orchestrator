@@ -30,6 +30,7 @@ import { getAgentTopEntries, renderTopTable, type SortKey, sortEntries } from ".
 import { renderTreeFooter, renderTreeView } from "./agent-tree-renderer.js";
 import type { AgentActivity } from "./agent-ui-types.js";
 import { renderSchedulesSection } from "./dashboard/schedules-section.js";
+import { getWidgetMetrics } from "./global-registry.js";
 import { RenderMetrics, type RenderMetricsSnapshot } from "./render-metrics.js";
 import { buildSnapshotHash } from "./snapshot-hash.js";
 import {
@@ -355,7 +356,7 @@ export class AgentDashboard implements Component {
   // ════════════════════════════════════════════════════════════════
 
   private getWidgetMetrics(): RenderMetricsSnapshot | undefined {
-    const wm = (globalThis as any)[Symbol.for("pi-subagents:widget-metrics")];
+    const wm = getWidgetMetrics();
     if (wm?.getSnapshot) {
       try { return wm.getSnapshot(); } catch { /* ignore */ }
     }
@@ -867,7 +868,7 @@ export class AgentDashboard implements Component {
 
     // Robust width handling
     const terminalCols =
-      (this.tui as any)?.terminal?.columns ??
+      this.tui?.terminal?.columns ??
       process.stdout?.columns ??
       120;
 
@@ -1036,7 +1037,7 @@ export async function showAgentDashboard(
   await ctx.ui.custom<undefined>(
     (tui, _theme, _keybindings, done) => {
       return new AgentDashboard(
-        tui as any,
+        tui as import("./tui-shim.js").TUI,
         { manager, agentActivity, scheduler, onViewConversation, onAbort, onSteer, onShowPermissions, onSwarmAction },
         done,
       );

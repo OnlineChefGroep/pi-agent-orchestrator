@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { logger } from "./logger.js";
+import { getTelemetryRegistry, setTelemetryRegistry } from "./ui/global-registry.js";
 
 /**
  * telemetry.ts — Structured event emitter for security and validation events.
@@ -61,15 +62,14 @@ const SECURITY_EVENTS: ReadonlySet<TelemetryEventName> = new Set<TelemetryEventN
 ]);
 
 /** Global registry of telemetry handlers (Symbol-based to avoid collisions) */
-const TELEMETRY_REGISTRY_KEY = Symbol.for("pi-subagents:telemetry-handlers");
 
 type HandlerRegistry = Map<TelemetryEventName, Set<unknown>>;
 
 function getRegistry(): HandlerRegistry {
-  let registry = (globalThis as any)[TELEMETRY_REGISTRY_KEY] as HandlerRegistry | undefined;
+  let registry = getTelemetryRegistry<HandlerRegistry>();
   if (!registry) {
     registry = new Map();
-    (globalThis as any)[TELEMETRY_REGISTRY_KEY] = registry;
+    setTelemetryRegistry(registry);
   }
   return registry;
 }
