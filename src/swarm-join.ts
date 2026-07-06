@@ -558,8 +558,8 @@ export class SwarmCoordinator {
 
   private checkHealth(swarm: SwarmInternal): void {
     const now = Date.now();
-    const maxMissed = swarm.config.maxMissedHeartbeats || DEFAULT_MAX_MISSED_HEARTBEATS;
-    const interval = swarm.config.heartbeatInterval || DEFAULT_HEARTBEAT_INTERVAL;
+    const maxMissed = swarm.config.maxMissedHeartbeats ?? DEFAULT_MAX_MISSED_HEARTBEATS;
+    const interval = swarm.config.heartbeatInterval ?? DEFAULT_HEARTBEAT_INTERVAL;
     const threshold = interval * maxMissed;
 
     for (const [agentId, agent] of swarm.agents) {
@@ -689,7 +689,7 @@ export class SwarmCoordinator {
 
   private checkRateLimit(swarm: SwarmInternal): boolean {
     this.cleanupRateLimit(swarm);
-    const maxRate = swarm.config.maxDeliveryRate || DEFAULT_MAX_DELIVERY_RATE;
+    const maxRate = swarm.config.maxDeliveryRate ?? DEFAULT_MAX_DELIVERY_RATE;
     return swarm.deliveryTimestamps.length < maxRate;
   }
 
