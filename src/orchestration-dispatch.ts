@@ -107,7 +107,6 @@ const IMPLEMENT_KEYWORDS = [
   /\bcreate\b/i,
   /\bwrite\b/i,
   /\badd\b/i,
-
   /\bdevelo(?:p|ing)\b/i,
 ];
 
