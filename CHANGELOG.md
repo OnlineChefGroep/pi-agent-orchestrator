@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.17.1 (2026-07-06)
+
+### Bug Fixes
+
+- **Orchestration dispatch heuristic**: Fixed `hasMultipleFiles` alone triggering crew mode for read-only prompts. The heuristic now requires an accompanying implementation signal (implement, build, create, write, add, develop) before dispatching crew mode for multi-file prompts. This prevents unnecessary 3-agent crews for simple file exploration tasks.
+- **Precedence order**: Fixed long multi-step implementation check to run before parallel keyword check, matching the documented precedence order.
+- **Duplicate conditions**: Removed legacy duplicate branches in `heuristicPickMode()` that were left after the initial refactor.
+
+### Internal
+
+- Merged PRs: #233 (deps), #234 (wiki CI), #236 (crew dispatch fix)
+- All 1693 tests pass
+
+---
+
 ## v0.17.0 (2026-07-05)
 
 ### OSS Readiness — Full Public Release
