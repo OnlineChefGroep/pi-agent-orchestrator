@@ -23,9 +23,14 @@ export function resolveAgentInvocationConfig(
   isolated: boolean;
   isolation?: IsolationMode;
 } {
+  // Model: tool-call params take priority over agent config defaults.
+  // The user's explicit model choice should always win.
+  const modelFromParams = params.model != null;
   return {
-    modelInput: agentConfig?.model ?? params.model,
-    modelFromParams: agentConfig?.model == null && params.model != null,
+    modelInput: params.model ?? agentConfig?.model,
+    modelFromParams,
+    // Other fields: agent config takes priority (intentional — agent configs
+    // define constraints like max turns that shouldn't be overrideable)
     thinking: (agentConfig?.thinking ?? params.thinking) as ThinkingLevel | undefined,
     maxTurns: agentConfig?.maxTurns ?? params.max_turns,
     inheritContext: agentConfig?.inheritContext ?? params.inherit_context ?? false,
