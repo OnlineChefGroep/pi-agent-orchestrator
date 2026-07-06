@@ -2,7 +2,12 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": [
     "src/index.ts",
-    "src/public-api.ts"
+    "src/public-api.ts",
+    "scripts/generate-showcase-media.mjs",
+    "scripts/showcase-live-demo.mjs",
+    "scripts/showcase-tmux-scenes.mjs",
+    "test/compaction.benchmark.ts",
+    "test/test-prompt-compression-programmatic.ts"
   ],
   "project": [
     "src/**/*.ts",
@@ -21,12 +26,16 @@
     "biome",
     "droid",
     "graphify",
-    "remotion"
+    "remotion",
+    "typedoc",
+    "node",
+    "npx"
   ],
   "ignoreDependencies": [
     "@earendil-works/pi-ai",
     "@earendil-works/pi-coding-agent",
     "@earendil-works/pi-agent-core",
-    "@vitest/coverage-v8"
+    "@vitest/coverage-v8",
+    "typedoc"
   ]
 }
