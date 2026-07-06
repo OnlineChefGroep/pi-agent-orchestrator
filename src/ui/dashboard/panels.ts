@@ -7,41 +7,33 @@ import type { DashboardRenderState } from "./types.js";
 
 // ── Detail Panel ────────────────────────────────────────────────────────────
 
-export function renderDashboardDetailPanel(
-  width: number,
+/** Render the colored status prefix for a record. */
+function detailStatusStr(rec: import("../../types.js").AgentRecord, th: DashboardTheme): string {
+  if (rec.status === "running") return `${th.accent}● ${rec.status}${th.reset}`;
+  if (rec.status === "completed") return `${th.success}✓ ${rec.status}${th.reset}`;
+  if (rec.status === "error" || rec.status === "aborted") return `${th.error}✗ ${rec.status}${th.reset}`;
+  return `${th.dim}${rec.status}${th.reset}`;
+}
+
+/** Build the invocation detail fragment (thinking, model, isolation) if any. */
+function buildInvocationFragment(
+  inv: NonNullable<import("../../types.js").AgentRecord["invocation"]>,
   th: DashboardTheme,
-  box: BoxChars,
+): string | undefined {
+  const invokeParts: string[] = [];
+  if (inv.thinking) invokeParts.push(`${th.accent}🧠 ${inv.thinking}${th.reset}`);
+  if (inv.modelName) invokeParts.push(`${th.dim}model: ${inv.modelName}${th.reset}`);
+  if (inv.isolated || inv.isolation)
+    invokeParts.push(`${th.dim}isolated${inv.isolation === "worktree" ? " (worktree)" : ""}${th.reset}`);
+  return invokeParts.length > 0 ? invokeParts.join(`  ${th.border}│${th.reset}  `) : undefined;
+}
+
+/** Build the contextual detail fragments (description, worktree, swarm, validation, invocation). */
+function buildDetailFragments(
+  rec: import("../../types.js").AgentRecord,
   state: DashboardRenderState,
-  manager?: AgentManager,
+  th: DashboardTheme,
 ): string[] {
-  const innerW = Math.max(1, width - 4);
-  const rec = state.agents[state.selectedIndex];
-  const title = rec ? `◆ ${getDisplayName(rec.type)} · Details` : "◆ Details";
-  const lines: string[] = [];
-  lines.push(borderLine(width, th, box, "mid"));
-  lines.push(framedRow(`${th.title}${title}${th.reset}`, innerW, th, box));
-  if (!rec) {
-    lines.push(framedRow(`${th.dim}No agent selected${th.reset}`, innerW, th, box));
-    return lines;
-  }
-
-  const activity = state.agentActivity.get(rec.id);
-  const statusStr =
-    rec.status === "running"
-      ? `${th.accent}● ${rec.status}${th.reset}`
-      : rec.status === "completed"
-        ? `${th.success}✓ ${rec.status}${th.reset}`
-        : rec.status === "error" || rec.status === "aborted"
-          ? `${th.error}✗ ${rec.status}${th.reset}`
-          : `${th.dim}${rec.status}${th.reset}`;
-  const metaLine1 = `${statusStr}  ${th.dim}${agentStats(rec, activity)}${th.reset}`;
-  lines.push(framedRow(metaLine1, innerW, th, box));
-  // Turn progress bar in detail panel
-  if (activity?.maxTurns && rec.status === "running") {
-    const progress = renderTurnProgress(activity.turnCount, activity.maxTurns, 20, th);
-    lines.push(framedRow(`  ${progress}`, innerW, th, box));
-  }
-
   const details: string[] = [];
   if (rec.description) details.push(`${th.muted}${rec.description}${th.reset}`);
   if (rec.worktree) details.push(`${th.dim}worktree: ${rec.worktree.branch}${th.reset}`);
@@ -63,51 +55,75 @@ export function renderDashboardDetailPanel(
   }
   if (rec.outputFile) details.push(`${th.dim}output: ${rec.outputFile}${th.reset}`);
 
-  // Invocation details (thinking level, model, isolation)
-  const inv = rec.invocation;
-  if (inv) {
-    const invokeParts: string[] = [];
-    if (inv.thinking) invokeParts.push(`${th.accent}🧠 ${inv.thinking}${th.reset}`);
-    if (inv.modelName) invokeParts.push(`${th.dim}model: ${inv.modelName}${th.reset}`);
-    if (inv.isolated || inv.isolation)
-      invokeParts.push(`${th.dim}isolated${inv.isolation === "worktree" ? " (worktree)" : ""}${th.reset}`);
-    if (invokeParts.length > 0) {
-      details.push(invokeParts.join(`  ${th.border}│${th.reset}  `));
-    }
+  if (rec.invocation) {
+    const invFrag = buildInvocationFragment(rec.invocation, th);
+    if (invFrag) details.push(invFrag);
+  }
+  return details;
+}
+
+/** Build the session-usage parts fragment when the manager exposes spawn/turn limits. */
+function buildSessionUsageParts(manager: AgentManager, th: DashboardTheme): string[] | undefined {
+  const usage = manager.getSessionUsage();
+  const maxAgents = manager.getSessionMaxSpawns();
+  const maxTurns = manager.getSessionMaxTurns();
+
+  if (maxAgents <= 0 && maxTurns <= 0) return undefined;
+
+  const usageParts: string[] = [];
+  if (maxAgents > 0) {
+    const pct = Math.round((usage.spawnedAgents / maxAgents) * 100);
+    const color = pct >= 90 ? th.error : pct >= 75 ? th.dim : th.accent;
+    usageParts.push(`${color}⬡ agents: ${usage.spawnedAgents}/${maxAgents} (${pct}%)${th.reset}`);
+  }
+  if (maxTurns > 0) {
+    const pct = Math.round((usage.totalTurns / maxTurns) * 100);
+    const color = pct >= 90 ? th.error : th.dim;
+    usageParts.push(`${color}⟳ turns: ${usage.totalTurns}/${maxTurns} (${pct}%)${th.reset}`);
+  }
+  return usageParts.length > 0 ? usageParts : undefined;
+}
+
+export function renderDashboardDetailPanel(
+  width: number,
+  th: DashboardTheme,
+  box: BoxChars,
+  state: DashboardRenderState,
+  manager?: AgentManager,
+): string[] {
+  const innerW = Math.max(1, width - 4);
+  const rec = state.agents[state.selectedIndex];
+  const title = rec ? `◆ ${getDisplayName(rec.type)} · Details` : "◆ Details";
+  const lines: string[] = [];
+  lines.push(borderLine(width, th, box, "mid"));
+  lines.push(framedRow(`${th.title}${title}${th.reset}`, innerW, th, box));
+  if (!rec) {
+    lines.push(framedRow(`${th.dim}No agent selected${th.reset}`, innerW, th, box));
+    return lines;
   }
 
+  const activity = state.agentActivity.get(rec.id);
+  const statusStr = detailStatusStr(rec, th);
+  const metaLine1 = `${statusStr}  ${th.dim}${agentStats(rec, activity)}${th.reset}`;
+  lines.push(framedRow(metaLine1, innerW, th, box));
+  // Turn progress bar in detail panel
+  if (activity?.maxTurns && rec.status === "running") {
+    const progress = renderTurnProgress(activity.turnCount, activity.maxTurns, 20, th);
+    lines.push(framedRow(`  ${progress}`, innerW, th, box));
+  }
+
+  const details = buildDetailFragments(rec, state, th);
   if (details.length > 0) {
     lines.push(framedRow(details.join(`  ${th.border}│${th.reset}  `), innerW, th, box));
   }
 
   // Session usage section
   if (manager) {
-    const usage = manager.getSessionUsage();
-    const maxAgents = manager.getSessionMaxSpawns();
-    const maxTurns = manager.getSessionMaxTurns();
-
-    if (maxAgents > 0 || maxTurns > 0) {
-      const usageParts: string[] = [];
-      if (maxAgents > 0) {
-        const pct = Math.round((usage.spawnedAgents / maxAgents) * 100);
-        const color = pct >= 90 ? th.error : pct >= 75 ? th.dim : th.accent;
-        usageParts.push(`${color}⬡ agents: ${usage.spawnedAgents}/${maxAgents} (${pct}%)${th.reset}`);
-      }
-      if (maxTurns > 0) {
-        const pct = Math.round((usage.totalTurns / maxTurns) * 100);
-        const color = pct >= 90 ? th.error : pct >= 75 ? th.dim : th.dim;
-        usageParts.push(`${color}⟳ turns: ${usage.totalTurns}/${maxTurns} (${pct}%)${th.reset}`);
-      }
-      if (usageParts.length > 0) {
-        lines.push(
-          framedRow(
-            `${th.dim}session:  ${usageParts.join(`  ${th.border}│${th.reset}  `)}${th.reset}`,
-            innerW,
-            th,
-            box,
-          ),
-        );
-      }
+    const usageParts = buildSessionUsageParts(manager, th);
+    if (usageParts) {
+      lines.push(
+        framedRow(`${th.dim}session:  ${usageParts.join(`  ${th.border}│${th.reset}  `)}${th.reset}`, innerW, th, box),
+      );
     }
   }
 

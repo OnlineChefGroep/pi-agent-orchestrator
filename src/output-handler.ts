@@ -161,6 +161,16 @@ class AgentsTopComponent implements Component {
     }, 1000);
   }
 
+  /** Apply a sort-key selection, toggling direction if already active. */
+  private selectSortKey(key: SortKey): void {
+    if (this.sortKey === key) this.sortAsc = !this.sortAsc;
+    else {
+      this.sortKey = key;
+      this.sortAsc = false;
+    }
+    this.page = 0;
+  }
+
   handleInput(data: string): void {
     if (matchesKey(data, "q") || matchesKey(data, "escape")) {
       this.close();
@@ -173,40 +183,15 @@ class AgentsTopComponent implements Component {
       const totalPages = Math.max(1, Math.ceil(entries.length / this.pageSize));
       this.page = Math.min(totalPages - 1, this.page + 1);
     } else if (matchesKey(data, "t")) {
-      if (this.sortKey === "tokens") this.sortAsc = !this.sortAsc;
-      else {
-        this.sortKey = "tokens";
-        this.sortAsc = false;
-      }
-      this.page = 0;
+      this.selectSortKey("tokens");
     } else if (matchesKey(data, "r")) {
-      if (this.sortKey === "turns") this.sortAsc = !this.sortAsc;
-      else {
-        this.sortKey = "turns";
-        this.sortAsc = false;
-      }
-      this.page = 0;
+      this.selectSortKey("turns");
     } else if (matchesKey(data, "d")) {
-      if (this.sortKey === "duration") this.sortAsc = !this.sortAsc;
-      else {
-        this.sortKey = "duration";
-        this.sortAsc = false;
-      }
-      this.page = 0;
+      this.selectSortKey("duration");
     } else if (matchesKey(data, "u")) {
-      if (this.sortKey === "toolUses") this.sortAsc = !this.sortAsc;
-      else {
-        this.sortKey = "toolUses";
-        this.sortAsc = false;
-      }
-      this.page = 0;
+      this.selectSortKey("toolUses");
     } else if (matchesKey(data, "n")) {
-      if (this.sortKey === "name") this.sortAsc = !this.sortAsc;
-      else {
-        this.sortKey = "name";
-        this.sortAsc = false;
-      }
-      this.page = 0;
+      this.selectSortKey("name");
     }
   }
 
@@ -255,14 +240,13 @@ async function showAgentsTop(
   );
 }
 
-/**
- * Display the main agents menu with options for dashboard, agent types, scheduling, and settings.
- */
-export async function showAgentsMenu(ctx: ExtensionCommandContext, deps: AgentsMenuDeps): Promise<void> {
-  await reloadCustomAgents();
-  const allNames = getAllTypes();
-  const agents = deps.manager.listAgents();
-
+/** Build the option list for the agents menu based on current state. */
+function buildAgentsMenuOptions(
+  agents: AgentRecord[],
+  allNames: string[],
+  schedulerActive: boolean,
+  jobCount: number,
+): string[] {
   const options: string[] = [];
 
   if (agents.length > 0) {
@@ -285,8 +269,7 @@ export async function showAgentsMenu(ctx: ExtensionCommandContext, deps: AgentsM
     options.push(`Agent types (${allNames.length})`);
   }
 
-  if (deps.scheduler.isActive()) {
-    const jobCount = deps.scheduler.list().length;
+  if (schedulerActive) {
     options.push(`Scheduled jobs (${jobCount})`);
   }
 
@@ -296,20 +279,23 @@ export async function showAgentsMenu(ctx: ExtensionCommandContext, deps: AgentsM
   options.push("Settings");
   options.push("Agent top (live stats — CPU, tokens, turns)");
 
-  const noAgentsMsg =
-    allNames.length === 0 && agents.length === 0
-      ? "No agents found. Create specialized subagents that can be delegated to.\n\n" +
-        "Each subagent has its own context window, custom system prompt, and specific tools.\n\n" +
-        "Try creating: Code Reviewer, Security Auditor, Test Writer, or Documentation Writer.\n\n"
-      : "";
+  return options;
+}
 
-  if (noAgentsMsg) {
-    ctx.ui.notify(noAgentsMsg, "info");
-  }
+/** Resolve a tree-format menu choice to its format identifier. */
+function resolveTreeFormat(treeFormat: string): "text" | "mermaid" | "json" {
+  if (treeFormat.includes("Mermaid")) return "mermaid";
+  if (treeFormat.includes("JSON")) return "json";
+  return "text";
+}
 
-  const choice = await ctx.ui.select("Agents", options);
-  if (!choice) return;
-
+/** Dispatch the user's menu choice, returning true if the menu should reopen. */
+async function dispatchAgentsChoice(
+  choice: string,
+  ctx: ExtensionCommandContext,
+  deps: AgentsMenuDeps,
+  agents: AgentRecord[],
+): Promise<void> {
   if (choice.startsWith("Running agents (")) {
     await showRunningAgents(ctx, deps.manager, deps.agentActivity);
     await reopenMenu(ctx, deps);
@@ -323,10 +309,7 @@ export async function showAgentsMenu(ctx: ExtensionCommandContext, deps: AgentsM
       "Raw JSON Tree",
     ]);
     if (treeFormat) {
-      let format: "text" | "mermaid" | "json" = "text";
-      if (treeFormat.includes("Mermaid")) format = "mermaid";
-      if (treeFormat.includes("JSON")) format = "json";
-
+      const format = resolveTreeFormat(treeFormat);
       const treeData = buildExecutionTree(agents, format);
       await ctx.ui.editor(`Execution Tree (${format})`, treeData);
     }
@@ -357,4 +340,33 @@ export async function showAgentsMenu(ctx: ExtensionCommandContext, deps: AgentsM
     await showAgentsTop(ctx, deps.manager, deps.agentActivity);
     await reopenMenu(ctx, deps);
   }
+}
+
+/**
+ * Display the main agents menu with options for dashboard, agent types, scheduling, and settings.
+ */
+export async function showAgentsMenu(ctx: ExtensionCommandContext, deps: AgentsMenuDeps): Promise<void> {
+  await reloadCustomAgents();
+  const allNames = getAllTypes();
+  const agents = deps.manager.listAgents();
+
+  const schedulerActive = deps.scheduler.isActive();
+  const jobCount = schedulerActive ? deps.scheduler.list().length : 0;
+  const options = buildAgentsMenuOptions(agents, allNames, schedulerActive, jobCount);
+
+  const noAgentsMsg =
+    allNames.length === 0 && agents.length === 0
+      ? "No agents found. Create specialized subagents that can be delegated to.\n\n" +
+        "Each subagent has its own context window, custom system prompt, and specific tools.\n\n" +
+        "Try creating: Code Reviewer, Security Auditor, Test Writer, or Documentation Writer.\n\n"
+      : "";
+
+  if (noAgentsMsg) {
+    ctx.ui.notify(noAgentsMsg, "info");
+  }
+
+  const choice = await ctx.ui.select("Agents", options);
+  if (!choice) return;
+
+  await dispatchAgentsChoice(choice, ctx, deps, agents);
 }

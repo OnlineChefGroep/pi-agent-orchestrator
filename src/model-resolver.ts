@@ -44,6 +44,34 @@ export function invalidateModelCache(): void {
 }
 
 /**
+ * Score a single model against the query.
+ * Higher = better match. 0 = no match.
+ */
+function scoreModel(m: ModelEntry, query: string): number {
+  const id = m.id.toLowerCase();
+  const name = m.name.toLowerCase();
+  const full = `${m.provider}/${m.id}`.toLowerCase();
+
+  if (id === query || full === query) {
+    return 100; // exact
+  }
+  if (id.includes(query) || full.includes(query)) {
+    return 60 + (query.length / id.length) * 30; // substring, prefer tighter matches
+  }
+  if (name.includes(query)) {
+    return 40 + (query.length / name.length) * 20;
+  }
+  if (
+    query
+      .split(/[\s\-/]+/)
+      .every((part) => id.includes(part) || name.includes(part) || m.provider.toLowerCase().includes(part))
+  ) {
+    return 20; // all parts present somewhere
+  }
+  return 0;
+}
+
+/**
  * Resolve a model identifier to a registered model.
  *
  * Attempts an exact "provider/modelId" match against available models, then falls back to a fuzzy search over provider, id, and name.
@@ -71,30 +99,11 @@ export function resolveModel<T extends ModelEntry>(input: string, registry: Mode
   // 2. Fuzzy match against available models
   const query = lowercasedInput;
 
-  // Score each model: prefer exact id match > id contains > name contains > provider+id contains
   let bestMatch: ModelEntry | undefined;
   let bestScore = 0;
 
   for (const m of all) {
-    const id = m.id.toLowerCase();
-    const name = m.name.toLowerCase();
-    const full = `${m.provider}/${m.id}`.toLowerCase();
-
-    let score = 0;
-    if (id === query || full === query) {
-      score = 100; // exact
-    } else if (id.includes(query) || full.includes(query)) {
-      score = 60 + (query.length / id.length) * 30; // substring, prefer tighter matches
-    } else if (name.includes(query)) {
-      score = 40 + (query.length / name.length) * 20;
-    } else if (
-      query
-        .split(/[\s\-/]+/)
-        .every((part) => id.includes(part) || name.includes(part) || m.provider.toLowerCase().includes(part))
-    ) {
-      score = 20; // all parts present somewhere
-    }
-
+    const score = scoreModel(m, query);
     if (score > bestScore) {
       bestScore = score;
       bestMatch = m;

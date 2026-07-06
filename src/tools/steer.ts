@@ -3,8 +3,28 @@ import { Type } from "@sinclair/typebox";
 import { steerAgent } from "../agent-runner.js";
 import { logger } from "../logger.js";
 import { formatLifetimeTokens, textResult } from "../tool-result-helpers.js";
+import type { AgentRecord } from "../types.js";
 import { getSessionContextPercent } from "../usage.js";
 import type { ToolContext } from "./context.js";
+
+/**
+ * Build the "current state" summary shown after a successful steer.
+ * Renders token usage, tool-use count, context-window fill, and compaction count.
+ *
+ * @param record - The agent record whose state should be summarized
+ * @param contextPercent - Context-window fill percent, or null when unavailable
+ * @returns Array of formatted state strings (empty if no metrics available)
+ */
+function buildSteerStateParts(record: AgentRecord, contextPercent: number | null): string[] {
+  const tokens = formatLifetimeTokens(record);
+  const stateParts: string[] = [];
+  if (tokens) stateParts.push(tokens);
+  stateParts.push(`${record.toolUses} tool ${record.toolUses === 1 ? "use" : "uses"}`);
+  if (contextPercent !== null) stateParts.push(`context ${Math.round(contextPercent)}% full`);
+  if (record.compactionCount)
+    stateParts.push(`${record.compactionCount} compaction${record.compactionCount === 1 ? "" : "s"}`);
+  return stateParts;
+}
 
 export function createSteerTool(ctx: ToolContext) {
   return defineTool({
@@ -46,14 +66,8 @@ export function createSteerTool(ctx: ToolContext) {
           logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
         });
         ctx.pi.events.emit("subagents:steered", { id: record.id, message: params.message });
-        const tokens = formatLifetimeTokens(record);
         const contextPercent = getSessionContextPercent(record.session);
-        const stateParts: string[] = [];
-        if (tokens) stateParts.push(tokens);
-        stateParts.push(`${record.toolUses} tool ${record.toolUses === 1 ? "use" : "uses"}`);
-        if (contextPercent !== null) stateParts.push(`context ${Math.round(contextPercent)}% full`);
-        if (record.compactionCount)
-          stateParts.push(`${record.compactionCount} compaction${record.compactionCount === 1 ? "" : "s"}`);
+        const stateParts = buildSteerStateParts(record, contextPercent);
         return textResult(
           `Steering message sent to agent ${record.id}. The agent will process it after its current tool execution.\n` +
             `Current state: ${stateParts.join(" · ")}`,

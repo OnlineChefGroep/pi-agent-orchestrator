@@ -413,95 +413,444 @@ export class AgentDashboard implements Component {
     }, 3000);
   }
 
+  /** Handle keystrokes while command mode is active. Returns true if consumed. */
+  private handleCommandModeInput(data: string): boolean {
+    if (!this.inCommandMode) return false;
+
+    if (matchesKey(data, "escape")) {
+      this.inCommandMode = false;
+      this.commandBuffer = "";
+      this.dirty = true;
+      this.requestRender();
+      return true;
+    }
+    if (matchesKey(data, "enter") || matchesKey(data, "return")) {
+      this.executeCommand(this.commandBuffer);
+      this.inCommandMode = false;
+      this.commandBuffer = "";
+      this.dirty = true;
+      this.requestRender();
+      return true;
+    }
+    if (matchesKey(data, "backspace")) {
+      this.commandBuffer = this.commandBuffer.slice(0, -1);
+      this.dirty = true;
+      this.requestRender();
+      return true;
+    }
+    // Shift+letter → map to uppercase
+    if (data.startsWith("shift+") && data.length === 7) {
+      this.commandBuffer += data.charAt(6).toUpperCase();
+      this.dirty = true;
+      this.requestRender();
+      return true;
+    }
+    // Single character → append to buffer
+    if (data.length === 1 && !data.includes("+")) {
+      this.commandBuffer += data;
+      this.dirty = true;
+      this.requestRender();
+      return true;
+    }
+    // Unknown key while in command mode → cancel and fall through
+    this.inCommandMode = false;
+    this.commandBuffer = "";
+    return false;
+  }
+
+  /** Returns true if the given key is safe to pass through while the perf overlay is showing. */
+  private isPerfSafeKey(data: string): boolean {
+    return (
+      matchesKey(data, "up") ||
+      matchesKey(data, "down") ||
+      matchesKey(data, "k") ||
+      matchesKey(data, "j") ||
+      matchesKey(data, "pageUp") ||
+      matchesKey(data, "pageDown") ||
+      matchesKey(data, "shift+up") ||
+      matchesKey(data, "shift+down") ||
+      matchesKey(data, "left") ||
+      matchesKey(data, "right") ||
+      matchesKey(data, "shift+left") ||
+      matchesKey(data, "shift+right") ||
+      matchesKey(data, "home") ||
+      matchesKey(data, "end")
+    );
+  }
+
+  /** Handle perf-overlay keystrokes. Returns true if consumed. */
+  private handlePerfInput(data: string): boolean {
+    if (!this.showPerf) return false;
+
+    if (matchesKey(data, "q") || matchesKey(data, "escape")) {
+      this.showPerf = false;
+      this.dirty = true;
+      this.requestRender();
+      return true;
+    }
+    // Allow / to enter command mode even when perf is showing
+    if (data === "/" && !this.inCommandMode) {
+      this.inCommandMode = true;
+      this.commandBuffer = "/";
+      this.dirty = true;
+      this.requestRender();
+      return true;
+    }
+    // While the perf overlay covers the agent list, only allow safe navigation
+    // and view-only keys to pass through. Destructive/action keys (enter, space,
+    // shift+k, s/p/r/t/w, etc.) are swallowed to prevent aborting agents or
+    // mutating state behind a panel the user can no longer see.
+    if (!this.isPerfSafeKey(data)) {
+      this.dirty = true;
+      this.requestRender();
+      return true;
+    }
+    // Safe navigation keys fall through to the normal handler below.
+    return false;
+  }
+
+  /** Handle overlay (help/tree/schedules) scroll navigation. Returns true if consumed. */
+  private handleSubViewScroll(data: string): boolean {
+    const isSubViewActive = this.showHelp || this.showTree || this.showSchedules;
+    if (!isSubViewActive) return false;
+
+    const vh = this.getViewportHeight();
+    if (matchesKey(data, "up") || matchesKey(data, "k")) {
+      this.subViewScrollOffset = Math.max(0, this.subViewScrollOffset - 1);
+    } else if (matchesKey(data, "down") || matchesKey(data, "j")) {
+      this.subViewScrollOffset += 1;
+    } else if (matchesKey(data, "pageUp") || matchesKey(data, "shift+up")) {
+      this.subViewScrollOffset = Math.max(0, this.subViewScrollOffset - vh);
+    } else if (matchesKey(data, "pageDown") || matchesKey(data, "shift+down")) {
+      this.subViewScrollOffset += vh;
+    } else if (matchesKey(data, "home") || matchesKey(data, "g")) {
+      this.subViewScrollOffset = 0;
+    } else if (matchesKey(data, "end") || matchesKey(data, "shift+g")) {
+      this.subViewScrollOffset = 9999;
+    } else {
+      return false;
+    }
+    this.dirty = true;
+    this.requestRender();
+    return true;
+  }
+
+  /** Handle navigation keys (vim + arrows + paging). Returns true if consumed. */
+  private handleNavigation(data: string, viewportHeight: number, maxScroll: number): boolean {
+    if (matchesKey(data, "up") || matchesKey(data, "k")) {
+      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
+      this.dirty = true;
+    } else if (matchesKey(data, "down") || matchesKey(data, "j")) {
+      if (this.agents.length === 0) return true;
+      this.selectedIndex = Math.min(this.agents.length - 1, this.selectedIndex + 1);
+      this.dirty = true;
+    } else if (matchesKey(data, "pageUp") || matchesKey(data, "shift+up")) {
+      this.selectedIndex = Math.max(0, this.selectedIndex - this.getViewportHeight());
+      this.scrollOffset = Math.max(0, this.scrollOffset - this.getViewportHeight());
+      this.dirty = true;
+    } else if (matchesKey(data, "pageDown") || matchesKey(data, "shift+down")) {
+      if (this.agents.length === 0) return true;
+      this.selectedIndex = Math.min(this.agents.length - 1, this.selectedIndex + viewportHeight);
+      this.scrollOffset = Math.min(maxScroll, this.scrollOffset + viewportHeight);
+      this.dirty = true;
+    } else if (matchesKey(data, "home") || matchesKey(data, "g")) {
+      this.selectedIndex = 0;
+      this.scrollOffset = 0;
+      this.dirty = true;
+    } else if (matchesKey(data, "end") || matchesKey(data, "shift+g")) {
+      if (this.agents.length === 0) return true;
+      this.selectedIndex = this.agents.length - 1;
+      this.scrollOffset = maxScroll;
+      this.dirty = true;
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  /** Apply a top-view sort key toggle: if already active, flip direction; otherwise switch. */
+  private toggleTopSort(key: SortKey): void {
+    if (this.topSortKey === key) this.topSortAsc = !this.topSortAsc;
+    else {
+      this.topSortKey = key;
+      this.topSortAsc = false;
+    }
+    this.topPage = 0;
+    this.dirty = true;
+    this.spinnerFrame++;
+    this.requestRender();
+  }
+
+  /** Handle top-view sort and paging keys. Returns true if consumed. */
+  private handleTopViewKeys(data: string): boolean {
+    if (!this.topViewMode) return false;
+
+    const sortMap: Record<string, SortKey> = {
+      d: "duration",
+      u: "toolUses",
+      l: "lastSeen",
+      n: "name",
+    };
+    const sortKey = sortMap[data];
+    if (sortKey) {
+      this.toggleTopSort(sortKey);
+      return true;
+    }
+    if (matchesKey(data, "left") || matchesKey(data, "shift+left")) {
+      this.topPage = Math.max(0, this.topPage - 1);
+      this.dirty = true;
+      this.spinnerFrame++;
+      this.requestRender();
+      return true;
+    }
+    if (matchesKey(data, "right") || matchesKey(data, "shift+right")) {
+      const entries = sortEntries(
+        getAgentTopEntries(this.agents, this.options.agentActivity),
+        this.topSortKey,
+        this.topSortAsc,
+      );
+      const totalPages = Math.max(1, Math.ceil(entries.length / this.getViewportHeight()));
+      this.topPage = Math.min(totalPages - 1, this.topPage + 1);
+      this.dirty = true;
+      this.spinnerFrame++;
+      this.requestRender();
+      return true;
+    }
+    return false;
+  }
+
+  /** Returns true if any sub-view overlay (help/tree/schedules) is currently shown. */
+  private isSubViewActive(): boolean {
+    return this.showHelp || this.showTree || this.showSchedules;
+  }
+
+  /** Returns true and re-renders when a sub-view overlay is active (blocking the action). */
+  private blockIfSubView(): boolean {
+    if (!this.isSubViewActive()) return false;
+    this.dirty = true;
+    this.requestRender();
+    return true;
+  }
+
+  /** Abort the selected agents (or the currently focused one). */
+  private killSelectedAgents(rec: AgentRecord | undefined): void {
+    const idsToKill = this.selectedIds.size > 0 ? Array.from(this.selectedIds) : rec ? [rec.id] : [];
+    let anyAborted = false;
+    for (const id of idsToKill) {
+      const aborted = this.options.onAbort ? this.options.onAbort(id) : this.options.manager.abort(id);
+      if (aborted) anyAborted = true;
+    }
+    if (anyAborted) {
+      this.selectedIds.clear();
+      this.refreshAgents();
+      this.requestRender();
+    }
+  }
+
+  /** Handle navigation action keys (enter, space). Returns true if consumed. */
+  private handleNavActionKeys(data: string, rec: AgentRecord | undefined): boolean {
+    if (matchesKey(data, "enter")) {
+      if (this.blockIfSubView()) return true;
+      if (rec && this.options.onViewConversation) {
+        this.close();
+        void this.options.onViewConversation(rec);
+        return true;
+      }
+      return false;
+    }
+    if (matchesKey(data, "space")) {
+      if (this.blockIfSubView()) return true;
+      if (rec) {
+        if (this.selectedIds.has(rec.id)) this.selectedIds.delete(rec.id);
+        else this.selectedIds.add(rec.id);
+        this.dirty = true;
+        this.requestRender();
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /** Handle the steer key (s). */
+  private handleSteerKey(rec: AgentRecord | undefined): boolean {
+    if (this.blockIfSubView()) return true;
+    if (rec) {
+      if (this.options.onSteer) {
+        this.close();
+        void this.options.onSteer(rec.id);
+        return true;
+      }
+      this.showStatus("Steer is not available in this context.");
+    }
+    return true;
+  }
+
+  /** Handle the permissions key (p). */
+  private handlePermissionsKey(rec: AgentRecord | undefined): boolean {
+    if (this.blockIfSubView()) return true;
+    if (rec) {
+      if (this.options.onShowPermissions) {
+        this.close();
+        void this.options.onShowPermissions(rec);
+        return true;
+      }
+      this.showStatus("Permissions view is not available in this context.");
+    }
+    return true;
+  }
+
+  /** Handle destructive action keys (kill, steer, permissions). Returns true if consumed. */
+  private handleDestructiveActionKeys(data: string, rec: AgentRecord | undefined): boolean {
+    if (matchesKey(data, "shift+k") || matchesKey(data, "K")) {
+      if (this.blockIfSubView()) return true;
+      this.killSelectedAgents(rec);
+      return true;
+    }
+    if (matchesKey(data, "s") || matchesKey(data, "shift+s")) {
+      return this.handleSteerKey(rec);
+    }
+    if (matchesKey(data, "p") || matchesKey(data, "shift+p")) {
+      return this.handlePermissionsKey(rec);
+    }
+    return false;
+  }
+
+  /** Handle the action keys (enter, space, kill, steer, etc.). Returns true if consumed. */
+  private handleActionKeys(data: string, rec: AgentRecord | undefined): boolean {
+    if (this.handleNavActionKeys(data, rec)) return true;
+    return this.handleDestructiveActionKeys(data, rec);
+  }
+
+  /** Handle top-view sort key (r=turns, t=tokens) with toggle-or-switch logic. */
+  private handleTopViewSortToggle(key: SortKey): void {
+    if (this.topSortKey === key) this.topSortAsc = !this.topSortAsc;
+    else {
+      this.topSortKey = key;
+      this.topSortAsc = false;
+    }
+    this.topPage = 0;
+  }
+
+  /** Collect the target agents for a swarm action (selected or single focused). */
+  private collectSwarmTargets(rec: AgentRecord | undefined): AgentRecord[] {
+    if (this.selectedIds.size > 0) {
+      const arr: AgentRecord[] = [];
+      for (let i = 0; i < this.agents.length; i++) {
+        if (this.selectedIds.has(this.agents[i].id)) arr.push(this.agents[i]);
+      }
+      return arr;
+    }
+    return rec ? [rec] : [];
+  }
+
+  /** Handle the 'r' key: refresh in normal mode, or sort by turns in top view. */
+  private handleRefreshOrTurnsSort(): void {
+    if (this.topViewMode) {
+      this.handleTopViewSortToggle("turns");
+    } else {
+      this.refreshAgents();
+    }
+    this.dirty = true;
+    this.requestRender();
+  }
+
+  /** Handle the 't' key: toggle top view, or sort by tokens if already in top view. */
+  private handleTopViewOrTokensSort(): void {
+    if (this.topViewMode) {
+      this.handleTopViewSortToggle("tokens");
+    } else {
+      this.topViewMode = !this.topViewMode;
+      if (this.topViewMode) {
+        this.topPage = 0;
+        this.showSchedules = false;
+        this.showTree = false;
+      }
+    }
+    this.dirty = true;
+    this.requestRender();
+  }
+
+  /** Handle view-toggle keys (r, ?, t, z, y). Returns true if consumed. */
+  private handleViewToggleKeys(data: string): boolean {
+    if (matchesKey(data, "r") || matchesKey(data, "shift+r")) {
+      this.handleRefreshOrTurnsSort();
+      return true;
+    }
+    if (matchesKey(data, "?")) {
+      this.showHelp = !this.showHelp;
+      if (this.showHelp) this.subViewScrollOffset = 0;
+      this.dirty = true;
+      this.requestRender();
+      return true;
+    }
+    if (matchesKey(data, "t")) {
+      this.handleTopViewOrTokensSort();
+      return true;
+    }
+    if (matchesKey(data, "z") || matchesKey(data, "shift+z")) {
+      if (this.options.scheduler?.isActive()) {
+        this.showSchedules = !this.showSchedules;
+        if (this.showSchedules) this.closeAllOverlaysExcept("schedules");
+        this.dirty = true;
+        this.requestRender();
+      }
+      return true;
+    }
+    if (matchesKey(data, "y")) {
+      this.showTree = !this.showTree;
+      if (this.showTree) this.closeAllOverlaysExcept("tree");
+      this.dirty = true;
+      this.requestRender();
+      return true;
+    }
+    return false;
+  }
+
+  /** Close all overlays except the named one, preserving the just-toggled view. */
+  private closeAllOverlaysExcept(keep: "schedules" | "tree"): void {
+    this.topViewMode = false;
+    this.showHelp = false;
+    this.showPerf = false;
+    if (keep !== "tree") this.showTree = false;
+    if (keep !== "schedules") this.showSchedules = false;
+    this.subViewScrollOffset = 0;
+  }
+
+  /** Handle the swarm-create key (w). Returns true if consumed. */
+  private handleSwarmKey(data: string, rec: AgentRecord | undefined): boolean {
+    if (!matchesKey(data, "w") && !matchesKey(data, "shift+w")) return false;
+    if (this.blockIfSubView()) return true;
+    const targets = this.collectSwarmTargets(rec);
+    if (targets.length > 0) {
+      if (this.options.onSwarmAction) {
+        this.close();
+        void this.options.onSwarmAction(
+          "create",
+          targets.map((t) => t.id),
+        );
+        return true;
+      }
+      this.showStatus("Swarm actions are not available in this context.");
+    }
+    return true;
+  }
+
+  /** Handle toggle keys (r, ?, t, z, y, w). Returns true if consumed. */
+  private handleToggleKeys(data: string, rec: AgentRecord | undefined): boolean {
+    if (this.handleViewToggleKeys(data)) return true;
+    return this.handleSwarmKey(data, rec);
+  }
+
   handleInput(data: string): void {
     const rec = this.agents[this.selectedIndex];
     const viewportHeight = this.getViewportHeight();
     const maxScroll = Math.max(0, this.bodyLineCount - viewportHeight);
 
     // ── Command mode ───────────────────────────────────────────────
-    if (this.inCommandMode) {
-      if (matchesKey(data, "escape")) {
-        this.inCommandMode = false;
-        this.commandBuffer = "";
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      if (matchesKey(data, "enter") || matchesKey(data, "return")) {
-        this.executeCommand(this.commandBuffer);
-        this.inCommandMode = false;
-        this.commandBuffer = "";
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      if (matchesKey(data, "backspace")) {
-        this.commandBuffer = this.commandBuffer.slice(0, -1);
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      // Shift+letter → map to uppercase
-      if (data.startsWith("shift+") && data.length === 7) {
-        this.commandBuffer += data.charAt(6).toUpperCase();
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      // Single character → append to buffer
-      if (data.length === 1 && !data.includes("+")) {
-        this.commandBuffer += data;
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      // Unknown key while in command mode → cancel and fall through
-      this.inCommandMode = false;
-      this.commandBuffer = "";
-    }
+    if (this.handleCommandModeInput(data)) return;
 
     // ── Toggle perf view if it's showing (q/esc close perf, not dashboard) ──
-    if (this.showPerf) {
-      if (matchesKey(data, "q") || matchesKey(data, "escape")) {
-        this.showPerf = false;
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      // Allow / to enter command mode even when perf is showing
-      if (data === "/" && !this.inCommandMode) {
-        this.inCommandMode = true;
-        this.commandBuffer = "/";
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      // While the perf overlay covers the agent list, only allow safe navigation
-      // and view-only keys to pass through. Destructive/action keys (enter, space,
-      // shift+k, s/p/r/t/w, etc.) are swallowed to prevent aborting agents or
-      // mutating state behind a panel the user can no longer see.
-      const isPerfSafeKey =
-        matchesKey(data, "up") ||
-        matchesKey(data, "down") ||
-        matchesKey(data, "k") ||
-        matchesKey(data, "j") ||
-        matchesKey(data, "pageUp") ||
-        matchesKey(data, "pageDown") ||
-        matchesKey(data, "shift+up") ||
-        matchesKey(data, "shift+down") ||
-        matchesKey(data, "left") ||
-        matchesKey(data, "right") ||
-        matchesKey(data, "shift+left") ||
-        matchesKey(data, "shift+right") ||
-        matchesKey(data, "home") ||
-        matchesKey(data, "end");
-      if (!isPerfSafeKey) {
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      // Safe navigation keys fall through to the normal handler below.
-    }
+    if (this.handlePerfInput(data)) return;
 
     // ── Enter command mode from normal mode ──
     if (matchesKey(data, "/") && !this.inCommandMode) {
@@ -533,319 +882,24 @@ export class AgentDashboard implements Component {
     }
 
     // ── Overlay scroll navigation ─────────────────────────────────
-    // When an overlay (help/tree/schedules) is active, navigation keys scroll
-    // the overlay instead of moving the underlying agent selection.
-    const isSubViewActive = this.showHelp || this.showTree || this.showSchedules;
-    if (isSubViewActive) {
-      const vh = this.getViewportHeight();
-      if (matchesKey(data, "up") || matchesKey(data, "k")) {
-        this.subViewScrollOffset = Math.max(0, this.subViewScrollOffset - 1);
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      if (matchesKey(data, "down") || matchesKey(data, "j")) {
-        this.subViewScrollOffset += 1;
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      if (matchesKey(data, "pageUp") || matchesKey(data, "shift+up")) {
-        this.subViewScrollOffset = Math.max(0, this.subViewScrollOffset - vh);
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      if (matchesKey(data, "pageDown") || matchesKey(data, "shift+down")) {
-        this.subViewScrollOffset += vh;
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      if (matchesKey(data, "home") || matchesKey(data, "g")) {
-        this.subViewScrollOffset = 0;
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      if (matchesKey(data, "end") || matchesKey(data, "shift+g")) {
-        this.subViewScrollOffset = 9999;
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-    }
+    if (this.handleSubViewScroll(data)) return;
 
     // Navigation — vim + arrows
-    if (matchesKey(data, "up") || matchesKey(data, "k")) {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.dirty = true;
-    } else if (matchesKey(data, "down") || matchesKey(data, "j")) {
-      if (this.agents.length === 0) return;
-      this.selectedIndex = Math.min(this.agents.length - 1, this.selectedIndex + 1);
-      this.dirty = true;
-    } else if (matchesKey(data, "pageUp") || matchesKey(data, "shift+up")) {
-      this.selectedIndex = Math.max(0, this.selectedIndex - this.getViewportHeight());
-      this.scrollOffset = Math.max(0, this.scrollOffset - this.getViewportHeight());
-      this.dirty = true;
-    } else if (matchesKey(data, "pageDown") || matchesKey(data, "shift+down")) {
-      if (this.agents.length === 0) return;
-      this.selectedIndex = Math.min(this.agents.length - 1, this.selectedIndex + viewportHeight);
-      this.scrollOffset = Math.min(maxScroll, this.scrollOffset + viewportHeight);
-      this.dirty = true;
-    } else if (matchesKey(data, "home") || matchesKey(data, "g")) {
-      this.selectedIndex = 0;
-      this.scrollOffset = 0;
-      this.dirty = true;
-    } else if (matchesKey(data, "end") || matchesKey(data, "shift+g")) {
-      if (this.agents.length === 0) return;
-      this.selectedIndex = this.agents.length - 1;
-      this.scrollOffset = maxScroll;
-      this.dirty = true;
-    }
+    this.handleNavigation(data, viewportHeight, maxScroll);
 
     // ── Top view mode sort/page keys ──────────────────────────────
-    // Intercept sort keys before global actions to avoid conflicts.
-    // t/r are also global actions (toggle top view / refresh), so they're
-    // handled inline below with topViewMode checks.
-    if (this.topViewMode) {
-      if (matchesKey(data, "d")) {
-        if (this.topSortKey === "duration") this.topSortAsc = !this.topSortAsc;
-        else {
-          this.topSortKey = "duration";
-          this.topSortAsc = false;
-        }
-        this.topPage = 0;
-        this.dirty = true;
-        this.spinnerFrame++;
-        this.requestRender();
-        return;
-      }
-      if (matchesKey(data, "u")) {
-        if (this.topSortKey === "toolUses") this.topSortAsc = !this.topSortAsc;
-        else {
-          this.topSortKey = "toolUses";
-          this.topSortAsc = false;
-        }
-        this.topPage = 0;
-        this.dirty = true;
-        this.spinnerFrame++;
-        this.requestRender();
-        return;
-      }
-      if (matchesKey(data, "l")) {
-        if (this.topSortKey === "lastSeen") this.topSortAsc = !this.topSortAsc;
-        else {
-          this.topSortKey = "lastSeen";
-          this.topSortAsc = false;
-        }
-        this.topPage = 0;
-        this.dirty = true;
-        this.spinnerFrame++;
-        this.requestRender();
-        return;
-      }
-      if (matchesKey(data, "n")) {
-        if (this.topSortKey === "name") this.topSortAsc = !this.topSortAsc;
-        else {
-          this.topSortKey = "name";
-          this.topSortAsc = false;
-        }
-        this.topPage = 0;
-        this.dirty = true;
-        this.spinnerFrame++;
-        this.requestRender();
-        return;
-      }
-      if (matchesKey(data, "left") || matchesKey(data, "shift+left")) {
-        this.topPage = Math.max(0, this.topPage - 1);
-        this.dirty = true;
-        this.spinnerFrame++;
-        this.requestRender();
-        return;
-      }
-      if (matchesKey(data, "right") || matchesKey(data, "shift+right")) {
-        const entries = sortEntries(
-          getAgentTopEntries(this.agents, this.options.agentActivity),
-          this.topSortKey,
-          this.topSortAsc,
-        );
-        const totalPages = Math.max(1, Math.ceil(entries.length / this.getViewportHeight()));
-        this.topPage = Math.min(totalPages - 1, this.topPage + 1);
-        this.dirty = true;
-        this.spinnerFrame++;
-        this.requestRender();
-        return;
-      }
-      // t, r, and other keys fall through to the action handlers below
-      // which check this.topViewMode inline.
+    if (this.handleTopViewKeys(data)) return;
+
+    // Actions and toggles
+    if (this.handleActionKeys(data, rec)) {
+      this.spinnerFrame++;
+      this.keepSelectedBodyLineVisible();
+      return;
     }
-
-    // Actions
-    if (matchesKey(data, "enter")) {
-      if (isSubViewActive) {
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      if (rec && this.options.onViewConversation) {
-        this.close();
-        void this.options.onViewConversation(rec);
-        return;
-      }
-    } else if (matchesKey(data, "space")) {
-      if (isSubViewActive) {
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      if (rec) {
-        if (this.selectedIds.has(rec.id)) {
-          this.selectedIds.delete(rec.id);
-        } else {
-          this.selectedIds.add(rec.id);
-        }
-        this.dirty = true;
-        this.requestRender();
-      }
-    } else if (matchesKey(data, "shift+k") || matchesKey(data, "K")) {
-      if (isSubViewActive) {
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      const idsToKill = this.selectedIds.size > 0 ? Array.from(this.selectedIds) : rec ? [rec.id] : [];
-
-      let anyAborted = false;
-      for (const id of idsToKill) {
-        const aborted = this.options.onAbort ? this.options.onAbort(id) : this.options.manager.abort(id);
-        if (aborted) anyAborted = true;
-      }
-      if (anyAborted) {
-        this.selectedIds.clear();
-        this.refreshAgents();
-        this.requestRender();
-      }
-    } else if (matchesKey(data, "s") || matchesKey(data, "shift+s")) {
-      if (isSubViewActive) {
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      if (rec) {
-        if (this.options.onSteer) {
-          this.close();
-          void this.options.onSteer(rec.id);
-          return;
-        }
-        this.showStatus("Steer is not available in this context.");
-      }
-    } else if (matchesKey(data, "p") || matchesKey(data, "shift+p")) {
-      if (isSubViewActive) {
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      if (rec) {
-        if (this.options.onShowPermissions) {
-          this.close();
-          void this.options.onShowPermissions(rec);
-          return;
-        }
-        this.showStatus("Permissions view is not available in this context.");
-      }
-    } else if (matchesKey(data, "r") || matchesKey(data, "shift+r")) {
-      if (this.topViewMode) {
-        // In top view: sort by turns
-        if (this.topSortKey === "turns") this.topSortAsc = !this.topSortAsc;
-        else {
-          this.topSortKey = "turns";
-          this.topSortAsc = false;
-        }
-        this.topPage = 0;
-      } else {
-        this.refreshAgents();
-      }
-      this.dirty = true;
-      this.requestRender();
-    } else if (matchesKey(data, "?")) {
-      this.showHelp = !this.showHelp;
-      if (this.showHelp) this.subViewScrollOffset = 0;
-      this.dirty = true;
-      this.requestRender();
-    } else if (matchesKey(data, "t")) {
-      if (this.topViewMode) {
-        // In top view: sort by tokens (pressing t again toggles direction)
-        if (this.topSortKey === "tokens") this.topSortAsc = !this.topSortAsc;
-        else {
-          this.topSortKey = "tokens";
-          this.topSortAsc = false;
-        }
-        this.topPage = 0;
-      } else {
-        this.topViewMode = !this.topViewMode;
-        if (this.topViewMode) {
-          this.topPage = 0;
-          this.showSchedules = false;
-          this.showTree = false;
-        }
-      }
-      this.dirty = true;
-      this.requestRender();
-    } else if (matchesKey(data, "z") || matchesKey(data, "shift+z")) {
-      if (this.options.scheduler?.isActive()) {
-        this.showSchedules = !this.showSchedules;
-        if (this.showSchedules) {
-          this.topViewMode = false;
-          this.showHelp = false;
-          this.showPerf = false;
-          this.showTree = false;
-          this.subViewScrollOffset = 0;
-        }
-        this.dirty = true;
-        this.requestRender();
-      }
-    } else if (matchesKey(data, "y")) {
-      this.showTree = !this.showTree;
-      if (this.showTree) {
-        this.topViewMode = false;
-        this.showSchedules = false;
-        this.showHelp = false;
-        this.showPerf = false;
-        this.subViewScrollOffset = 0;
-      }
-      this.dirty = true;
-      this.requestRender();
-    } else if (matchesKey(data, "w") || matchesKey(data, "shift+w")) {
-      if (isSubViewActive) {
-        this.dirty = true;
-        this.requestRender();
-        return;
-      }
-      const targets =
-        this.selectedIds.size > 0
-          ? (() => {
-              const arr = [];
-              for (let i = 0; i < this.agents.length; i++) {
-                if (this.selectedIds.has(this.agents[i].id)) arr.push(this.agents[i]);
-              }
-              return arr;
-            })()
-          : rec
-            ? [rec]
-            : [];
-
-      if (targets.length > 0) {
-        if (this.options.onSwarmAction) {
-          this.close();
-          void this.options.onSwarmAction(
-            "create",
-            targets.map((t) => t.id),
-          );
-          return;
-        }
-        this.showStatus("Swarm actions are not available in this context.");
-      }
+    if (this.handleToggleKeys(data, rec)) {
+      this.spinnerFrame++;
+      this.keepSelectedBodyLineVisible();
+      return;
     }
 
     // Spinner: advance on user input for responsive feel.
@@ -912,6 +966,119 @@ export class AgentDashboard implements Component {
     };
   }
 
+  /** Render an overlay view (tree/schedules/help/perf) into the lines array. Returns true if an overlay was rendered. */
+  private renderOverlayView(lines: string[], innerW: number, th: DashboardTheme, box: BoxChars): boolean {
+    if (this.showTree) {
+      this.renderScrollableOverlay(lines, innerW, th, box, [
+        ...renderTreeView(innerW, th, box, this.agents),
+        ...renderTreeFooter(innerW, th, box),
+      ]);
+      return true;
+    }
+    if (this.showSchedules && this.options.scheduler?.isActive()) {
+      this.renderScrollableOverlay(
+        lines,
+        innerW,
+        th,
+        box,
+        renderSchedulesSection(innerW, th, box, this.options.scheduler),
+      );
+      return true;
+    }
+    if (this.showHelp) {
+      this.renderScrollableOverlay(lines, innerW, th, box, renderDashboardHelp(innerW, th, box));
+      return true;
+    }
+    if (this.showPerf) {
+      const metrics =
+        this.perfView === "widget"
+          ? (this.getWidgetMetrics() ?? this.renderMetrics.snapshot())
+          : this.renderMetrics.snapshot();
+      this.renderScrollableOverlay(
+        lines,
+        innerW,
+        th,
+        box,
+        renderDashboardPerf(innerW, th, box, metrics, this.perfView === "widget" ? "widget" : "dashboard"),
+      );
+      return true;
+    }
+    return false;
+  }
+
+  /** Render a scrollable overlay: paginate the given overlay lines and pad to viewport height. */
+  private renderScrollableOverlay(
+    lines: string[],
+    innerW: number,
+    th: DashboardTheme,
+    box: BoxChars,
+    overlayLines: string[],
+  ): void {
+    const vh = this.getViewportHeight();
+    const maxScroll = Math.max(0, overlayLines.length - vh);
+    this.subViewScrollOffset = Math.min(this.subViewScrollOffset, maxScroll);
+    const visible = overlayLines.slice(this.subViewScrollOffset, this.subViewScrollOffset + vh);
+    for (const line of visible) lines.push(line);
+    for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
+  }
+
+  /** Render the top-view (resource table) mode into the lines array. */
+  private renderTopViewMode(lines: string[], th: DashboardTheme, safeWidth: number): void {
+    const vh = this.getViewportHeight();
+    this.topPageSize = Math.max(5, vh);
+    const entries = sortEntries(
+      getAgentTopEntries(this.agents, this.options.agentActivity),
+      this.topSortKey,
+      this.topSortAsc,
+    );
+    lines.push(
+      ...renderTopTable(
+        entries,
+        this.topSortKey,
+        this.topSortAsc,
+        this.topPage,
+        this.topPageSize,
+        th,
+        safeWidth,
+        "t: back to list",
+      ),
+    );
+  }
+
+  /** Render the normal agent list body (with caching + virtual scroll) into the lines array. */
+  private renderBodyView(
+    lines: string[],
+    innerW: number,
+    th: DashboardTheme,
+    box: BoxChars,
+    state: DashboardRenderState,
+  ): void {
+    // Body cache: rebuild when dirty OR when spinner changed (running agents need animation).
+    const needsSpinnerRebuild = this.hasRunningAgents() && this.cachedSpinnerFrame !== this.spinnerFrame;
+    const needsResizeRebuild = this.cachedInnerW !== innerW;
+    if (this.dirty || this.cachedBodyLines.length === 0 || needsSpinnerRebuild || needsResizeRebuild) {
+      const body = buildDashboardBodyLines(innerW, th, box, state);
+      this.cachedBodyLines = body.lines;
+      this.cachedBodyFocusMap = body.focusLineByAgentId;
+      this.cachedBodyLineCount = body.lines.length;
+      this.cachedSpinnerFrame = this.spinnerFrame;
+      this.cachedInnerW = innerW;
+    }
+    this.bodyFocusLineByAgentId = this.cachedBodyFocusMap;
+    this.bodyLineCount = this.cachedBodyLineCount;
+    this.keepSelectedBodyLineVisible();
+
+    const vh = this.getViewportHeight();
+    const maxScroll = Math.max(0, this.cachedBodyLineCount - vh);
+    this.scrollOffset = Math.min(this.scrollOffset, maxScroll);
+
+    const start = Math.min(this.scrollOffset, maxScroll);
+    const visible = this.cachedBodyLines.slice(start, start + vh);
+
+    for (const line of visible) lines.push(framedRow(line, innerW, th, box));
+    for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
+  }
+
   render(width: number): string[] {
     const renderStart = performance.now();
 
@@ -936,96 +1103,15 @@ export class AgentDashboard implements Component {
     const state = this.renderState();
     const lines = renderDashboardHeader(safeWidth, th, box, state, this.options.manager);
 
-    if (this.showTree) {
-      const overlayLines = [...renderTreeView(innerW, th, box, this.agents), ...renderTreeFooter(innerW, th, box)];
-      const vh = this.getViewportHeight();
-      const maxScroll = Math.max(0, overlayLines.length - vh);
-      this.subViewScrollOffset = Math.min(this.subViewScrollOffset, maxScroll);
-      const visible = overlayLines.slice(this.subViewScrollOffset, this.subViewScrollOffset + vh);
-      for (const line of visible) lines.push(line);
-      for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
-    } else if (this.showSchedules && this.options.scheduler?.isActive()) {
-      const overlayLines = renderSchedulesSection(innerW, th, box, this.options.scheduler);
-      const vh = this.getViewportHeight();
-      const maxScroll = Math.max(0, overlayLines.length - vh);
-      this.subViewScrollOffset = Math.min(this.subViewScrollOffset, maxScroll);
-      const visible = overlayLines.slice(this.subViewScrollOffset, this.subViewScrollOffset + vh);
-      for (const line of visible) lines.push(line);
-      for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
-    } else if (this.showHelp) {
-      const overlayLines = renderDashboardHelp(innerW, th, box);
-      const vh = this.getViewportHeight();
-      const maxScroll = Math.max(0, overlayLines.length - vh);
-      this.subViewScrollOffset = Math.min(this.subViewScrollOffset, maxScroll);
-      const visible = overlayLines.slice(this.subViewScrollOffset, this.subViewScrollOffset + vh);
-      for (const line of visible) lines.push(line);
-      for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
-    } else if (this.showPerf) {
-      let overlayLines: string[];
-      if (this.perfView === "widget") {
-        const widgetMetrics = this.getWidgetMetrics();
-        if (widgetMetrics) {
-          overlayLines = renderDashboardPerf(innerW, th, box, widgetMetrics, "widget");
-        } else {
-          overlayLines = renderDashboardPerf(innerW, th, box, this.renderMetrics.snapshot(), "widget");
-        }
-      } else {
-        overlayLines = renderDashboardPerf(innerW, th, box, this.renderMetrics.snapshot(), "dashboard");
-      }
-      const vh = this.getViewportHeight();
-      const maxScroll = Math.max(0, overlayLines.length - vh);
-      this.subViewScrollOffset = Math.min(this.subViewScrollOffset, maxScroll);
-      const visible = overlayLines.slice(this.subViewScrollOffset, this.subViewScrollOffset + vh);
-      for (const line of visible) lines.push(line);
-      for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
+    // Render the main content area based on the active view mode.
+    if (this.renderOverlayView(lines, innerW, th, box)) {
+      // overlay rendered
     } else if (this.agents.length === 0) {
       lines.push(...renderDashboardEmpty(innerW, th, box));
     } else if (this.topViewMode) {
-      // Top view: render the agent stats table instead of the list
-      const vh = this.getViewportHeight();
-      this.topPageSize = Math.max(5, vh);
-      const entries = sortEntries(
-        getAgentTopEntries(this.agents, this.options.agentActivity),
-        this.topSortKey,
-        this.topSortAsc,
-      );
-      lines.push(
-        ...renderTopTable(
-          entries,
-          this.topSortKey,
-          this.topSortAsc,
-          this.topPage,
-          this.topPageSize,
-          th,
-          safeWidth,
-          "t: back to list",
-        ),
-      );
+      this.renderTopViewMode(lines, th, safeWidth);
     } else {
-      // Body cache: rebuild when dirty OR when spinner changed (running agents need animation).
-      const needsSpinnerRebuild = this.hasRunningAgents() && this.cachedSpinnerFrame !== this.spinnerFrame;
-      const needsResizeRebuild = this.cachedInnerW !== innerW;
-      if (this.dirty || this.cachedBodyLines.length === 0 || needsSpinnerRebuild || needsResizeRebuild) {
-        const body = buildDashboardBodyLines(innerW, th, box, state);
-        this.cachedBodyLines = body.lines;
-        this.cachedBodyFocusMap = body.focusLineByAgentId;
-        this.cachedBodyLineCount = body.lines.length;
-        this.cachedSpinnerFrame = this.spinnerFrame;
-        this.cachedInnerW = innerW;
-      }
-      this.bodyFocusLineByAgentId = this.cachedBodyFocusMap;
-      this.bodyLineCount = this.cachedBodyLineCount;
-      this.keepSelectedBodyLineVisible();
-
-      const vh = this.getViewportHeight();
-      const maxScroll = Math.max(0, this.cachedBodyLineCount - vh);
-      this.scrollOffset = Math.min(this.scrollOffset, maxScroll);
-
-      const start = Math.min(this.scrollOffset, maxScroll);
-      const visible = this.cachedBodyLines.slice(start, start + vh);
-
-      for (const line of visible) lines.push(framedRow(line, innerW, th, box));
-      for (let i = visible.length; i < vh; i++) lines.push(framedRow("", innerW, th, box));
+      this.renderBodyView(lines, innerW, th, box, state);
     }
 
     // Show command input line when in command mode.

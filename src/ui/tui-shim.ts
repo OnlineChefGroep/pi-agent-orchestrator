@@ -248,6 +248,71 @@ export function truncateToWidth(
 // same caveat as `visibleWidth`.
 // ────────────────────────────────────────────────────────────────────────────
 
+/** Split a line on whitespace, keeping spaces attached to the preceding token. */
+function tokenizeLine(line: string): string[] {
+  const tokens: string[] = [];
+  let buf = "";
+  for (const ch of line) {
+    if (ch === " ") {
+      buf += ch;
+      tokens.push(buf);
+      buf = "";
+    } else {
+      buf += ch;
+    }
+  }
+  if (buf) tokens.push(buf);
+  return tokens;
+}
+
+/** Hard-wrap a single token whose visible width exceeds `width`. Returns leftover tail. */
+function hardWrapToken(tok: string, width: number, wrapped: string[]): string {
+  let rest = tok;
+  while (visibleWidth(rest) > width) {
+    const prefix = takeVisible(rest, width);
+    wrapped.push(truncateToWidth(rest, width));
+    rest = rest.slice(prefix.length);
+  }
+  return rest;
+}
+
+/** Wrap a single input line (already known to exceed `width`) into display lines. */
+function wrapOverlongLine(line: string, width: number): string[] {
+  const wrapped: string[] = [];
+  const tokens = tokenizeLine(line);
+
+  let current = "";
+  for (const tok of tokens) {
+    const projected = visibleWidth(current + tok);
+    if (projected <= width) {
+      current += tok;
+      continue;
+    }
+    // Flush whatever we accumulated so far.
+    if (current.length > 0) {
+      wrapped.push(current.trimEnd());
+      current = "";
+    }
+    if (visibleWidth(tok) > width) {
+      // Token alone doesn't fit — hard-wrap by repeatedly truncating
+      // the longest prefix that fits. Use `takeVisible` for the slice
+      // arithmetic (it returns the prefix without ellipsis/ANSI reset,
+      // so the resulting `length` correctly indexes the original `rest`),
+      // and `truncateToWidth` for the displayed line.
+      const rest = hardWrapToken(tok, width, wrapped);
+      // Whatever's left at the end (still > width would loop again, but
+      // takeVisible already returned a string of visible width <= width
+      // so the remainder might be empty). Drop dangling whitespace.
+      const trimmed = rest.replace(/^\s+/, "");
+      if (trimmed.length > 0) current = trimmed;
+    } else {
+      current = tok;
+    }
+  }
+  if (current) wrapped.push(current.trimEnd());
+  return wrapped;
+}
+
 export function wrapTextWithAnsi(text: string, width: number): string[] {
   if (width <= 0) return [];
   const inputLines = text.split("\n");
@@ -258,55 +323,7 @@ export function wrapTextWithAnsi(text: string, width: number): string[] {
       wrapped.push(line);
       continue;
     }
-
-    // Split on whitespace, keep spaces attached to preceding token.
-    const tokens: string[] = [];
-    let buf = "";
-    for (const ch of line) {
-      if (ch === " ") {
-        buf += ch;
-        tokens.push(buf);
-        buf = "";
-      } else {
-        buf += ch;
-      }
-    }
-    if (buf) tokens.push(buf);
-
-    let current = "";
-    for (const tok of tokens) {
-      const projected = visibleWidth(current + tok);
-      if (projected <= width) {
-        current += tok;
-        continue;
-      }
-      // Flush whatever we accumulated so far.
-      if (current.length > 0) {
-        wrapped.push(current.trimEnd());
-        current = "";
-      }
-      if (visibleWidth(tok) > width) {
-        // Token alone doesn't fit — hard-wrap by repeatedly truncating
-        // the longest prefix that fits. Use `takeVisible` for the slice
-        // arithmetic (it returns the prefix without ellipsis/ANSI reset,
-        // so the resulting `length` correctly indexes the original `rest`),
-        // and `truncateToWidth` for the displayed line.
-        let rest = tok;
-        while (visibleWidth(rest) > width) {
-          const prefix = takeVisible(rest, width);
-          wrapped.push(truncateToWidth(rest, width));
-          rest = rest.slice(prefix.length);
-        }
-        // Whatever's left at the end (still > width would loop again, but
-        // takeVisible already returned a string of visible width <= width
-        // so the remainder might be empty). Drop dangling whitespace.
-        const trimmed = rest.replace(/^\s+/, "");
-        if (trimmed.length > 0) current = trimmed;
-      } else {
-        current = tok;
-      }
-    }
-    if (current) wrapped.push(current.trimEnd());
+    wrapped.push(...wrapOverlongLine(line, width));
   }
 
   return wrapped;

@@ -121,31 +121,31 @@ function renderActivityHeatmap(
   return label;
 }
 
+/** Resolve the icon and status text for a finished agent based on its status. */
+function finishedIconAndStatus(a: AgentRecord, theme: Theme): { icon: string; statusText: string } {
+  if (a.status === "completed") {
+    return { icon: theme.fg("success", "✓"), statusText: "" };
+  }
+  if (a.status === "steered") {
+    return { icon: theme.fg("warning", "✓"), statusText: theme.fg("warning", " (turn limit)") };
+  }
+  if (a.status === "stopped") {
+    return { icon: theme.fg("dim", "■"), statusText: theme.fg("dim", " stopped") };
+  }
+  if (a.status === "error") {
+    const errMsg = a.error ? `: ${a.error.slice(0, 60)}` : "";
+    return { icon: theme.fg("error", "✗"), statusText: theme.fg("error", ` error${errMsg}`) };
+  }
+  return { icon: theme.fg("error", "✗"), statusText: theme.fg("warning", " aborted") };
+}
+
 function renderFinishedLine(a: AgentRecord, activity: AgentActivity | undefined, theme: Theme): string {
   const name = getDisplayName(a.type);
   const modeLabel = getPromptModeLabel(a.type);
   const duration = formatMs((a.completedAt ?? Date.now()) - (a.startedAt ?? 0));
   const activeUiStyle = getUiStyle();
 
-  let icon: string;
-  let statusText: string;
-  if (a.status === "completed") {
-    icon = theme.fg("success", "✓");
-    statusText = "";
-  } else if (a.status === "steered") {
-    icon = theme.fg("warning", "✓");
-    statusText = theme.fg("warning", " (turn limit)");
-  } else if (a.status === "stopped") {
-    icon = theme.fg("dim", "■");
-    statusText = theme.fg("dim", " stopped");
-  } else if (a.status === "error") {
-    icon = theme.fg("error", "✗");
-    const errMsg = a.error ? `: ${a.error.slice(0, 60)}` : "";
-    statusText = theme.fg("error", ` error${errMsg}`);
-  } else {
-    icon = theme.fg("error", "✗");
-    statusText = theme.fg("warning", " aborted");
-  }
+  const { icon, statusText } = finishedIconAndStatus(a, theme);
 
   const parts: string[] = [];
   if (activity) parts.push(formatTurns(activity.turnCount, activity.maxTurns));
@@ -161,24 +161,17 @@ function renderFinishedLine(a: AgentRecord, activity: AgentActivity | undefined,
   return `${icon} ${theme.fg("dim", name)}${validationIcon}${modeTag}  ${theme.fg("dim", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusText}`;
 }
 
-export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
-  const running: AgentRecord[] = [];
-  const queued: AgentRecord[] = [];
-  const finished: AgentRecord[] = [];
-  for (let i = 0; i < options.agents.length; i++) {
-    const a = options.agents[i];
-    if (a.status === "running") running.push(a);
-    else if (a.status === "queued") queued.push(a);
-    else if (a.completedAt && options.shouldShowFinished(a.id, a.status)) finished.push(a);
-  }
+/** Box-drawing character set, switched on UI style. */
+type BoxChars = {
+  c_tree: string;
+  c_angle: string;
+  c_bar: string;
+  c_ind: string;
+  headingIcon: string;
+};
 
-  const hasActive = running.length > 0 || queued.length > 0;
-  const hasFinished = finished.length > 0;
-  if (!hasActive && !hasFinished) return [];
-
-  const activeUiStyle = getUiStyle();
-  const theme = activeTheme(options.theme);
-
+/** Resolve the box-drawing character set based on the active UI style. */
+function resolveBoxChars(activeUiStyle: string, hasActive: boolean): BoxChars {
   let c_tree = "├──";
   let c_angle = "╰──";
   let c_bar = "│  ";
@@ -198,19 +191,51 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     headingIcon = "*";
   }
 
-  const w = options.tui.terminal.columns;
-  const truncate = (line: string) => fastTruncate(line, w);
-  const headingColor = hasActive ? "accent" : "dim";
-  const frame = getSpinnerFrame(options.frame);
+  return { c_tree, c_angle, c_bar, c_ind, headingIcon };
+}
 
+/** Partition the agent list into running, queued, and finished buckets. */
+function partitionAgents(options: RenderAgentWidgetOptions): {
+  running: AgentRecord[];
+  queued: AgentRecord[];
+  finished: AgentRecord[];
+} {
+  const running: AgentRecord[] = [];
+  const queued: AgentRecord[] = [];
+  const finished: AgentRecord[] = [];
+  for (let i = 0; i < options.agents.length; i++) {
+    const a = options.agents[i];
+    if (a.status === "running") running.push(a);
+    else if (a.status === "queued") queued.push(a);
+    else if (a.completedAt && options.shouldShowFinished(a.id, a.status)) finished.push(a);
+  }
+  return { running, queued, finished };
+}
+
+/** Render the lines for finished agents (with truncation applied). */
+function buildFinishedLines(
+  finished: AgentRecord[],
+  options: RenderAgentWidgetOptions,
+  theme: Theme,
+  c_tree: string,
+  truncate: (line: string) => string,
+): string[] {
   const finishedLines: string[] = [];
   for (const a of finished) {
     finishedLines.push(
       truncate(`${theme.fg("dim", c_tree)} ${renderFinishedLine(a, options.agentActivity.get(a.id), theme)}`),
     );
   }
+  return finishedLines;
+}
 
-  // ── Compact batch rendering ──
+/** Render the lines for queued agents, with compact batching for large groups. */
+function buildQueuedLines(
+  queued: AgentRecord[],
+  theme: Theme,
+  c_tree: string,
+  truncate: (line: string) => string,
+): string[] {
   // Group queued agents by type for compact display (e.g. "5× Explore agents queued").
   const queuedByType = new Map<string, { type: string; name: string; count: number }>();
   for (const a of queued) {
@@ -245,7 +270,47 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
       ),
     );
   }
+  return queuedLines;
+}
 
+/** Build the stats line parts for a running agent from its activity + record. */
+function buildRunningStatsParts(
+  a: AgentRecord,
+  bg: AgentActivity | undefined,
+  elapsed: string,
+  theme: Theme,
+): string[] {
+  const parts: string[] = [];
+  if (bg) parts.push(formatTurns(bg.turnCount, bg.maxTurns));
+  const toolUses = bg?.toolUses ?? a.toolUses;
+  if (toolUses > 0) parts.push(`${toolUses} tool`);
+  const tokens = getLifetimeTotal(bg?.lifetimeUsage);
+  if (tokens > 0) {
+    const contextPercent = getSessionContextPercent(bg?.session);
+    parts.push(formatSessionTokens(tokens, contextPercent, theme, a.compactionCount));
+    const elapsedMs = Date.now() - (a.startedAt ?? 0);
+    const burnRate = formatBurnRate(tokens, elapsedMs, theme);
+    if (burnRate) parts.push(burnRate);
+  }
+  if (bg?.lastSeenMs !== undefined) {
+    const lastSeen = formatLastSeen(bg.lastSeenMs, theme);
+    if (lastSeen) parts.push(lastSeen);
+  }
+  parts.push(elapsed);
+  return parts;
+}
+
+/** Render the lines for running agents (two lines each: header + activity). */
+function buildRunningLines(
+  running: AgentRecord[],
+  options: RenderAgentWidgetOptions,
+  theme: Theme,
+  frame: string,
+  c_tree: string,
+  c_bar: string,
+  c_ind: string,
+  truncate: (line: string) => string,
+): string[][] {
   const runningLines: string[][] = [];
   for (const a of running) {
     const name = getDisplayName(a.type);
@@ -254,22 +319,8 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     const elapsed = formatMs(Date.now() - (a.startedAt ?? 0));
 
     const bg = options.agentActivity.get(a.id);
-    const toolUses = bg?.toolUses ?? a.toolUses;
-    const tokens = getLifetimeTotal(bg?.lifetimeUsage);
-    const contextPercent = getSessionContextPercent(bg?.session);
-    const elapsedMs = Date.now() - (a.startedAt ?? 0);
-    const tokenText = tokens > 0 ? formatSessionTokens(tokens, contextPercent, theme, a.compactionCount) : "";
-    const burnRate = tokens > 0 ? formatBurnRate(tokens, elapsedMs, theme) : "";
-    const lastSeen = bg?.lastSeenMs !== undefined ? formatLastSeen(bg.lastSeenMs, theme) : "";
 
-    const parts: string[] = [];
-    if (bg) parts.push(formatTurns(bg.turnCount, bg.maxTurns));
-    if (toolUses > 0) parts.push(`${toolUses} tool`);
-    if (tokenText) parts.push(tokenText);
-    if (burnRate) parts.push(burnRate);
-    if (lastSeen) parts.push(lastSeen);
-    parts.push(elapsed);
-    const statsText = parts.join(" · ");
+    const statsText = buildRunningStatsParts(a, bg, elapsed, theme).join(" · ");
 
     // Thinking level indicator
     const thinkingLabel = a.invocation?.thinking ? ` ${theme.fg("dim", `🧠${a.invocation.thinking}`)}` : "";
@@ -283,6 +334,169 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
       truncate(theme.fg("dim", c_bar) + theme.fg("dim", `${c_ind}${activity}`)),
     ]);
   }
+  return runningLines;
+}
+
+/** Build the heading line, accounting for heatmap presence and pagination. */
+function buildHeadingLine(
+  heatLine: string | undefined,
+  pageCount: number,
+  pageIndex: number,
+  headingColor: string,
+  headingIcon: string,
+  truncate: (line: string) => string,
+  theme: Theme,
+): string {
+  if (heatLine) {
+    return truncate(heatLine);
+  }
+  if (pageCount > 1) {
+    return truncate(
+      `${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}  ${theme.fg("dim", `[${pageIndex + 1}/${pageCount}]`)}`,
+    );
+  }
+  return truncate(`${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}`);
+}
+
+/** Replace the last tree-char marker with the angle (corner) char on the final body line. */
+function applyAngleToLastLine(lines: string[], c_tree: string, c_angle: string): void {
+  if (lines.length <= 1) return;
+  const last = lines.length - 1;
+  const idx = lines[last].indexOf(c_tree);
+  if (idx >= 0) {
+    lines[last] = lines[last].substring(0, idx) + c_angle + lines[last].substring(idx + c_tree.length);
+  }
+}
+
+/** When the last rendered section is running, also angle the second-to-last line and clear trailing bar. */
+function applyRunningTailAngle(
+  lines: string[],
+  runningCount: number,
+  totalQueuedLines: number,
+  c_tree: string,
+  c_angle: string,
+  c_bar: string,
+): void {
+  if (runningCount === 0 || totalQueuedLines !== 0 || lines.length < 3) return;
+  const last = lines.length - 1;
+  const idx = lines[last - 1].indexOf(c_tree);
+  if (idx >= 0) {
+    lines[last - 1] = lines[last - 1].substring(0, idx) + c_angle + lines[last - 1].substring(idx + c_tree.length);
+  }
+  lines[last] = lines[last].replace(c_bar, " ".repeat(c_bar.length));
+}
+
+/** Emit body lines when everything fits within the budget. */
+function emitFittingBody(
+  lines: string[],
+  finishedLines: string[],
+  runningLines: string[][],
+  queuedLines: string[],
+  chars: BoxChars,
+): void {
+  lines.push(...finishedLines);
+  for (const pair of runningLines) lines.push(...pair);
+  for (const ql of queuedLines) lines.push(ql);
+
+  if (lines.length > 1) {
+    applyAngleToLastLine(lines, chars.c_tree, chars.c_angle);
+    applyRunningTailAngle(lines, runningLines.length, queuedLines.length, chars.c_tree, chars.c_angle, chars.c_bar);
+  }
+}
+
+/** Emit body lines under overflow, dropping entries and appending a "+N more" summary. */
+function emitOverflowBody(
+  lines: string[],
+  finishedLines: string[],
+  runningLines: string[][],
+  queuedLines: string[],
+  maxBody: number,
+  chars: BoxChars,
+  truncate: (line: string) => string,
+  theme: Theme,
+): void {
+  let budget = maxBody - 1;
+  let hiddenRunning = 0;
+  let hiddenFinished = 0;
+
+  for (const pair of runningLines) {
+    if (budget >= 2) {
+      lines.push(...pair);
+      budget -= 2;
+    } else {
+      hiddenRunning++;
+    }
+  }
+
+  for (const ql of queuedLines) {
+    if (budget >= 1) {
+      lines.push(ql);
+      budget--;
+    }
+  }
+
+  for (const fl of finishedLines) {
+    if (budget >= 1) {
+      lines.push(fl);
+      budget--;
+    } else {
+      hiddenFinished++;
+    }
+  }
+
+  const overflowParts: string[] = [];
+  if (hiddenRunning > 0) overflowParts.push(`${hiddenRunning} running`);
+  if (hiddenFinished > 0) overflowParts.push(`${hiddenFinished} finished`);
+  const overflowText = overflowParts.join(", ");
+  lines.push(
+    truncate(
+      `${theme.fg("dim", chars.c_angle)} ${theme.fg("dim", `+${hiddenRunning + hiddenFinished} more (${overflowText})`)}`,
+    ),
+  );
+}
+
+/** Append the scroll hint when paginating across multiple pages, if there is room. */
+function maybeAppendScrollHint(
+  lines: string[],
+  pageCount: number,
+  pageIndex: number,
+  c_angle: string,
+  truncate: (line: string) => string,
+  theme: Theme,
+): void {
+  if (pageCount <= 1 || lines.length >= MAX_WIDGET_LINES) return;
+  const hasPrev = pageIndex > 0;
+  const hasNext = pageIndex < pageCount - 1;
+  const hint =
+    hasPrev && hasNext
+      ? `${theme.fg("dim", "↑↓ scroll for more")}`
+      : hasPrev
+        ? `${theme.fg("dim", "↑ scroll up")}`
+        : `${theme.fg("dim", "↓ scroll down")}`;
+  lines.push(truncate(`${theme.fg("dim", c_angle)} ${hint}`));
+}
+
+export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
+  const { running, queued, finished } = partitionAgents(options);
+
+  const hasActive = running.length > 0 || queued.length > 0;
+  const hasFinished = finished.length > 0;
+  if (!hasActive && !hasFinished) return [];
+
+  const activeUiStyle = getUiStyle();
+  const theme = activeTheme(options.theme);
+
+  const chars = resolveBoxChars(activeUiStyle, hasActive);
+  const { c_tree, c_angle, c_bar, c_ind, headingIcon } = chars;
+
+  const w = options.tui.terminal.columns;
+  const truncate = (line: string) => fastTruncate(line, w);
+  const headingColor = hasActive ? "accent" : "dim";
+  const frame = getSpinnerFrame(options.frame);
+
+  const finishedLines = buildFinishedLines(finished, options, theme, c_tree, truncate);
+  const queuedLines = buildQueuedLines(queued, theme, c_tree, truncate);
+  const runningLines = buildRunningLines(running, options, theme, frame, c_tree, c_bar, c_ind, truncate);
 
   // Activity heatmap: shown when there are active (running/queued) agents
   const heatLine = hasActive ? renderActivityHeatmap(options.agentActivity, theme, w) : undefined;
@@ -299,98 +513,18 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
 
   // ── Build heading with optional page indicator ──
   const lines: string[] = [];
-  if (heatLine) {
-    lines.push(truncate(heatLine));
-  } else if (pageCount > 1) {
-    lines.push(
-      truncate(
-        `${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}  ${theme.fg("dim", `[${pageIndex + 1}/${pageCount}]`)}`,
-      ),
-    );
-  } else {
-    lines.push(truncate(`${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}`));
-  }
+  lines.push(buildHeadingLine(heatLine, pageCount, pageIndex, headingColor, headingIcon, truncate, theme));
 
   const maxBody = MAX_WIDGET_LINES - (heatLine ? 1 : 0);
   const totalBody = finishedLines.length + runningLines.length * 2 + totalQueuedLines;
 
   if (totalBody <= maxBody) {
-    lines.push(...finishedLines);
-    for (const pair of runningLines) lines.push(...pair);
-    for (const ql of queuedLines) lines.push(ql);
-
-    if (lines.length > 1) {
-      const last = lines.length - 1;
-      {
-        const idx = lines[last].indexOf(c_tree);
-        if (idx >= 0) {
-          lines[last] = lines[last].substring(0, idx) + c_angle + lines[last].substring(idx + c_tree.length);
-        }
-      }
-      if (runningLines.length > 0 && totalQueuedLines === 0 && last >= 2) {
-        {
-          const idx = lines[last - 1].indexOf(c_tree);
-          if (idx >= 0) {
-            lines[last - 1] =
-              lines[last - 1].substring(0, idx) + c_angle + lines[last - 1].substring(idx + c_tree.length);
-          }
-        }
-        lines[last] = lines[last].replace(c_bar, " ".repeat(c_bar.length));
-      }
-    }
+    emitFittingBody(lines, finishedLines, runningLines, queuedLines, chars);
   } else {
-    let budget = maxBody - 1;
-    let hiddenRunning = 0;
-    let hiddenFinished = 0;
-
-    for (const pair of runningLines) {
-      if (budget >= 2) {
-        lines.push(...pair);
-        budget -= 2;
-      } else {
-        hiddenRunning++;
-      }
-    }
-
-    for (const ql of queuedLines) {
-      if (budget >= 1) {
-        lines.push(ql);
-        budget--;
-      }
-    }
-
-    for (const fl of finishedLines) {
-      if (budget >= 1) {
-        lines.push(fl);
-        budget--;
-      } else {
-        hiddenFinished++;
-      }
-    }
-
-    const overflowParts: string[] = [];
-    if (hiddenRunning > 0) overflowParts.push(`${hiddenRunning} running`);
-    if (hiddenFinished > 0) overflowParts.push(`${hiddenFinished} finished`);
-    const overflowText = overflowParts.join(", ");
-    lines.push(
-      truncate(
-        `${theme.fg("dim", c_angle)} ${theme.fg("dim", `+${hiddenRunning + hiddenFinished} more (${overflowText})`)}`,
-      ),
-    );
+    emitOverflowBody(lines, finishedLines, runningLines, queuedLines, maxBody, chars, truncate, theme);
   }
 
-  // ── Scroll hint: show when there are multiple pages ──
-  if (pageCount > 1 && lines.length < MAX_WIDGET_LINES) {
-    const hasPrev = pageIndex > 0;
-    const hasNext = pageIndex < pageCount - 1;
-    const hint =
-      hasPrev && hasNext
-        ? `${theme.fg("dim", "↑↓ scroll for more")}`
-        : hasPrev
-          ? `${theme.fg("dim", "↑ scroll up")}`
-          : `${theme.fg("dim", "↓ scroll down")}`;
-    lines.push(truncate(`${theme.fg("dim", c_angle)} ${hint}`));
-  }
+  maybeAppendScrollHint(lines, pageCount, pageIndex, c_angle, truncate, theme);
 
   return lines;
 }

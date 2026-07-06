@@ -121,6 +121,78 @@ export class BatchOrchestrator {
   }
 
   /**
+   * Process smart/group agents: register a fixed group and mark them handled.
+   * Returns the group count (0 if below threshold).
+   */
+  private processSmartGroupBatch(smartAgents: PendingAgent[], batchId: number, handled: Set<string>): number {
+    if (smartAgents.length < this.config.smartGroupThreshold) return 0;
+
+    const groupId = `batch-${batchId}-group`;
+    const ids = smartAgents.map((a) => a.id);
+    for (const id of ids) handled.add(id);
+
+    this.deps.groupJoin.registerGroup(groupId, ids);
+    for (const { id } of smartAgents) {
+      const record = this.deps.manager.getRecord(id);
+      if (!record) continue;
+      record.groupId = groupId;
+      if (record.completedAt != null && !record.resultConsumed) {
+        this.deps.groupJoin.onAgentComplete(record);
+      }
+    }
+    return 1;
+  }
+
+  /**
+   * Process swarm agents: create a swarm, add each agent, and mark them handled.
+   * Returns the swarm count (0 if below threshold).
+   */
+  private processSwarmBatch(swarmAgents: PendingAgent[], batchId: number, handled: Set<string>): number {
+    if (swarmAgents.length < this.config.swarmThreshold) return 0;
+
+    const strategy = this.config.defaultSwarmStrategy || "live";
+    const swarmId = this.deps.swarmJoin.createSwarm({
+      name: `Batch-${batchId} Swarm`,
+      strategy,
+      ...this.config.defaultSwarmConfig,
+    });
+
+    for (const { id, priority } of swarmAgents) {
+      this.deps.swarmJoin.addAgentToSwarm(swarmId, id, priority);
+      // If agent already completed before batch finalization, process it
+      const record = this.deps.manager.getRecord(id);
+      if (!record) continue;
+      record.swarmId = swarmId;
+      if (record.completedAt != null && !record.resultConsumed) {
+        this.deps.swarmJoin.onAgentComplete(record);
+      }
+    }
+    for (const { id } of swarmAgents) handled.add(id);
+    return 1;
+  }
+
+  /** Nudge individual leftovers that weren't claimed by a group or swarm. */
+  private nudgeIndividualLeftovers(batchAgents: PendingAgent[], handled: Set<string>): void {
+    for (const { id } of batchAgents) {
+      if (handled.has(id)) continue;
+      const record = this.deps.manager.getRecord(id);
+      if (record?.completedAt != null && !record.resultConsumed) {
+        this.deps.onAgentHandled(record);
+      }
+    }
+  }
+
+  /** Fallback: nudge every agent individually to prevent deadlock. */
+  private nudgeAllIndividually(batchAgents: PendingAgent[]): void {
+    for (const { id } of batchAgents) {
+      const record = this.deps.manager.getRecord(id);
+      if (record?.completedAt != null && !record.resultConsumed) {
+        this.deps.onAgentHandled(record);
+      }
+    }
+  }
+
+  /**
    * Finalize the current batch:
    * - smart/group agents → fixed GroupJoinManager groups
    * - swarm agents → dynamic SwarmCoordinator with full config support
@@ -145,58 +217,11 @@ export class BatchOrchestrator {
       );
 
       const handled = new Set<string>();
-      let smartGroups = 0;
-      let swarmCount = 0;
-
-      // --- Smart/Group batching ---
-      if (smartAgents.length >= this.config.smartGroupThreshold) {
-        const groupId = `batch-${batchId}-group`;
-        const ids = smartAgents.map((a) => a.id);
-        for (const id of ids) handled.add(id);
-        smartGroups++;
-
-        this.deps.groupJoin.registerGroup(groupId, ids);
-        for (const { id } of smartAgents) {
-          const record = this.deps.manager.getRecord(id);
-          if (!record) continue;
-          record.groupId = groupId;
-          if (record.completedAt != null && !record.resultConsumed) {
-            this.deps.groupJoin.onAgentComplete(record);
-          }
-        }
-      }
-
-      // --- Swarm batching ---
-      if (swarmAgents.length >= this.config.swarmThreshold) {
-        const strategy = this.config.defaultSwarmStrategy || "live";
-        const swarmId = this.deps.swarmJoin.createSwarm({
-          name: `Batch-${batchId} Swarm`,
-          strategy,
-          ...this.config.defaultSwarmConfig,
-        });
-        swarmCount++;
-
-        for (const { id, priority } of swarmAgents) {
-          this.deps.swarmJoin.addAgentToSwarm(swarmId, id, priority);
-          // If agent already completed before batch finalization, process it
-          const record = this.deps.manager.getRecord(id);
-          if (!record) continue;
-          record.swarmId = swarmId;
-          if (record.completedAt != null && !record.resultConsumed) {
-            this.deps.swarmJoin.onAgentComplete(record);
-          }
-        }
-        for (const { id } of swarmAgents) handled.add(id);
-      }
+      const smartGroups = this.processSmartGroupBatch(smartAgents, batchId, handled);
+      const swarmCount = this.processSwarmBatch(swarmAgents, batchId, handled);
 
       // --- Individual leftovers ---
-      for (const { id } of batchAgents) {
-        if (handled.has(id)) continue;
-        const record = this.deps.manager.getRecord(id);
-        if (record?.completedAt != null && !record.resultConsumed) {
-          this.deps.onAgentHandled(record);
-        }
-      }
+      this.nudgeIndividualLeftovers(batchAgents, handled);
 
       // Stats callback
       const stats: BatchStats = {
@@ -216,12 +241,7 @@ export class BatchOrchestrator {
         error: err instanceof Error ? err.message : String(err),
       });
       // Fallback: nudge all individually to prevent deadlock
-      for (const { id } of batchAgents) {
-        const record = this.deps.manager.getRecord(id);
-        if (record?.completedAt != null && !record.resultConsumed) {
-          this.deps.onAgentHandled(record);
-        }
-      }
+      this.nudgeAllIndividually(batchAgents);
     } finally {
       this.isFinalizing = false;
       this.deps.onWidgetUpdate();

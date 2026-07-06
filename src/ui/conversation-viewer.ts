@@ -159,6 +159,37 @@ export class ConversationViewer implements Component {
     }
   }
 
+  /** Resolve the status icon for the current record. */
+  private statusIcon(th: ReturnType<typeof activeTheme>): string {
+    if (this.record.status === "running") return th.fg("accent", "●");
+    if (this.record.status === "completed") return th.fg("success", "✓");
+    if (this.record.status === "error") return th.fg("error", "✗");
+    return th.fg("dim", "○");
+  }
+
+  /** Build the divider strings (top, bottom, mid) based on UI style and width. */
+  private buildDividers(
+    width: number,
+    innerW: number,
+    activeUiStyle: string,
+    th: ReturnType<typeof activeTheme>,
+    box: ReturnType<typeof getBoxChars>,
+    row: (content: string) => string,
+  ): { hrTop: string; hrBot: string; hrMid: string } {
+    if (activeUiStyle === "plain") {
+      return {
+        hrTop: "-".repeat(width),
+        hrBot: "-".repeat(width),
+        hrMid: "-".repeat(innerW + 4),
+      };
+    }
+    return {
+      hrTop: th.fg("border", `${box.tl}${box.h.repeat(width - 2)}${box.tr}`),
+      hrBot: th.fg("border", `${box.bl}${box.h.repeat(width - 2)}${box.br}`),
+      hrMid: row(th.fg("dim", box.h.repeat(innerW))),
+    };
+  }
+
   render(width: number): string[] {
     if (width < 6) return []; // too narrow for any meaningful rendering
     const th = activeTheme(this.theme);
@@ -177,32 +208,14 @@ export class ConversationViewer implements Component {
       return `${th.fg("border", box.l)} ${body} ${th.fg("border", box.r)}`;
     };
 
-    let hrTop = "";
-    let hrBot = "";
-    let hrMid = "";
-    if (activeUiStyle === "plain") {
-      hrTop = "-".repeat(width);
-      hrBot = "-".repeat(width);
-      hrMid = "-".repeat(innerW + 4);
-    } else {
-      hrTop = th.fg("border", `${box.tl}${box.h.repeat(width - 2)}${box.tr}`);
-      hrBot = th.fg("border", `${box.bl}${box.h.repeat(width - 2)}${box.br}`);
-      hrMid = row(th.fg("dim", box.h.repeat(innerW)));
-    }
+    const { hrTop, hrBot, hrMid } = this.buildDividers(width, innerW, activeUiStyle, th, box, row);
 
     // Header
     lines.push(hrTop);
     const name = getDisplayName(this.record.type);
     const modeLabel = getPromptModeLabel(this.record.type);
     const modeTag = modeLabel ? ` ${th.fg("dim", `(${modeLabel})`)}` : "";
-    const statusIcon =
-      this.record.status === "running"
-        ? th.fg("accent", "●")
-        : this.record.status === "completed"
-          ? th.fg("success", "✓")
-          : this.record.status === "error"
-            ? th.fg("error", "✗")
-            : th.fg("dim", "○");
+    const statusIcon = this.statusIcon(th);
     const duration = formatDuration(this.record.startedAt ?? 0, this.record.completedAt);
 
     const headerParts: string[] = [duration];
@@ -376,6 +389,196 @@ export class ConversationViewer implements Component {
     return [...lines, "", newLine];
   }
 
+  /** Render a user-role message (header + wrapped text lines). */
+  private renderUserMessage(msg: any, width: number, activeUiStyle: string, lines: string[]): void {
+    const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
+    if (!text.trim()) return;
+
+    let header = " \x1b[48;2;0;100;160;38;2;255;255;255;1m 👤 USER \x1b[0m";
+    let border = " \x1b[38;2;0;160;220m│\x1b[0m";
+    if (activeUiStyle === "retro") {
+      header = " \x1b[44;37;1m 👤 USER \x1b[0m";
+      border = " \x1b[36m|\x1b[0m";
+    } else if (activeUiStyle === "plain") {
+      header = " 👤 USER ";
+      border = " |";
+    }
+
+    lines.push(header);
+    for (const line of wrapTextWithAnsi(text.trim(), width - 3)) {
+      lines.push(`${border} ${line}`);
+    }
+  }
+
+  /** Render an assistant-role message (header + text + tool-call annotations). */
+  private renderAssistantMessage(msg: any, width: number, activeUiStyle: string, lines: string[]): void {
+    const textParts: string[] = [];
+    const toolCalls: string[] = [];
+    for (const c of msg.content) {
+      if (c.type === "text" && c.text) textParts.push(c.text);
+      else if (c.type === "toolCall") {
+        toolCalls.push((c as any).name ?? (c as any).toolName ?? "unknown");
+      }
+    }
+
+    let header = " \x1b[48;2;100;50;180;38;2;255;255;255;1m 🤖 HERMES \x1b[0m";
+    let border = " \x1b[38;2;150;80;220m│\x1b[0m";
+    if (activeUiStyle === "retro") {
+      header = " \x1b[45;37;1m 🤖 HERMES \x1b[0m";
+      border = " \x1b[35m|\x1b[0m";
+    } else if (activeUiStyle === "plain") {
+      header = " 🤖 HERMES ";
+      border = " |";
+    }
+
+    lines.push(header);
+    if (textParts.length > 0) {
+      for (const line of wrapTextWithAnsi(textParts.join("\n").trim(), width - 3)) {
+        lines.push(`${border} ${line}`);
+      }
+    }
+    for (const name of toolCalls) {
+      let callLine = ` \x1b[38;2;150;80;220m│\x1b[0m   \x1b[38;2;220;120;0m⚡ [Tool Invoke: ${name}]\x1b[0m`;
+      if (activeUiStyle === "retro") {
+        callLine = ` \x1b[35m|\x1b[0m   \x1b[33m⚡ [Tool Invoke: ${name}]\x1b[0m`;
+      } else if (activeUiStyle === "plain") {
+        callLine = ` |   ⚡ [Tool Invoke: ${name}]`;
+      }
+      lines.push(callLine);
+    }
+  }
+
+  /** Render a tool-result message as a boxed snippet, or plain if the viewport is too narrow. */
+  private renderToolResultMessage(
+    msg: any,
+    width: number,
+    activeUiStyle: string,
+    th: ReturnType<typeof activeTheme>,
+    lines: string[],
+  ): void {
+    const text = extractText(msg.content);
+    const truncated = text.length > 800 ? `${text.slice(0, 800)}\n... (truncated)` : text;
+    const trimmedTruncated = truncated.trim();
+    if (!trimmedTruncated) return;
+
+    const innerW = width - 6;
+    if (innerW <= 10) {
+      lines.push(th.fg("warning", "[Result]"));
+      for (const line of wrapTextWithAnsi(trimmedTruncated, width)) {
+        lines.push(th.fg("dim", line));
+      }
+      return;
+    }
+    this.renderBoxedResult(innerW, activeUiStyle, trimmedTruncated, lines);
+  }
+
+  /** Render the bordered tool-result box (assumes innerW > 10). */
+  private renderBoxedResult(innerW: number, activeUiStyle: string, content: string, lines: string[]): void {
+    const headerText = ` 🔧 Tool Result `;
+    const dashCount = Math.max(2, innerW - headerText.length - 2);
+
+    const box = getBoxChars();
+    let topBorder = `\x1b[38;2;220;120;0m${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}\x1b[0m`;
+    let bottomBorder = `\x1b[38;2;220;120;0m${box.bl}${box.h.repeat(innerW + 2)}${box.br}\x1b[0m`;
+    let leftBorder = "\x1b[38;2;220;120;0m│\x1b[0m";
+    let rightBorder = "\x1b[38;2;220;120;0m│\x1b[0m";
+
+    if (activeUiStyle === "retro") {
+      topBorder = `\x1b[33m${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}\x1b[0m`;
+      bottomBorder = `\x1b[33m${box.bl}${box.h.repeat(innerW + 2)}${box.br}\x1b[0m`;
+      leftBorder = "\x1b[33m|\x1b[0m";
+      rightBorder = "\x1b[33m|\x1b[0m";
+    } else if (activeUiStyle === "plain") {
+      topBorder = `${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}`;
+      bottomBorder = `${box.bl}${box.h.repeat(innerW + 2)}${box.br}`;
+      leftBorder = "|";
+      rightBorder = "|";
+    }
+
+    lines.push(`   ${topBorder}`);
+    for (const line of wrapTextWithAnsi(content, innerW)) {
+      const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
+      lines.push(`   ${leftBorder} ${paddedLine} ${rightBorder}`);
+    }
+    lines.push(`   ${bottomBorder}`);
+  }
+
+  /** Render a bash-execution message as a bordered command + output box, or plain when too narrow. */
+  private renderBashMessage(
+    msg: any,
+    width: number,
+    activeUiStyle: string,
+    th: ReturnType<typeof activeTheme>,
+    lines: string[],
+  ): void {
+    const bash = msg;
+    const command = bash.command || "";
+    const output = bash.output || "";
+
+    const innerW = width - 6;
+    if (innerW <= 10) {
+      lines.push(th.fg("accent", `$ ${command}`));
+      const trimmedOutput = output.trim();
+      if (trimmedOutput) {
+        for (const line of wrapTextWithAnsi(trimmedOutput, width)) {
+          lines.push(th.fg("dim", line));
+        }
+      }
+      return;
+    }
+    this.renderBashBox(innerW, command, output, activeUiStyle, lines);
+  }
+
+  /** Render the bordered bash command + output box (assumes innerW > 10). */
+  private renderBashBox(innerW: number, command: string, output: string, activeUiStyle: string, lines: string[]): void {
+    const headerText = ` 💻 Bash Command `;
+    const dashCount = Math.max(2, innerW - headerText.length - 2);
+
+    let topBorder = `\x1b[38;2;0;160;220m╭──${headerText}${"─".repeat(dashCount)}╮\x1b[0m`;
+    let bottomBorder = `\x1b[38;2;0;160;220m╰${"─".repeat(innerW + 2)}╯\x1b[0m`;
+    let leftBorder = "\x1b[38;2;0;160;220m│\x1b[0m";
+    let rightBorder = "\x1b[38;2;0;160;220m│\x1b[0m";
+    let midBorder = `\x1b[38;2;0;160;220m├${"─".repeat(innerW + 2)}┤\x1b[0m`;
+    let cmdPrefix = "\x1b[1m$ ";
+    let cmdSuffix = "\x1b[0m";
+    let outPrefix = "\x1b[2m";
+    let outSuffix = "\x1b[0m";
+
+    if (activeUiStyle === "retro") {
+      topBorder = `\x1b[36m+--${headerText}${"-".repeat(dashCount)}+\x1b[0m`;
+      bottomBorder = `\x1b[36m+${"-".repeat(innerW + 2)}+\x1b[0m`;
+      leftBorder = "\x1b[36m|\x1b[0m";
+      rightBorder = "\x1b[36m|\x1b[0m";
+      midBorder = `\x1b[36m+${"-".repeat(innerW + 2)}+\x1b[0m`;
+    } else if (activeUiStyle === "plain") {
+      topBorder = `+--${headerText}${"-".repeat(dashCount)}+`;
+      bottomBorder = `+${"-".repeat(innerW + 2)}+`;
+      leftBorder = "|";
+      rightBorder = "|";
+      midBorder = `+${"-".repeat(innerW + 2)}+`;
+      cmdPrefix = "$ ";
+      cmdSuffix = "";
+      outPrefix = "";
+      outSuffix = "";
+    }
+
+    lines.push(`   ${topBorder}`);
+    const cmdLineStr = `${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`;
+    lines.push(
+      `   ${leftBorder} ${cmdLineStr}${" ".repeat(Math.max(0, innerW - visibleWidth(`${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`)))} ${rightBorder}`,
+    );
+
+    if (output.trim()) {
+      lines.push(`   ${midBorder}`);
+      const outTrunc = output.length > 800 ? `${output.slice(0, 800)}\n... (truncated)` : output;
+      for (const line of wrapTextWithAnsi(outTrunc.trim(), innerW)) {
+        const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
+        lines.push(`   ${leftBorder} ${outPrefix}${paddedLine}${outSuffix} ${rightBorder}`);
+      }
+    }
+    lines.push(`   ${bottomBorder}`);
+  }
+
   /**
    * Render a single message into the output lines array.
    * Extracted from buildContentLines for incremental reuse.
@@ -388,163 +591,13 @@ export class ConversationViewer implements Component {
     lines: string[],
   ): void {
     if (msg.role === "user") {
-      const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
-      if (!text.trim()) return;
-
-      let header = " \x1b[48;2;0;100;160;38;2;255;255;255;1m 👤 USER \x1b[0m";
-      let border = " \x1b[38;2;0;160;220m│\x1b[0m";
-      if (activeUiStyle === "retro") {
-        header = " \x1b[44;37;1m 👤 USER \x1b[0m";
-        border = " \x1b[36m|\x1b[0m";
-      } else if (activeUiStyle === "plain") {
-        header = " 👤 USER ";
-        border = " |";
-      }
-
-      lines.push(header);
-      for (const line of wrapTextWithAnsi(text.trim(), width - 3)) {
-        lines.push(`${border} ${line}`);
-      }
+      this.renderUserMessage(msg, width, activeUiStyle, lines);
     } else if (msg.role === "assistant") {
-      const textParts: string[] = [];
-      const toolCalls: string[] = [];
-      for (const c of msg.content) {
-        if (c.type === "text" && c.text) textParts.push(c.text);
-        else if (c.type === "toolCall") {
-          toolCalls.push((c as any).name ?? (c as any).toolName ?? "unknown");
-        }
-      }
-
-      let header = " \x1b[48;2;100;50;180;38;2;255;255;255;1m 🤖 HERMES \x1b[0m";
-      let border = " \x1b[38;2;150;80;220m│\x1b[0m";
-      if (activeUiStyle === "retro") {
-        header = " \x1b[45;37;1m 🤖 HERMES \x1b[0m";
-        border = " \x1b[35m|\x1b[0m";
-      } else if (activeUiStyle === "plain") {
-        header = " 🤖 HERMES ";
-        border = " |";
-      }
-
-      lines.push(header);
-      if (textParts.length > 0) {
-        for (const line of wrapTextWithAnsi(textParts.join("\n").trim(), width - 3)) {
-          lines.push(`${border} ${line}`);
-        }
-      }
-      for (const name of toolCalls) {
-        let callLine = ` \x1b[38;2;150;80;220m│\x1b[0m   \x1b[38;2;220;120;0m⚡ [Tool Invoke: ${name}]\x1b[0m`;
-        if (activeUiStyle === "retro") {
-          callLine = ` \x1b[35m|\x1b[0m   \x1b[33m⚡ [Tool Invoke: ${name}]\x1b[0m`;
-        } else if (activeUiStyle === "plain") {
-          callLine = ` |   ⚡ [Tool Invoke: ${name}]`;
-        }
-        lines.push(callLine);
-      }
+      this.renderAssistantMessage(msg, width, activeUiStyle, lines);
     } else if (msg.role === "toolResult") {
-      const text = extractText(msg.content);
-      const truncated = text.length > 800 ? `${text.slice(0, 800)}\n... (truncated)` : text;
-      const trimmedTruncated = truncated.trim();
-      if (!trimmedTruncated) return;
-
-      const innerW = width - 6;
-      if (innerW > 10) {
-        const headerText = ` 🔧 Tool Result `;
-        const dashCount = Math.max(2, innerW - headerText.length - 2);
-
-        const box = getBoxChars();
-        let topBorder = `\x1b[38;2;220;120;0m${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}\x1b[0m`;
-        let bottomBorder = `\x1b[38;2;220;120;0m${box.bl}${box.h.repeat(innerW + 2)}${box.br}\x1b[0m`;
-        let leftBorder = "\x1b[38;2;220;120;0m│\x1b[0m";
-        let rightBorder = "\x1b[38;2;220;120;0m│\x1b[0m";
-
-        if (activeUiStyle === "retro") {
-          topBorder = `\x1b[33m${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}\x1b[0m`;
-          bottomBorder = `\x1b[33m${box.bl}${box.h.repeat(innerW + 2)}${box.br}\x1b[0m`;
-          leftBorder = "\x1b[33m|\x1b[0m";
-          rightBorder = "\x1b[33m|\x1b[0m";
-        } else if (activeUiStyle === "plain") {
-          topBorder = `${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}`;
-          bottomBorder = `${box.bl}${box.h.repeat(innerW + 2)}${box.br}`;
-          leftBorder = "|";
-          rightBorder = "|";
-        }
-
-        lines.push(`   ${topBorder}`);
-        for (const line of wrapTextWithAnsi(trimmedTruncated, innerW)) {
-          const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
-          lines.push(`   ${leftBorder} ${paddedLine} ${rightBorder}`);
-        }
-        lines.push(`   ${bottomBorder}`);
-      } else {
-        lines.push(th.fg("warning", "[Result]"));
-        for (const line of wrapTextWithAnsi(trimmedTruncated, width)) {
-          lines.push(th.fg("dim", line));
-        }
-      }
+      this.renderToolResultMessage(msg, width, activeUiStyle, th, lines);
     } else if (isBashExecution(msg)) {
-      const bash = msg;
-      const command = bash.command || "";
-      const output = bash.output || "";
-
-      const innerW = width - 6;
-      if (innerW > 10) {
-        const headerText = ` 💻 Bash Command `;
-        const dashCount = Math.max(2, innerW - headerText.length - 2);
-
-        let topBorder = `\x1b[38;2;0;160;220m╭──${headerText}${"─".repeat(dashCount)}╮\x1b[0m`;
-        let bottomBorder = `\x1b[38;2;0;160;220m╰${"─".repeat(innerW + 2)}╯\x1b[0m`;
-        let leftBorder = "\x1b[38;2;0;160;220m│\x1b[0m";
-        let rightBorder = "\x1b[38;2;0;160;220m│\x1b[0m";
-        let midBorder = `\x1b[38;2;0;160;220m├${"─".repeat(innerW + 2)}┤\x1b[0m`;
-        let cmdPrefix = "\x1b[1m$ ";
-        let cmdSuffix = "\x1b[0m";
-        let outPrefix = "\x1b[2m";
-        let outSuffix = "\x1b[0m";
-
-        if (activeUiStyle === "retro") {
-          topBorder = `\x1b[36m+--${headerText}${"-".repeat(dashCount)}+\x1b[0m`;
-          bottomBorder = `\x1b[36m+${"-".repeat(innerW + 2)}+\x1b[0m`;
-          leftBorder = "\x1b[36m|\x1b[0m";
-          rightBorder = "\x1b[36m|\x1b[0m";
-          midBorder = `\x1b[36m+${"-".repeat(innerW + 2)}+\x1b[0m`;
-        } else if (activeUiStyle === "plain") {
-          topBorder = `+--${headerText}${"-".repeat(dashCount)}+`;
-          bottomBorder = `+${"-".repeat(innerW + 2)}+`;
-          leftBorder = "|";
-          rightBorder = "|";
-          midBorder = `+${"-".repeat(innerW + 2)}+`;
-          cmdPrefix = "$ ";
-          cmdSuffix = "";
-          outPrefix = "";
-          outSuffix = "";
-        }
-
-        lines.push(`   ${topBorder}`);
-        const cmdLineStr = `${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`;
-        lines.push(
-          `   ${leftBorder} ${cmdLineStr}${" ".repeat(Math.max(0, innerW - visibleWidth(`${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`)))} ${rightBorder}`,
-        );
-
-        if (output.trim()) {
-          lines.push(`   ${midBorder}`);
-          const outTrunc = output.length > 800 ? `${output.slice(0, 800)}\n... (truncated)` : output;
-          for (const line of wrapTextWithAnsi(outTrunc.trim(), innerW)) {
-            const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
-            lines.push(`   ${leftBorder} ${outPrefix}${paddedLine}${outSuffix} ${rightBorder}`);
-          }
-        }
-        lines.push(`   ${bottomBorder}`);
-      } else {
-        lines.push(th.fg("accent", `$ ${command}`));
-        const trimmedOutput = output.trim();
-        if (trimmedOutput) {
-          for (const line of wrapTextWithAnsi(trimmedOutput, width)) {
-            lines.push(th.fg("dim", line));
-          }
-        }
-      }
-    } else {
-      return;
+      this.renderBashMessage(msg, width, activeUiStyle, th, lines);
     }
   }
 
@@ -584,183 +637,19 @@ export class ConversationViewer implements Component {
 
     let needsSeparator = false;
     for (const msg of messages) {
+      const linesBefore = lines.length;
       if (needsSeparator) {
         lines.push("");
       }
-      if (msg.role === "user") {
-        const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
-        if (!text.trim()) continue;
-
-        let header = " \x1b[48;2;0;100;160;38;2;255;255;255;1m 👤 USER \x1b[0m";
-        let border = " \x1b[38;2;0;160;220m│\x1b[0m";
-        if (activeUiStyle === "retro") {
-          header = " \x1b[44;37;1m 👤 USER \x1b[0m";
-          border = " \x1b[36m|\x1b[0m";
-        } else if (activeUiStyle === "plain") {
-          header = " 👤 USER ";
-          border = " |";
-        }
-
-        lines.push(header);
-        for (const line of wrapTextWithAnsi(text.trim(), width - 3)) {
-          lines.push(`${border} ${line}`);
-        }
-      } else if (msg.role === "assistant") {
-        const textParts: string[] = [];
-        const toolCalls: string[] = [];
-        for (const c of msg.content) {
-          if (c.type === "text" && c.text) textParts.push(c.text);
-          else if (c.type === "toolCall") {
-            toolCalls.push((c as any).name ?? (c as any).toolName ?? "unknown");
-          }
-        }
-
-        let header = " \x1b[48;2;100;50;180;38;2;255;255;255;1m 🤖 HERMES \x1b[0m";
-        let border = " \x1b[38;2;150;80;220m│\x1b[0m";
-        if (activeUiStyle === "retro") {
-          header = " \x1b[45;37;1m 🤖 HERMES \x1b[0m";
-          border = " \x1b[35m|\x1b[0m";
-        } else if (activeUiStyle === "plain") {
-          header = " 🤖 HERMES ";
-          border = " |";
-        }
-
-        lines.push(header);
-        if (textParts.length > 0) {
-          for (const line of wrapTextWithAnsi(textParts.join("\n").trim(), width - 3)) {
-            lines.push(`${border} ${line}`);
-          }
-        }
-        for (const name of toolCalls) {
-          let callLine = ` \x1b[38;2;150;80;220m│\x1b[0m   \x1b[38;2;220;120;0m⚡ [Tool Invoke: ${name}]\x1b[0m`;
-          if (activeUiStyle === "retro") {
-            callLine = ` \x1b[35m|\x1b[0m   \x1b[33m⚡ [Tool Invoke: ${name}]\x1b[0m`;
-          } else if (activeUiStyle === "plain") {
-            callLine = ` |   ⚡ [Tool Invoke: ${name}]`;
-          }
-          lines.push(callLine);
-        }
-      } else if (msg.role === "toolResult") {
-        const text = extractText(msg.content);
-        const truncated = text.length > 800 ? `${text.slice(0, 800)}\n... (truncated)` : text;
-        const trimmedTruncated = truncated.trim();
-        if (!trimmedTruncated) continue;
-
-        const innerW = width - 6;
-        if (innerW > 10) {
-          const headerText = ` 🔧 Tool Result `;
-          const dashCount = Math.max(2, innerW - headerText.length - 2);
-
-          const box = getBoxChars();
-          let topBorder = `\x1b[38;2;220;120;0m${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}\x1b[0m`;
-          let bottomBorder = `\x1b[38;2;220;120;0m${box.bl}${box.h.repeat(innerW + 2)}${box.br}\x1b[0m`;
-          let leftBorder = "\x1b[38;2;220;120;0m│\x1b[0m";
-          let rightBorder = "\x1b[38;2;220;120;0m│\x1b[0m";
-
-          if (activeUiStyle === "retro") {
-            topBorder = `\x1b[33m${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}\x1b[0m`;
-            bottomBorder = `\x1b[33m${box.bl}${box.h.repeat(innerW + 2)}${box.br}\x1b[0m`;
-            leftBorder = "\x1b[33m|\x1b[0m";
-            rightBorder = "\x1b[33m|\x1b[0m";
-          } else if (activeUiStyle === "plain") {
-            topBorder = `${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}`;
-            bottomBorder = `${box.bl}${box.h.repeat(innerW + 2)}${box.br}`;
-            leftBorder = "|";
-            rightBorder = "|";
-          }
-
-          lines.push(`   ${topBorder}`);
-          for (const line of wrapTextWithAnsi(trimmedTruncated, innerW)) {
-            const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
-            lines.push(`   ${leftBorder} ${paddedLine} ${rightBorder}`);
-          }
-          lines.push(`   ${bottomBorder}`);
-        } else {
-          lines.push(th.fg("warning", "[Result]"));
-          for (const line of wrapTextWithAnsi(trimmedTruncated, width)) {
-            lines.push(th.fg("dim", line));
-          }
-        }
-      } else if (isBashExecution(msg)) {
-        const bash = msg;
-        const command = bash.command || "";
-        const output = bash.output || "";
-
-        const innerW = width - 6;
-        if (innerW > 10) {
-          const headerText = ` 💻 Bash Command `;
-          const dashCount = Math.max(2, innerW - headerText.length - 2);
-
-          let topBorder = `\x1b[38;2;0;160;220m╭──${headerText}${"─".repeat(dashCount)}╮\x1b[0m`;
-          let bottomBorder = `\x1b[38;2;0;160;220m╰${"─".repeat(innerW + 2)}╯\x1b[0m`;
-          let leftBorder = "\x1b[38;2;0;160;220m│\x1b[0m";
-          let rightBorder = "\x1b[38;2;0;160;220m│\x1b[0m";
-          let midBorder = `\x1b[38;2;0;160;220m├${"─".repeat(innerW + 2)}┤\x1b[0m`;
-          let cmdPrefix = "\x1b[1m$ ";
-          let cmdSuffix = "\x1b[0m";
-          let outPrefix = "\x1b[2m";
-          let outSuffix = "\x1b[0m";
-
-          if (activeUiStyle === "retro") {
-            topBorder = `\x1b[36m+--${headerText}${"-".repeat(dashCount)}+\x1b[0m`;
-            bottomBorder = `\x1b[36m+${"-".repeat(innerW + 2)}+\x1b[0m`;
-            leftBorder = "\x1b[36m|\x1b[0m";
-            rightBorder = "\x1b[36m|\x1b[0m";
-            midBorder = `\x1b[36m+${"-".repeat(innerW + 2)}+\x1b[0m`;
-          } else if (activeUiStyle === "plain") {
-            topBorder = `+--${headerText}${"-".repeat(dashCount)}+`;
-            bottomBorder = `+${"-".repeat(innerW + 2)}+`;
-            leftBorder = "|";
-            rightBorder = "|";
-            midBorder = `+${"-".repeat(innerW + 2)}+`;
-            cmdPrefix = "$ ";
-            cmdSuffix = "";
-            outPrefix = "";
-            outSuffix = "";
-          }
-
-          lines.push(`   ${topBorder}`);
-          const cmdLineStr = `${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`;
-          lines.push(
-            `   ${leftBorder} ${cmdLineStr}${" ".repeat(Math.max(0, innerW - visibleWidth(`${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`)))} ${rightBorder}`,
-          );
-
-          if (output.trim()) {
-            lines.push(`   ${midBorder}`);
-            const outTrunc = output.length > 800 ? `${output.slice(0, 800)}\n... (truncated)` : output;
-            for (const line of wrapTextWithAnsi(outTrunc.trim(), innerW)) {
-              const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
-              lines.push(`   ${leftBorder} ${outPrefix}${paddedLine}${outSuffix} ${rightBorder}`);
-            }
-          }
-          lines.push(`   ${bottomBorder}`);
-        } else {
-          lines.push(th.fg("accent", `$ ${command}`));
-          const trimmedOutput = output.trim();
-          if (trimmedOutput) {
-            for (const line of wrapTextWithAnsi(trimmedOutput, width)) {
-              lines.push(th.fg("dim", line));
-            }
-          }
-        }
-      } else {
-        continue;
+      this.renderMessage(msg, width, activeUiStyle, th, lines);
+      // If renderMessage added content, future messages need a separator.
+      // If it was skipped (empty/unknown), remove the phantom separator.
+      if (lines.length === linesBefore + 1 && needsSeparator) {
+        // Only the separator was added — message produced no content. Remove it.
+        lines.pop();
+      } else if (lines.length > linesBefore) {
+        needsSeparator = true;
       }
-      needsSeparator = true;
-    }
-
-    if (this.record.status === "running" && this.activity) {
-      const spinnerFrame = getTimeSpinnerFrame();
-      const act = describeActivity(this.activity.activeTools, this.activity.responseText);
-      lines.push("");
-
-      let runningLineStr = `  \x1b[38;2;255;165;0m${spinnerFrame}\x1b[0m \x1b[38;2;168;100;255mHermes is working:\x1b[0m \x1b[3m${act}\x1b[0m`;
-      if (activeUiStyle === "retro") {
-        runningLineStr = `  \x1b[33m${spinnerFrame}\x1b[0m \x1b[35;1mHermes is working:\x1b[0m \x1b[3m${act}\x1b[0m`;
-      } else if (activeUiStyle === "plain") {
-        runningLineStr = `  ${spinnerFrame} Hermes is working: ${act}`;
-      }
-      lines.push(fastTruncate(runningLineStr, width));
     }
 
     return lines.map((l) => fastTruncate(l, width));

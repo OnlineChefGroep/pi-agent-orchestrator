@@ -69,6 +69,135 @@ function getFirstTextContent(result: Pick<AgentResultLike, "content">): string {
 }
 
 /**
+ * Build the stats line: "haiku · thinking: high · ⟳5≤30 · 3 tool uses · 33.8k tokens"
+ *
+ * @param d - Agent details whose stats should be formatted
+ * @param theme - Theme used to style the separator and stat parts
+ * @returns The composed, styled stats string (may be empty when no stats are present)
+ */
+function buildStatsLine(d: AgentDetails, theme: Theme): string {
+  const parts: string[] = [];
+  if (d.modelName) parts.push(d.modelName);
+  if (d.tags) parts.push(...d.tags);
+  if (d.turnCount != null && d.turnCount > 0) {
+    parts.push(formatTurns(d.turnCount, d.maxTurns));
+  }
+  if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
+  if (d.tokens) parts.push(d.tokens);
+  return parts.map((p) => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `);
+}
+
+/**
+ * Render the running/streaming state: spinner frame + stats + current activity.
+ *
+ * @param details - Agent details for the running agent
+ * @param theme - Theme used to style the spinner, stats, and activity line
+ * @returns A Text instance showing the spinner, stats, and activity
+ */
+function renderRunningResult(details: AgentDetails, theme: Theme): Text {
+  const frame = getSpinnerFrame(details.spinnerFrame ?? 0);
+  const s = buildStatsLine(details, theme);
+  let line = theme.fg("accent", frame) + (s ? ` ${s}` : "");
+  line += `\n${theme.fg("dim", `  ⎿  ${details.activity ?? "thinking…"}`)}`;
+  return new Text(line, 0, 0);
+}
+
+/**
+ * Render the expanded output section for a completed/steered agent result.
+ * Shows up to 50 lines of the result text, with a truncation note if more exist.
+ *
+ * @param result - The agent result whose text content should be expanded
+ * @param theme - Theme used to style the output lines and truncation note
+ * @returns The expanded output string (may be empty when no text content exists)
+ */
+function renderExpandedOutput(result: AgentResultLike, theme: Theme): string {
+  const resultText = getFirstTextContent(result);
+  if (!resultText) return "";
+
+  const allLines = resultText.split("\n");
+  const lines = allLines.slice(0, 50);
+  const expandedParts: string[] = [];
+  for (const l of lines) {
+    expandedParts.push(`\n${theme.fg("dim", `  ${l}`)}`);
+  }
+  let output = expandedParts.join("");
+  if (allLines.length > 50) {
+    output += `\n${theme.fg("muted", "  ... (use get_subagent_result with verbose for full output)")}`;
+  }
+  return output;
+}
+
+/**
+ * Render the completed or steered state: checkmark icon + stats + duration + optional validation badge,
+ * followed by either expanded output or a compact "Done" line.
+ *
+ * @param result - The agent result (used for expanded output text)
+ * @param details - Agent details for the completed/steered agent
+ * @param opts - Rendering options controlling expanded vs compact view
+ * @param theme - Theme used to style all elements
+ * @returns A Text instance showing the completion summary
+ */
+function renderCompletedResult(
+  result: AgentResultLike,
+  details: AgentDetails,
+  opts: { expanded: boolean },
+  theme: Theme,
+): Text {
+  const duration = formatMs(details.durationMs);
+  const isSteered = details.status === "steered";
+  const icon = isSteered ? theme.fg("warning", "✓") : theme.fg("success", "✓");
+  const s = buildStatsLine(details, theme);
+  let line = icon + (s ? ` ${s}` : "");
+  line += ` ${theme.fg("dim", "·")} ${theme.fg("dim", duration)}`;
+
+  // Validation badge
+  if (details.validated !== undefined) {
+    line += details.validated ? ` ${theme.fg("success", "✅")}` : ` ${theme.fg("error", "❌")}`;
+  }
+
+  if (opts.expanded) {
+    line += renderExpandedOutput(result, theme);
+  } else {
+    const doneText = isSteered ? "Wrapped up (turn limit)" : "Done";
+    line += `\n${theme.fg("dim", `  ⎿  ${doneText}`)}`;
+  }
+  return new Text(line, 0, 0);
+}
+
+/**
+ * Render the stopped state: stopped icon + stats + "Stopped" label.
+ *
+ * @param details - Agent details for the stopped agent
+ * @param theme - Theme used to style the icon, stats, and label
+ * @returns A Text instance showing the stopped summary
+ */
+function renderStoppedResult(details: AgentDetails, theme: Theme): Text {
+  const s = buildStatsLine(details, theme);
+  let line = theme.fg("dim", "■") + (s ? ` ${s}` : "");
+  line += `\n${theme.fg("dim", "  ⎿  Stopped")}`;
+  return new Text(line, 0, 0);
+}
+
+/**
+ * Render the error or aborted state: error icon + stats + error/abort detail.
+ *
+ * @param details - Agent details for the errored/aborted agent
+ * @param theme - Theme used to style the icon, stats, and detail line
+ * @returns A Text instance showing the error or abort summary
+ */
+function renderErrorResult(details: AgentDetails, theme: Theme): Text {
+  const s = buildStatsLine(details, theme);
+  let line = theme.fg("error", "✗") + (s ? ` ${s}` : "");
+
+  if (details.status === "error") {
+    line += `\n${theme.fg("error", `  ⎿  Error: ${details.error ?? "unknown"}`)}`;
+  } else {
+    line += `\n${theme.fg("warning", "  ⎿  Aborted (max turns exceeded)")}`;
+  }
+  return new Text(line, 0, 0);
+}
+
+/**
  * Format an agent tool result into a TUI Text block showing status, stats, and optional expanded output.
  *
  * @param result - The agent result containing `content` and optional `details` that drive the rendered output.
@@ -86,26 +215,9 @@ export function renderAgentResult(
     return new Text(getFirstTextContent(result), 0, 0);
   }
 
-  // Build "haiku · thinking: high · ⟳5≤30 · 3 tool uses · 33.8k tokens" stats string
-  const stats = (d: AgentDetails) => {
-    const parts: string[] = [];
-    if (d.modelName) parts.push(d.modelName);
-    if (d.tags) parts.push(...d.tags);
-    if (d.turnCount != null && d.turnCount > 0) {
-      parts.push(formatTurns(d.turnCount, d.maxTurns));
-    }
-    if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
-    if (d.tokens) parts.push(d.tokens);
-    return parts.map((p) => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `);
-  };
-
   // ---- While running (streaming) ----
   if (opts.isPartial || details.status === "running") {
-    const frame = getSpinnerFrame(details.spinnerFrame ?? 0);
-    const s = stats(details);
-    let line = theme.fg("accent", frame) + (s ? ` ${s}` : "");
-    line += `\n${theme.fg("dim", `  ⎿  ${details.activity ?? "thinking…"}`)}`;
-    return new Text(line, 0, 0);
+    return renderRunningResult(details, theme);
   }
 
   // ---- Background agent launched ----
@@ -115,57 +227,16 @@ export function renderAgentResult(
 
   // ---- Completed / Steered ----
   if (details.status === "completed" || details.status === "steered") {
-    const duration = formatMs(details.durationMs);
-    const isSteered = details.status === "steered";
-    const icon = isSteered ? theme.fg("warning", "✓") : theme.fg("success", "✓");
-    const s = stats(details);
-    let line = icon + (s ? ` ${s}` : "");
-    line += ` ${theme.fg("dim", "·")} ${theme.fg("dim", duration)}`;
-
-    // Validation badge
-    if (details.validated !== undefined) {
-      line += details.validated ? ` ${theme.fg("success", "✅")}` : ` ${theme.fg("error", "❌")}`;
-    }
-
-    if (opts.expanded) {
-      const resultText = getFirstTextContent(result);
-      if (resultText) {
-        const lines = resultText.split("\n").slice(0, 50);
-        const expandedParts: string[] = [];
-        for (const l of lines) {
-          expandedParts.push(`\n${theme.fg("dim", `  ${l}`)}`);
-        }
-        line += expandedParts.join("");
-        if (resultText.split("\n").length > 50) {
-          line += `\n${theme.fg("muted", "  ... (use get_subagent_result with verbose for full output)")}`;
-        }
-      }
-    } else {
-      const doneText = isSteered ? "Wrapped up (turn limit)" : "Done";
-      line += `\n${theme.fg("dim", `  ⎿  ${doneText}`)}`;
-    }
-    return new Text(line, 0, 0);
+    return renderCompletedResult(result, details, opts, theme);
   }
 
   // ---- Stopped (user-initiated abort) ----
   if (details.status === "stopped") {
-    const s = stats(details);
-    let line = theme.fg("dim", "■") + (s ? ` ${s}` : "");
-    line += `\n${theme.fg("dim", "  ⎿  Stopped")}`;
-    return new Text(line, 0, 0);
+    return renderStoppedResult(details, theme);
   }
 
   // ---- Error / Aborted (hard max_turns) ----
-  const s = stats(details);
-  let line = theme.fg("error", "✗") + (s ? ` ${s}` : "");
-
-  if (details.status === "error") {
-    line += `\n${theme.fg("error", `  ⎿  Error: ${details.error ?? "unknown"}`)}`;
-  } else {
-    line += `\n${theme.fg("warning", "  ⎿  Aborted (max turns exceeded)")}`;
-  }
-
-  return new Text(line, 0, 0);
+  return renderErrorResult(details, theme);
 }
 
 /**
@@ -421,6 +492,530 @@ export function setupSessionCallbacks(
 }
 
 /**
+ * Resolve the agent type, model, invocation config, and detail base for the execute callback.
+ * Returns the fully resolved config, or an early-return result when model resolution fails
+ * (e.g. an invalid model name passed via tool params).
+ */
+function resolveExecuteConfig(
+  params: Record<string, unknown>,
+  piCtx: ExtensionContext,
+): { config: ExecuteResolvedConfig; earlyReturn?: AgentToolResult<unknown> } {
+  const rawType = params.subagent_type as SubagentType;
+  const resolved = resolveType(rawType);
+  const subagentType = resolved ?? "general-purpose";
+  const fellBack = resolved === undefined;
+  const displayName = getDisplayName(subagentType);
+  const customConfig = getAgentConfig(subagentType);
+  const resolvedConfig = resolveAgentInvocationConfig(customConfig, params);
+
+  // Resolve model from agent config first; tool-call params only fill gaps.
+  let model = piCtx.model;
+  let earlyReturn: AgentToolResult<unknown> | undefined;
+  if (resolvedConfig.modelInput) {
+    const resolvedModel = resolveModel(resolvedConfig.modelInput, piCtx.modelRegistry);
+    if (typeof resolvedModel === "string") {
+      if (resolvedConfig.modelFromParams) earlyReturn = textResult(resolvedModel);
+    } else {
+      model = resolvedModel as any;
+    }
+  }
+
+  const config = buildResolvedConfig(
+    params,
+    piCtx,
+    resolvedConfig,
+    customConfig,
+    subagentType,
+    displayName,
+    rawType,
+    fellBack,
+    model,
+  );
+  return { config, earlyReturn };
+}
+
+/**
+ * Build the ExecuteResolvedConfig from resolved parameters.
+ * Extracted to keep resolveExecuteConfig readable.
+ */
+function buildResolvedConfig(
+  params: Record<string, unknown>,
+  piCtx: ExtensionContext,
+  resolvedConfig: ReturnType<typeof resolveAgentInvocationConfig>,
+  customConfig: ReturnType<typeof getAgentConfig>,
+  subagentType: SubagentType,
+  displayName: string,
+  rawType: string,
+  fellBack: boolean,
+  model: Model<any> | undefined,
+): ExecuteResolvedConfig {
+  const thinking = resolvedConfig.thinking;
+  const inheritContext = resolvedConfig.inheritContext;
+  const runInBackground = resolvedConfig.runInBackground;
+  const isolated = resolvedConfig.isolated;
+  const isolation = resolvedConfig.isolation;
+
+  const parentModelId = piCtx.model?.id;
+  const effectiveModelId = model?.id;
+  const modelName =
+    effectiveModelId && effectiveModelId !== parentModelId
+      ? (model?.name ?? effectiveModelId).replace(/^Claude\s+/i, "").toLowerCase()
+      : undefined;
+  const effectiveMaxTurns = normalizeMaxTurns(resolvedConfig.maxTurns ?? getDefaultMaxTurns());
+  const agentInvocation: AgentInvocation = {
+    modelName,
+    thinking,
+    maxTurns: normalizeMaxTurns(resolvedConfig.maxTurns),
+    isolated,
+    inheritContext,
+    runInBackground,
+    isolation,
+  };
+  const modeLabel = getPromptModeLabel(subagentType);
+  const { tags: invocationTags } = buildInvocationTags(agentInvocation);
+  const agentTags = modeLabel ? [modeLabel, ...invocationTags] : invocationTags;
+  const detailBase = {
+    displayName,
+    description: params.description as string,
+    subagentType,
+    modelName,
+    tags: agentTags.length > 0 ? agentTags : undefined,
+  };
+
+  return {
+    detailBase,
+    subagentType,
+    displayName,
+    rawType,
+    fellBack,
+    runInBackground,
+    effectiveMaxTurns,
+    model,
+    isolated,
+    inheritContext,
+    thinking,
+    isolation,
+    agentInvocation,
+    customConfig,
+  };
+}
+
+/**
+ * Handle orchestration dispatch (swarm / crew fan-out).
+ * Returns the aggregated result when dispatch is non-single, or null when
+ * the dispatch resolves to "single" (falling through to background/foreground).
+ */
+async function handleOrchestrationDispatch(
+  params: Record<string, unknown>,
+  config: ExecuteResolvedConfig,
+  toolCtx: ToolContext,
+  piCtx: ExtensionContext,
+  toolCallId: string,
+): Promise<AgentToolResult<unknown> | null> {
+  const { pi, manager, widget, agentActivity, batchOrchestrator } = toolCtx;
+  const configuredOrchestrationMode = getOrchestrationMode();
+  const dispatch = resolveOrchestrationMode({
+    mode: configuredOrchestrationMode,
+    prompt: params.prompt as string,
+    description: params.description as string,
+    subagentType: config.subagentType,
+    runInBackground: config.runInBackground,
+  });
+  recordDispatchDecision({
+    kind: dispatch.kind,
+    configuredMode: configuredOrchestrationMode,
+    source: configuredOrchestrationMode === "auto" ? "auto-heuristic" : "explicit",
+    promptLength: (params.prompt as string).length,
+    description: (params.description as string) ?? "",
+  });
+  if (dispatch.kind === "single") return null;
+
+  return await runOrchestratedDispatch(dispatch, {
+    detailBase: config.detailBase,
+    subagentType: config.subagentType,
+    displayName: config.displayName,
+    rawType: config.rawType,
+    fellBack: config.fellBack,
+    runInBackground: config.runInBackground,
+    effectiveMaxTurns: config.effectiveMaxTurns,
+    model: config.model,
+    isolated: config.isolated,
+    inheritContext: config.inheritContext,
+    thinking: config.thinking,
+    isolation: config.isolation,
+    agentInvocation: config.agentInvocation,
+    manager,
+    batchOrchestrator,
+    agentActivity,
+    widget,
+    pi,
+    piCtx,
+    toolCallId,
+  });
+}
+
+/**
+ * Shared resolved configuration passed through the execute phases.
+ * Captures the common fields needed by estimate, schedule, resume,
+ * background, and foreground paths so each helper receives a single object.
+ */
+interface ExecuteResolvedConfig {
+  detailBase: {
+    displayName: string;
+    description: string;
+    subagentType: string;
+    modelName?: string;
+    tags?: string[];
+  };
+  subagentType: SubagentType;
+  displayName: string;
+  rawType: string;
+  fellBack: boolean;
+  runInBackground: boolean;
+  effectiveMaxTurns: number | undefined;
+  model: Model<any> | undefined;
+  isolated: boolean;
+  inheritContext: boolean;
+  thinking: ThinkingLevel | undefined;
+  isolation: IsolationMode | undefined;
+  agentInvocation: AgentInvocation;
+  customConfig: ReturnType<typeof getAgentConfig>;
+}
+
+/**
+ * Handle the estimate_only path: validate incompatibilities and return a token/turn estimate.
+ * Returns null when estimate_only is not requested.
+ */
+async function handleEstimateOnly(
+  params: Record<string, unknown>,
+  config: ExecuteResolvedConfig,
+): Promise<AgentToolResult<unknown> | null> {
+  if (!params.estimate_only) return null;
+  if (params.resume) return textResult("Cannot combine `estimate_only` with `resume`.");
+  if (params.schedule) return textResult("Cannot combine `estimate_only` with `schedule`.");
+  return textResult(
+    buildAgentEstimate({
+      prompt: params.prompt as string,
+      description: params.description as string,
+      type: config.subagentType,
+      config: config.customConfig,
+      inheritContext: config.inheritContext,
+      maxTurns: config.effectiveMaxTurns,
+    }),
+  );
+}
+
+/**
+ * Handle the schedule path: validate incompatibilities, register a cron job,
+ * and return a job-confirmation result. Returns null when no schedule is requested.
+ */
+async function handleSchedule(
+  params: Record<string, unknown>,
+  config: ExecuteResolvedConfig,
+  scheduler: ToolContext["scheduler"],
+): Promise<AgentToolResult<unknown> | null> {
+  if (!params.schedule) return null;
+
+  if (!isSchedulingEnabled()) {
+    return textResult("Scheduling is disabled in this project. Enable via /agents → Settings → Scheduling.");
+  }
+  if (params.resume) {
+    return textResult("Cannot combine `schedule` with `resume` — schedules create fresh agents.");
+  }
+  if (params.inherit_context) {
+    return textResult(
+      "Cannot combine `schedule` with `inherit_context` — there is no parent conversation at fire time.",
+    );
+  }
+  if (params.run_in_background === false) {
+    return textResult(
+      "Cannot combine `schedule` with `run_in_background: false` — scheduled jobs always run in background.",
+    );
+  }
+  if (!scheduler.isActive()) {
+    return textResult("Scheduler is not active in this session yet. Try again after the session has fully started.");
+  }
+  try {
+    const job = await scheduler.addJob({
+      name: params.description as string,
+      description: params.description as string,
+      schedule: params.schedule as string,
+      subagent_type: config.subagentType,
+      prompt: params.prompt as string,
+      model: params.model as string | undefined,
+      thinking: config.thinking,
+      max_turns: config.effectiveMaxTurns,
+      isolated: config.isolated,
+      isolation: config.isolation,
+    });
+    const next = scheduler.getNextRun(job.id);
+    return textResult(
+      `Scheduled "${job.name}" (id: ${job.id}, type: ${job.scheduleType}). ` +
+        `Next run: ${next ?? "(unknown)"}. ` +
+        `Manage via /agents → Scheduled jobs.`,
+    );
+  } catch (err) {
+    return textResult(err instanceof Error ? err.message : String(err));
+  }
+}
+
+/**
+ * Handle the resume path: look up an existing agent, validate it has a session,
+ * and resume execution. Returns null when no resume is requested.
+ */
+async function handleResume(
+  params: Record<string, unknown>,
+  config: ExecuteResolvedConfig,
+  manager: AgentManager,
+  signal: AbortSignal | undefined,
+): Promise<AgentToolResult<unknown> | null> {
+  if (!params.resume) return null;
+
+  const existing = manager.getRecord(params.resume as string);
+  if (!existing) {
+    return textResult(`Agent not found: "${params.resume}". It may have been cleaned up.`);
+  }
+  if (!existing.session) {
+    return textResult(`Agent "${params.resume}" has no active session to resume.`);
+  }
+  const record = await manager.resume(params.resume as string, params.prompt as string, signal);
+  if (!record) {
+    return textResult(`Failed to resume agent "${params.resume}".`);
+  }
+  return textResult(
+    record.result?.trim() || record.error?.trim() || "No output.",
+    buildDetails(config.detailBase, { ...record, startedAt: record.startedAt ?? 0 }),
+  );
+}
+
+/**
+ * Handle the background execution path: spawn a background agent, wire output
+ * file streaming and join mode, and return a background-confirmation result.
+ */
+async function handleBackgroundSpawn(
+  params: Record<string, unknown>,
+  config: ExecuteResolvedConfig,
+  toolCtx: ToolContext,
+  piCtx: ExtensionContext,
+  toolCallId: string,
+): Promise<AgentToolResult<unknown>> {
+  const { pi, manager, widget, agentActivity, batchOrchestrator } = toolCtx;
+  const { state: bgState, callbacks: bgCallbacks } = createActivityTracker(config.effectiveMaxTurns);
+
+  // Build spawn options upfront so we can mutate the same object after
+  // spawn returns — the manager stores this reference internally.
+  const spawnOptions = {
+    ...buildSpawnOptions({
+      description: params.description as string,
+      model: config.model,
+      maxTurns: config.effectiveMaxTurns,
+      isolated: config.isolated,
+      inheritContext: config.inheritContext,
+      thinking: config.thinking,
+      isolation: config.isolation,
+      invocation: config.agentInvocation,
+    }),
+    isBackground: true,
+    ...bgCallbacks,
+  };
+
+  let id: string;
+  try {
+    id = manager.spawn(pi, piCtx, config.subagentType, params.prompt as string, spawnOptions);
+  } catch (err) {
+    return textResult(err instanceof Error ? err.message : String(err));
+  }
+
+  // Wire output file streaming now that id is available.
+  setupSessionCallbacks(spawnOptions, (session) => {
+    const rec = manager.getRecord(id);
+    if (rec?.outputFile) {
+      rec.outputCleanup = streamToOutputFile(session, rec.outputFile, id, piCtx.cwd);
+    }
+  });
+
+  // Set output file + join mode synchronously after spawn.
+  const joinMode = resolveJoinMode(getDefaultJoinMode(), true);
+  const record = manager.getRecord(id);
+  if (record && joinMode) {
+    record.joinMode = joinMode;
+    record.toolCallId = toolCallId;
+    record.outputFile = createOutputFilePath(piCtx.cwd, id, piCtx.sessionManager.getSessionId());
+    writeInitialEntry(record.outputFile, id, params.prompt as string, piCtx.cwd);
+  }
+
+  if (joinMode != null && joinMode !== "async") {
+    batchOrchestrator.addToBatch(id, joinMode);
+  }
+
+  agentActivity.set(id, bgState);
+  widget.ensureTimer();
+  widget.debouncedUpdate();
+
+  pi.events.emit("subagents:created", {
+    id,
+    type: config.subagentType,
+    description: params.description,
+    isBackground: true,
+  });
+
+  return buildBackgroundResult(id, record, config, manager);
+}
+
+/**
+ * Build the text result for a successfully spawned background agent.
+ * Includes agent ID, type, description, output file, and queue position.
+ */
+function buildBackgroundResult(
+  id: string,
+  record: AgentRecord | undefined,
+  config: ExecuteResolvedConfig,
+  manager: AgentManager,
+): AgentToolResult<unknown> {
+  const isQueued = record?.status === "queued";
+  return textResult(
+    `Agent ${isQueued ? "queued" : "started"} in background.\n` +
+      `Agent ID: ${id}\n` +
+      `Type: ${config.displayName}\n` +
+      `Description: ${config.detailBase.description}\n` +
+      (record?.outputFile ? `Output file: ${record.outputFile}\n` : "") +
+      (isQueued ? `Position: queued (max ${manager.getMaxConcurrent()} concurrent)\n` : "") +
+      `\nYou will be notified when this agent completes.\n` +
+      `Use get_subagent_result to retrieve full results, or steer_subagent to send it messages.\n` +
+      `Do not duplicate this agent's work.`,
+    { ...config.detailBase, toolUses: 0, tokens: "", durationMs: 0, status: "background" as const, agentId: id },
+  );
+}
+
+/**
+ * Handle the foreground execution path: stream progress via onUpdate,
+ * spawn-and-wait, and return the final result.
+ */
+async function handleForegroundSpawn(
+  params: Record<string, unknown>,
+  config: ExecuteResolvedConfig,
+  toolCtx: ToolContext,
+  piCtx: ExtensionContext,
+  signal: AbortSignal | undefined,
+  onUpdate: ((update: { content: Array<{ type: string; text: string }>; details: unknown }) => void) | undefined,
+): Promise<AgentToolResult<unknown>> {
+  const { pi, manager, widget, agentActivity } = toolCtx;
+  const detailBase = config.detailBase;
+  let spinnerFrame = 0;
+  const startedAt = Date.now();
+  let fgId: string | undefined;
+
+  // fgState is assigned right after createActivityTracker — the closure
+  // reads it lazily, so the ref pattern is safe (callback never fires
+  // before the next line runs).
+  let fgState: ActivityTrackerState;
+  const streamUpdate = () => {
+    const details: AgentDetails = {
+      ...detailBase,
+      toolUses: fgState.toolUses,
+      tokens: formatLifetimeTokens(fgState),
+      turnCount: fgState.turnCount,
+      maxTurns: fgState.maxTurns,
+      durationMs: Date.now() - startedAt,
+      status: "running",
+      activity: describeActivity(fgState.activeTools, fgState.responseText),
+      spinnerFrame,
+    };
+    onUpdate?.({
+      content: [{ type: "text", text: `${fgState.toolUses} tool uses...` }],
+      details: details as any,
+    });
+  };
+
+  const tracker = createActivityTracker(config.effectiveMaxTurns, streamUpdate);
+  fgState = tracker.state;
+  const fgCallbacks = tracker.callbacks;
+
+  // Wire session creation to register in widget
+  setupSessionCallbacks(fgCallbacks, (session) => {
+    for (const a of manager.listAgents()) {
+      if (a.session === session) {
+        fgId = a.id;
+        agentActivity.set(a.id, fgState);
+        widget.ensureTimer();
+        break;
+      }
+    }
+  });
+
+  // Animate spinner at ~80ms (smooth rotation through 10 braille frames)
+  const spinnerInterval = setInterval(() => {
+    spinnerFrame++;
+    streamUpdate();
+  }, 80);
+
+  streamUpdate();
+
+  let record: AgentRecord;
+  try {
+    record = await manager.spawnAndWait(pi, piCtx, config.subagentType, params.prompt as string, {
+      ...buildSpawnOptions({
+        description: params.description as string,
+        model: config.model,
+        maxTurns: config.effectiveMaxTurns,
+        isolated: config.isolated,
+        inheritContext: config.inheritContext,
+        thinking: config.thinking,
+        isolation: config.isolation,
+        invocation: config.agentInvocation,
+      }),
+      signal,
+      ...fgCallbacks,
+    });
+  } catch (err) {
+    clearInterval(spinnerInterval);
+    return textResult(err instanceof Error ? err.message : String(err));
+  }
+
+  clearInterval(spinnerInterval);
+
+  // Clean up foreground agent from widget
+  if (fgId) {
+    agentActivity.delete(fgId);
+    widget.markFinished(fgId);
+  }
+
+  return buildForegroundResult(record, config, fgState, detailBase);
+}
+
+/**
+ * Build the final text result for a completed foreground agent.
+ * Handles error, completion, and stats formatting.
+ */
+function buildForegroundResult(
+  record: AgentRecord,
+  config: ExecuteResolvedConfig,
+  fgState: ActivityTrackerState,
+  detailBase: ExecuteResolvedConfig["detailBase"],
+): AgentToolResult<unknown> {
+  const tokenText = formatLifetimeTokens(fgState);
+  const details = buildDetails(detailBase, { ...record, startedAt: record.startedAt ?? 0 }, fgState, {
+    tokens: tokenText,
+  });
+  const fallbackNote = config.fellBack
+    ? `Note: Unknown agent type "${config.rawType}" — using general-purpose.\n\n`
+    : "";
+
+  if (record.status === "error") {
+    return textResult(`${fallbackNote}Agent failed: ${record.error}`, details);
+  }
+
+  const durationMs = (record.completedAt ?? Date.now()) - (record.startedAt ?? 0);
+  const statsParts = [`${record.toolUses} tool uses`];
+  if (tokenText) statsParts.push(tokenText);
+  return textResult(
+    `${fallbackNote}Agent completed in ${formatMs(durationMs)} (${statsParts.join(", ")})${getStatusNote(record.status)}.\n\n` +
+      (record.result?.trim() || "No output."),
+    details,
+  );
+}
+
+/**
  * Register and return the "Agent" tool used to launch and control autonomous subagents.
  *
  * The returned tool exposes parameters to configure agent type, prompt, model, thinking level, max turns, background/foreground execution, resuming, isolation, scheduling (when enabled), and estimate-only queries; it renders calls/results with a custom TUI presentation and implements execution paths for estimates, scheduling, resuming, background spawning (with output-file streaming and batching), and foreground streaming with progress updates.
@@ -556,7 +1151,7 @@ Guidelines:
     // ---- Execute ----
 
     execute: async (toolCallId, params, signal, onUpdate, piCtx) => {
-      const { pi, manager, widget, agentActivity, batchOrchestrator, scheduler } = ctx;
+      const { widget } = ctx;
 
       // Ensure we have UI context for widget rendering
       const uiCtx = piCtx && typeof piCtx.ui === "object" ? (piCtx.ui as UICtx) : undefined;
@@ -565,373 +1160,42 @@ Guidelines:
       // Reload custom agents so new .pi/agents/*.md files are picked up without restart
       await reloadCustomAgents();
 
-      const rawType = params.subagent_type as SubagentType;
-      const resolved = resolveType(rawType);
-      const subagentType = resolved ?? "general-purpose";
-      const fellBack = resolved === undefined;
+      const { config, earlyReturn } = resolveExecuteConfig(params as Record<string, unknown>, piCtx);
+      if (earlyReturn) return earlyReturn;
 
-      const displayName = getDisplayName(subagentType);
+      // Early-return paths (estimate, schedule, resume) — each returns null if not applicable
+      const estimateResult = await handleEstimateOnly(params as Record<string, unknown>, config);
+      if (estimateResult) return estimateResult;
 
-      // Get agent config (if any)
-      const customConfig = getAgentConfig(subagentType);
+      const scheduleResult = await handleSchedule(params as Record<string, unknown>, config, ctx.scheduler);
+      if (scheduleResult) return scheduleResult;
 
-      const resolvedConfig = resolveAgentInvocationConfig(customConfig, params);
-
-      // Resolve model from agent config first; tool-call params only fill gaps.
-      let model = piCtx.model;
-      if (resolvedConfig.modelInput) {
-        const resolvedModel = resolveModel(resolvedConfig.modelInput, piCtx.modelRegistry);
-        if (typeof resolvedModel === "string") {
-          if (resolvedConfig.modelFromParams) return textResult(resolvedModel);
-        } else {
-          model = resolvedModel as any;
-        }
-      }
-
-      const thinking = resolvedConfig.thinking;
-      const inheritContext = resolvedConfig.inheritContext;
-      const runInBackground = resolvedConfig.runInBackground;
-      const isolated = resolvedConfig.isolated;
-      const isolation = resolvedConfig.isolation;
-
-      const parentModelId = piCtx.model?.id;
-      const effectiveModelId = model?.id;
-      const modelName =
-        effectiveModelId && effectiveModelId !== parentModelId
-          ? (model?.name ?? effectiveModelId).replace(/^Claude\s+/i, "").toLowerCase()
-          : undefined;
-      const effectiveMaxTurns = normalizeMaxTurns(resolvedConfig.maxTurns ?? getDefaultMaxTurns());
-      const agentInvocation: AgentInvocation = {
-        modelName,
-        thinking,
-        // Explicit value only — the default fallback would just add noise.
-        // Normalize so `0` (unlimited) doesn't surface as a misleading "max turns: 0".
-        maxTurns: normalizeMaxTurns(resolvedConfig.maxTurns),
-        isolated,
-        inheritContext,
-        runInBackground,
-        isolation,
-      };
-      // Tool-result render shows the mode label too; viewer's header already does.
-      const modeLabel = getPromptModeLabel(subagentType);
-      const { tags: invocationTags } = buildInvocationTags(agentInvocation);
-      const agentTags = modeLabel ? [modeLabel, ...invocationTags] : invocationTags;
-      const detailBase = {
-        displayName,
-        description: params.description,
-        subagentType,
-        modelName,
-        tags: agentTags.length > 0 ? agentTags : undefined,
-      };
-
-      if (params.estimate_only) {
-        if (params.resume) return textResult("Cannot combine `estimate_only` with `resume`.");
-        if (params.schedule) return textResult("Cannot combine `estimate_only` with `schedule`.");
-        return textResult(
-          buildAgentEstimate({
-            prompt: params.prompt as string,
-            description: params.description as string,
-            type: subagentType,
-            config: customConfig,
-            inheritContext,
-            maxTurns: effectiveMaxTurns,
-          }),
-        );
-      }
-
-      // ---- Schedule: register a job, don't spawn now ----
-      if (params.schedule) {
-        if (!isSchedulingEnabled()) {
-          return textResult("Scheduling is disabled in this project. Enable via /agents → Settings → Scheduling.");
-        }
-        if (params.resume) {
-          return textResult("Cannot combine `schedule` with `resume` — schedules create fresh agents.");
-        }
-        if (params.inherit_context) {
-          return textResult(
-            "Cannot combine `schedule` with `inherit_context` — there is no parent conversation at fire time.",
-          );
-        }
-        if (params.run_in_background === false) {
-          return textResult(
-            "Cannot combine `schedule` with `run_in_background: false` — scheduled jobs always run in background.",
-          );
-        }
-        if (!scheduler.isActive()) {
-          return textResult(
-            "Scheduler is not active in this session yet. Try again after the session has fully started.",
-          );
-        }
-        try {
-          const job = await scheduler.addJob({
-            name: params.description as string,
-            description: params.description as string,
-            schedule: params.schedule as string,
-            subagent_type: subagentType,
-            prompt: params.prompt as string,
-            model: params.model as string | undefined,
-            thinking: thinking,
-            max_turns: effectiveMaxTurns,
-            isolated: isolated,
-            isolation: isolation,
-          });
-          const next = scheduler.getNextRun(job.id);
-          return textResult(
-            `Scheduled "${job.name}" (id: ${job.id}, type: ${job.scheduleType}). ` +
-              `Next run: ${next ?? "(unknown)"}. ` +
-              `Manage via /agents → Scheduled jobs.`,
-          );
-        } catch (err) {
-          return textResult(err instanceof Error ? err.message : String(err));
-        }
-      }
-
-      // Resume existing agent
-      if (params.resume) {
-        const existing = manager.getRecord(params.resume);
-        if (!existing) {
-          return textResult(`Agent not found: "${params.resume}". It may have been cleaned up.`);
-        }
-        if (!existing.session) {
-          return textResult(`Agent "${params.resume}" has no active session to resume.`);
-        }
-        const record = await manager.resume(params.resume, params.prompt, signal);
-        if (!record) {
-          return textResult(`Failed to resume agent "${params.resume}".`);
-        }
-        return textResult(
-          record.result?.trim() || record.error?.trim() || "No output.",
-          buildDetails(detailBase, { ...record, startedAt: record.startedAt ?? 0 }),
-        );
-      }
+      const resumeResult = await handleResume(params as Record<string, unknown>, config, ctx.manager, signal);
+      if (resumeResult) return resumeResult;
 
       // Orchestration dispatch: single / swarm / crew fan-out
-      // — runs before the background/foreground branch so the dispatch can
-      // spawn N background agents (or N foreground-awaited background agents)
-      // and return an aggregated result. If the dispatch says "single", we
-      // fall through to the existing background/foreground paths.
-      const configuredOrchestrationMode = getOrchestrationMode();
-      const dispatch = resolveOrchestrationMode({
-        mode: configuredOrchestrationMode,
-        prompt: params.prompt as string,
-        description: params.description as string,
-        subagentType,
-        runInBackground,
-      });
-      // Record the decision for the /agents → Health check histogram so the
-      // user can see whether the auto-heuristic is firing on prompts they
-      // expected to be one-shots. The configuredMode + promptLength fields
-      // give the user context when they go hunting later.
-      recordDispatchDecision({
-        kind: dispatch.kind,
-        configuredMode: configuredOrchestrationMode,
-        source: configuredOrchestrationMode === "auto" ? "auto-heuristic" : "explicit",
-        promptLength: (params.prompt as string).length,
-        description: (params.description as string) ?? "",
-      });
-      if (dispatch.kind !== "single") {
-        return await runOrchestratedDispatch(dispatch, {
-          detailBase,
-          subagentType,
-          displayName,
-          rawType,
-          fellBack,
-          runInBackground,
-          effectiveMaxTurns,
-          model,
-          isolated,
-          inheritContext,
-          thinking,
-          isolation,
-          agentInvocation,
-          manager,
-          batchOrchestrator,
-          agentActivity,
-          widget,
-          pi,
-          piCtx,
-          toolCallId,
-        });
-      }
+      const dispatchResult = await handleOrchestrationDispatch(
+        params as Record<string, unknown>,
+        config,
+        ctx,
+        piCtx,
+        toolCallId,
+      );
+      if (dispatchResult) return dispatchResult;
 
       // Background execution
-      if (runInBackground) {
-        const { state: bgState, callbacks: bgCallbacks } = createActivityTracker(effectiveMaxTurns);
-
-        // Build spawn options upfront so we can mutate the same object after
-        // spawn returns — the manager stores this reference internally.
-        const spawnOptions = {
-          ...buildSpawnOptions({
-            description: params.description as string,
-            model,
-            maxTurns: effectiveMaxTurns,
-            isolated,
-            inheritContext,
-            thinking,
-            isolation,
-            invocation: agentInvocation,
-          }),
-          isBackground: true,
-          ...bgCallbacks,
-        };
-
-        let id: string;
-        try {
-          id = manager.spawn(pi, piCtx, subagentType, params.prompt, spawnOptions);
-        } catch (err) {
-          return textResult(err instanceof Error ? err.message : String(err));
-        }
-
-        // Wire output file streaming now that id is available.
-        // Mutating spawnOptions (same object stored in manager) before the
-        // async session callback fires ensures the streaming hook runs when
-        // the session is created.
-        setupSessionCallbacks(spawnOptions, (session) => {
-          const rec = manager.getRecord(id);
-          if (rec?.outputFile) {
-            rec.outputCleanup = streamToOutputFile(session, rec.outputFile, id, piCtx.cwd);
-          }
-        });
-
-        // Set output file + join mode synchronously after spawn, before the
-        // event loop yields — onSessionCreated is async so this is safe.
-        const joinMode = resolveJoinMode(getDefaultJoinMode(), true);
-        const record = manager.getRecord(id);
-        if (record && joinMode) {
-          record.joinMode = joinMode;
-          record.toolCallId = toolCallId;
-          record.outputFile = createOutputFilePath(piCtx.cwd, id, piCtx.sessionManager.getSessionId());
-          writeInitialEntry(record.outputFile, id, params.prompt, piCtx.cwd);
-        }
-
-        if (joinMode == null || joinMode === "async") {
-          // Foreground/no join mode or explicit async — not part of any batch
-        } else {
-          // smart / group / swarm — add to current batch (orchestrator routes by joinMode)
-          batchOrchestrator.addToBatch(id, joinMode);
-        }
-
-        agentActivity.set(id, bgState);
-        widget.ensureTimer();
-        widget.debouncedUpdate();
-
-        // Emit created event
-        pi.events.emit("subagents:created", {
-          id,
-          type: subagentType,
-          description: params.description,
-          isBackground: true,
-        });
-
-        const isQueued = record?.status === "queued";
-        return textResult(
-          `Agent ${isQueued ? "queued" : "started"} in background.\n` +
-            `Agent ID: ${id}\n` +
-            `Type: ${displayName}\n` +
-            `Description: ${params.description}\n` +
-            (record?.outputFile ? `Output file: ${record.outputFile}\n` : "") +
-            (isQueued ? `Position: queued (max ${manager.getMaxConcurrent()} concurrent)\n` : "") +
-            `\nYou will be notified when this agent completes.\n` +
-            `Use get_subagent_result to retrieve full results, or steer_subagent to send it messages.\n` +
-            `Do not duplicate this agent's work.`,
-          { ...detailBase, toolUses: 0, tokens: "", durationMs: 0, status: "background" as const, agentId: id },
-        );
+      if (config.runInBackground) {
+        return await handleBackgroundSpawn(params as Record<string, unknown>, config, ctx, piCtx, toolCallId);
       }
 
       // Foreground (synchronous) execution — stream progress via onUpdate
-      let spinnerFrame = 0;
-      const startedAt = Date.now();
-      let fgId: string | undefined;
-
-      const streamUpdate = () => {
-        const details: AgentDetails = {
-          ...detailBase,
-          toolUses: fgState.toolUses,
-          tokens: formatLifetimeTokens(fgState),
-          turnCount: fgState.turnCount,
-          maxTurns: fgState.maxTurns,
-          durationMs: Date.now() - startedAt,
-          status: "running",
-          activity: describeActivity(fgState.activeTools, fgState.responseText),
-          spinnerFrame,
-        };
-        onUpdate?.({
-          content: [{ type: "text", text: `${fgState.toolUses} tool uses...` }],
-          details: details as any,
-        });
-      };
-
-      const { state: fgState, callbacks: fgCallbacks } = createActivityTracker(effectiveMaxTurns, streamUpdate);
-
-      // Wire session creation to register in widget
-      setupSessionCallbacks(fgCallbacks, (session) => {
-        for (const a of manager.listAgents()) {
-          if (a.session === session) {
-            fgId = a.id;
-            agentActivity.set(a.id, fgState);
-            widget.ensureTimer();
-            break;
-          }
-        }
-      });
-
-      // Animate spinner at ~80ms (smooth rotation through 10 braille frames)
-      const spinnerInterval = setInterval(() => {
-        spinnerFrame++;
-        streamUpdate();
-      }, 80);
-
-      streamUpdate();
-
-      let record: AgentRecord;
-      try {
-        record = await manager.spawnAndWait(pi, piCtx, subagentType, params.prompt, {
-          ...buildSpawnOptions({
-            description: params.description as string,
-            model,
-            maxTurns: effectiveMaxTurns,
-            isolated,
-            inheritContext,
-            thinking,
-            isolation,
-            invocation: agentInvocation,
-          }),
-          signal,
-          ...fgCallbacks,
-        });
-      } catch (err) {
-        clearInterval(spinnerInterval);
-        return textResult(err instanceof Error ? err.message : String(err));
-      }
-
-      clearInterval(spinnerInterval);
-
-      // Clean up foreground agent from widget
-      if (fgId) {
-        agentActivity.delete(fgId);
-        widget.markFinished(fgId);
-      }
-
-      // Get final token count
-      const tokenText = formatLifetimeTokens(fgState);
-
-      const details = buildDetails(detailBase, { ...record, startedAt: record.startedAt ?? 0 }, fgState, {
-        tokens: tokenText,
-      });
-
-      const fallbackNote = fellBack ? `Note: Unknown agent type "${rawType}" — using general-purpose.\n\n` : "";
-
-      if (record.status === "error") {
-        return textResult(`${fallbackNote}Agent failed: ${record.error}`, details);
-      }
-
-      const durationMs = (record.completedAt ?? Date.now()) - (record.startedAt ?? 0);
-      const statsParts = [`${record.toolUses} tool uses`];
-      if (tokenText) statsParts.push(tokenText);
-      return textResult(
-        `${fallbackNote}Agent completed in ${formatMs(durationMs)} (${statsParts.join(", ")})${getStatusNote(record.status)}.\n\n` +
-          (record.result?.trim() || "No output."),
-        details,
+      return await handleForegroundSpawn(
+        params as Record<string, unknown>,
+        config,
+        ctx,
+        piCtx,
+        signal,
+        onUpdate as any,
       );
     },
   });

@@ -18,7 +18,14 @@ import { resumeAgent, runAgent, type ToolActivity } from "./agent-runner.js";
 import { getConfig } from "./agent-types.js";
 import { type HookRegistry } from "./hooks.js";
 import { generateCorrelationId } from "./telemetry-otel.js";
-import type { AgentInvocation, AgentRecord, IsolationMode, SubagentType, ThinkingLevel } from "./types.js";
+import type {
+  AgentInvocation,
+  AgentRecord,
+  IsolationMode,
+  SubagentType,
+  ThinkingLevel,
+  ValidationResult,
+} from "./types.js";
 import { addUsage } from "./usage.js";
 import { cleanupWorktree, createWorktree, pruneWorktrees } from "./worktree.js";
 
@@ -213,36 +220,45 @@ export class AgentManager {
   }
 
   /**
-   * Spawn an agent and return its ID immediately (for background use).
-   * If the concurrency limit is reached, the agent is queued.
+   * Enforce the per-session agent spawn limit.
+   * Throws when the configured maxAgentsPerSession has already been reached.
    */
-  spawn(pi: ExtensionAPI, ctx: ExtensionContext, type: SubagentType, prompt: string, options: SpawnOptions): string {
+  private enforceSessionAgentLimit(): void {
     const maxAgents = this.sessionLimits.maxAgentsPerSession;
     if (maxAgents !== undefined && this.sessionUsage.spawnedAgents >= maxAgents) {
       throw new Error(`Session agent limit reached (${this.sessionUsage.spawnedAgents}/${maxAgents})`);
     }
+  }
 
-    // --- Budget / depth enforcement & inheritance ---
-    const parentId = this.getActiveAgentId();
-    const parentRecord = parentId ? this.agents.get(parentId) : undefined;
+  /**
+   * Enforce parent task budget and nesting depth limits.
+   * Increments the parent's totalSpawned counter when the spawn is allowed.
+   * No-op when there is no parent record.
+   */
+  private enforceParentBudgetAndDepth(parentRecord: AgentRecord | undefined): void {
+    if (!parentRecord) return;
 
-    if (parentRecord) {
-      const taskBudget = parentRecord.invocation?.taskBudget;
-      if (taskBudget != null && parentRecord.totalSpawned >= taskBudget) {
-        throw new Error(`Task budget exhausted (${parentRecord.totalSpawned}/${taskBudget})`);
-      }
-      const levelLimit = parentRecord.invocation?.levelLimit ?? 5;
-      const childLevel = (parentRecord.currentLevel ?? 0) + 1;
-      if (childLevel > levelLimit) {
-        throw new Error(`Max agent depth reached (${childLevel}/${levelLimit})`);
-      }
-      parentRecord.totalSpawned++;
+    const taskBudget = parentRecord.invocation?.taskBudget;
+    if (taskBudget != null && parentRecord.totalSpawned >= taskBudget) {
+      throw new Error(`Task budget exhausted (${parentRecord.totalSpawned}/${taskBudget})`);
     }
+    const levelLimit = parentRecord.invocation?.levelLimit ?? 5;
+    const childLevel = (parentRecord.currentLevel ?? 0) + 1;
+    if (childLevel > levelLimit) {
+      throw new Error(`Max agent depth reached (${childLevel}/${levelLimit})`);
+    }
+    parentRecord.totalSpawned++;
+  }
 
-    const childLevel = parentRecord ? (parentRecord.currentLevel ?? 0) + 1 : (options.currentLevel ?? 0);
-
-    // Inherit taskBudget/levelLimit from parent unless explicitly overridden
-    const childInvocation: AgentInvocation = structuredClone(options.invocation ?? {});
+  /**
+   * Build the child agent invocation by inheriting taskBudget/levelLimit from
+   * the parent unless explicitly overridden in the options.
+   */
+  private buildChildInvocation(
+    parentRecord: AgentRecord | undefined,
+    invocation: AgentInvocation | undefined,
+  ): AgentInvocation {
+    const childInvocation: AgentInvocation = structuredClone(invocation ?? {});
     if (parentRecord?.invocation) {
       if (childInvocation.taskBudget === undefined) {
         childInvocation.taskBudget = parentRecord.invocation.taskBudget;
@@ -251,14 +267,23 @@ export class AgentManager {
         childInvocation.levelLimit = parentRecord.invocation.levelLimit;
       }
     }
+    return childInvocation;
+  }
 
-    const id = randomUUID().slice(0, 17);
-    // Honor a caller-supplied correlation id (used by tests and by
-    // any future code path that wants a deterministic id) but always
-    // fall back to a fresh one so the record is never missing one.
-    const correlationId = options.correlationId ?? generateCorrelationId();
+  /**
+   * Create the AgentRecord for a newly spawned agent.
+   * Centralizes record initialization so the spawn method stays readable.
+   */
+  private createAgentRecord(
+    id: string,
+    type: SubagentType,
+    options: SpawnOptions,
+    childInvocation: AgentInvocation,
+    childLevel: number,
+    correlationId: string,
+  ): AgentRecord {
     const abortController = new AbortController();
-    const record: AgentRecord = {
+    return {
       id,
       type,
       description: options.description,
@@ -276,10 +301,13 @@ export class AgentManager {
       contextInputs: { inheritContext: options.inheritContext ?? false },
       correlationId,
     };
-    this.agents.set(id, record);
-    this.sessionUsage.spawnedAgents++;
+  }
 
-    // Dispatch subagent:spawn hook (non-blocking, fire-and-forget)
+  /**
+   * Dispatch the subagent:spawn hook (non-blocking, fire-and-forget).
+   * Failures are logged but never block the spawn.
+   */
+  private dispatchSpawnHook(id: string, type: SubagentType, options: SpawnOptions): void {
     this.hooks
       ?.dispatch("subagent:spawn", id, {
         type,
@@ -289,6 +317,30 @@ export class AgentManager {
       .catch((err) => {
         logger.warn(`Hook dispatch failed:`, { error: err instanceof Error ? err.message : String(err) });
       });
+  }
+
+  /**
+   * Spawn an agent and return its ID immediately (for background use).
+   * If the concurrency limit is reached, the agent is queued.
+   */
+  spawn(pi: ExtensionAPI, ctx: ExtensionContext, type: SubagentType, prompt: string, options: SpawnOptions): string {
+    this.enforceSessionAgentLimit();
+
+    // --- Budget / depth enforcement & inheritance ---
+    const parentId = this.getActiveAgentId();
+    const parentRecord = parentId ? this.agents.get(parentId) : undefined;
+    this.enforceParentBudgetAndDepth(parentRecord);
+
+    const childLevel = parentRecord ? (parentRecord.currentLevel ?? 0) + 1 : (options.currentLevel ?? 0);
+    const childInvocation = this.buildChildInvocation(parentRecord, options.invocation);
+
+    const id = randomUUID().slice(0, 17);
+    const correlationId = options.correlationId ?? generateCorrelationId();
+    const record = this.createAgentRecord(id, type, options, childInvocation, childLevel, correlationId);
+    this.agents.set(id, record);
+    this.sessionUsage.spawnedAgents++;
+
+    this.dispatchSpawnHook(id, type, options);
 
     const args: SpawnArgs = { pi, ctx, type, prompt, options };
 
@@ -430,28 +482,7 @@ export class AgentManager {
         record.session = session;
         const status = aborted ? "aborted" : steered ? "steered" : "completed";
 
-        // Store validation results on the record
-        if (validationResults) {
-          record.validationResults = validationResults;
-          record.validated = validated;
-
-          // Append validation feedback when validators fail
-          if (!validated) {
-            let failedFeedback = "";
-            for (const r of validationResults) {
-              if (r.passed) continue;
-              let details = "";
-              for (const c of r.criteria) {
-                if (!c.passed) {
-                  details += `\n  - ${c.criterion}: ${c.feedback}`;
-                }
-              }
-              if (failedFeedback) failedFeedback += "\n\n";
-              failedFeedback += `[${r.agentId}] ${r.summary}${details}`;
-            }
-            record.result = `${record.result ?? ""}\n\n---\n## Validation Feedback (FAILED)\n${failedFeedback}`;
-          }
-        }
+        this.applyValidationResults(record, validationResults, validated);
 
         this.finalizeAgent(record, ctx, options.description, !!options.isBackground, detach, status);
         return responseText;
@@ -463,6 +494,46 @@ export class AgentManager {
       });
 
     record.promise = promise;
+  }
+
+  /**
+   * Store validation results on the record and append failed-validation
+   * feedback to the result text when validators did not all pass.
+   */
+  private applyValidationResults(
+    record: AgentRecord,
+    validationResults: ValidationResult[] | undefined,
+    validated: boolean | undefined,
+  ): void {
+    if (!validationResults) return;
+
+    record.validationResults = validationResults;
+    record.validated = validated;
+
+    if (validated) return;
+
+    const failedFeedback = this.buildFailedValidationFeedback(validationResults);
+    record.result = `${record.result ?? ""}\n\n---\n## Validation Feedback (FAILED)\n${failedFeedback}`;
+  }
+
+  /**
+   * Build the human-readable feedback string from failed validation criteria.
+   * Skips passed validators and passed criteria within failed validators.
+   */
+  private buildFailedValidationFeedback(results: ValidationResult[]): string {
+    let failedFeedback = "";
+    for (const r of results) {
+      if (r.passed) continue;
+      let details = "";
+      for (const c of r.criteria) {
+        if (!c.passed) {
+          details += `\n  - ${c.criterion}: ${c.feedback}`;
+        }
+      }
+      if (failedFeedback) failedFeedback += "\n\n";
+      failedFeedback += `[${r.agentId}] ${r.summary}${details}`;
+    }
+    return failedFeedback;
   }
 
   /**

@@ -90,6 +90,158 @@ export function buildDashboardBodyLines(
   return { lines: [...swarmLines, ...agentLines], focusLineByAgentId };
 }
 
+/** Single-pass counting of agent statuses and unique swarms (capped to a display window). */
+function countVirtualAgents(agents: AgentRecord[]): {
+  runningCount: number;
+  queuedCount: number;
+  doneCount: number;
+  swarmsCount: number;
+  displaySwarms: AgentRecord[];
+} {
+  let runningCount = 0;
+  let queuedCount = 0;
+  let doneCount = 0;
+  let swarmsCount = 0;
+  const seenSwarms: Record<string, boolean> = Object.create(null);
+  const displaySwarms: AgentRecord[] = [];
+
+  const SWARM_VIRTUAL_WINDOW = 10;
+
+  for (let i = 0; i < agents.length; i++) {
+    const a = agents[i];
+    if (!a.swarmId) {
+      if (a.status === "running") runningCount++;
+      else if (a.status === "queued") queuedCount++;
+      else doneCount++;
+    } else if (!seenSwarms[a.swarmId]) {
+      seenSwarms[a.swarmId] = true;
+      swarmsCount++;
+      if (displaySwarms.length < SWARM_VIRTUAL_WINDOW) {
+        displaySwarms.push(a);
+      }
+    }
+  }
+
+  return { runningCount, queuedCount, doneCount, swarmsCount, displaySwarms };
+}
+
+/** Compute the visible window bounds [start, end) for each status section. */
+function computeWindowBounds(
+  total: number,
+  selectedIndex: number,
+  runningCount: number,
+  queuedCount: number,
+  doneCount: number,
+): {
+  winRunStart: number;
+  winRunEnd: number;
+  winQStart: number;
+  winQEnd: number;
+  winDStart: number;
+  winDEnd: number;
+} {
+  const halfWindow = Math.floor(VIRTUAL_WINDOW / 2);
+  const windowStart = Math.max(0, selectedIndex - halfWindow);
+  const windowEnd = Math.min(total, selectedIndex + halfWindow);
+
+  const winRunStart = Math.max(0, windowStart);
+  const winRunEnd = Math.min(runningCount, windowEnd);
+
+  const winQStart = Math.max(0, windowStart);
+  const winQEnd = Math.min(queuedCount, windowEnd);
+
+  const doneOffset = selectedIndex - runningCount - queuedCount;
+  const winDStart = doneOffset < 0 ? Math.max(0, doneCount - VIRTUAL_WINDOW) : Math.max(0, doneOffset - halfWindow);
+  const winDEnd = doneOffset < 0 ? doneCount : Math.min(doneCount, doneOffset + halfWindow);
+
+  return { winRunStart, winRunEnd, winQStart, winQEnd, winDStart, winDEnd };
+}
+
+/** Single-pass extraction of the running/queued/done slices within their windows. */
+function sliceWindowedAgents(
+  agents: AgentRecord[],
+  bounds: {
+    winRunStart: number;
+    winRunEnd: number;
+    winQStart: number;
+    winQEnd: number;
+    winDStart: number;
+    winDEnd: number;
+  },
+): { runningSlice: AgentRecord[]; queuedSlice: AgentRecord[]; doneSlice: AgentRecord[] } {
+  const runningSlice: AgentRecord[] = [];
+  const queuedSlice: AgentRecord[] = [];
+  const doneSlice: AgentRecord[] = [];
+
+  let rIdx = 0;
+  let qIdx = 0;
+  let dIdx = 0;
+
+  for (let i = 0; i < agents.length; i++) {
+    const a = agents[i];
+    if (a.swarmId) continue;
+    if (a.status === "running") {
+      if (rIdx >= bounds.winRunStart && rIdx < bounds.winRunEnd) runningSlice.push(a);
+      rIdx++;
+    } else if (a.status === "queued") {
+      if (qIdx >= bounds.winQStart && qIdx < bounds.winQEnd) queuedSlice.push(a);
+      qIdx++;
+    } else {
+      if (dIdx >= bounds.winDStart && dIdx < bounds.winDEnd) doneSlice.push(a);
+      dIdx++;
+    }
+  }
+
+  return { runningSlice, queuedSlice, doneSlice };
+}
+
+const SWARM_VIRTUAL_WINDOW = 10;
+
+/** Render the swarm section header and first-N swarm rows into `lines`. */
+function renderVirtualSwarmSection(
+  lines: string[],
+  swarmsCount: number,
+  total: number,
+  displaySwarms: AgentRecord[],
+  innerW: number,
+  th: DashboardTheme,
+  box: BoxChars,
+  state: DashboardRenderState,
+  focusLineByAgentId: Map<string, number>,
+): void {
+  if (swarmsCount <= 0) return;
+  lines.push("");
+  lines.push(renderSectionTitle("◆ SWARMS", `${swarmsCount} swarms · ${total} agents`, innerW, th, box));
+  for (const first of displaySwarms) {
+    focusLineByAgentId.set(first.id, lines.length);
+    lines.push(`  ${renderCompactRow(first, innerW - 2, th, state)}`);
+  }
+  const showAllSwarms = swarmsCount <= SWARM_VIRTUAL_WINDOW;
+  if (!showAllSwarms) {
+    lines.push(`  ${th.dim}+ ${swarmsCount - SWARM_VIRTUAL_WINDOW} more swarms${th.reset}`);
+  } else if (swarmsCount > 5) {
+    lines.push(`  ${th.dim}+ ${swarmsCount - 5} more swarms${th.reset}`);
+  }
+}
+
+/** Render the "earlier/later" overflow hints around a windowed slice. */
+function appendWindowOverflow(
+  lines: string[],
+  winStart: number,
+  winEnd: number,
+  totalCount: number,
+  earlierLabel: string,
+  moreLabel: string,
+  th: DashboardTheme,
+): void {
+  if (winStart > 0) {
+    lines.push(`  ${th.dim}+ ${winStart} ${earlierLabel}${th.reset}`);
+  }
+  if (winEnd < totalCount) {
+    lines.push(`  ${th.dim}+ ${totalCount - winEnd} ${moreLabel}${th.reset}`);
+  }
+}
+
 /**
  * Virtual-scrolled body rendering for large agent lists.
  *
@@ -110,95 +262,14 @@ function buildVirtualBodyLines(
   const { agents, selectedIndex } = state;
   const total = agents.length;
 
-  // Zero-allocation single-pass counting loop to establish window bounds
-  // before extracting only the visible slice, rather than populating large intermediate categorized arrays.
-  let runningCount = 0;
-  let queuedCount = 0;
-  let doneCount = 0;
+  const { runningCount, queuedCount, doneCount, swarmsCount, displaySwarms } = countVirtualAgents(agents);
 
-  // For extreme performance optimization in hot-rendering loops, use Object.create(null)
-  // for tracking sets or dictionaries to bypass prototype lookup and avoid allocation overhead.
-  let swarmsCount = 0;
-  const seenSwarms: Record<string, boolean> = Object.create(null);
-  const displaySwarms: AgentRecord[] = [];
-
-  const SWARM_VIRTUAL_WINDOW = 10;
-
-  for (let i = 0; i < total; i++) {
-    const a = agents[i];
-    if (!a.swarmId) {
-      if (a.status === "running") runningCount++;
-      else if (a.status === "queued") queuedCount++;
-      else doneCount++;
-    } else {
-      if (!seenSwarms[a.swarmId]) {
-        seenSwarms[a.swarmId] = true;
-        swarmsCount++;
-        if (displaySwarms.length < SWARM_VIRTUAL_WINDOW) {
-          displaySwarms.push(a);
-        }
-      }
-    }
-  }
-
-  // Window around selected index
-  const halfWindow = Math.floor(VIRTUAL_WINDOW / 2);
-  const windowStart = Math.max(0, selectedIndex - halfWindow);
-  const windowEnd = Math.min(total, selectedIndex + halfWindow);
-
-  // Determine slice indices for each section
-  const winRunStart = Math.max(0, windowStart);
-  const winRunEnd = Math.min(runningCount, windowEnd);
-
-  const winQStart = Math.max(0, windowStart);
-  const winQEnd = Math.min(queuedCount, windowEnd);
-
-  const doneOffset = selectedIndex - runningCount - queuedCount;
-  const winDStart = doneOffset < 0 ? Math.max(0, doneCount - VIRTUAL_WINDOW) : Math.max(0, doneOffset - halfWindow);
-  const winDEnd = doneOffset < 0 ? doneCount : Math.min(doneCount, doneOffset + halfWindow);
-
-  // Extract slices using a single pass over the original array
-  const runningSlice: AgentRecord[] = [];
-  const queuedSlice: AgentRecord[] = [];
-  const doneSlice: AgentRecord[] = [];
-
-  let rIdx = 0;
-  let qIdx = 0;
-  let dIdx = 0;
-
-  for (let i = 0; i < total; i++) {
-    const a = agents[i];
-    if (!a.swarmId) {
-      if (a.status === "running") {
-        if (rIdx >= winRunStart && rIdx < winRunEnd) runningSlice.push(a);
-        rIdx++;
-      } else if (a.status === "queued") {
-        if (qIdx >= winQStart && qIdx < winQEnd) queuedSlice.push(a);
-        qIdx++;
-      } else {
-        if (dIdx >= winDStart && dIdx < winDEnd) doneSlice.push(a);
-        dIdx++;
-      }
-    }
-  }
+  const bounds = computeWindowBounds(total, selectedIndex, runningCount, queuedCount, doneCount);
+  const { runningSlice, queuedSlice, doneSlice } = sliceWindowedAgents(agents, bounds);
 
   const lines: string[] = [];
 
-  // Swarm section
-  const showAllSwarms = swarmsCount <= SWARM_VIRTUAL_WINDOW;
-  if (swarmsCount > 0) {
-    lines.push("");
-    lines.push(renderSectionTitle("◆ SWARMS", `${swarmsCount} swarms · ${total} agents`, innerW, th, box));
-    for (const first of displaySwarms) {
-      focusLineByAgentId.set(first.id, lines.length);
-      lines.push(`  ${renderCompactRow(first, innerW - 2, th, state)}`);
-    }
-    if (!showAllSwarms) {
-      lines.push(`  ${th.dim}+ ${swarmsCount - SWARM_VIRTUAL_WINDOW} more swarms${th.reset}`);
-    } else if (swarmsCount > 5) {
-      lines.push(`  ${th.dim}+ ${swarmsCount - 5} more swarms${th.reset}`);
-    }
-  }
+  renderVirtualSwarmSection(lines, swarmsCount, total, displaySwarms, innerW, th, box, state, focusLineByAgentId);
 
   // Running section
   if (runningCount > 0) {
@@ -209,12 +280,15 @@ function buildVirtualBodyLines(
       focusLineByAgentId.set(rec.id, lines.length + 1);
       lines.push(...renderRunningCard(rec, innerW, th, box, state));
     }
-    if (winRunStart > 0) {
-      lines.push(`  ${th.dim}+ ${winRunStart} earlier running agents${th.reset}`);
-    }
-    if (winRunEnd < runningCount) {
-      lines.push(`  ${th.dim}+ ${runningCount - winRunEnd} more running agents${th.reset}`);
-    }
+    appendWindowOverflow(
+      lines,
+      bounds.winRunStart,
+      bounds.winRunEnd,
+      runningCount,
+      "earlier running agents",
+      "more running agents",
+      th,
+    );
   }
 
   // Queued section
@@ -226,12 +300,7 @@ function buildVirtualBodyLines(
       focusLineByAgentId.set(rec.id, lines.length);
       lines.push(`  ${renderCompactRow(rec, innerW - 2, th, state)}`);
     }
-    if (winQStart > 0) {
-      lines.push(`  ${th.dim}+ ${winQStart} earlier queued${th.reset}`);
-    }
-    if (winQEnd < queuedCount) {
-      lines.push(`  ${th.dim}+ ${queuedCount - winQEnd} more queued${th.reset}`);
-    }
+    appendWindowOverflow(lines, bounds.winQStart, bounds.winQEnd, queuedCount, "earlier queued", "more queued", th);
   }
 
   // Done section
@@ -243,12 +312,15 @@ function buildVirtualBodyLines(
       focusLineByAgentId.set(rec.id, lines.length);
       lines.push(`  ${renderCompactRow(rec, innerW - 2, th, state)}`);
     }
-    if (winDStart > 0) {
-      lines.push(`  ${th.dim}+ ${winDStart} earlier finished agents${th.reset}`);
-    }
-    if (winDEnd < doneCount) {
-      lines.push(`  ${th.dim}+ ${doneCount - winDEnd} more finished agents${th.reset}`);
-    }
+    appendWindowOverflow(
+      lines,
+      bounds.winDStart,
+      bounds.winDEnd,
+      doneCount,
+      "earlier finished agents",
+      "more finished agents",
+      th,
+    );
   }
 
   // Virtual scroll indicator

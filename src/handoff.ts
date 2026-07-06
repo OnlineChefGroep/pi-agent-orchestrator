@@ -137,48 +137,10 @@ function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS, maxDepth:
     throw new Error(`JSON size ${input.length} exceeds maximum ${MAX_JSON_SIZE} bytes`);
   }
 
-  // Single-pass scan: depth, key count, and max raw string length.
+  // Single-pass scan for depth, key count, and max raw string length.
   // Tracking maxStringLen lets us skip the recursive truncateStrings walk
   // when no string exceeds MAX_STRING_LENGTH — the common case for handoffs.
-  let currentDepth = 0;
-  let keyCount = 0;
-  let maxStringLen = 0;
-  let inString = false;
-  let escapeNext = false;
-  let stringStart = -1;
-
-  for (let i = 0; i < input.length; i++) {
-    const char = input[i];
-
-    if (inString) {
-      if (escapeNext) {
-        escapeNext = false;
-      } else if (char === "\\") {
-        escapeNext = true;
-      } else if (char === '"') {
-        inString = false;
-        const rawLen = i - stringStart;
-        if (rawLen > maxStringLen) maxStringLen = rawLen;
-      }
-    } else {
-      if (char === '"') {
-        inString = true;
-        stringStart = i;
-      } else if (char === "{" || char === "[") {
-        currentDepth++;
-        if (currentDepth > maxDepth) {
-          throw new Error(`JSON depth exceeds maximum of ${maxDepth}`);
-        }
-      } else if (char === "}" || char === "]") {
-        currentDepth--;
-      } else if (char === ":") {
-        keyCount++;
-        if (keyCount > maxKeys) {
-          throw new Error(`JSON key count exceeds maximum of ${maxKeys}`);
-        }
-      }
-    }
-  }
+  const { maxStringLen } = scanJsonLimits(input, maxKeys, maxDepth);
 
   const parsed = JSON.parse(input);
 
@@ -190,6 +152,115 @@ function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS, maxDepth:
   }
 
   return parsed;
+}
+
+/**
+ * Single-pass JSON scanner that enforces depth and key-count limits while
+ * tracking the maximum raw string length seen in the document. Throws on
+ * limit violations. Used by {@link safeJsonParse} to guard JSON.parse.
+ */
+function scanJsonLimits(
+  input: string,
+  maxKeys: number,
+  maxDepth: number,
+): { currentDepth: number; keyCount: number; maxStringLen: number } {
+  let currentDepth = 0;
+  let keyCount = 0;
+  let maxStringLen = 0;
+  let inString = false;
+  let escapeNext = false;
+  let stringStart = -1;
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    const state = { inString, escapeNext, stringStart };
+
+    const stringResult = updateStringScanState(char, state, i);
+    if (stringResult.handledString) {
+      inString = stringResult.inString;
+      escapeNext = stringResult.escapeNext;
+      if (stringResult.stringClosed) {
+        maxStringLen = Math.max(maxStringLen, stringResult.rawLen);
+      }
+      continue;
+    }
+
+    inString = stringResult.inString;
+    escapeNext = stringResult.escapeNext;
+
+    const depthKey = updateStructuralState(char, currentDepth, keyCount, maxDepth, maxKeys);
+    currentDepth = depthKey.currentDepth;
+    keyCount = depthKey.keyCount;
+  }
+
+  return { currentDepth, keyCount, maxStringLen };
+}
+
+/** Update the string-scan state for a single character. Mutates `state` in place. */
+function updateStringScanState(
+  char: string,
+  state: { inString: boolean; escapeNext: boolean; stringStart: number },
+  i: number,
+): {
+  handledString: boolean;
+  inString: boolean;
+  escapeNext: boolean;
+  stringClosed: boolean;
+  rawLen: number;
+} {
+  if (state.inString) {
+    if (state.escapeNext) {
+      state.escapeNext = false;
+      return { handledString: true, inString: true, escapeNext: false, stringClosed: false, rawLen: 0 };
+    }
+    if (char === "\\") {
+      state.escapeNext = true;
+      return { handledString: true, inString: true, escapeNext: true, stringClosed: false, rawLen: 0 };
+    }
+    if (char === '"') {
+      state.inString = false;
+      return {
+        handledString: true,
+        inString: false,
+        escapeNext: false,
+        stringClosed: true,
+        rawLen: i - state.stringStart,
+      };
+    }
+    return { handledString: true, inString: true, escapeNext: false, stringClosed: false, rawLen: 0 };
+  }
+
+  if (char === '"') {
+    state.inString = true;
+    state.stringStart = i;
+    return { handledString: true, inString: true, escapeNext: false, stringClosed: false, rawLen: 0 };
+  }
+
+  return { handledString: false, inString: false, escapeNext: state.escapeNext, stringClosed: false, rawLen: 0 };
+}
+
+/** Update depth and key-count counters for a structural (non-string) character. Throws on limit violations. */
+function updateStructuralState(
+  char: string,
+  currentDepth: number,
+  keyCount: number,
+  maxDepth: number,
+  maxKeys: number,
+): { currentDepth: number; keyCount: number } {
+  if (char === "{" || char === "[") {
+    currentDepth++;
+    if (currentDepth > maxDepth) {
+      throw new Error(`JSON depth exceeds maximum of ${maxDepth}`);
+    }
+  } else if (char === "}" || char === "]") {
+    currentDepth--;
+  } else if (char === ":") {
+    keyCount++;
+    if (keyCount > maxKeys) {
+      throw new Error(`JSON key count exceeds maximum of ${maxKeys}`);
+    }
+  }
+  return { currentDepth, keyCount };
 }
 
 function truncateStrings(obj: any): any {
@@ -268,34 +339,50 @@ function validateHandoffShape(obj: Record<string, unknown>): string[] {
     issues.push(`findings (too many: ${obj.findings.length})`);
   }
   if (obj.files !== undefined) {
-    if (!Array.isArray(obj.files)) {
-      issues.push("files");
-    } else if (obj.files.length > MAX_FILES_COUNT) {
-      issues.push(`files (too many: ${obj.files.length})`);
-    } else if (obj.files.some((file) => typeof file !== "string" || file.trim().length === 0)) {
-      issues.push("files (invalid item)");
-    }
+    pushFilesIssues(obj.files, issues);
   }
   if (obj.artifacts !== undefined) {
-    if (!Array.isArray(obj.artifacts)) {
-      issues.push("artifacts");
-    } else if (obj.artifacts.length > MAX_ARTIFACTS_COUNT) {
-      issues.push(`artifacts (too many: ${obj.artifacts.length})`);
-    } else {
-      for (const artifact of obj.artifacts) {
-        // Accept either a v2 typed artifact or any loose shape that has at
-        // least one of the fields {@link coerceLegacyArtifact} can convert
-        // (path / title+value / branch / url). Strict v2 validation +
-        // coercion runs after shape validation in `parseHandoff`.
-        if (!isCoercibleArtifactShape(artifact)) {
-          issues.push("artifacts (invalid item)");
-          break;
-        }
-      }
-    }
+    pushArtifactsIssues(obj.artifacts, issues);
   }
 
   return issues;
+}
+
+/**
+ * Validate the `files` field of a handoff and push any issues onto `issues`.
+ * Used by {@link validateHandoffShape} to keep its complexity low.
+ */
+function pushFilesIssues(files: unknown, issues: string[]): void {
+  if (!Array.isArray(files)) {
+    issues.push("files");
+  } else if (files.length > MAX_FILES_COUNT) {
+    issues.push(`files (too many: ${files.length})`);
+  } else if (files.some((file) => typeof file !== "string" || file.trim().length === 0)) {
+    issues.push("files (invalid item)");
+  }
+}
+
+/**
+ * Validate the `artifacts` field of a handoff and push any issues onto
+ * `issues`. Used by {@link validateHandoffShape} to keep its complexity low.
+ */
+function pushArtifactsIssues(artifacts: unknown, issues: string[]): void {
+  if (!Array.isArray(artifacts)) {
+    issues.push("artifacts");
+  } else if (artifacts.length > MAX_ARTIFACTS_COUNT) {
+    issues.push(`artifacts (too many: ${artifacts.length})`);
+  } else {
+    for (const artifact of artifacts) {
+      // Accept either a v2 typed artifact or any loose shape that has at
+      // least one of the fields {@link coerceLegacyArtifact} can convert
+      // (path / title+value / branch / url). Strict v2 validation +
+      // coercion runs after shape validation in `parseHandoff`.
+      if (!isCoercibleArtifactShape(artifact)) {
+        issues.push("artifacts (invalid item)");
+        break;
+      }
+    }
+  }
 }
 
 /**
@@ -347,46 +434,62 @@ function isHandoffArtifactV2(value: unknown): value is HandoffArtifactV2 {
 
   switch (obj.type) {
     case "file":
-      return (
-        isValidStringField(obj.path, MAX_ARTIFACT_PATH_LENGTH) &&
-        (obj.mimeType === undefined || isValidStringField(obj.mimeType, 200)) &&
-        (obj.title === undefined || isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH))
-      );
-
+      return isFileArtifactShape(obj);
     case "branch":
-      if (!isValidStringField(obj.branch, MAX_ARTIFACT_BRANCH_NAME_LENGTH)) return false;
-      if (obj.base !== undefined && !isValidStringField(obj.base, MAX_ARTIFACT_BRANCH_NAME_LENGTH)) return false;
-      if (obj.commits !== undefined) {
-        if (
-          !Array.isArray(obj.commits) ||
-          obj.commits.length > MAX_ARTIFACT_COMMITS_COUNT ||
-          obj.commits.some((c) => typeof c !== "string" || c.length === 0 || c.length > MAX_ARTIFACT_COMMITS_LENGTH)
-        ) {
-          return false;
-        }
-      }
-      if (obj.title !== undefined && !isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH)) return false;
-      return true;
-
+      return isBranchArtifactShape(obj);
     case "url":
-      return (
-        isValidStringField(obj.url, MAX_ARTIFACT_URL_LENGTH) &&
-        (obj.title === undefined || isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH)) &&
-        (obj.description === undefined || isValidStringField(obj.description, MAX_ARTIFACT_DESCRIPTION_LENGTH))
-      );
-
+      return isUrlArtifactShape(obj);
     case "note":
-      return (
-        isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH) &&
-        isValidStringField(obj.value, MAX_ARTIFACT_VALUE_LENGTH) &&
-        (obj.mimeType === undefined || isValidStringField(obj.mimeType, 200))
-      );
-
+      return isNoteArtifactShape(obj);
     default:
       // Unknown / legacy type. Reject strict-mode artifacts so validateHandoffShape
       // surfaces the issue; coercion happens in parseHandoff as a soft-fallback.
       return false;
   }
+}
+
+/** Validate a v2 `file` artifact. Extracted from {@link isHandoffArtifactV2}. */
+function isFileArtifactShape(obj: Record<string, unknown>): boolean {
+  return (
+    isValidStringField(obj.path, MAX_ARTIFACT_PATH_LENGTH) &&
+    (obj.mimeType === undefined || isValidStringField(obj.mimeType, 200)) &&
+    (obj.title === undefined || isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH))
+  );
+}
+
+/** Validate a v2 `url` artifact. Extracted from {@link isHandoffArtifactV2}. */
+function isUrlArtifactShape(obj: Record<string, unknown>): boolean {
+  return (
+    isValidStringField(obj.url, MAX_ARTIFACT_URL_LENGTH) &&
+    (obj.title === undefined || isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH)) &&
+    (obj.description === undefined || isValidStringField(obj.description, MAX_ARTIFACT_DESCRIPTION_LENGTH))
+  );
+}
+
+/** Validate a v2 `note` artifact. Extracted from {@link isHandoffArtifactV2}. */
+function isNoteArtifactShape(obj: Record<string, unknown>): boolean {
+  return (
+    isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH) &&
+    isValidStringField(obj.value, MAX_ARTIFACT_VALUE_LENGTH) &&
+    (obj.mimeType === undefined || isValidStringField(obj.mimeType, 200))
+  );
+}
+
+/** Validate a v2 `branch` artifact. Extracted from {@link isHandoffArtifactV2}. */
+function isBranchArtifactShape(obj: Record<string, unknown>): boolean {
+  if (!isValidStringField(obj.branch, MAX_ARTIFACT_BRANCH_NAME_LENGTH)) return false;
+  if (obj.base !== undefined && !isValidStringField(obj.base, MAX_ARTIFACT_BRANCH_NAME_LENGTH)) return false;
+  if (obj.commits !== undefined) {
+    if (
+      !Array.isArray(obj.commits) ||
+      obj.commits.length > MAX_ARTIFACT_COMMITS_COUNT ||
+      obj.commits.some((c) => typeof c !== "string" || c.length === 0 || c.length > MAX_ARTIFACT_COMMITS_LENGTH)
+    ) {
+      return false;
+    }
+  }
+  if (obj.title !== undefined && !isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH)) return false;
+  return true;
 }
 
 /**
@@ -406,54 +509,76 @@ function coerceLegacyArtifact(value: unknown): HandoffArtifactV2 | null {
   const originalType = typeof obj.type === "string" ? obj.type : "<missing>";
 
   // File-shaped: any non-empty `path` becomes a file artifact
-  if (typeof obj.path === "string" && obj.path.trim().length > 0) {
-    return {
-      type: "file",
-      path: obj.path,
-      mimeType: typeof obj.mimeType === "string" ? obj.mimeType : undefined,
-      title: typeof obj.title === "string" ? obj.title : undefined,
-    };
-  }
+  const fileArtifact = coerceFileArtifact(obj);
+  if (fileArtifact) return fileArtifact;
 
   // Note-shaped: title + value
-  if (
-    typeof obj.title === "string" &&
-    obj.title.trim().length > 0 &&
-    typeof obj.value === "string" &&
-    obj.value.length > 0
-  ) {
-    return {
-      type: "note",
-      title: obj.title,
-      value: obj.value.slice(0, MAX_ARTIFACT_VALUE_LENGTH),
-      mimeType: typeof obj.mimeType === "string" ? obj.mimeType : undefined,
-    };
-  }
+  const noteArtifact = coerceNoteArtifact(obj);
+  if (noteArtifact) return noteArtifact;
 
   // Branch-shaped: branch field
-  if (typeof obj.branch === "string" && obj.branch.trim().length > 0) {
-    return {
-      type: "branch",
-      branch: obj.branch,
-      base: typeof obj.base === "string" ? obj.base : undefined,
-      title: typeof obj.title === "string" ? obj.title : undefined,
-    };
-  }
+  const branchArtifact = coerceBranchArtifact(obj);
+  if (branchArtifact) return branchArtifact;
 
   // URL-shaped: url field
-  if (typeof obj.url === "string" && obj.url.trim().length > 0) {
-    return {
-      type: "url",
-      url: obj.url,
-      title: typeof obj.title === "string" ? obj.title : undefined,
-      description: typeof obj.description === "string" ? obj.description : undefined,
-    };
-  }
+  const urlArtifact = coerceUrlArtifact(obj);
+  if (urlArtifact) return urlArtifact;
 
   logger.warn(
     `Dropped legacy handoff artifact of unknown type "${originalType}" — no path/title+value/branch/url fields found`,
   );
   return null;
+}
+
+/** Coerce a loose `file`-shaped artifact (non-empty `path`). Extracted from {@link coerceLegacyArtifact}. */
+function coerceFileArtifact(obj: Record<string, unknown>): HandoffFileArtifact | null {
+  if (typeof obj.path !== "string" || obj.path.trim().length === 0) return null;
+  return {
+    type: "file",
+    path: obj.path,
+    mimeType: typeof obj.mimeType === "string" ? obj.mimeType : undefined,
+    title: typeof obj.title === "string" ? obj.title : undefined,
+  };
+}
+
+/** Coerce a loose `note`-shaped artifact (`title` + `value`). Extracted from {@link coerceLegacyArtifact}. */
+function coerceNoteArtifact(obj: Record<string, unknown>): HandoffNoteArtifact | null {
+  if (
+    typeof obj.title !== "string" ||
+    obj.title.trim().length === 0 ||
+    typeof obj.value !== "string" ||
+    obj.value.length === 0
+  ) {
+    return null;
+  }
+  return {
+    type: "note",
+    title: obj.title,
+    value: obj.value.slice(0, MAX_ARTIFACT_VALUE_LENGTH),
+    mimeType: typeof obj.mimeType === "string" ? obj.mimeType : undefined,
+  };
+}
+
+/** Coerce a loose `branch`-shaped artifact (`branch` field). Extracted from {@link coerceLegacyArtifact}. */
+function coerceBranchArtifact(obj: Record<string, unknown>): HandoffBranchArtifact | null {
+  if (typeof obj.branch !== "string" || obj.branch.trim().length === 0) return null;
+  return {
+    type: "branch",
+    branch: obj.branch,
+    base: typeof obj.base === "string" ? obj.base : undefined,
+    title: typeof obj.title === "string" ? obj.title : undefined,
+  };
+}
+
+/** Coerce a loose `url`-shaped artifact (`url` field). Extracted from {@link coerceLegacyArtifact}. */
+function coerceUrlArtifact(obj: Record<string, unknown>): HandoffUrlArtifact | null {
+  if (typeof obj.url !== "string" || obj.url.trim().length === 0) return null;
+  return {
+    type: "url",
+    url: obj.url,
+    title: typeof obj.title === "string" ? obj.title : undefined,
+    description: typeof obj.description === "string" ? obj.description : undefined,
+  };
 }
 
 /**
@@ -693,32 +818,46 @@ export function renderHandoffForParent(handoff: AgentHandoff): string {
 
 function renderArtifactForParent(artifact: HandoffArtifactV2): string {
   switch (artifact.type) {
-    case "file": {
-      const title = artifact.title ? `${artifact.title}: ` : "";
-      const mime = artifact.mimeType ? ` (${artifact.mimeType})` : "";
-      return `[file] ${title}${artifact.path}${mime}`;
-    }
-    case "branch": {
-      const title = artifact.title ? `${artifact.title} ` : "";
-      const base = artifact.base ? ` (from ${artifact.base})` : "";
-      const commits =
-        artifact.commits && artifact.commits.length > 0
-          ? ` +${artifact.commits.length} commit${artifact.commits.length === 1 ? "" : "s"}`
-          : "";
-      return `[branch] ${title}${artifact.branch}${base}${commits}`;
-    }
-    case "url": {
-      const title = artifact.title ? `${artifact.title}: ` : "";
-      const desc = artifact.description ? ` — ${artifact.description}` : "";
-      return `[url] ${title}${artifact.url}${desc}`;
-    }
-    case "note": {
-      const mime = artifact.mimeType ? ` (${artifact.mimeType})` : "";
-      // Indent multi-line notes so they line up with the bullet
-      const value = artifact.value.includes("\n")
-        ? `\n      ${artifact.value.replace(/\n/g, "\n      ")}`
-        : artifact.value;
-      return `[note] ${artifact.title}: ${value}${mime}`;
-    }
+    case "file":
+      return renderFileArtifact(artifact);
+    case "branch":
+      return renderBranchArtifact(artifact);
+    case "url":
+      return renderUrlArtifact(artifact);
+    case "note":
+      return renderNoteArtifact(artifact);
   }
+}
+
+/** Render a `file` artifact for the parent view. Extracted from {@link renderArtifactForParent}. */
+function renderFileArtifact(artifact: HandoffFileArtifact): string {
+  const title = artifact.title ? `${artifact.title}: ` : "";
+  const mime = artifact.mimeType ? ` (${artifact.mimeType})` : "";
+  return `[file] ${title}${artifact.path}${mime}`;
+}
+
+/** Render a `branch` artifact for the parent view. Extracted from {@link renderArtifactForParent}. */
+function renderBranchArtifact(artifact: HandoffBranchArtifact): string {
+  const title = artifact.title ? `${artifact.title} ` : "";
+  const base = artifact.base ? ` (from ${artifact.base})` : "";
+  const commits =
+    artifact.commits && artifact.commits.length > 0
+      ? ` +${artifact.commits.length} commit${artifact.commits.length === 1 ? "" : "s"}`
+      : "";
+  return `[branch] ${title}${artifact.branch}${base}${commits}`;
+}
+
+/** Render a `url` artifact for the parent view. Extracted from {@link renderArtifactForParent}. */
+function renderUrlArtifact(artifact: HandoffUrlArtifact): string {
+  const title = artifact.title ? `${artifact.title}: ` : "";
+  const desc = artifact.description ? ` — ${artifact.description}` : "";
+  return `[url] ${title}${artifact.url}${desc}`;
+}
+
+/** Render a `note` artifact for the parent view. Extracted from {@link renderArtifactForParent}. */
+function renderNoteArtifact(artifact: HandoffNoteArtifact): string {
+  const mime = artifact.mimeType ? ` (${artifact.mimeType})` : "";
+  // Indent multi-line notes so they line up with the bullet
+  const value = artifact.value.includes("\n") ? `\n      ${artifact.value.replace(/\n/g, "\n      ")}` : artifact.value;
+  return `[note] ${artifact.title}: ${value}${mime}`;
 }

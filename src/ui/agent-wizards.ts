@@ -108,6 +108,34 @@ Write the file using the write tool. Only write the file, nothing else.`;
   }
 }
 
+/** Resolve the user's tool choice into the `tools:` frontmatter value. Returns undefined to abort. */
+async function resolveToolsChoice(ctx: ExtensionCommandContext, toolChoice: string): Promise<string | undefined> {
+  if (toolChoice === "all") {
+    return BUILTIN_TOOL_NAMES.join(", ");
+  }
+  if (toolChoice === "none") {
+    return "none";
+  }
+  if (toolChoice.startsWith("read-only")) {
+    return "read, bash, grep, find, ls";
+  }
+  const customTools = await ctx.ui.input("Tools (comma-separated)", BUILTIN_TOOL_NAMES.join(", "));
+  if (!customTools) return undefined;
+  return customTools;
+}
+
+/** Resolve the user's model choice into the `model:` frontmatter fragment. */
+async function resolveModelLine(ctx: ExtensionCommandContext, modelChoice: string): Promise<string> {
+  if (modelChoice === "haiku") return "\nmodel: anthropic/claude-haiku-4-5-20251001";
+  if (modelChoice === "sonnet") return "\nmodel: anthropic/claude-sonnet-4-6";
+  if (modelChoice === "opus") return "\nmodel: anthropic/claude-opus-4-6";
+  if (modelChoice === "custom...") {
+    const customModel = await ctx.ui.input("Model (provider/modelId)");
+    if (customModel) return `\nmodel: ${customModel}`;
+  }
+  return "";
+}
+
 export async function showManualWizard(ctx: ExtensionCommandContext, targetDir: string): Promise<void> {
   // 1. Name
   const name = await ctx.ui.input("Agent name (filename, no spaces)");
@@ -126,31 +154,14 @@ export async function showManualWizard(ctx: ExtensionCommandContext, targetDir: 
   ]);
   if (!toolChoice) return;
 
-  let tools: string;
-  if (toolChoice === "all") {
-    tools = BUILTIN_TOOL_NAMES.join(", ");
-  } else if (toolChoice === "none") {
-    tools = "none";
-  } else if (toolChoice.startsWith("read-only")) {
-    tools = "read, bash, grep, find, ls";
-  } else {
-    const customTools = await ctx.ui.input("Tools (comma-separated)", BUILTIN_TOOL_NAMES.join(", "));
-    if (!customTools) return;
-    tools = customTools;
-  }
+  const tools = await resolveToolsChoice(ctx, toolChoice);
+  if (tools === undefined) return;
 
   // 4. Model
   const modelChoice = await ctx.ui.select("Model", ["inherit (parent model)", "haiku", "sonnet", "opus", "custom..."]);
   if (!modelChoice) return;
 
-  let modelLine = "";
-  if (modelChoice === "haiku") modelLine = "\nmodel: anthropic/claude-haiku-4-5-20251001";
-  else if (modelChoice === "sonnet") modelLine = "\nmodel: anthropic/claude-sonnet-4-6";
-  else if (modelChoice === "opus") modelLine = "\nmodel: anthropic/claude-opus-4-6";
-  else if (modelChoice === "custom...") {
-    const customModel = await ctx.ui.input("Model (provider/modelId)");
-    if (customModel) modelLine = `\nmodel: ${customModel}`;
-  }
+  const modelLine = await resolveModelLine(ctx, modelChoice);
 
   // 5. Thinking
   const thinkingChoice = await ctx.ui.select("Thinking level", [

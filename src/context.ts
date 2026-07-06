@@ -30,6 +30,25 @@ export function extractText(content: unknown[]): string {
 }
 
 /**
+ * Format a message entry into a context part (e.g. "[User]: ...").
+ * Returns an empty string when the message yields no usable text.
+ */
+function formatMessagePart(msg: { role: string; content?: string | unknown[] }): string {
+  if (msg.role === "user") {
+    const content = msg.content;
+    const text = (typeof content === "string" ? content : extractText(Array.isArray(content) ? content : [])).trim();
+    return text ? `[User]: ${text}` : "";
+  }
+  if (msg.role === "assistant") {
+    const content = msg.content;
+    const text = extractText(Array.isArray(content) ? content : []).trim();
+    return text ? `[Assistant]: ${text}` : "";
+  }
+  // Skip toolResult messages — too verbose for context
+  return "";
+}
+
+/**
  * Build a text representation of the parent conversation context.
  * Used when inherit_context is true to give the subagent visibility
  * into what has been discussed/done so far.
@@ -42,15 +61,8 @@ export function buildParentContext(ctx: ExtensionContext): string {
 
   for (const entry of entries) {
     if (entry.type === "message") {
-      const msg = entry.message;
-      if (msg.role === "user") {
-        const text = (typeof msg.content === "string" ? msg.content : extractText(msg.content)).trim();
-        if (text) parts.push(`[User]: ${text}`);
-      } else if (msg.role === "assistant") {
-        const text = extractText(msg.content).trim();
-        if (text) parts.push(`[Assistant]: ${text}`);
-      }
-      // Skip toolResult messages — too verbose for context
+      const part = formatMessagePart(entry.message);
+      if (part) parts.push(part);
     } else if (entry.type === "compaction") {
       // Include compaction summaries — they're already condensed
       if (entry.summary) {

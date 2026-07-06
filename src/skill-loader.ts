@@ -130,6 +130,31 @@ function findInRoot(root: string, name: string, ctx: SkillLoaderContext): string
 }
 
 /**
+ * Process a single directory entry during BFS.
+ * Returns the skill content if this entry is the target skill, otherwise undefined.
+ * Pushes sub-directories onto the queue for further traversal.
+ */
+function processBfsEntry(entry: Dirent<string>, current: string, name: string, queue: string[]): string | undefined {
+  if (!entry.isDirectory()) return undefined;
+  if (entry.name.startsWith(".") || entry.name === "node_modules") return undefined;
+
+  // Symlinked dirs already filtered by entry.isDirectory() — Dirent uses lstat semantics.
+  const path = join(current, entry.name);
+  const skillMd = join(path, "SKILL.md");
+
+  if (existsSync(skillMd)) {
+    if (entry.name === name) {
+      const content = safeReadFile(skillMd)?.trim();
+      if (content !== undefined) return content;
+    }
+    return undefined; // Pi rule: skills don't nest — don't descend into a skill dir
+  }
+
+  queue.push(path);
+  return undefined;
+}
+
+/**
  * Core BFS loop: traverse `initialQueue` directories looking for a dir
  * named `name` that contains SKILL.md. Pi-conforming filters.
  *
@@ -163,22 +188,8 @@ function bfsForSkill(name: string, initialQueue: string[], ctx: SkillLoaderConte
     }
 
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
-
-      // Symlinked dirs already filtered by entry.isDirectory() — Dirent uses lstat semantics.
-      const path = join(current, entry.name);
-      const skillMd = join(path, "SKILL.md");
-
-      if (existsSync(skillMd)) {
-        if (entry.name === name) {
-          const content = safeReadFile(skillMd)?.trim();
-          if (content !== undefined) return content;
-        }
-        continue; // Pi rule: skills don't nest — don't descend into a skill dir
-      }
-
-      queue.push(path);
+      const result = processBfsEntry(entry, current, name, queue);
+      if (result !== undefined) return result;
     }
   }
 

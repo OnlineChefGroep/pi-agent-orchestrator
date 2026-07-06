@@ -27,6 +27,66 @@ function truncateUnicode(str: string, maxLength: number): string {
 
 const MAX_PROMPT_LENGTH = 100000; // 100KB
 const MAX_TOOLS_COUNT = 100;
+/** Validate the agent name and built-in override rules. */
+function validateAgentName(name: string, config: Partial<AgentConfig>, errors: string[]): void {
+  if (!name || typeof name !== "string") {
+    errors.push("Agent name is required");
+    return;
+  }
+  if (name.length > MAX_NAME_LENGTH) {
+    errors.push(`Agent name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
+  }
+  if (UNSAFE_NAME_PATTERN.test(name)) {
+    errors.push(`Agent name contains unsafe characters: ${name}`);
+  }
+  // Prevent overriding built-in agents with wildcard tools
+  const builtinNames = new Set(getDefaultAgentNames());
+  if (builtinNames.has(name) && config.builtinToolNames?.includes("*")) {
+    errors.push(`Cannot override built-in agent "${name}" with wildcard (*) tools`);
+  }
+}
+
+/** Validate prompt/description/display-name length ceilings. */
+function validateTextLengths(config: Partial<AgentConfig>, errors: string[]): void {
+  if (config.systemPrompt && config.systemPrompt.length > MAX_PROMPT_LENGTH) {
+    errors.push(`System prompt exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
+  }
+  if (config.description && config.description.length > MAX_PROMPT_LENGTH) {
+    errors.push(`Description exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
+  }
+  if (config.displayName && config.displayName.length > MAX_NAME_LENGTH) {
+    errors.push(`Display name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
+  }
+}
+
+/** Validate count and per-item length of a tool name list. */
+function validateToolList(
+  tools: readonly string[] | undefined,
+  tooManyMsg: string,
+  tooLongMsg: string,
+  errors: string[],
+): void {
+  if (!tools) return;
+  if (tools.length > MAX_TOOLS_COUNT) {
+    errors.push(tooManyMsg);
+  }
+  if (tools.some((t) => t.length > MAX_NAME_LENGTH)) {
+    errors.push(tooLongMsg);
+  }
+}
+
+/** Emit telemetry for any unknown tool names referenced by the agent. */
+function emitUnknownToolTelemetry(name: string, tools: readonly string[]): void {
+  const knownTools = new Set([...BUILTIN_TOOL_NAMES, "*"]);
+  const unknownTools = tools.filter((t) => !knownTools.has(t));
+  if (unknownTools.length === 0) return;
+  const sanitizedTools = unknownTools.map((t) =>
+    typeof t === "string" ? (t.length > 50 ? `${truncateUnicode(t, 50)}...` : t) : "[INVALID_TYPE]",
+  );
+  const safeName = typeof name === "string" ? truncateUnicode(name, MAX_NAME_LENGTH) : String(name);
+  emitTelemetry("agent:unknown-tools", { name: safeName, tools: sanitizedTools });
+}
+
 /**
  * Validate an agent config for security issues.
  * Returns array of error messages (empty if valid).
@@ -37,59 +97,26 @@ const MAX_TOOLS_COUNT = 100;
  */
 function validateAgentConfig(name: string, config: Partial<AgentConfig>): string[] {
   const errors: string[] = [];
-  // Validate name
-  if (!name || typeof name !== "string") {
-    errors.push("Agent name is required");
-  } else if (name.length > MAX_NAME_LENGTH) {
-    errors.push(`Agent name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
-  } else if (UNSAFE_NAME_PATTERN.test(name)) errors.push(`Agent name contains unsafe characters: ${name}`);
-  // Prevent overriding built-in agents with wildcard tools
-  const builtinNames = new Set(getDefaultAgentNames());
-  if (builtinNames.has(name) && config.builtinToolNames?.includes("*")) {
-    errors.push(`Cannot override built-in agent "${name}" with wildcard (*) tools`);
-  }
-  // Validate system prompt length only (no injection pattern check)
-  if (config.systemPrompt && config.systemPrompt.length > MAX_PROMPT_LENGTH) {
-    errors.push(`System prompt exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
-  }
-  // Validate description length
-  if (config.description && config.description.length > MAX_PROMPT_LENGTH) {
-    errors.push(`Description exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
-  }
-  // Validate display name length
-  if (config.displayName && config.displayName.length > MAX_NAME_LENGTH) {
-    errors.push(`Display name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
-  }
+  validateAgentName(name, config, errors);
+  validateTextLengths(config, errors);
   // Validate tool names
   if (config.builtinToolNames) {
-    if (config.builtinToolNames.length > MAX_TOOLS_COUNT) {
-      errors.push(`Too many tools specified (max ${MAX_TOOLS_COUNT})`);
-    }
-    const hasLongTool = config.builtinToolNames.some((t) => t.length > MAX_NAME_LENGTH);
-    if (hasLongTool) {
-      errors.push(`Tool name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
-    }
+    validateToolList(
+      config.builtinToolNames,
+      `Too many tools specified (max ${MAX_TOOLS_COUNT})`,
+      `Tool name exceeds maximum length of ${MAX_NAME_LENGTH} characters`,
+      errors,
+    );
     // CVE-011 FIX: Emit telemetry for unknown tool names (don't block, just log)
-    const knownTools = new Set([...BUILTIN_TOOL_NAMES, "*"]);
-    const unknownTools = config.builtinToolNames.filter((t) => !knownTools.has(t));
-    if (unknownTools.length > 0) {
-      // Redact potentially sensitive tool names to prevent logging secrets
-      // We limit to 50 characters to prevent DOS, and use a safe substring approach
-      const sanitizedTools = unknownTools.map((t) =>
-        typeof t === "string" ? (t.length > 50 ? `${truncateUnicode(t, 50)}...` : t) : "[INVALID_TYPE]",
-      );
-      const safeName = typeof name === "string" ? truncateUnicode(name, MAX_NAME_LENGTH) : String(name);
-      emitTelemetry("agent:unknown-tools", { name: safeName, tools: sanitizedTools });
-    }
+    emitUnknownToolTelemetry(name, config.builtinToolNames);
   }
   if (config.disallowedTools) {
-    if (config.disallowedTools.length > MAX_TOOLS_COUNT) {
-      errors.push(`Too many disallowed tools specified (max ${MAX_TOOLS_COUNT})`);
-    }
-    const hasLongDisallowedTool = config.disallowedTools.some((t) => t.length > MAX_NAME_LENGTH);
-    if (hasLongDisallowedTool) {
-      errors.push(`Disallowed tool name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
-    }
+    validateToolList(
+      config.disallowedTools,
+      `Too many disallowed tools specified (max ${MAX_TOOLS_COUNT})`,
+      `Disallowed tool name exceeds maximum length of ${MAX_NAME_LENGTH} characters`,
+      errors,
+    );
   }
   return errors;
 }

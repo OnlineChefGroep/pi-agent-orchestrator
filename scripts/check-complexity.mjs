@@ -29,6 +29,37 @@ const DECISION_PATTERNS = [
   /\?\.\[/g,
 ];
 
+function isCommentLine(trimmed) {
+  return trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*");
+}
+
+function countLineComplexity(line) {
+  let complexity = 0;
+  for (const pattern of DECISION_PATTERNS) {
+    const matches = line.match(pattern);
+    if (matches) {
+      complexity += matches.length;
+    }
+  }
+  return complexity;
+}
+
+function processClosingBraces(line, braceDepthRef, funcStack) {
+  let braceDepth = braceDepthRef.value;
+  const completed = [];
+  for (const ch of line) {
+    if (ch === "{") braceDepth++;
+    if (ch === "}") {
+      braceDepth--;
+      if (funcStack.length > 0 && braceDepth <= funcStack[funcStack.length - 1].braceDepth) {
+        completed.push(funcStack.pop());
+      }
+    }
+  }
+  braceDepthRef.value = braceDepth;
+  return completed;
+}
+
 function scanFile(filePath) {
   const content = readFileSync(filePath, "utf-8");
   const lines = content.split("\n");
@@ -36,7 +67,7 @@ function scanFile(filePath) {
 
   // Track function boundaries and their complexity
   let funcStack = [];
-  let braceDepth = 0;
+  const braceDepthRef = { value: 0 };
   let _inFunction = false;
 
   for (let i = 0; i < lines.length; i++) {
@@ -44,7 +75,7 @@ function scanFile(filePath) {
     const trimmed = line.trim();
 
     // Skip comments and strings heuristically
-    if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+    if (isCommentLine(trimmed)) {
       continue;
     }
 
@@ -54,36 +85,30 @@ function scanFile(filePath) {
     );
 
     if (funcMatch) {
-      funcStack.push({ name: funcMatch[1] || "anonymous", line: i + 1, complexity: 1, braceDepth });
+      funcStack.push({
+        name: funcMatch[1] || "anonymous",
+        line: i + 1,
+        complexity: 1,
+        braceDepth: braceDepthRef.value,
+      });
       _inFunction = true;
     }
 
     // Count decision points in current function context
     if (funcStack.length > 0) {
-      for (const pattern of DECISION_PATTERNS) {
-        const matches = line.match(pattern);
-        if (matches) {
-          funcStack[funcStack.length - 1].complexity += matches.length;
-        }
-      }
+      funcStack[funcStack.length - 1].complexity += countLineComplexity(line);
     }
 
     // Track braces
-    for (const ch of line) {
-      if (ch === "{") braceDepth++;
-      if (ch === "}") {
-        braceDepth--;
-        if (funcStack.length > 0 && braceDepth <= funcStack[funcStack.length - 1].braceDepth) {
-          const completed = funcStack.pop();
-          if (completed.complexity > COMPLEXITY_THRESHOLD) {
-            violations.push({
-              file: filePath,
-              function: completed.name,
-              line: completed.line,
-              complexity: completed.complexity,
-            });
-          }
-        }
+    const completed = processClosingBraces(line, braceDepthRef, funcStack);
+    for (const c of completed) {
+      if (c.complexity > COMPLEXITY_THRESHOLD) {
+        violations.push({
+          file: filePath,
+          function: c.name,
+          line: c.line,
+          complexity: c.complexity,
+        });
       }
     }
   }

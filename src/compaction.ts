@@ -28,6 +28,37 @@ export interface CompactableMessage {
   toolName?: string;
 }
 
+/** Estimate the character length contributed by a single content block. */
+function blockLength(block: unknown): number {
+  const b = block as any;
+  if (b?.type === "text" && typeof b.text === "string") {
+    return b.text.length;
+  }
+  if (b?.type === "tool_result") {
+    return toolResultLength(b);
+  }
+  if (b?.type === "tool_use" && b.input != null) {
+    return JSON.stringify(b.input).length;
+  }
+  return 50; // fast heuristic for other unknown blocks
+}
+
+/** Estimate the character length of a tool_result block. */
+function toolResultLength(b: any): number {
+  if (typeof b.content === "string") {
+    return b.content.length;
+  }
+  if (Array.isArray(b.content)) {
+    let len = 0;
+    for (const nested of b.content) {
+      const n = nested as any;
+      len += n?.type === "text" && typeof n.text === "string" ? n.text.length : 50;
+    }
+    return len;
+  }
+  return 50; // default penalty for non-text tool results
+}
+
 /**
  * Estimate token count from message content.
  * Rough heuristic: 1 token ≈ 4 characters for English text.
@@ -40,25 +71,7 @@ function estimateTokens(message: CompactableMessage): number {
     len = content.length;
   } else if (Array.isArray(content)) {
     for (const block of content) {
-      const b = block as any;
-      if (b?.type === "text" && typeof b.text === "string") {
-        len += b.text.length;
-      } else if (b?.type === "tool_result") {
-        if (typeof b.content === "string") {
-          len += b.content.length;
-        } else if (Array.isArray(b.content)) {
-          for (const nested of b.content) {
-            const n = nested as any;
-            len += n?.type === "text" && typeof n.text === "string" ? n.text.length : 50;
-          }
-        } else {
-          len += 50; // default penalty for non-text tool results
-        }
-      } else if (b?.type === "tool_use" && b.input != null) {
-        len += JSON.stringify(b.input).length;
-      } else {
-        len += 50; // fast heuristic for other unknown blocks
-      }
+      len += blockLength(block);
     }
   } else {
     len = JSON.stringify(content).length;

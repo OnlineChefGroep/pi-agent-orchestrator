@@ -81,6 +81,82 @@ export async function showAgentPermissions(
   );
 }
 
+/** Determine the menu options offered for an agent based on its state. */
+function agentDetailMenuOptions(
+  disabled: boolean,
+  isDefault: boolean,
+  file: { path: string; location: string } | undefined,
+): string[] {
+  if (disabled && file) {
+    // Disabled agent with a file — offer Enable
+    return isDefault ? ["Enable", "Edit", "Reset to default", "Delete", "Back"] : ["Enable", "Edit", "Delete", "Back"];
+  }
+  if (isDefault && !file) {
+    // Default agent with no .md override
+    return ["Eject (export as .md)", "Disable", "Back"];
+  }
+  if (isDefault && file) {
+    // Default agent with .md override (ejected)
+    return ["Edit", "Disable", "Reset to default", "Delete", "Back"];
+  }
+  // User-defined agent
+  return ["Edit", "Disable", "Delete", "Back"];
+}
+
+/** Handle the user's choice from the agent-detail menu. */
+async function handleAgentDetailChoice(
+  ctx: ExtensionCommandContext,
+  choice: string,
+  name: string,
+  cfg: NonNullable<ReturnType<typeof getAgentConfig>>,
+  file: ReturnType<typeof findAgentFile>,
+): Promise<void> {
+  if (choice === "Edit" && file) {
+    const content = await readFile(file.path, "utf-8");
+    const edited = await ctx.ui.editor(`Edit ${name}`, content);
+    if (edited !== undefined && edited !== content) {
+      await writeFile(file.path, edited, "utf-8");
+      await reloadCustomAgents();
+      ctx.ui.notify(`Updated ${file.path}`, "info");
+    }
+    return;
+  }
+  if (choice === "Delete") {
+    if (file) {
+      const confirmed = await ctx.ui.confirm("Delete agent", `Delete ${name} from ${file.location} (${file.path})?`);
+      if (confirmed) {
+        await unlink(file.path);
+        await reloadCustomAgents();
+        ctx.ui.notify(`Deleted ${file.path}`, "info");
+      }
+    }
+    return;
+  }
+  if (choice === "Reset to default" && file) {
+    const confirmed = await ctx.ui.confirm(
+      "Reset to default",
+      `Delete override ${file.path} and restore embedded default?`,
+    );
+    if (confirmed) {
+      await unlink(file.path);
+      await reloadCustomAgents();
+      ctx.ui.notify(`Restored default ${name}`, "info");
+    }
+    return;
+  }
+  if (choice.startsWith("Eject")) {
+    await ejectAgent(ctx, name, cfg);
+    return;
+  }
+  if (choice === "Disable") {
+    await disableAgent(ctx, name);
+    return;
+  }
+  if (choice === "Enable") {
+    await enableAgent(ctx, name);
+  }
+}
+
 export async function showAgentDetail(ctx: ExtensionCommandContext, name: string): Promise<void> {
   const cfg = getAgentConfig(name);
   if (!cfg) {
@@ -92,58 +168,10 @@ export async function showAgentDetail(ctx: ExtensionCommandContext, name: string
   const isDefault = cfg.isDefault === true;
   const disabled = cfg.enabled === false;
 
-  let menuOptions: string[];
-  if (disabled && file) {
-    // Disabled agent with a file — offer Enable
-    menuOptions = isDefault
-      ? ["Enable", "Edit", "Reset to default", "Delete", "Back"]
-      : ["Enable", "Edit", "Delete", "Back"];
-  } else if (isDefault && !file) {
-    // Default agent with no .md override
-    menuOptions = ["Eject (export as .md)", "Disable", "Back"];
-  } else if (isDefault && file) {
-    // Default agent with .md override (ejected)
-    menuOptions = ["Edit", "Disable", "Reset to default", "Delete", "Back"];
-  } else {
-    // User-defined agent
-    menuOptions = ["Edit", "Disable", "Delete", "Back"];
-  }
+  const menuOptions = agentDetailMenuOptions(disabled, isDefault, file);
 
   const choice = await ctx.ui.select(name, menuOptions);
   if (!choice || choice === "Back") return;
 
-  if (choice === "Edit" && file) {
-    const content = await readFile(file.path, "utf-8");
-    const edited = await ctx.ui.editor(`Edit ${name}`, content);
-    if (edited !== undefined && edited !== content) {
-      await writeFile(file.path, edited, "utf-8");
-      await reloadCustomAgents();
-      ctx.ui.notify(`Updated ${file.path}`, "info");
-    }
-  } else if (choice === "Delete") {
-    if (file) {
-      const confirmed = await ctx.ui.confirm("Delete agent", `Delete ${name} from ${file.location} (${file.path})?`);
-      if (confirmed) {
-        await unlink(file.path);
-        await reloadCustomAgents();
-        ctx.ui.notify(`Deleted ${file.path}`, "info");
-      }
-    }
-  } else if (choice === "Reset to default" && file) {
-    const confirmed = await ctx.ui.confirm(
-      "Reset to default",
-      `Delete override ${file.path} and restore embedded default?`,
-    );
-    if (confirmed) {
-      await unlink(file.path);
-      await reloadCustomAgents();
-      ctx.ui.notify(`Restored default ${name}`, "info");
-    }
-  } else if (choice.startsWith("Eject")) {
-    await ejectAgent(ctx, name, cfg);
-  } else if (choice === "Disable") {
-    await disableAgent(ctx, name);
-  } else if (choice === "Enable") {
-    await enableAgent(ctx, name);
-  }
+  await handleAgentDetailChoice(ctx, choice, name, cfg, file);
 }

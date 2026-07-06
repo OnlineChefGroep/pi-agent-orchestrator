@@ -4,12 +4,13 @@ import { type BoxChars, borderLine, type DashboardTheme, framedRow, padVisible }
 import { visibleWidth } from "../tui-shim.js";
 import type { DashboardRenderState } from "./types.js";
 
-function dashboardSummaryBar(
-  state: DashboardRenderState,
-  innerW: number,
-  th: DashboardTheme,
-  manager?: AgentManager,
-): string {
+/** Count agent statuses into running/queued/completed/errored buckets. */
+function countAgentStatuses(state: DashboardRenderState): {
+  running: number;
+  queued: number;
+  completed: number;
+  errored: number;
+} {
   let running = 0;
   let queued = 0;
   let completed = 0;
@@ -21,6 +22,38 @@ function dashboardSummaryBar(
     else if (s === "completed" || s === "steered") completed++;
     else if (s === "error" || s === "aborted") errored++;
   }
+  return { running, queued, completed, errored };
+}
+
+/** Build session usage meter parts when the manager exposes limits. */
+function buildSessionMeters(manager: AgentManager, th: DashboardTheme): string[] {
+  const usage = manager.getSessionUsage();
+  const maxAgents = manager.getSessionMaxSpawns();
+  const maxTurns = manager.getSessionMaxTurns();
+
+  if (maxAgents <= 0 && maxTurns <= 0) return [];
+
+  const meterParts: string[] = [];
+  if (maxAgents > 0) {
+    const pct = Math.round((usage.spawnedAgents / maxAgents) * 100);
+    const color = pct >= 90 ? th.error : pct >= 75 ? th.dim : th.accent;
+    meterParts.push(`${color}⬡ ${usage.spawnedAgents}/${maxAgents} agents${th.reset}`);
+  }
+  if (maxTurns > 0) {
+    const pct = Math.round((usage.totalTurns / maxTurns) * 100);
+    const color = pct >= 90 ? th.error : th.dim;
+    meterParts.push(`${color}⟳ ${usage.totalTurns}/${maxTurns} turns${th.reset}`);
+  }
+  return meterParts;
+}
+
+function dashboardSummaryBar(
+  state: DashboardRenderState,
+  innerW: number,
+  th: DashboardTheme,
+  manager?: AgentManager,
+): string {
+  const { running, queued, completed, errored } = countAgentStatuses(state);
   const selected = state.selectedIds.size > 0 ? `  ${th.highlight}◆ ${state.selectedIds.size} selected${th.reset}` : "";
   const sep = `  ${th.border}│${th.reset}  `;
   const parts = [
@@ -32,28 +65,9 @@ function dashboardSummaryBar(
 
   // Session usage meters when manager is available
   if (manager) {
-    const usage = manager.getSessionUsage();
-    const maxAgents = manager.getSessionMaxSpawns();
-    const maxTurns = manager.getSessionMaxTurns();
-
-    if (maxAgents > 0 || maxTurns > 0) {
-      const meterParts: string[] = [];
-
-      if (maxAgents > 0) {
-        const pct = Math.round((usage.spawnedAgents / maxAgents) * 100);
-        const color = pct >= 90 ? th.error : pct >= 75 ? th.dim : th.accent;
-        meterParts.push(`${color}⬡ ${usage.spawnedAgents}/${maxAgents} agents${th.reset}`);
-      }
-
-      if (maxTurns > 0) {
-        const pct = Math.round((usage.totalTurns / maxTurns) * 100);
-        const color = pct >= 90 ? th.error : pct >= 75 ? th.dim : th.dim;
-        meterParts.push(`${color}⟳ ${usage.totalTurns}/${maxTurns} turns${th.reset}`);
-      }
-
-      if (meterParts.length > 0) {
-        return padVisible(` ${parts.join(sep)}${selected}  ${meterParts.join(sep)}`, innerW - 2);
-      }
+    const meterParts = buildSessionMeters(manager, th);
+    if (meterParts.length > 0) {
+      return padVisible(` ${parts.join(sep)}${selected}  ${meterParts.join(sep)}`, innerW - 2);
     }
   }
 

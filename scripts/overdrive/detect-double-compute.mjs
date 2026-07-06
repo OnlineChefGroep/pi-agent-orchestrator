@@ -38,6 +38,60 @@ const PURE_METHODS = new Set([
 
 const WINDOW_SIZE = 8; // lines
 
+const CALL_PATTERN = /\b([a-zA-Z_$][\w$]*)\.([a-zA-Z_$][\w$]*)\s*\(/g;
+
+function isCommentLine(line) {
+  const trimmed = line.trim();
+  return trimmed.startsWith("//") || trimmed.startsWith("*");
+}
+
+function extractPureMethodCalls(line) {
+  const calls = [];
+  for (const match of line.matchAll(CALL_PATTERN)) {
+    const identifier = match[1];
+    const method = match[2];
+    if (!PURE_METHODS.has(method)) continue;
+    calls.push({
+      identifier,
+      method,
+      column: match.index + 1,
+    });
+  }
+  return calls;
+}
+
+function isSameLine(a, b) {
+  return a.lineNum === b.lineNum;
+}
+
+function isSameMethodCall(a, b) {
+  return a.identifier === b.identifier && a.method === b.method;
+}
+
+function isDuplicateDetectionCandidate(a, b) {
+  if (isSameLine(a, b)) return false; // same-line is OK (e.g., chaining)
+  if (!isSameMethodCall(a, b)) return false;
+  // Skip if the identifier is `this` (legitimate) or a common FP-prone name
+  if (a.identifier === "this") return false;
+  // Skip if the calls are very close (likely the same expression on consecutive lines)
+  if (Math.abs(a.lineNum - b.lineNum) <= 1 && a.column === b.column) return false;
+  return true;
+}
+
+function buildFinding(a, b, filePath) {
+  return {
+    rule: "detect-double-compute",
+    file: filePath,
+    line: b.lineNum,
+    column: b.column,
+    snippet: b.line.slice(0, 200),
+    message:
+      `Double-compute: ${a.identifier}.${a.method}() called twice ` +
+      `(line ${a.lineNum} and line ${b.lineNum}). Cache the result ` +
+      `once and reuse. See overdrive pattern P4.`,
+  };
+}
+
 /**
  * @param {string} source
  * @param {{ filePath?: string, windowSize?: number }} [opts]
@@ -59,21 +113,10 @@ export function detectDoubleCompute(source, opts = {}) {
 
     // Skip pure comments
     const trimmed = line.trim();
-    if (trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
+    if (isCommentLine(line)) continue;
 
     // Find all identifier.method() calls on this line
-    const callPattern = /\b([a-zA-Z_$][\w$]*)\.([a-zA-Z_$][\w$]*)\s*\(/g;
-    const calls = [];
-    for (const match of line.matchAll(callPattern)) {
-      const identifier = match[1];
-      const method = match[2];
-      if (!PURE_METHODS.has(method)) continue;
-      calls.push({
-        identifier,
-        method,
-        column: match.index + 1,
-      });
-    }
+    const calls = extractPureMethodCalls(line);
 
     // Add to window
     for (const call of calls) {
@@ -85,24 +128,8 @@ export function detectDoubleCompute(source, opts = {}) {
       for (let k = j + 1; k < window.length; k++) {
         const a = window[j];
         const b = window[k];
-        if (a.lineNum === b.lineNum) continue; // same-line is OK (e.g., chaining)
-        if (a.identifier !== b.identifier) continue;
-        if (a.method !== b.method) continue;
-        // Skip if the identifier is `this` (legitimate) or a common FP-prone name
-        if (a.identifier === "this") continue;
-        // Skip if the calls are very close (likely the same expression on consecutive lines)
-        if (Math.abs(a.lineNum - b.lineNum) <= 1 && a.column === b.column) continue;
-        findings.push({
-          rule: "detect-double-compute",
-          file: filePath,
-          line: b.lineNum,
-          column: b.column,
-          snippet: b.line.slice(0, 200),
-          message:
-            `Double-compute: ${a.identifier}.${a.method}() called twice ` +
-            `(line ${a.lineNum} and line ${b.lineNum}). Cache the result ` +
-            `once and reuse. See overdrive pattern P4.`,
-        });
+        if (!isDuplicateDetectionCandidate(a, b)) continue;
+        findings.push(buildFinding(a, b, filePath));
         // Remove the first occurrence so we don't double-report
         window.splice(j, 1);
         break;

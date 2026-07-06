@@ -30,42 +30,42 @@ function relTime(iso: string | undefined, now = Date.now()): string {
   const abs = Math.abs(diff);
   const future = diff > 0;
 
-  let timeStr = "";
-  if (abs < 60_000) timeStr = future ? "in <1m" : "<1m ago";
-  else {
-    const m = Math.round(abs / 60_000);
-    if (m < 60) timeStr = future ? `in ${m}m` : `${m}m ago`;
-    else {
-      const h = Math.round(abs / 3_600_000);
-      if (h < 24) timeStr = future ? `in ${h}h` : `${h}h ago`;
-      else {
-        const d = Math.round(abs / 86_400_000);
-        timeStr = future ? `in ${d}d` : `${d}d ago`;
-      }
-    }
-  }
-
+  const timeStr = formatRelTimeStr(abs, future);
   if (uiStyle === "plain") {
     return timeStr;
   }
+  return colorizeRelTime(timeStr, abs, uiStyle);
+}
 
-  // Color gradient coding based on urgency
+/** Format the relative time string portion (no color codes) from absolute diff and direction. */
+function formatRelTimeStr(abs: number, future: boolean): string {
+  if (abs < 60_000) return future ? "in <1m" : "<1m ago";
+  const m = Math.round(abs / 60_000);
+  if (m < 60) return future ? `in ${m}m` : `${m}m ago`;
+  const h = Math.round(abs / 3_600_000);
+  if (h < 24) return future ? `in ${h}h` : `${h}h ago`;
+  const d = Math.round(abs / 86_400_000);
+  return future ? `in ${d}d` : `${d}d ago`;
+}
+
+/** Apply the urgency-based color gradient to a relative time string. */
+function colorizeRelTime(timeStr: string, abs: number, uiStyle: string): string {
   if (abs < 15 * 60_000) {
     if (uiStyle === "retro") {
       return `\x1b[1;33m${timeStr}\x1b[0m`; // Bold Yellow
     }
     return `\x1b[38;2;255;130;0;1m${timeStr}\x1b[0m`; // Critical/Imminent (<15m): Bold Orange
-  } else if (abs < 12 * 3600_000) {
+  }
+  if (abs < 12 * 3600_000) {
     if (uiStyle === "retro") {
       return `\x1b[36m${timeStr}\x1b[0m`; // Cyan
     }
     return `\x1b[38;2;240;220;0m${timeStr}\x1b[0m`; // Medium (<12h): Warm Yellow
-  } else {
-    if (uiStyle === "retro") {
-      return `\x1b[32m${timeStr}\x1b[0m`; // Green
-    }
-    return `\x1b[38;2;0;180;150m${timeStr}\x1b[0m`; // Distant (>12h): Teal/Dim Green
   }
+  if (uiStyle === "retro") {
+    return `\x1b[32m${timeStr}\x1b[0m`; // Green
+  }
+  return `\x1b[38;2;0;180;150m${timeStr}\x1b[0m`; // Distant (>12h): Teal/Dim Green
 }
 
 /** Rich status pill indicator. */

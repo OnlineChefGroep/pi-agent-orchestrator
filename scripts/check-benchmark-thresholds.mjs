@@ -36,10 +36,8 @@ function color(status, text) {
   return text;
 }
 
-async function main() {
-  console.log(`\n${BOLD}═══ Render Benchmark Threshold Check ═══${RESET}\n`);
-
-  const testFiles = [
+function resolveTestFiles() {
+  return [
     "test/widget-render-perf.test.ts",
     "test/dashboard-render-perf.test.ts",
     "test/spawn-latency-bench.test.ts",
@@ -47,39 +45,23 @@ async function main() {
   ]
     .map((f) => resolve(ROOT, f))
     .filter((f) => existsSync(f));
+}
 
-  if (testFiles.length === 0) {
-    console.error(`${RED}ERROR:${RESET} No benchmark test files found`);
-    process.exit(1);
-  }
-
+function runBenchmarks(testFiles) {
   const paths = testFiles.map((f) => `"${f}"`).join(" ");
-  let rawOutput;
   try {
-    rawOutput = execSync(`npx vitest run ${paths} --reporter=verbose 2>&1`, {
+    return execSync(`npx vitest run ${paths} --reporter=verbose 2>&1`, {
       cwd: ROOT,
       encoding: "utf-8",
       timeout: 300_000,
       maxBuffer: 20 * 1024 * 1024,
     });
   } catch (err) {
-    rawOutput = err.stderr ? `${err.stdout || ""}\n${err.stderr}` : err.stdout || String(err);
+    return err.stderr ? `${err.stdout || ""}\n${err.stderr}` : err.stdout || String(err);
   }
+}
 
-  // Parse structured [BENCHMARK] lines
-  const benchLines = rawOutput.match(/\[BENCHMARK\].*/g) || [];
-
-  if (benchLines.length === 0) {
-    console.warn(
-      `${YELLOW}Warning:${RESET} No [BENCHMARK] lines found in output.\n` +
-        "Make sure the test file has benchmarkLog() calls.\n",
-    );
-    // Still show raw output for debugging
-    console.log(rawOutput.slice(0, 2000));
-    console.log("...");
-    process.exit(0);
-  }
-
+function parseBenchLines(benchLines) {
   const results = [];
   for (const line of benchLines) {
     // Format: [BENCHMARK] <name> <measured>/<threshold> <pct>% <OK|WARN|FAIL>
@@ -97,8 +79,10 @@ async function main() {
       status: status.trim(),
     });
   }
+  return results;
+}
 
-  // Print summary table
+function printResultsTable(results) {
   const nameWidth = Math.max(...results.map((r) => r.name.length), 25);
   const sep = "─".repeat(nameWidth + 50);
 
@@ -130,25 +114,66 @@ async function main() {
   );
   console.log();
 
+  return { ok, warned, failed };
+}
+
+function printWarnings(results) {
+  console.warn(`${YELLOW}Benchmark warnings (approaching threshold):${RESET}`);
+  for (const r of results) {
+    if (r.status === "WARN") {
+      console.warn(`  ⚠️  ${r.name}: ${r.measured} / ${r.threshold} (${r.pct}%)`);
+    }
+  }
+  console.warn();
+}
+
+function printFailures(results) {
+  console.error(`${RED}Benchmark failures (exceeded threshold):${RESET}`);
+  for (const r of results) {
+    if (r.status === "FAIL") {
+      console.error(`  ❌ ${r.name}: ${r.measured} exceeds ${r.threshold}`);
+    }
+  }
+  console.error();
+}
+
+async function main() {
+  console.log(`\n${BOLD}═══ Render Benchmark Threshold Check ═══${RESET}\n`);
+
+  const testFiles = resolveTestFiles();
+
+  if (testFiles.length === 0) {
+    console.error(`${RED}ERROR:${RESET} No benchmark test files found`);
+    process.exit(1);
+  }
+
+  const rawOutput = runBenchmarks(testFiles);
+
+  // Parse structured [BENCHMARK] lines
+  const benchLines = rawOutput.match(/\[BENCHMARK\].*/g) || [];
+
+  if (benchLines.length === 0) {
+    console.warn(
+      `${YELLOW}Warning:${RESET} No [BENCHMARK] lines found in output.\n` +
+        "Make sure the test file has benchmarkLog() calls.\n",
+    );
+    // Still show raw output for debugging
+    console.log(rawOutput.slice(0, 2000));
+    console.log("...");
+    process.exit(0);
+  }
+
+  const results = parseBenchLines(benchLines);
+
+  const { warned, failed } = printResultsTable(results);
+
   // Print warnings/errors summary
   if (warned > 0) {
-    console.warn(`${YELLOW}Benchmark warnings (approaching threshold):${RESET}`);
-    for (const r of results) {
-      if (r.status === "WARN") {
-        console.warn(`  ⚠️  ${r.name}: ${r.measured} / ${r.threshold} (${r.pct}%)`);
-      }
-    }
-    console.warn();
+    printWarnings(results);
   }
 
   if (failed > 0) {
-    console.error(`${RED}Benchmark failures (exceeded threshold):${RESET}`);
-    for (const r of results) {
-      if (r.status === "FAIL") {
-        console.error(`  ❌ ${r.name}: ${r.measured} exceeds ${r.threshold}`);
-      }
-    }
-    console.error();
+    printFailures(results);
     process.exit(1);
   }
 

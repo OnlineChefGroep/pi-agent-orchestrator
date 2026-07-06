@@ -199,30 +199,34 @@ export class AgentWidget {
     let remainingLines = PAGE_SIZE;
     let skipped = this.scrollPage * PAGE_SIZE;
 
+    /** Decide whether to skip/emit an agent given the current skip budget and remaining lines. */
+    const consumeAgent = (a: AgentRecord, linesPerAgent: number): "stop" | "next" => {
+      if (skipped > 0) {
+        if (linesPerAgent <= skipped) {
+          skipped -= linesPerAgent;
+          return "next";
+        }
+        // Agent starts mid-page after partial skip.
+        const prevSkipped = skipped;
+        skipped = 0;
+        visible.push(a);
+        remainingLines -= linesPerAgent - prevSkipped;
+        return "next";
+      }
+      if (remainingLines >= linesPerAgent) {
+        visible.push(a);
+        remainingLines -= linesPerAgent;
+        return "next";
+      }
+      return "stop"; // No more room in this page
+    };
+
     const processCategory = (targetStatus: string, linesPerAgent: number) => {
       for (let i = 0; i < agents.length; i++) {
         const a = agents[i];
         const match =
           targetStatus === "finished" ? a.status !== "running" && a.status !== "queued" : a.status === targetStatus;
-
-        if (match) {
-          if (skipped > 0) {
-            if (linesPerAgent <= skipped) {
-              skipped -= linesPerAgent;
-              continue;
-            }
-            // Agent starts mid-page after partial skip.
-            const prevSkipped = skipped;
-            skipped = 0;
-            visible.push(a);
-            remainingLines -= linesPerAgent - prevSkipped;
-          } else if (remainingLines >= linesPerAgent) {
-            visible.push(a);
-            remainingLines -= linesPerAgent;
-          } else {
-            return; // No more room in this page
-          }
-        }
+        if (match && consumeAgent(a, linesPerAgent) === "stop") return;
       }
     };
 
@@ -315,25 +319,11 @@ export class AgentWidget {
     }, AgentWidget.SPAWN_BATCH_MS);
   }
 
-  /** Force an immediate widget update. */
-  update() {
-    if (!this.uiCtx || this.closed) return;
-    // Clear any pending debounce timer — we're updating now.
-    if (this.updateTimer) {
-      clearTimeout(this.updateTimer);
-      this.updateTimer = undefined;
-    }
-    const allAgents = this.manager.listAgents();
-
-    // Single-pass: build snapshot hash + count running/queued/hasFinished
-    // in one iteration instead of 3 separate loops.
+  /** Compute the FNV-1a-style snapshot hash of the agent list (id + status). */
+  private computeSnapshotHash(allAgents: AgentRecord[]): number {
     let hash = 0x811c9dc5;
-    let runningCount = 0;
-    let queuedCount = 0;
-    let hasFinished = false;
     for (let i = 0; i < allAgents.length; i++) {
       const a = allAgents[i];
-      // Hash: agent ID + status
       const id = a.id;
       for (let j = 0; j < id.length; j++) {
         hash ^= id.charCodeAt(j);
@@ -348,33 +338,129 @@ export class AgentWidget {
       }
       hash ^= 0x2c;
       hash = Math.imul(hash, 0x01000193);
-      // Categorize
-      if (a.status === "running") runningCount++;
-      else if (a.status === "queued") queuedCount++;
-      else if (a.completedAt && this.shouldShowFinished(a.id, a.status)) hasFinished = true;
     }
-    const snapshotHash = hash | 0;
+    return hash | 0;
+  }
 
-    const snapshotChanged = snapshotHash !== this.agentSnapshotHash;
-    if (snapshotChanged) {
-      this.agentSnapshotHash = snapshotHash;
-      this.dirty = true;
-      // Adapt refresh interval based on agent activity level.
-      const hasRunning = runningCount > 0 || queuedCount > 0;
-      const targetInterval = hasRunning ? ACTIVE_REFRESH_MS : IDLE_REFRESH_MS;
-      if (this.currentIntervalMs !== targetInterval) {
-        this.currentIntervalMs = targetInterval;
-        this.scheduleNextTick(targetInterval);
-      }
-    }
-    const hasActive = runningCount > 0 || queuedCount > 0;
-
-    // Clean up stale finishedTurnAge entries for removed agents (runs every update, not just when idle).
+  /** Clean up stale finishedTurnAge entries for agents no longer in the list. */
+  private cleanupStaleTurnAge(allAgents: AgentRecord[]): void {
     const agentIds = new Set<string>();
     for (let i = 0; i < allAgents.length; i++) agentIds.add(allAgents[i].id);
     for (const [id] of this.finishedTurnAge) {
       if (!agentIds.has(id)) this.finishedTurnAge.delete(id);
     }
+  }
+
+  /** Build the status-bar text from running/queued counts, or undefined when nothing is active. */
+  private buildStatusText(runningCount: number, queuedCount: number): string | undefined {
+    if (runningCount === 0 && queuedCount === 0) return undefined;
+    const statusParts: string[] = [];
+    if (runningCount > 0) statusParts.push(`${runningCount} running`);
+    if (queuedCount > 0) statusParts.push(`${queuedCount} queued`);
+    const total = runningCount + queuedCount;
+    return `${statusParts.join(", ")} agent${total === 1 ? "" : "s"}`;
+  }
+
+  /** Tear down widget + status bar + timer when there is nothing left to display. */
+  private teardownIdleWidget(): void {
+    if (this.widgetRegistered) {
+      this.uiCtx!.setWidget("agents", undefined);
+      this.widgetRegistered = false;
+      this.tui = undefined;
+    }
+    if (this.lastStatusText !== undefined) {
+      this.uiCtx!.setStatus("subagents", undefined);
+      this.lastStatusText = undefined;
+    }
+    if (this.widgetInterval) {
+      clearTimeout(this.widgetInterval);
+      this.widgetInterval = undefined;
+    }
+    this.dirty = false;
+  }
+
+  /** Register the widget callback with the UI context (first-time registration). */
+  private registerWidget(): void {
+    this.uiCtx!.setWidget(
+      "agents",
+      (tui, theme) => {
+        this.tui = tui;
+        return {
+          render: () => this.renderWidget(tui, theme),
+          invalidate: () => {
+            // Theme changed — force re-registration so factory captures fresh theme.
+            this.widgetRegistered = false;
+            this.tui = undefined;
+          },
+        };
+      },
+      { placement: "aboveEditor" },
+    );
+    this.widgetRegistered = true;
+    this.dirty = false;
+  }
+
+  /** Adapt refresh interval and mark dirty when the agent snapshot changes. */
+  private applySnapshotChange(snapshotHash: number, runningCount: number, queuedCount: number): boolean {
+    const snapshotChanged = snapshotHash !== this.agentSnapshotHash;
+    if (!snapshotChanged) return false;
+    this.agentSnapshotHash = snapshotHash;
+    this.dirty = true;
+    // Adapt refresh interval based on agent activity level.
+    const hasRunning = runningCount > 0 || queuedCount > 0;
+    const targetInterval = hasRunning ? ACTIVE_REFRESH_MS : IDLE_REFRESH_MS;
+    if (this.currentIntervalMs !== targetInterval) {
+      this.currentIntervalMs = targetInterval;
+      this.scheduleNextTick(targetInterval);
+    }
+    return true;
+  }
+
+  /** Advance the spinner frame and force a periodic dirty when running agents exist. */
+  private advanceSpinner(hasActive: boolean): void {
+    this.widgetFrame++;
+    // Force re-render periodically when running agents exist (spinner animation).
+    // Without this, the dirty-check optimization freezes spinners indefinitely.
+    if (!this.dirty && hasActive && this.widgetFrame % 3 === 0) {
+      this.dirty = true;
+    }
+  }
+
+  /** Categorize agents into running/queued/finished counts in a single pass. */
+  private categorizeAgents(allAgents: AgentRecord[]): {
+    runningCount: number;
+    queuedCount: number;
+    hasFinished: boolean;
+  } {
+    let runningCount = 0;
+    let queuedCount = 0;
+    let hasFinished = false;
+    for (let i = 0; i < allAgents.length; i++) {
+      const a = allAgents[i];
+      if (a.status === "running") runningCount++;
+      else if (a.status === "queued") queuedCount++;
+      else if (a.completedAt && this.shouldShowFinished(a.id, a.status)) hasFinished = true;
+    }
+    return { runningCount, queuedCount, hasFinished };
+  }
+
+  /** Force an immediate widget update. */
+  update() {
+    if (!this.uiCtx || this.closed) return;
+    // Clear any pending debounce timer — we're updating now.
+    if (this.updateTimer) {
+      clearTimeout(this.updateTimer);
+      this.updateTimer = undefined;
+    }
+    const allAgents = this.manager.listAgents();
+
+    const { runningCount, queuedCount, hasFinished } = this.categorizeAgents(allAgents);
+    const snapshotHash = this.computeSnapshotHash(allAgents);
+    this.applySnapshotChange(snapshotHash, runningCount, queuedCount);
+    const hasActive = runningCount > 0 || queuedCount > 0;
+
+    // Clean up stale finishedTurnAge entries for removed agents (runs every update, not just when idle).
+    this.cleanupStaleTurnAge(allAgents);
 
     // Track active agents and first spawn timestamp
     const totalActive = runningCount + queuedCount;
@@ -385,45 +471,18 @@ export class AgentWidget {
 
     // Nothing to show — clear widget
     if (!hasActive && !hasFinished) {
-      if (this.widgetRegistered) {
-        this.uiCtx.setWidget("agents", undefined);
-        this.widgetRegistered = false;
-        this.tui = undefined;
-      }
-      if (this.lastStatusText !== undefined) {
-        this.uiCtx.setStatus("subagents", undefined);
-        this.lastStatusText = undefined;
-      }
-      if (this.widgetInterval) {
-        clearTimeout(this.widgetInterval);
-        this.widgetInterval = undefined;
-      }
-      this.dirty = false;
+      this.teardownIdleWidget();
       return;
     }
 
     // Status bar — only call setStatus when the text actually changes
-    let newStatusText: string | undefined;
-    if (hasActive) {
-      const statusParts: string[] = [];
-      if (runningCount > 0) statusParts.push(`${runningCount} running`);
-      if (queuedCount > 0) statusParts.push(`${queuedCount} queued`);
-      const total = runningCount + queuedCount;
-      newStatusText = `${statusParts.join(", ")} agent${total === 1 ? "" : "s"}`;
-    }
+    const newStatusText = this.buildStatusText(runningCount, queuedCount);
     if (newStatusText !== this.lastStatusText) {
       this.uiCtx.setStatus("subagents", newStatusText);
       this.lastStatusText = newStatusText;
     }
 
-    // Always advance spinner for smooth animation.
-    this.widgetFrame++;
-
-    // Force re-render periodically when running agents exist (spinner animation).
-    // Without this, the dirty-check optimization freezes spinners indefinitely.
-    if (!this.dirty && hasActive && this.widgetFrame % 3 === 0) {
-      this.dirty = true;
-    }
+    this.advanceSpinner(hasActive);
 
     // Dirty check: skip TUI re-render when only the spinner frame advanced.
     // On turn boundaries and structural changes, we always re-render.
@@ -439,23 +498,7 @@ export class AgentWidget {
       this.tui?.requestRender();
       this.dirty = false;
     } else {
-      this.uiCtx.setWidget(
-        "agents",
-        (tui, theme) => {
-          this.tui = tui;
-          return {
-            render: () => this.renderWidget(tui, theme),
-            invalidate: () => {
-              // Theme changed — force re-registration so factory captures fresh theme.
-              this.widgetRegistered = false;
-              this.tui = undefined;
-            },
-          };
-        },
-        { placement: "aboveEditor" },
-      );
-      this.widgetRegistered = true;
-      this.dirty = false;
+      this.registerWidget();
     }
   }
 

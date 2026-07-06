@@ -326,6 +326,26 @@ function getLastAssistantText(session: AgentSession): string {
   return "";
 }
 
+function dispatchResumeEvent(
+  event: AgentSessionEvent,
+  options: {
+    onToolActivity?: (activity: ToolActivity) => void;
+    onAssistantUsage?: (usage: { input: number; output: number; cacheWrite: number }) => void;
+    onCompaction?: (info: { reason: "manual" | "threshold" | "overflow"; tokensBefore: number }) => void;
+  },
+): void {
+  if (event.type === "tool_execution_start") options.onToolActivity?.({ type: "start", toolName: event.toolName });
+  if (event.type === "tool_execution_end") options.onToolActivity?.({ type: "end", toolName: event.toolName });
+  if (event.type === "message_end" && event.message.role === "assistant") {
+    const msg = event.message as { usage?: { input?: number; output?: number; cacheWrite?: number } };
+    const u = msg.usage;
+    if (u) options.onAssistantUsage?.({ input: u.input ?? 0, output: u.output ?? 0, cacheWrite: u.cacheWrite ?? 0 });
+  }
+  if (event.type === "compaction_end" && !event.aborted) {
+    options.onCompaction?.({ reason: event.reason, tokensBefore: event.result?.tokensBefore ?? 0 });
+  }
+}
+
 function forwardAbortSignal(session: AgentSession, signal?: AbortSignal): () => void {
   if (!signal) return () => {};
   const onAbort = () => session.abort();
@@ -349,6 +369,571 @@ function buildEffectivePrompt(ctx: ExtensionContext, prompt: string, options: Ru
 
   if (!parentContext) return prompt;
   return parentContext + prompt;
+}
+
+// ----------------------------------------------------------------------------
+// runAgent turn/event handling helpers
+// ----------------------------------------------------------------------------
+
+interface RunTurnState {
+  turnCount: number;
+  toolCallCount: number;
+  tokensIn: number;
+  tokensOut: number;
+  tokensCacheWrite: number;
+  latencyToFirstToken: number | undefined;
+  softLimitReached: boolean;
+  aborted: boolean;
+  currentMessageText: string;
+  toolSpanSeq: number;
+  currentTurnSpan: import("@opentelemetry/api").Span | undefined;
+  activeToolSpans: Map<string, import("@opentelemetry/api").Span>;
+}
+
+function logHookError(err: unknown): void {
+  logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
+}
+
+function dispatchHookSafe(
+  hooks: HookRegistry | undefined,
+  name: Parameters<HookRegistry["dispatch"]>[0],
+  agentId: string,
+  payload?: Record<string, unknown>,
+): void {
+  hooks?.dispatch(name, agentId, payload).catch(logHookError);
+}
+
+function endCurrentTurnSpan(state: RunTurnState): void {
+  if (state.currentTurnSpan) {
+    endTurnSpan(state.currentTurnSpan);
+    state.currentTurnSpan = undefined;
+  }
+}
+
+function handleTurnEnd(
+  state: RunTurnState,
+  options: RunOptions,
+  session: AgentSession,
+  maxTurns: number | undefined,
+): void {
+  endCurrentTurnSpan(state);
+  dispatchHookSafe(options.hooks, "turn:end", options.agentId ?? "unknown");
+  state.turnCount++;
+  options.onTurnEnd?.(state.turnCount);
+  if (maxTurns == null) return;
+  if (!state.softLimitReached && state.turnCount >= maxTurns) {
+    state.softLimitReached = true;
+    session.steer("You have reached your turn limit. Wrap up immediately — provide your final answer now.");
+  } else if (state.softLimitReached && state.turnCount >= maxTurns + graceTurns) {
+    state.aborted = true;
+    session.abort();
+  }
+}
+
+function handleTurnStart(
+  state: RunTurnState,
+  options: RunOptions,
+  agentCtx: import("@opentelemetry/api").Context,
+): void {
+  endCurrentTurnSpan(state);
+  state.currentTurnSpan = startTurnSpan(options.agentId ?? "unknown", state.turnCount + 1, agentCtx);
+  dispatchHookSafe(options.hooks, "turn:start", options.agentId ?? "unknown");
+}
+
+function handleMessageStart(state: RunTurnState, startTime: number): void {
+  state.currentMessageText = "";
+  if (state.latencyToFirstToken === undefined) {
+    state.latencyToFirstToken = Date.now() - startTime;
+  }
+}
+
+function handleMessageUpdate(
+  event: Extract<AgentSessionEvent, { type: "message_update" }>,
+  state: RunTurnState,
+  options: RunOptions,
+): void {
+  if (event.assistantMessageEvent.type !== "text_delta") return;
+  state.currentMessageText += event.assistantMessageEvent.delta;
+  options.onTextDelta?.(event.assistantMessageEvent.delta, state.currentMessageText);
+}
+
+function handleToolExecutionStart(
+  event: Extract<AgentSessionEvent, { type: "tool_execution_start" }>,
+  state: RunTurnState,
+  options: RunOptions,
+  session: AgentSession,
+  agentCtx: import("@opentelemetry/api").Context,
+  quotas: { maxTokens: number; maxDurationMs: number; maxToolCalls: number },
+): boolean {
+  state.toolCallCount++;
+  const toolSpanKey = `${event.toolName}-${++state.toolSpanSeq}`;
+  const toolSpan = startToolSpan(options.agentId ?? "unknown", event.toolName, agentCtx);
+  state.activeToolSpans.set(toolSpanKey, toolSpan);
+
+  if (state.toolCallCount > quotas.maxToolCalls) {
+    logger.warn(`Tool call quota exceeded`, {
+      agentId: options.agentId,
+      toolCallCount: state.toolCallCount,
+      maxToolCalls: quotas.maxToolCalls,
+    });
+    session.abort();
+    state.aborted = true;
+    return false;
+  }
+  options.onToolActivity?.({ type: "start", toolName: event.toolName });
+  return true;
+}
+
+function handleToolExecutionEnd(
+  event: Extract<AgentSessionEvent, { type: "tool_execution_end" }>,
+  state: RunTurnState,
+  options: RunOptions,
+): void {
+  for (const [key, ts] of [...state.activeToolSpans.entries()].reverse()) {
+    if (key.startsWith(`${event.toolName}-`)) {
+      endToolSpan(ts);
+      state.activeToolSpans.delete(key);
+      break;
+    }
+  }
+  options.onToolActivity?.({ type: "end", toolName: event.toolName });
+}
+
+function handleMessageEnd(
+  event: Extract<AgentSessionEvent, { type: "message_end" }>,
+  state: RunTurnState,
+  options: RunOptions,
+): void {
+  if (event.message.role !== "assistant") return;
+  const msg = event.message as { usage?: { input?: number; output?: number; cacheWrite?: number } };
+  const u = msg.usage;
+  if (!u) return;
+  state.tokensIn += u.input ?? 0;
+  state.tokensOut += u.output ?? 0;
+  state.tokensCacheWrite += u.cacheWrite ?? 0;
+  options.onAssistantUsage?.({ input: u.input ?? 0, output: u.output ?? 0, cacheWrite: u.cacheWrite ?? 0 });
+}
+
+function handleCompactionEnd(
+  event: Extract<AgentSessionEvent, { type: "compaction_end" }>,
+  options: RunOptions,
+  agentCtx: import("@opentelemetry/api").Context,
+): void {
+  if (event.aborted) return;
+  const tokensBefore = event.result?.tokensBefore ?? 0;
+  options.onCompaction?.({ reason: event.reason, tokensBefore });
+  const compactionSpan = startCompactionSpan(options.agentId ?? "unknown", event.reason, tokensBefore, agentCtx);
+  endCompactionSpan(compactionSpan);
+  dispatchHookSafe(options.hooks, "compaction:end", options.agentId ?? "unknown", {
+    reason: event.reason,
+    tokensBefore: tokensBefore,
+  });
+}
+
+function handleCompactionStart(
+  event: Extract<AgentSessionEvent, { type: "compaction_start" }>,
+  options: RunOptions,
+): void {
+  dispatchHookSafe(options.hooks, "compaction:start", options.agentId ?? "unknown", { reason: event.reason });
+}
+
+// ----------------------------------------------------------------------------
+// runAgent setup helpers
+// ----------------------------------------------------------------------------
+
+interface AgentSetupInputs {
+  type: SubagentType;
+  options: RunOptions;
+  config: EffectiveConfig;
+  agentConfig: ReturnType<typeof getAgentConfig>;
+  effectiveCwd: string;
+  extensions: false | readonly string[] | true;
+  skills: false | readonly string[] | true;
+  env: Awaited<ReturnType<typeof detectEnv>>;
+  parentSystemPrompt: string;
+}
+
+function resolveToolNamesAndExtras(input: AgentSetupInputs): { toolNames: string[]; extras: PromptExtras } {
+  const { type, agentConfig, effectiveCwd, skills } = input;
+  const extras: PromptExtras = {};
+
+  if (Array.isArray(skills)) {
+    const loaded = preloadSkills(skills, effectiveCwd);
+    if (loaded.length > 0) extras.skillBlocks = loaded;
+  }
+
+  let toolNames = getToolNamesForType(type);
+
+  if (agentConfig?.memory) {
+    toolNames = applyMemoryTools(toolNames, agentConfig, effectiveCwd, extras);
+  }
+
+  // Parent permission inheritance
+  const allowedTools = new Set(input.config.builtinToolNames);
+  toolNames = toolNames.filter((t) => allowedTools.has(t));
+  return { toolNames, extras };
+}
+
+function applyMemoryTools(
+  toolNames: string[],
+  agentConfig: NonNullable<ReturnType<typeof getAgentConfig>>,
+  effectiveCwd: string,
+  extras: PromptExtras,
+): string[] {
+  const existingNames = new Set(toolNames);
+  const denied = agentConfig.disallowedTools ? new Set(agentConfig.disallowedTools) : undefined;
+  const effectivelyHas = (name: string) => existingNames.has(name) && !denied?.has(name);
+  const hasWriteTools = effectivelyHas("write") || effectivelyHas("edit");
+
+  if (hasWriteTools) {
+    const extraNames = getMemoryToolNames(existingNames);
+    if (extraNames.length > 0) toolNames = [...toolNames, ...extraNames];
+    extras.memoryBlock = buildMemoryBlock(
+      agentConfig.name,
+      agentConfig.memory ?? "project",
+      effectiveCwd,
+      agentConfig.maxMemoryLines,
+    );
+  } else {
+    const extraNames = getReadOnlyMemoryToolNames(existingNames);
+    if (extraNames.length > 0) toolNames = [...toolNames, ...extraNames];
+    extras.memoryBlock = buildReadOnlyMemoryBlock(
+      agentConfig.name,
+      agentConfig.memory ?? "project",
+      effectiveCwd,
+      agentConfig.maxMemoryLines,
+    );
+  }
+  return toolNames;
+}
+
+function buildSystemPromptForAgent(
+  type: SubagentType,
+  agentConfig: ReturnType<typeof getAgentConfig>,
+  effectiveCwd: string,
+  env: Awaited<ReturnType<typeof detectEnv>>,
+  parentSystemPrompt: string,
+  extras: PromptExtras,
+): string {
+  const compressionLevel = agentConfig?.promptCompressionLevel ?? getPromptCompressionLevel();
+  if (agentConfig) {
+    return buildAgentPrompt(agentConfig, effectiveCwd, env, parentSystemPrompt, extras, compressionLevel);
+  }
+  const fallback = DEFAULT_AGENTS.get("general-purpose");
+  if (!fallback) {
+    throw new AgentRunnerError(`No fallback config available for unknown type "${type}"`, "unknown");
+  }
+  return buildAgentPrompt({ ...fallback, name: type }, effectiveCwd, env, parentSystemPrompt, extras, compressionLevel);
+}
+
+function applyCtxInjection(
+  systemPrompt: string,
+  toolNames: string[],
+  agentId: string | undefined,
+): { systemPrompt: string; toolNames: string[] } {
+  const ctxInjection = buildCtxInjection();
+  if (!ctxInjection) return { systemPrompt, toolNames };
+  const nextPrompt = `${systemPrompt}\n\n${ctxInjection.systemPromptAddition}`;
+  const nextTools = [...toolNames, ...ctxInjection.toolAllowList];
+  logger.debug("context-mode tools injected", { agentId: agentId ?? "unknown" });
+  return { systemPrompt: nextPrompt, toolNames: nextTools };
+}
+
+interface SwarmIntervals {
+  heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+  messagePollInterval: ReturnType<typeof setInterval> | undefined;
+}
+
+function setupSwarmIntervals(options: RunOptions): SwarmIntervals {
+  const swarmCoord = getSwarmCoordinator();
+  const result: SwarmIntervals = { heartbeatInterval: undefined, messagePollInterval: undefined };
+  if (!swarmCoord || !options.agentId) return result;
+
+  if (options.swarm?.enableHeartbeat) {
+    const interval = options.swarm.heartbeatIntervalMs ?? 10_000;
+    result.heartbeatInterval = setInterval(() => {
+      swarmCoord.heartbeat(options.agentId!);
+    }, interval);
+  }
+
+  if (options.swarm?.enableMessaging) {
+    let lastMessagePoll = 0;
+    const interval = options.swarm.messagePollIntervalMs ?? 5_000;
+    result.messagePollInterval = setInterval(() => {
+      const messages = swarmCoord.pollMessages(options.agentId!, lastMessagePoll);
+      for (const msg of messages) {
+        lastMessagePoll = Math.max(lastMessagePoll, msg.ts);
+        options.onSwarmMessage?.(msg.from, msg.payload);
+      }
+    }, interval);
+  }
+  return result;
+}
+
+function applyToolFiltering(
+  session: AgentSession,
+  toolNames: string[],
+  extensions: false | readonly string[] | true,
+  agentConfig: ReturnType<typeof getAgentConfig>,
+): void {
+  const disallowedSet = agentConfig?.disallowedTools ? new Set(agentConfig.disallowedTools) : undefined;
+  if (extensions !== false) {
+    const builtinToolNameSet = new Set(toolNames);
+    const activeTools = session.getActiveToolNames().filter((t) => {
+      if (EXCLUDED_TOOL_NAMES.has(t)) return false;
+      if (disallowedSet?.has(t)) return false;
+      if (builtinToolNameSet.has(t)) return true;
+      if (Array.isArray(extensions)) {
+        return extensions.some((ext) => t.startsWith(ext) || t.includes(ext));
+      }
+      return true;
+    });
+    session.setActiveToolsByName(activeTools);
+  } else if (disallowedSet) {
+    const activeTools = session.getActiveToolNames().filter((t) => !disallowedSet.has(t));
+    session.setActiveToolsByName(activeTools);
+  }
+}
+
+async function dispatchStartHook(
+  options: RunOptions,
+  type: SubagentType,
+  model: Model<Api>,
+  quotas: { maxTokens: number; maxDurationMs: number; maxToolCalls: number },
+): Promise<void> {
+  if (!options.hooks) return;
+  const hookResult = await options.hooks.dispatch("subagent:start", options.agentId ?? "unknown", {
+    type,
+    model: `${model.provider}/${model.id}`,
+    quotas,
+  });
+  if (hookResult === "block") {
+    throw new AgentRunnerError("Blocked by hook", "aborted", { hook: "subagent:start" });
+  }
+}
+
+function checkDepthLimit(options: RunOptions): { currentLevel: number; depthLimit: number } {
+  const currentLevel = options.currentLevel ?? 0;
+  const depthLimit = options.levelLimit ?? 5;
+  if (currentLevel >= depthLimit) {
+    throw new AgentRunnerError(`Max agent depth reached (${currentLevel}/${depthLimit})`, "depth_exceeded", {
+      currentLevel,
+      depthLimit,
+    });
+  }
+  return { currentLevel, depthLimit };
+}
+
+function resolveAgentModel(
+  ctx: ExtensionContext,
+  options: RunOptions,
+  agentConfig: ReturnType<typeof getAgentConfig>,
+): Model<Api> {
+  const model = options.model ?? resolveDefaultModel(ctx.model, ctx.modelRegistry, agentConfig?.model);
+  if (!model) {
+    throw new AgentRunnerError("No model available for agent execution", "model_unavailable");
+  }
+  return model;
+}
+
+async function buildResourceLoader(
+  effectiveCwd: string,
+  extensions: false | readonly string[] | true,
+  skills: false | readonly string[] | true,
+  systemPrompt: string,
+  agentDir: string,
+): Promise<DefaultResourceLoader> {
+  const noSkills = skills === false || Array.isArray(skills);
+  const loader = new DefaultResourceLoader({
+    cwd: effectiveCwd,
+    agentDir,
+    noExtensions: extensions === false,
+    noSkills,
+    noPromptTemplates: true,
+    noThemes: true,
+    noContextFiles: true,
+    systemPromptOverride: () => systemPrompt,
+    appendSystemPromptOverride: () => [],
+  });
+  await loader.reload();
+  return loader;
+}
+
+function buildSessionOptions(
+  ctx: ExtensionContext,
+  effectiveCwd: string,
+  agentConfig: ReturnType<typeof getAgentConfig>,
+  model: Model<Api>,
+  toolNames: string[],
+  loader: DefaultResourceLoader,
+  options: RunOptions,
+  agentDir: string,
+): Parameters<typeof createAgentSession>[0] {
+  const thinkingLevel = options.thinkingLevel ?? agentConfig?.thinking;
+  const sessionOpts: Parameters<typeof createAgentSession>[0] = {
+    cwd: effectiveCwd,
+    agentDir,
+    sessionManager: SessionManager.inMemory(effectiveCwd),
+    settingsManager: SettingsManager.create(effectiveCwd, agentDir),
+    modelRegistry: ctx.modelRegistry,
+    model,
+    tools: toolNames,
+    resourceLoader: loader,
+  };
+  if (thinkingLevel) {
+    sessionOpts.thinkingLevel = thinkingLevel;
+  }
+  return sessionOpts;
+}
+
+function parseHandoffFromResponse(
+  responseText: string,
+  agentConfig: ReturnType<typeof getAgentConfig>,
+): { responseText: string; handoff: AgentHandoff | undefined } {
+  if (!agentConfig?.handoff) return { responseText, handoff: undefined };
+  const parsed = parseHandoff(responseText);
+  if (!parsed) return { responseText, handoff: undefined };
+  return { responseText: renderHandoffForParent(parsed), handoff: parsed };
+}
+
+interface AgentRunContext {
+  session: AgentSession;
+  agentSpan: import("@opentelemetry/api").Span;
+  type: SubagentType;
+  options: RunOptions;
+  turnState: RunTurnState;
+  startTime: number;
+  activeToolSpans: Map<string, import("@opentelemetry/api").Span>;
+  heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+  messagePollInterval: ReturnType<typeof setInterval> | undefined;
+  unsubTurns: () => void;
+  collector: ReturnType<typeof collectResponseText>;
+  cleanupAbort: () => void;
+}
+
+async function runSessionPrompt(
+  session: AgentSession,
+  effectivePrompt: string,
+  runCtx: AgentRunContext,
+): Promise<void> {
+  const { options, turnState, agentSpan, type, startTime } = runCtx;
+  try {
+    await session.prompt(effectivePrompt);
+    dispatchHookSafe(options.hooks, "subagent:end", options.agentId ?? "unknown", {
+      tokensIn: turnState.tokensIn,
+      tokensOut: turnState.tokensOut,
+    });
+  } catch (err) {
+    const errDuration = Date.now() - startTime;
+    endAgentSpan(agentSpan, {
+      status: "error",
+      durationMs: errDuration,
+      turns: turnState.turnCount,
+      toolCalls: turnState.toolCallCount,
+      tokensIn: turnState.tokensIn,
+      tokensOut: turnState.tokensOut,
+      tokensCacheWrite: turnState.tokensCacheWrite,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    captureException(err, { agentType: type });
+    options.hooks
+      ?.dispatch("subagent:error", options.agentId ?? "unknown", {
+        error: err instanceof Error ? err.message : String(err),
+      })
+      .catch((err2) => {
+        logger.debug(`Hook dispatch error: ${err2 instanceof Error ? err2.message : String(err2)}`);
+      });
+    throw err;
+  } finally {
+    runCtx.unsubTurns();
+    runCtx.collector.unsubscribe();
+    runCtx.cleanupAbort();
+    endCurrentTurnSpan(turnState);
+    for (const ts of runCtx.activeToolSpans.values()) {
+      endToolSpan(ts);
+    }
+    runCtx.activeToolSpans.clear();
+    if (runCtx.heartbeatInterval) clearInterval(runCtx.heartbeatInterval);
+    if (runCtx.messagePollInterval) clearInterval(runCtx.messagePollInterval);
+  }
+}
+
+async function runValidationStage(
+  session: AgentSession,
+  ctx: ExtensionContext,
+  responseTextIn: string,
+  agentConfig: ReturnType<typeof getAgentConfig>,
+  options: RunOptions,
+): Promise<{
+  responseText: string;
+  validationResults: ValidationResult[] | undefined;
+  validated: boolean | undefined;
+}> {
+  if (options.skipValidators || !hasValidators(agentConfig)) {
+    return { responseText: responseTextIn, validationResults: undefined, validated: undefined };
+  }
+  const result = await runAdversarialValidation(
+    session,
+    ctx,
+    responseTextIn,
+    agentConfig,
+    options.agentId ?? "unknown",
+    {
+      pi: options.pi,
+      model: options.model,
+      signal: options.signal,
+      hooks: options.hooks,
+      onToolActivity: options.onToolActivity,
+      onAssistantUsage: options.onAssistantUsage,
+      onCompaction: options.onCompaction,
+      onValidationComplete: options.onValidationComplete,
+      runAgent,
+      resumeAgent,
+    },
+  );
+  return {
+    responseText: result.responseText,
+    validationResults: result.validationResults,
+    validated: result.validated,
+  };
+}
+
+function finalizeAgentRun(
+  type: SubagentType,
+  options: RunOptions,
+  turnState: RunTurnState,
+  agentSpan: import("@opentelemetry/api").Span,
+  duration: number,
+  validationResults: ValidationResult[] | undefined,
+  validated: boolean | undefined,
+): void {
+  emitTelemetry("agent:completed", {
+    type,
+    duration,
+    validatorResults: validationResults?.map((r) => ({ passed: r.passed, summary: r.summary })),
+  });
+
+  trackEvent("agent:completed", options.agentId ?? "unknown", {
+    type,
+    duration,
+    aborted: turnState.aborted,
+    steered: turnState.softLimitReached,
+    validated,
+    turnCount: turnState.turnCount,
+    toolCallCount: turnState.toolCallCount,
+  });
+
+  const finalStatus = turnState.aborted ? "aborted" : turnState.softLimitReached ? "steered" : "completed";
+  endAgentSpan(agentSpan, {
+    status: finalStatus,
+    durationMs: duration,
+    turns: turnState.turnCount,
+    toolCalls: turnState.toolCallCount,
+    tokensIn: turnState.tokensIn,
+    tokensOut: turnState.tokensOut,
+    tokensCacheWrite: turnState.tokensCacheWrite,
+    validated,
+  });
 }
 
 // ============================================================================
@@ -382,14 +967,7 @@ export async function runAgent(
   const agentConfig = getAgentConfig(type);
 
   // Early exit: check level limit
-  const currentLevel = options.currentLevel ?? 0;
-  const depthLimit = options.levelLimit ?? 5;
-  if (currentLevel >= depthLimit) {
-    throw new AgentRunnerError(`Max agent depth reached (${currentLevel}/${depthLimit})`, "depth_exceeded", {
-      currentLevel,
-      depthLimit,
-    });
-  }
+  const { currentLevel } = checkDepthLimit(options);
 
   // Telemetry
   emitTelemetry("agent:spawned", {
@@ -417,113 +995,36 @@ export async function runAgent(
   // Resolve extensions/skills
   const extensions = options.isolated ? false : config.extensions;
   const skills = options.isolated ? false : config.skills;
-  const extras: PromptExtras = {};
 
-  if (Array.isArray(skills)) {
-    const loaded = preloadSkills(skills, effectiveCwd);
-    if (loaded.length > 0) extras.skillBlocks = loaded;
-  }
-
-  let toolNames = getToolNamesForType(type);
-
-  // Persistent memory
-  if (agentConfig?.memory) {
-    const existingNames = new Set(toolNames);
-    const denied = agentConfig.disallowedTools ? new Set(agentConfig.disallowedTools) : undefined;
-    const effectivelyHas = (name: string) => existingNames.has(name) && !denied?.has(name);
-    const hasWriteTools = effectivelyHas("write") || effectivelyHas("edit");
-
-    if (hasWriteTools) {
-      const extraNames = getMemoryToolNames(existingNames);
-      if (extraNames.length > 0) toolNames = [...toolNames, ...extraNames];
-      extras.memoryBlock = buildMemoryBlock(
-        agentConfig.name,
-        agentConfig.memory,
-        effectiveCwd,
-        agentConfig.maxMemoryLines,
-      );
-    } else {
-      const extraNames = getReadOnlyMemoryToolNames(existingNames);
-      if (extraNames.length > 0) toolNames = [...toolNames, ...extraNames];
-      extras.memoryBlock = buildReadOnlyMemoryBlock(
-        agentConfig.name,
-        agentConfig.memory,
-        effectiveCwd,
-        agentConfig.maxMemoryLines,
-      );
-    }
-  }
-
-  // Parent permission inheritance
-  const allowedTools = new Set(config.builtinToolNames);
-  toolNames = toolNames.filter((t) => allowedTools.has(t));
+  const setupInput: AgentSetupInputs = {
+    type,
+    options,
+    config,
+    agentConfig,
+    effectiveCwd,
+    extensions,
+    skills,
+    env,
+    parentSystemPrompt,
+  };
+  const { toolNames: baseToolNames, extras } = resolveToolNamesAndExtras(setupInput);
+  let toolNames = baseToolNames;
 
   // Build system prompt
-  const compressionLevel = agentConfig?.promptCompressionLevel ?? getPromptCompressionLevel();
-  let systemPrompt: string;
-  if (agentConfig) {
-    systemPrompt = buildAgentPrompt(agentConfig, effectiveCwd, env, parentSystemPrompt, extras, compressionLevel);
-  } else {
-    const fallback = DEFAULT_AGENTS.get("general-purpose");
-    if (!fallback) {
-      throw new AgentRunnerError(`No fallback config available for unknown type "${type}"`, "unknown");
-    }
-    systemPrompt = buildAgentPrompt(
-      { ...fallback, name: type },
-      effectiveCwd,
-      env,
-      parentSystemPrompt,
-      extras,
-      compressionLevel,
-    );
-  }
+  let systemPrompt = buildSystemPromptForAgent(type, agentConfig, effectiveCwd, env, parentSystemPrompt, extras);
 
   // Context-mode injection
-  const ctxInjection = buildCtxInjection();
-  if (ctxInjection) {
-    systemPrompt = `${systemPrompt}\n\n${ctxInjection.systemPromptAddition}`;
-    toolNames = [...toolNames, ...ctxInjection.toolAllowList];
-    logger.debug("context-mode tools injected", { agentId: options.agentId ?? "unknown" });
-  }
+  const ctxResult = applyCtxInjection(systemPrompt, toolNames, options.agentId);
+  systemPrompt = ctxResult.systemPrompt;
+  toolNames = ctxResult.toolNames;
 
-  const noSkills = skills === false || Array.isArray(skills);
   const agentDir = getAgentDir();
-
-  const loader = new DefaultResourceLoader({
-    cwd: effectiveCwd,
-    agentDir,
-    noExtensions: extensions === false,
-    noSkills,
-    noPromptTemplates: true,
-    noThemes: true,
-    noContextFiles: true,
-    systemPromptOverride: () => systemPrompt,
-    appendSystemPromptOverride: () => [],
-  });
-  await loader.reload();
+  const loader = await buildResourceLoader(effectiveCwd, extensions, skills, systemPrompt, agentDir);
 
   // Resolve model with circuit breaker
-  const model = options.model ?? resolveDefaultModel(ctx.model, ctx.modelRegistry, agentConfig?.model);
+  const model = resolveAgentModel(ctx, options, agentConfig);
 
-  if (!model) {
-    throw new AgentRunnerError("No model available for agent execution", "model_unavailable");
-  }
-
-  const thinkingLevel = options.thinkingLevel ?? agentConfig?.thinking;
-
-  const sessionOpts: Parameters<typeof createAgentSession>[0] = {
-    cwd: effectiveCwd,
-    agentDir,
-    sessionManager: SessionManager.inMemory(effectiveCwd),
-    settingsManager: SettingsManager.create(effectiveCwd, agentDir),
-    modelRegistry: ctx.modelRegistry,
-    model,
-    tools: toolNames,
-    resourceLoader: loader,
-  };
-  if (thinkingLevel) {
-    sessionOpts.thinkingLevel = thinkingLevel;
-  }
+  const sessionOpts = buildSessionOptions(ctx, effectiveCwd, agentConfig, model, toolNames, loader, options, agentDir);
 
   // Set error tracking user context so crashes are attributed to this agent
   setErrorTrackingUser({
@@ -533,16 +1034,7 @@ export async function runAgent(
   });
 
   // Hook: subagent:start
-  if (options.hooks) {
-    const hookResult = await options.hooks.dispatch("subagent:start", options.agentId ?? "unknown", {
-      type,
-      model: `${model.provider}/${model.id}`,
-      quotas,
-    });
-    if (hookResult === "block") {
-      throw new AgentRunnerError("Blocked by hook", "aborted", { hook: "subagent:start" });
-    }
-  }
+  await dispatchStartHook(options, type, model, quotas);
 
   const effectivePrompt = buildEffectivePrompt(ctx, prompt, options);
 
@@ -552,49 +1044,11 @@ export async function runAgent(
   const baseSessionName = agentConfig?.name ?? type;
   session.setSessionName(options.agentId ? `${baseSessionName}#${options.agentId.slice(0, 8)}` : baseSessionName);
 
-  // Swarm integration: register heartbeat
-  let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
-  let messagePollInterval: ReturnType<typeof setInterval> | undefined;
-  const swarmCoord = getSwarmCoordinator();
-  if (swarmCoord && options.agentId && options.swarm?.enableHeartbeat) {
-    const interval = options.swarm.heartbeatIntervalMs ?? 10_000;
-    heartbeatInterval = setInterval(() => {
-      swarmCoord.heartbeat(options.agentId!);
-    }, interval);
-  }
-
-  // Swarm messaging poll
-  let lastMessagePoll = 0;
-  if (swarmCoord && options.agentId && options.swarm?.enableMessaging) {
-    const interval = options.swarm.messagePollIntervalMs ?? 5_000;
-    messagePollInterval = setInterval(() => {
-      const messages = swarmCoord.pollMessages(options.agentId!, lastMessagePoll);
-      for (const msg of messages) {
-        lastMessagePoll = Math.max(lastMessagePoll, msg.ts);
-        options.onSwarmMessage?.(msg.from, msg.payload);
-      }
-    }, interval);
-  }
+  // Swarm integration
+  const { heartbeatInterval, messagePollInterval } = setupSwarmIntervals(options);
 
   // Tool filtering
-  const disallowedSet = agentConfig?.disallowedTools ? new Set(agentConfig.disallowedTools) : undefined;
-
-  if (extensions !== false) {
-    const builtinToolNameSet = new Set(toolNames);
-    const activeTools = session.getActiveToolNames().filter((t) => {
-      if (EXCLUDED_TOOL_NAMES.has(t)) return false;
-      if (disallowedSet?.has(t)) return false;
-      if (builtinToolNameSet.has(t)) return true;
-      if (Array.isArray(extensions)) {
-        return extensions.some((ext) => t.startsWith(ext) || t.includes(ext));
-      }
-      return true;
-    });
-    session.setActiveToolsByName(activeTools);
-  } else if (disallowedSet) {
-    const activeTools = session.getActiveToolNames().filter((t) => !disallowedSet.has(t));
-    session.setActiveToolsByName(activeTools);
-  }
+  applyToolFiltering(session, toolNames, extensions, agentConfig);
 
   await session.bindExtensions({
     onError: (err) => {
@@ -616,294 +1070,124 @@ export async function runAgent(
     correlationId: options.correlationId,
   });
   const activeToolSpans = new Map<string, import("@opentelemetry/api").Span>();
-  let currentTurnSpan: import("@opentelemetry/api").Span | undefined;
-  let toolSpanSeq = 0;
 
   // Turn tracking and quotas
-  let turnCount = 0;
-  let toolCallCount = 0;
-  let tokensIn = 0;
-  let tokensOut = 0;
-  let tokensCacheWrite = 0;
-  let latencyToFirstToken: number | undefined;
   const maxTurns = normalizeMaxTurns(options.maxTurns ?? agentConfig?.maxTurns ?? defaultMaxTurns);
-  let softLimitReached = false;
-  let aborted = false;
+  const turnState: RunTurnState = {
+    turnCount: 0,
+    toolCallCount: 0,
+    tokensIn: 0,
+    tokensOut: 0,
+    tokensCacheWrite: 0,
+    latencyToFirstToken: undefined,
+    softLimitReached: false,
+    aborted: false,
+    currentMessageText: "",
+    toolSpanSeq: 0,
+    currentTurnSpan: undefined,
+    activeToolSpans,
+  };
 
-  let currentMessageText = "";
   const unsubTurns = session.subscribe((event: AgentSessionEvent) => {
     // Quota checks
     checkDurationQuota();
-    const totalTokens = tokensIn + tokensOut;
+    const totalTokens = turnState.tokensIn + turnState.tokensOut;
     if (totalTokens > quotas.maxTokens) {
       logger.warn(`Token quota exceeded`, { agentId: options.agentId, totalTokens, maxTokens: quotas.maxTokens });
       session.abort();
-      aborted = true;
+      turnState.aborted = true;
       return;
     }
 
-    if (event.type === "turn_end") {
-      // End previous turn span
-      if (currentTurnSpan) {
-        endTurnSpan(currentTurnSpan);
-        currentTurnSpan = undefined;
-      }
-
-      options.hooks?.dispatch("turn:end", options.agentId ?? "unknown").catch((err) => {
-        logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
-      });
-      turnCount++;
-      options.onTurnEnd?.(turnCount);
-      if (maxTurns != null) {
-        if (!softLimitReached && turnCount >= maxTurns) {
-          softLimitReached = true;
-          session.steer("You have reached your turn limit. Wrap up immediately — provide your final answer now.");
-        } else if (softLimitReached && turnCount >= maxTurns + graceTurns) {
-          aborted = true;
-          session.abort();
-        }
-      }
-    }
-
-    if (event.type === "turn_start") {
-      // End any prior turn span (safety)
-      if (currentTurnSpan) {
-        endTurnSpan(currentTurnSpan);
-        currentTurnSpan = undefined;
-      }
-      // Start new turn span
-      currentTurnSpan = startTurnSpan(options.agentId ?? "unknown", turnCount + 1, agentCtx);
-
-      options.hooks?.dispatch("turn:start", options.agentId ?? "unknown").catch((err) => {
-        logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
-      });
-    }
-
-    if (event.type === "message_start") {
-      currentMessageText = "";
-      if (latencyToFirstToken === undefined) {
-        latencyToFirstToken = Date.now() - startTime;
-      }
-    }
-
-    if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-      currentMessageText += event.assistantMessageEvent.delta;
-      options.onTextDelta?.(event.assistantMessageEvent.delta, currentMessageText);
-    }
-
-    if (event.type === "tool_execution_start") {
-      toolCallCount++;
-      // Start tool span
-      const toolSpanKey = `${event.toolName}-${++toolSpanSeq}`;
-      const toolSpan = startToolSpan(options.agentId ?? "unknown", event.toolName, agentCtx);
-      activeToolSpans.set(toolSpanKey, toolSpan);
-
-      if (toolCallCount > quotas.maxToolCalls) {
-        logger.warn(`Tool call quota exceeded`, {
-          agentId: options.agentId,
-          toolCallCount,
-          maxToolCalls: quotas.maxToolCalls,
-        });
-        session.abort();
-        aborted = true;
-        return;
-      }
-      options.onToolActivity?.({ type: "start", toolName: event.toolName });
-    }
-
-    if (event.type === "tool_execution_end") {
-      // End tool span — iterate in reverse for most-recent matching span
-      for (const [key, ts] of [...activeToolSpans.entries()].reverse()) {
-        if (key.startsWith(`${event.toolName}-`)) {
-          endToolSpan(ts);
-          activeToolSpans.delete(key);
-          break;
-        }
-      }
-
-      options.onToolActivity?.({ type: "end", toolName: event.toolName });
-    }
-
-    if (event.type === "message_end" && event.message.role === "assistant") {
-      const msg = event.message as { usage?: { input?: number; output?: number; cacheWrite?: number } };
-      const u = msg.usage;
-      if (u) {
-        tokensIn += u.input ?? 0;
-        tokensOut += u.output ?? 0;
-        tokensCacheWrite += u.cacheWrite ?? 0;
-        options.onAssistantUsage?.({
-          input: u.input ?? 0,
-          output: u.output ?? 0,
-          cacheWrite: u.cacheWrite ?? 0,
-        });
-      }
-    }
-
-    if (event.type === "compaction_end" && !event.aborted) {
-      const tokensBefore = event.result?.tokensBefore ?? 0;
-      options.onCompaction?.({ reason: event.reason, tokensBefore });
-      const compactionSpan = startCompactionSpan(options.agentId ?? "unknown", event.reason, tokensBefore, agentCtx);
-      endCompactionSpan(compactionSpan);
-
-      options.hooks
-        ?.dispatch("compaction:end", options.agentId ?? "unknown", {
-          reason: event.reason,
-          tokensBefore: tokensBefore,
-        })
-        .catch((err) => {
-          logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
-        });
-    }
-
-    if (event.type === "compaction_start") {
-      options.hooks
-        ?.dispatch("compaction:start", options.agentId ?? "unknown", {
-          reason: event.reason,
-        })
-        .catch((err) => {
-          logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
-        });
+    switch (event.type) {
+      case "turn_end":
+        handleTurnEnd(turnState, options, session, maxTurns);
+        break;
+      case "turn_start":
+        handleTurnStart(turnState, options, agentCtx);
+        break;
+      case "message_start":
+        handleMessageStart(turnState, startTime);
+        break;
+      case "message_update":
+        handleMessageUpdate(event, turnState, options);
+        break;
+      case "tool_execution_start":
+        if (!handleToolExecutionStart(event, turnState, options, session, agentCtx, quotas)) return;
+        break;
+      case "tool_execution_end":
+        handleToolExecutionEnd(event, turnState, options);
+        break;
+      case "message_end":
+        handleMessageEnd(event, turnState, options);
+        break;
+      case "compaction_end":
+        handleCompactionEnd(event, options, agentCtx);
+        break;
+      case "compaction_start":
+        handleCompactionStart(event, options);
+        break;
+      default:
+        break;
     }
   });
 
   const collector = collectResponseText(session);
   const cleanupAbort = forwardAbortSignal(session, options.signal);
 
-  try {
-    await session.prompt(effectivePrompt);
-    options.hooks
-      ?.dispatch("subagent:end", options.agentId ?? "unknown", {
-        tokensIn,
-        tokensOut,
-      })
-      .catch((err) => {
-        logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
-      });
-  } catch (err) {
-    // End agent span with error status
-    const errDuration = Date.now() - startTime;
-    endAgentSpan(agentSpan, {
-      status: "error",
-      durationMs: errDuration,
-      turns: turnCount,
-      toolCalls: toolCallCount,
-      tokensIn,
-      tokensOut,
-      tokensCacheWrite,
-      error: err instanceof Error ? err.message : String(err),
-    });
+  const runCtx: AgentRunContext = {
+    session,
+    agentSpan,
+    type,
+    options,
+    turnState,
+    startTime,
+    activeToolSpans,
+    heartbeatInterval,
+    messagePollInterval,
+    unsubTurns,
+    collector,
+    cleanupAbort,
+  };
 
-    // Report to Sentry (no-op when not configured) for production error tracking
-    captureException(err, { agentType: type });
-    options.hooks
-      ?.dispatch("subagent:error", options.agentId ?? "unknown", {
-        error: err instanceof Error ? err.message : String(err),
-      })
-      .catch((err2) => {
-        logger.debug(`Hook dispatch error: ${err2 instanceof Error ? err2.message : String(err2)}`);
-      });
-    throw err;
-  } finally {
-    unsubTurns();
-    collector.unsubscribe();
-    cleanupAbort();
-    // Clean up any dangling turn/tool spans
-    if (currentTurnSpan) {
-      endTurnSpan(currentTurnSpan);
-      currentTurnSpan = undefined;
-    }
-    for (const ts of activeToolSpans.values()) {
-      endToolSpan(ts);
-    }
-    activeToolSpans.clear();
-    if (heartbeatInterval) clearInterval(heartbeatInterval);
-    if (messagePollInterval) clearInterval(messagePollInterval);
-  }
+  await runSessionPrompt(session, effectivePrompt, runCtx);
 
   let responseText = collector.getText().trim() || getLastAssistantText(session);
   const duration = Date.now() - startTime;
 
   // Structured handoff parsing
-  let handoff: AgentHandoff | undefined;
-  if (agentConfig?.handoff) {
-    const parsed = parseHandoff(responseText);
-    if (parsed) {
-      handoff = parsed;
-      responseText = renderHandoffForParent(parsed);
-    }
-  }
+  const handoffResult = parseHandoffFromResponse(responseText, agentConfig);
+  responseText = handoffResult.responseText;
+  const handoff = handoffResult.handoff;
 
   // Adversarial validation (extracted to agent-runner-validator.ts)
-  let validationResults: ValidationResult[] | undefined;
-  let validated: boolean | undefined;
+  const validation = await runValidationStage(session, ctx, responseText, agentConfig, options);
+  responseText = validation.responseText;
+  const validationResults = validation.validationResults;
+  const validated = validation.validated;
 
-  if (!options.skipValidators && hasValidators(agentConfig)) {
-    const result = await runAdversarialValidation(
-      session,
-      ctx,
-      responseText,
-      agentConfig,
-      options.agentId ?? "unknown",
-      {
-        pi: options.pi,
-        model: options.model,
-        signal: options.signal,
-        hooks: options.hooks,
-        onToolActivity: options.onToolActivity,
-        onAssistantUsage: options.onAssistantUsage,
-        onCompaction: options.onCompaction,
-        onValidationComplete: options.onValidationComplete,
-        runAgent,
-        resumeAgent,
-      },
-    );
-    responseText = result.responseText;
-    validationResults = result.validationResults;
-    validated = result.validated;
-  }
-
-  // Telemetry
-  emitTelemetry("agent:completed", {
-    type,
-    duration,
-    validatorResults: validationResults?.map((r) => ({ passed: r.passed, summary: r.summary })),
-  });
-
-  // Analytics (no-op when not configured)
-  trackEvent("agent:completed", options.agentId ?? "unknown", {
-    type,
-    duration,
-    aborted,
-    steered: softLimitReached,
-    validated,
-    turnCount,
-    toolCallCount,
-  });
-
-  // End OpenTelemetry agent span
-  const finalStatus = aborted ? "aborted" : softLimitReached ? "steered" : "completed";
-  endAgentSpan(agentSpan, {
-    status: finalStatus,
-    durationMs: duration,
-    turns: turnCount,
-    toolCalls: toolCallCount,
-    tokensIn,
-    tokensOut,
-    tokensCacheWrite,
-    validated,
-  });
+  finalizeAgentRun(type, options, turnState, agentSpan, duration, validationResults, validated);
 
   const metrics: RunMetrics = {
     durationMs: duration,
-    turns: turnCount,
-    toolCalls: toolCallCount,
-    tokensIn,
-    tokensOut,
-    tokensCacheWrite,
-    latencyToFirstTokenMs: latencyToFirstToken,
+    turns: turnState.turnCount,
+    toolCalls: turnState.toolCallCount,
+    tokensIn: turnState.tokensIn,
+    tokensOut: turnState.tokensOut,
+    tokensCacheWrite: turnState.tokensCacheWrite,
+    latencyToFirstTokenMs: turnState.latencyToFirstToken,
   };
 
-  return { responseText, session, aborted, steered: softLimitReached, validationResults, validated, handoff, metrics };
+  return {
+    responseText,
+    session,
+    aborted: turnState.aborted,
+    steered: turnState.softLimitReached,
+    validationResults,
+    validated,
+    handoff,
+    metrics,
+  };
 }
 
 // ============================================================================
@@ -928,18 +1212,7 @@ export async function resumeAgent(
   const unsubEvents =
     options.onToolActivity || options.onAssistantUsage || options.onCompaction
       ? session.subscribe((event: AgentSessionEvent) => {
-          if (event.type === "tool_execution_start")
-            options.onToolActivity?.({ type: "start", toolName: event.toolName });
-          if (event.type === "tool_execution_end") options.onToolActivity?.({ type: "end", toolName: event.toolName });
-          if (event.type === "message_end" && event.message.role === "assistant") {
-            const msg = event.message as { usage?: { input?: number; output?: number; cacheWrite?: number } };
-            const u = msg.usage;
-            if (u)
-              options.onAssistantUsage?.({ input: u.input ?? 0, output: u.output ?? 0, cacheWrite: u.cacheWrite ?? 0 });
-          }
-          if (event.type === "compaction_end" && !event.aborted) {
-            options.onCompaction?.({ reason: event.reason, tokensBefore: event.result?.tokensBefore ?? 0 });
-          }
+          dispatchResumeEvent(event, options);
         })
       : () => {};
 
@@ -974,29 +1247,49 @@ export async function steerAgent(session: AgentSession, message: string): Promis
 // Conversation Serialization
 // ============================================================================
 
+function formatUserMessage(msg: AgentSession["messages"][number]): string | undefined {
+  if (msg.role !== "user") return undefined;
+  const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
+  const trimmed = text.trim();
+  return trimmed ? `[User]: ${trimmed}` : undefined;
+}
+
+function formatAssistantMessage(msg: AgentSession["messages"][number]): string[] {
+  if (msg.role !== "assistant") return [];
+  const textParts: string[] = [];
+  const toolCalls: string[] = [];
+  for (const c of msg.content) {
+    if (c.type === "text" && c.text) textParts.push(c.text);
+    else if (c.type === "toolCall") toolCalls.push(`  Tool: ${c.name ?? "unknown"}`);
+  }
+  const out: string[] = [];
+  if (textParts.length > 0) out.push(`[Assistant]: ${textParts.join("\n")}`);
+  if (toolCalls.length > 0) out.push(`[Tool Calls]:\n${toolCalls.join("\n")}`);
+  return out;
+}
+
+function formatToolResultMessage(msg: AgentSession["messages"][number]): string | undefined {
+  if (msg.role !== "toolResult") return undefined;
+  const text = extractText(msg.content);
+  const truncated = text.length > 200 ? `${text.slice(0, 200)}...` : text;
+  return `[Tool Result (${msg.toolName})]: ${truncated}`;
+}
+
+function formatConversationMessage(msg: AgentSession["messages"][number]): string[] {
+  const userPart = formatUserMessage(msg);
+  if (userPart) return [userPart];
+  const assistantParts = formatAssistantMessage(msg);
+  if (assistantParts.length > 0) return assistantParts;
+  const toolResultPart = formatToolResultMessage(msg);
+  if (toolResultPart) return [toolResultPart];
+  return [];
+}
+
 export function getAgentConversation(session: AgentSession): string {
   const parts: string[] = [];
-
   for (const msg of session.messages) {
-    if (msg.role === "user") {
-      const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
-      if (text.trim()) parts.push(`[User]: ${text.trim()}`);
-    } else if (msg.role === "assistant") {
-      const textParts: string[] = [];
-      const toolCalls: string[] = [];
-      for (const c of msg.content) {
-        if (c.type === "text" && c.text) textParts.push(c.text);
-        else if (c.type === "toolCall") toolCalls.push(`  Tool: ${c.name ?? "unknown"}`);
-      }
-      if (textParts.length > 0) parts.push(`[Assistant]: ${textParts.join("\n")}`);
-      if (toolCalls.length > 0) parts.push(`[Tool Calls]:\n${toolCalls.join("\n")}`);
-    } else if (msg.role === "toolResult") {
-      const text = extractText(msg.content);
-      const truncated = text.length > 200 ? `${text.slice(0, 200)}...` : text;
-      parts.push(`[Tool Result (${msg.toolName})]: ${truncated}`);
-    }
+    parts.push(...formatConversationMessage(msg));
   }
-
   return parts.join("\n\n");
 }
 

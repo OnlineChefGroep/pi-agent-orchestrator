@@ -243,6 +243,15 @@ const PREMIUM = {
   error: "#ff6478",
 };
 
+// SGR color code → PREMIUM palette mapping
+const SGR_COLOR_MAP = {
+  31: PREMIUM.error,
+  32: PREMIUM.success,
+  33: PREMIUM.highlight,
+  36: PREMIUM.accent,
+  37: PREMIUM.muted,
+};
+
 // Translate the SGR sequences this codebase emits into a style.
 function applySgr(style, params) {
   const codes = params.split(";").map((n) => (n === "" ? 0 : Number(n)));
@@ -252,20 +261,21 @@ function applySgr(style, params) {
       style.color = PREMIUM.default;
       style.bold = false;
       style.dim = false;
-    } else if (c === 1) style.bold = true;
-    else if (c === 2) style.dim = true;
-    else if (c === 22) {
+    } else if (c === 1) {
+      style.bold = true;
+    } else if (c === 2) {
+      style.dim = true;
+    } else if (c === 22) {
       style.bold = false;
       style.dim = false;
-    } else if (c === 31) style.color = PREMIUM.error;
-    else if (c === 32) style.color = PREMIUM.success;
-    else if (c === 33) style.color = PREMIUM.highlight;
-    else if (c === 36) style.color = PREMIUM.accent;
-    else if (c === 37) style.color = PREMIUM.muted;
-    else if (c === 38 && codes[i + 1] === 2) {
+    } else if (c === 38 && codes[i + 1] === 2) {
       style.color = `rgb(${codes[i + 2]},${codes[i + 3]},${codes[i + 4]})`;
       i += 4;
-    } else if (c === 39) style.color = PREMIUM.default;
+    } else if (c === 39) {
+      style.color = PREMIUM.default;
+    } else if (SGR_COLOR_MAP[c]) {
+      style.color = SGR_COLOR_MAP[c];
+    }
   }
 }
 

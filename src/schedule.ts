@@ -96,6 +96,27 @@ export class SubagentScheduler {
     return this.store?.list() ?? [];
   }
 
+  /** Validate the schedule format and bounds, appending any errors. */
+  private validateScheduleFormat(schedule: string, errors: string[]): void {
+    if (typeof schedule !== "string") {
+      errors.push("Schedule must be a string");
+      return;
+    }
+    try {
+      const detected = SubagentScheduler.detectSchedule(schedule);
+      if (detected.type === "interval" && detected.intervalMs) {
+        if (detected.intervalMs < MIN_INTERVAL) {
+          errors.push(`Interval ${detected.intervalMs}ms is below minimum ${MIN_INTERVAL}ms (1 minute)`);
+        }
+        if (detected.intervalMs > MAX_INTERVAL) {
+          errors.push(`Interval ${detected.intervalMs}ms exceeds maximum ${MAX_INTERVAL}ms (~24.8 days)`);
+        }
+      }
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   /**
    * CVE-005 FIX: Validate schedule input bounds.
    * Returns array of error messages (empty if valid).
@@ -122,23 +143,7 @@ export class SubagentScheduler {
     }
 
     // Validate schedule format and bounds
-    if (typeof input.schedule !== "string") {
-      errors.push("Schedule must be a string");
-    } else {
-      try {
-        const detected = SubagentScheduler.detectSchedule(input.schedule);
-        if (detected.type === "interval" && detected.intervalMs) {
-          if (detected.intervalMs < MIN_INTERVAL) {
-            errors.push(`Interval ${detected.intervalMs}ms is below minimum ${MIN_INTERVAL}ms (1 minute)`);
-          }
-          if (detected.intervalMs > MAX_INTERVAL) {
-            errors.push(`Interval ${detected.intervalMs}ms exceeds maximum ${MAX_INTERVAL}ms (~24.8 days)`);
-          }
-        }
-      } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err));
-      }
-    }
+    this.validateScheduleFormat(input.schedule, errors);
 
     return errors;
   }

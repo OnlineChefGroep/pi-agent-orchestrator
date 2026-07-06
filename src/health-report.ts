@@ -268,6 +268,144 @@ export function buildHealthReport(deps: HealthReportDeps): HealthReport {
   };
 }
 
+/** Append the Process section lines. */
+function pushProcessSection(lines: string[], r: HealthReport): void {
+  lines.push("## Process");
+  lines.push(`  node      : ${r.process.nodeVersion}`);
+  lines.push(`  platform  : ${r.process.platform}`);
+  lines.push(`  uptime    : ${formatDuration(r.process.uptimeMs)}`);
+  lines.push(`  rss       : ${r.process.memoryRssMB} MB`);
+  lines.push(`  heapUsed  : ${r.process.memoryHeapUsedMB} MB`);
+  lines.push("");
+}
+
+/** Append the Tracing section lines. */
+function pushTracingSection(lines: string[], r: HealthReport): void {
+  lines.push("## Tracing");
+  lines.push(`  enabled       : ${r.tracing.enabled ? "yes" : "no"}`);
+  lines.push(`  tracer        : ${r.tracing.tracerName}`);
+  lines.push(`  tracerVersion : ${r.tracing.tracerVersion}`);
+  lines.push("");
+}
+
+/** Append the Circuit Breaker section lines. */
+function pushCircuitBreakerSection(lines: string[], r: HealthReport): void {
+  lines.push("## Circuit Breaker");
+  lines.push(`  state          : ${r.circuitBreaker.state.toUpperCase()}`);
+  lines.push(`  failures       : ${r.circuitBreaker.failures}`);
+  lines.push(
+    `  lastFailureAt  : ${r.circuitBreaker.lastFailureAt === 0 ? "never" : new Date(r.circuitBreaker.lastFailureAt).toISOString()}`,
+  );
+  lines.push("");
+}
+
+/** Append the Schedule section lines. */
+function pushScheduleSection(lines: string[], r: HealthReport): void {
+  lines.push("## Schedule");
+  lines.push(`  feature  : ${r.schedule.enabled ? "enabled" : "disabled"}`);
+  lines.push(`  runtime  : ${r.schedule.active ? "running" : "stopped"}`);
+  lines.push(`  jobs     : ${r.schedule.jobCount}`);
+  lines.push("");
+}
+
+/** Append the Swarm section lines. */
+function pushSwarmSection(lines: string[], r: HealthReport): void {
+  lines.push("## Swarm");
+  if (r.swarm.available) {
+    lines.push(`  coordinator   : present`);
+    lines.push(`  swarms        : ${r.swarm.swarmCount}`);
+    lines.push(`  agents        : ${r.swarm.totalAgents}`);
+    lines.push(`  deliveries    : ${r.swarm.totalDeliveries}`);
+  } else {
+    lines.push(`  coordinator   : not configured`);
+  }
+  lines.push("");
+}
+
+/** Append the Agents section lines. */
+function pushAgentsSection(lines: string[], r: HealthReport): void {
+  lines.push("## Agents");
+  lines.push(`  total         : ${r.agents.total}`);
+  lines.push(`  running       : ${r.agents.running}`);
+  lines.push(`  queued        : ${r.agents.queued}`);
+  lines.push(`  by status     :`);
+  for (const status of Object.keys(r.agents.byStatus) as AgentStatus[]) {
+    const n = r.agents.byStatus[status];
+    if (n > 0) lines.push(`    ${status.padEnd(10)} : ${n}`);
+  }
+  lines.push(
+    `  session       : ${r.agents.sessionUsage.spawnedAgents} agents, ${r.agents.sessionUsage.totalTurns} turns`,
+  );
+  const limitParts: string[] = [];
+  if (r.agents.sessionLimits.maxAgentsPerSession !== undefined) {
+    limitParts.push(`agents≤${r.agents.sessionLimits.maxAgentsPerSession}`);
+  }
+  if (r.agents.sessionLimits.maxTotalTurnsPerSession !== undefined) {
+    limitParts.push(`turns≤${r.agents.sessionLimits.maxTotalTurnsPerSession}`);
+  }
+  lines.push(`  session limits: ${limitParts.length === 0 ? "unlimited" : limitParts.join(", ")}`);
+  lines.push("");
+}
+
+/** Append the Settings section lines. */
+function pushSettingsSection(lines: string[], r: HealthReport): void {
+  lines.push("## Settings");
+  lines.push(`  maxConcurrent              : ${r.settings.maxConcurrent}`);
+  lines.push(`  defaultMaxTurns            : ${r.settings.defaultMaxTurns ?? "unlimited"}`);
+  lines.push(`  graceTurns                 : ${r.settings.graceTurns}`);
+  lines.push(`  defaultJoinMode            : ${r.settings.defaultJoinMode}`);
+  lines.push(`  schedulingEnabled          : ${r.settings.schedulingEnabled}`);
+  lines.push(`  tracingEnabled             : ${r.settings.tracingEnabled}`);
+  lines.push(`  animationStyle             : ${r.settings.animationStyle}`);
+  lines.push(`  uiStyle                    : ${r.settings.uiStyle}`);
+  lines.push(`  orchestrationMode          : ${r.settings.orchestrationMode}`);
+  lines.push(`  dashboardRefreshInterval   : ${r.settings.dashboardRefreshInterval}ms`);
+  lines.push(`  promptCompressionLevel     : ${r.settings.promptCompressionLevel}`);
+  lines.push("");
+}
+
+/** Append the Recent Errors section lines. */
+function pushRecentErrorsSection(lines: string[], r: HealthReport): void {
+  lines.push("## Recent Errors");
+  if (r.recentErrors.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const e of r.recentErrors) {
+      const corr = e.correlationId ? ` [corr=${e.correlationId}]` : "";
+      lines.push(`  ${e.id} (${e.type})${corr}`);
+      lines.push(`    ${new Date(e.completedAt).toISOString()}: ${e.error}`);
+    }
+  }
+  lines.push("");
+}
+
+/** Append the Dispatch Decisions section lines. */
+function pushDispatchSection(lines: string[], r: HealthReport): void {
+  lines.push("## Dispatch Decisions (recent)");
+  const h = r.dispatchHistogram;
+  if (h.total === 0) {
+    lines.push(`  (none — empty ring buffer, capacity ${h.bufferCapacity})`);
+    return;
+  }
+  lines.push(
+    `  total       : ${h.total} (last ${Math.min(h.total, h.bufferCapacity)} of ${h.bufferCapacity}-slot ring)`,
+  );
+  lines.push(`  by kind     :`);
+  lines.push(`    single    : ${h.byKind.single}`);
+  lines.push(`    swarm     : ${h.byKind.swarm}`);
+  lines.push(`    crew      : ${h.byKind.crew}`);
+  lines.push(`  by source   :`);
+  lines.push(`    explicit  : ${h.bySource.explicit} (user pinned single/swarm/crew)`);
+  lines.push(`    auto      : ${h.bySource.autoHeuristic} (heuristic picked under auto mode)`);
+  if (h.bySource.autoHeuristic > 0) {
+    lines.push(`  auto picks  :`);
+    lines.push(`    →single   : ${h.autoPicks.single}`);
+    lines.push(`    →swarm    : ${h.autoPicks.swarm}`);
+    lines.push(`    →crew     : ${h.autoPicks.crew}`);
+  }
+  lines.push(`  last decision: ${h.lastDecisionAt === null ? "n/a" : new Date(h.lastDecisionAt).toISOString()}`);
+}
+
 /**
  * Render a `HealthReport` as a fixed-width text block suitable for
  * `ctx.ui.editor(...)`. Sections are separated by a single blank line
@@ -276,117 +414,19 @@ export function buildHealthReport(deps: HealthReportDeps): HealthReport {
  */
 export function formatHealthReport(r: HealthReport): string {
   const lines: string[] = [];
-  const push = (s: string) => lines.push(s);
 
-  push(`# /agents health — ${r.timestamp}`);
-  push("");
+  lines.push(`# /agents health — ${r.timestamp}`);
+  lines.push("");
 
-  push("## Process");
-  push(`  node      : ${r.process.nodeVersion}`);
-  push(`  platform  : ${r.process.platform}`);
-  push(`  uptime    : ${formatDuration(r.process.uptimeMs)}`);
-  push(`  rss       : ${r.process.memoryRssMB} MB`);
-  push(`  heapUsed  : ${r.process.memoryHeapUsedMB} MB`);
-  push("");
-
-  push("## Tracing");
-  push(`  enabled       : ${r.tracing.enabled ? "yes" : "no"}`);
-  push(`  tracer        : ${r.tracing.tracerName}`);
-  push(`  tracerVersion : ${r.tracing.tracerVersion}`);
-  push("");
-
-  push("## Circuit Breaker");
-  push(`  state          : ${r.circuitBreaker.state.toUpperCase()}`);
-  push(`  failures       : ${r.circuitBreaker.failures}`);
-  push(
-    `  lastFailureAt  : ${r.circuitBreaker.lastFailureAt === 0 ? "never" : new Date(r.circuitBreaker.lastFailureAt).toISOString()}`,
-  );
-  push("");
-
-  push("## Schedule");
-  push(`  feature  : ${r.schedule.enabled ? "enabled" : "disabled"}`);
-  push(`  runtime  : ${r.schedule.active ? "running" : "stopped"}`);
-  push(`  jobs     : ${r.schedule.jobCount}`);
-  push("");
-
-  push("## Swarm");
-  if (r.swarm.available) {
-    push(`  coordinator   : present`);
-    push(`  swarms        : ${r.swarm.swarmCount}`);
-    push(`  agents        : ${r.swarm.totalAgents}`);
-    push(`  deliveries    : ${r.swarm.totalDeliveries}`);
-  } else {
-    push(`  coordinator   : not configured`);
-  }
-  push("");
-
-  push("## Agents");
-  push(`  total         : ${r.agents.total}`);
-  push(`  running       : ${r.agents.running}`);
-  push(`  queued        : ${r.agents.queued}`);
-  push(`  by status     :`);
-  for (const status of Object.keys(r.agents.byStatus) as AgentStatus[]) {
-    const n = r.agents.byStatus[status];
-    if (n > 0) push(`    ${status.padEnd(10)} : ${n}`);
-  }
-  push(`  session       : ${r.agents.sessionUsage.spawnedAgents} agents, ${r.agents.sessionUsage.totalTurns} turns`);
-  const limitParts: string[] = [];
-  if (r.agents.sessionLimits.maxAgentsPerSession !== undefined) {
-    limitParts.push(`agents≤${r.agents.sessionLimits.maxAgentsPerSession}`);
-  }
-  if (r.agents.sessionLimits.maxTotalTurnsPerSession !== undefined) {
-    limitParts.push(`turns≤${r.agents.sessionLimits.maxTotalTurnsPerSession}`);
-  }
-  push(`  session limits: ${limitParts.length === 0 ? "unlimited" : limitParts.join(", ")}`);
-  push("");
-
-  push("## Settings");
-  push(`  maxConcurrent              : ${r.settings.maxConcurrent}`);
-  push(`  defaultMaxTurns            : ${r.settings.defaultMaxTurns ?? "unlimited"}`);
-  push(`  graceTurns                 : ${r.settings.graceTurns}`);
-  push(`  defaultJoinMode            : ${r.settings.defaultJoinMode}`);
-  push(`  schedulingEnabled          : ${r.settings.schedulingEnabled}`);
-  push(`  tracingEnabled             : ${r.settings.tracingEnabled}`);
-  push(`  animationStyle             : ${r.settings.animationStyle}`);
-  push(`  uiStyle                    : ${r.settings.uiStyle}`);
-  push(`  orchestrationMode          : ${r.settings.orchestrationMode}`);
-  push(`  dashboardRefreshInterval   : ${r.settings.dashboardRefreshInterval}ms`);
-  push(`  promptCompressionLevel     : ${r.settings.promptCompressionLevel}`);
-  push("");
-
-  push("## Recent Errors");
-  if (r.recentErrors.length === 0) {
-    push("  (none)");
-  } else {
-    for (const e of r.recentErrors) {
-      const corr = e.correlationId ? ` [corr=${e.correlationId}]` : "";
-      push(`  ${e.id} (${e.type})${corr}`);
-      push(`    ${new Date(e.completedAt).toISOString()}: ${e.error}`);
-    }
-  }
-  push("");
-
-  push("## Dispatch Decisions (recent)");
-  const h = r.dispatchHistogram;
-  if (h.total === 0) {
-    push(`  (none — empty ring buffer, capacity ${h.bufferCapacity})`);
-  } else {
-    push(`  total       : ${h.total} (last ${Math.min(h.total, h.bufferCapacity)} of ${h.bufferCapacity}-slot ring)`);
-    push(`  by kind     :`);
-    push(`    single    : ${h.byKind.single}`);
-    push(`    swarm     : ${h.byKind.swarm}`);
-    push(`    crew      : ${h.byKind.crew}`);
-    push(`  by source   :`);
-    push(`    explicit  : ${h.bySource.explicit} (user pinned single/swarm/crew)`);
-    push(`    auto      : ${h.bySource.autoHeuristic} (heuristic picked under auto mode)`);
-    if (h.bySource.autoHeuristic > 0) {
-      push(`  auto picks  :`);
-      push(`    →single   : ${h.autoPicks.single}`);
-      push(`    →swarm    : ${h.autoPicks.swarm}`);
-      push(`    →crew     : ${h.autoPicks.crew}`);
-    }
-    push(`  last decision: ${h.lastDecisionAt === null ? "n/a" : new Date(h.lastDecisionAt).toISOString()}`);
-  }
+  pushProcessSection(lines, r);
+  pushTracingSection(lines, r);
+  pushCircuitBreakerSection(lines, r);
+  pushScheduleSection(lines, r);
+  pushSwarmSection(lines, r);
+  pushAgentsSection(lines, r);
+  pushSettingsSection(lines, r);
+  pushRecentErrorsSection(lines, r);
+  pushDispatchSection(lines, r);
 
   return lines.join("\n");
 }

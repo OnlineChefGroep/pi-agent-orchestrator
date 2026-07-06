@@ -97,6 +97,30 @@ export function detectShiftInLoop(source, opts = {}) {
 }
 
 /**
+ * Handle a character inside a string (handles escapes and closing quote).
+ * @returns {{ inString: null|string, advance: number }} advance is the number
+ *   of additional chars to skip after the current one.
+ */
+function handleInStringChar(ch, inString) {
+  if (ch === "\\") {
+    return { inString, advance: 1 }; // skip escaped char
+  }
+  if (ch === inString) {
+    return { inString: null, advance: 0 };
+  }
+  return { inString, advance: 0 };
+}
+
+/**
+ * Check if the character is a quote that starts a string.
+ * @returns {null|string} the quote char, or null
+ */
+function getQuoteChar(ch) {
+  if (ch === '"' || ch === "'" || ch === "`") return ch;
+  return null;
+}
+
+/**
  * Count open/close braces on a line, respecting strings and comments.
  * @param {string} line
  * @returns {{ openBraces: number, closeBraces: number }}
@@ -120,15 +144,14 @@ function countBraces(line) {
     }
     // String handling
     if (inString) {
-      if (ch === "\\") {
-        c++; // skip escaped char
-        continue;
-      }
-      if (ch === inString) inString = null;
+      const result = handleInStringChar(ch, inString);
+      inString = result.inString;
+      c += result.advance;
       continue;
     }
-    if (ch === '"' || ch === "'" || ch === "`") {
-      inString = ch;
+    const quote = getQuoteChar(ch);
+    if (quote !== null) {
+      inString = quote;
       continue;
     }
     if (ch === "{") openBraces++;

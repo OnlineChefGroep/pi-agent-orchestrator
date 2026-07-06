@@ -72,33 +72,39 @@ export function sortEntries(entries: AgentTopEntry[], key: SortKey, asc: boolean
  * not as functions. This adapter produces colored text by concatenating
  * the code + text + reset sequence — compatible with renderTopTable's fg/bold API.
  */
+/** Look up the ANSI code for a named color in a DashboardTheme. Falls back to `dim`. */
+function colorCodeFor(color: string, th: DashboardTheme): string {
+  switch (color) {
+    case "title":
+      return th.title as string;
+    case "dim":
+      return th.dim as string;
+    case "muted":
+      return th.muted as string;
+    case "highlight":
+      return th.highlight as string;
+    case "accent":
+      return th.accent as string;
+    case "success":
+      return th.success as string;
+    case "error":
+      return th.error as string;
+    case "warning":
+      return th.highlight as string;
+    case "border":
+      return th.border as string;
+    default:
+      return th.dim as string;
+  }
+}
+
 export function createTopThemeAdapter(th: DashboardTheme): {
   fg(color: string, text: string): string;
   bold(text: string): string;
 } {
   return {
     fg(color: string, text: string): string {
-      const code = (
-        color === "title"
-          ? th.title
-          : color === "dim"
-            ? th.dim
-            : color === "muted"
-              ? th.muted
-              : color === "highlight"
-                ? th.highlight
-                : color === "accent"
-                  ? th.accent
-                  : color === "success"
-                    ? th.success
-                    : color === "error"
-                      ? th.error
-                      : color === "warning"
-                        ? th.highlight
-                        : color === "border"
-                          ? th.border
-                          : th.dim
-      ) as string;
+      const code = colorCodeFor(color, th);
       return `${code}${text}${th.reset}`;
     },
     bold(text: string): string {

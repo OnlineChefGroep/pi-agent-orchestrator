@@ -23,6 +23,235 @@ import { saveAndEmitChanged } from "../settings.js";
 import type { JoinMode, PromptCompressionLevel } from "../types.js";
 import { buildSettingsSnapshot } from "./settings-snapshot.js";
 
+type SettingsHandlerCtx = {
+  ctx: ExtensionCommandContext;
+  pi: ExtensionAPI;
+  manager: AgentManager;
+  getters: SettingsGetters;
+  setters: SettingsSetters;
+  scheduler: SubagentScheduler;
+};
+
+/** Handle the "Max concurrency" setting. */
+async function handleMaxConcurrency(h: SettingsHandlerCtx): Promise<void> {
+  const val = await h.ctx.ui.input("Max concurrent background agents", String(h.manager.getMaxConcurrent()));
+  if (!val) return;
+  const n = parseInt(val, 10);
+  if (n >= 1) {
+    h.manager.setMaxConcurrent(n);
+    notifyApplied(h.ctx, h.pi, h.manager, h.getters, `Max concurrency set to ${n}`);
+  } else {
+    h.ctx.ui.notify("Must be a positive integer.", "warning");
+  }
+}
+
+/** Handle the "Session limits" setting (max agents + max turns per session). */
+async function handleSessionLimits(h: SettingsHandlerCtx): Promise<void> {
+  const current = h.manager.getSessionLimits();
+  const agentVal = await h.ctx.ui.input(
+    "Max agents per session (0 = unlimited)",
+    String(current.maxAgentsPerSession ?? 0),
+  );
+  if (agentVal === undefined) return;
+  const turnVal = await h.ctx.ui.input(
+    "Max total turns per session (0 = unlimited)",
+    String(current.maxTotalTurnsPerSession ?? 0),
+  );
+  if (turnVal === undefined) return;
+  const maxAgents = parseInt(agentVal, 10);
+  const maxTurns = parseInt(turnVal, 10);
+  if (Number.isNaN(maxAgents) || maxAgents < 0 || Number.isNaN(maxTurns) || maxTurns < 0) {
+    h.ctx.ui.notify("Use 0 (unlimited) or a positive integer.", "warning");
+    return;
+  }
+  h.manager.setSessionLimits({
+    maxAgentsPerSession: maxAgents === 0 ? undefined : maxAgents,
+    maxTotalTurnsPerSession: maxTurns === 0 ? undefined : maxTurns,
+  });
+  notifyApplied(h.ctx, h.pi, h.manager, h.getters, "Session limits updated");
+}
+
+/** Handle the "Default max turns" setting. */
+async function handleDefaultMaxTurns(h: SettingsHandlerCtx): Promise<void> {
+  const val = await h.ctx.ui.input(
+    "Default max turns before wrap-up (0 = unlimited)",
+    String(h.getters.getDefaultMaxTurns() ?? 0),
+  );
+  if (!val) return;
+  const n = parseInt(val, 10);
+  if (n === 0) {
+    h.setters.setDefaultMaxTurns(undefined);
+    notifyApplied(h.ctx, h.pi, h.manager, h.getters, "Default max turns set to unlimited");
+  } else if (n >= 1) {
+    h.setters.setDefaultMaxTurns(n);
+    notifyApplied(h.ctx, h.pi, h.manager, h.getters, `Default max turns set to ${n}`);
+  } else {
+    h.ctx.ui.notify("Must be 0 (unlimited) or a positive integer.", "warning");
+  }
+}
+
+/** Handle the "Grace turns" setting. */
+async function handleGraceTurns(h: SettingsHandlerCtx): Promise<void> {
+  const val = await h.ctx.ui.input("Grace turns after wrap-up steer", String(h.getters.getGraceTurns()));
+  if (!val) return;
+  const n = parseInt(val, 10);
+  if (n >= 1) {
+    h.setters.setGraceTurns(n);
+    notifyApplied(h.ctx, h.pi, h.manager, h.getters, `Grace turns set to ${n}`);
+  } else {
+    h.ctx.ui.notify("Must be a positive integer.", "warning");
+  }
+}
+
+/** Handle the "Scheduling" enable/disable toggle. */
+async function handleScheduling(h: SettingsHandlerCtx): Promise<void> {
+  const val = await h.ctx.ui.select("Schedule subagent feature", [
+    "enabled — Agent tool accepts a `schedule` param; /agents → Scheduled jobs visible",
+    "disabled — `schedule` removed from Agent tool spec (no LLM-context cost); menu hidden",
+  ]);
+  if (!val) return;
+  const enabled = val.startsWith("enabled");
+  if (enabled === h.getters.isSchedulingEnabled()) {
+    h.ctx.ui.notify(`Scheduling already ${enabled ? "enabled" : "disabled"}.`, "info");
+    return;
+  }
+  h.setters.setSchedulingEnabled(enabled);
+  if (!enabled) h.scheduler.stop(); // immediate kill — outstanding fires stop ticking
+  notifyApplied(
+    h.ctx,
+    h.pi,
+    h.manager,
+    h.getters,
+    `Scheduling ${enabled ? "enabled" : "disabled"}. Tool spec change takes effect on next pi session.`,
+  );
+}
+
+/** Handle the "Tracing" enable/disable toggle. */
+async function handleTracing(h: SettingsHandlerCtx): Promise<void> {
+  const val = await h.ctx.ui.select("OpenTelemetry span emission", [
+    "enabled — agent lifecycle spans are emitted to the configured TracerProvider (default)",
+    "disabled — span helpers short-circuit to a shared no-op; no TracerProvider is consulted",
+  ]);
+  if (!val) return;
+  const enabled = val.startsWith("enabled");
+  if (enabled === h.getters.isTracingEnabled()) {
+    h.ctx.ui.notify(`Tracing already ${enabled ? "enabled" : "disabled"}.`, "info");
+    return;
+  }
+  h.setters.setTracingEnabled(enabled);
+  notifyApplied(h.ctx, h.pi, h.manager, h.getters, `Tracing ${enabled ? "enabled" : "disabled"}.`);
+}
+
+/** Handle the "Animation Style" selection. */
+async function handleAnimationStyle(h: SettingsHandlerCtx): Promise<void> {
+  const val = await h.ctx.ui.select("Animation Style", [
+    "braille — standard 10-frame spinner (default)",
+    "dots — minimal 8-frame dots",
+    "lines — classic 4-frame rotating lines",
+    "classic — asterisk only (*)",
+    "none — no spinner",
+  ]);
+  if (!val) return;
+  const style = val.split(" ")[0] as "braille" | "dots" | "lines" | "classic" | "none";
+  setAnimationStyle(style);
+  const { setSpinnerStyle } = await import("./animation.js");
+  setSpinnerStyle(style);
+  notifyApplied(h.ctx, h.pi, h.manager, h.getters, `Animation style set to ${style}`);
+}
+
+/** Handle the "UI/UX Style" selection. */
+async function handleUiStyle(h: SettingsHandlerCtx): Promise<void> {
+  const val = await h.ctx.ui.select("UI/UX Style", [
+    "premium — truecolor gradients and rounded connectors (default)",
+    "retro — 16-color fallback and straight box lines",
+    "plain — minimal markers, plain text with no ANSI styles",
+  ]);
+  if (!val) return;
+  const style = val.split(" ")[0] as "premium" | "retro" | "plain";
+  setUiStyle(style);
+  notifyApplied(h.ctx, h.pi, h.manager, h.getters, `UI/UX style set to ${style}`);
+}
+
+/** Handle the "Dashboard refresh interval" numeric setting. */
+async function handleDashboardRefresh(h: SettingsHandlerCtx): Promise<void> {
+  const val = await h.ctx.ui.input(
+    "Dashboard refresh interval in milliseconds (100-60000)",
+    String(getDashboardRefreshInterval()),
+  );
+  if (!val) return;
+  const n = parseInt(val, 10);
+  if (n >= 100 && n <= 60000) {
+    setDashboardRefreshInterval(n);
+    notifyApplied(h.ctx, h.pi, h.manager, h.getters, `Dashboard refresh interval set to ${n}ms`);
+  } else {
+    h.ctx.ui.notify("Must be between 100 and 60000 milliseconds.", "warning");
+  }
+}
+
+/** Handle the "Session spawn limit" numeric setting. */
+async function handleSessionSpawnLimit(h: SettingsHandlerCtx): Promise<void> {
+  const val = await h.ctx.ui.input("Session max spawns", String(h.manager.getSessionMaxSpawns()));
+  if (!val) return;
+  const n = parseInt(val, 10);
+  if (n >= 1) {
+    h.manager.setSessionMaxSpawns(n);
+    notifyApplied(h.ctx, h.pi, h.manager, h.getters, `Session spawn limit set to ${n}`);
+  } else {
+    h.ctx.ui.notify("Must be a positive integer.", "warning");
+  }
+}
+
+/** Handle the "Session turn limit" numeric setting. */
+async function handleSessionTurnLimit(h: SettingsHandlerCtx): Promise<void> {
+  const val = await h.ctx.ui.input("Session max turns", String(h.manager.getSessionMaxTurns()));
+  if (!val) return;
+  const n = parseInt(val, 10);
+  if (n >= 1) {
+    h.manager.setSessionMaxTurns(n);
+    notifyApplied(h.ctx, h.pi, h.manager, h.getters, `Session turn limit set to ${n}`);
+  } else {
+    h.ctx.ui.notify("Must be a positive integer.", "warning");
+  }
+}
+
+/** Handle the "Prompt compression" interactive submenu (compare + level selection). */
+async function handlePromptCompression(h: SettingsHandlerCtx): Promise<void> {
+  // Interactive submenu: shows token previews inline and allows level-by-level
+  // comparison. Uses a while loop so that after "📊 Compare" the user returns
+  // directly to the compression level selection rather than the full Settings menu.
+  while (true) {
+    const currentLevel = getPromptCompressionLevel();
+    const currentMark = (lvl: string) => (lvl === currentLevel ? " ◀ current" : "");
+    const val = await h.ctx.ui.select("Prompt compression level", [
+      `minimal — full prompts (~1482 tok, +70%) — max quality${currentMark("minimal")}`,
+      `balanced — concise prompts (~873 tok, baseline) — default${currentMark("balanced")}`,
+      `aggressive — ultra-short (~487 tok, ~44% less) — max savings${currentMark("aggressive")}`,
+      "📊 Compare compression levels — side-by-side token breakdown",
+    ]);
+    if (!val) return;
+
+    if (val.startsWith("📊")) {
+      await showCompressionComparison(h.ctx);
+      continue; // re-show compression menu
+    }
+
+    const level = val.split(" ")[0] as PromptCompressionLevel;
+    if (level === currentLevel) {
+      h.ctx.ui.notify(`Prompt compression already set to ${level}.`, "info");
+      continue; // re-show menu
+    }
+    setPromptCompressionLevel(level);
+    const savingsLabel =
+      level === "aggressive"
+        ? " (~386 tok less across all prompt components vs balanced)"
+        : level === "minimal"
+          ? " (~609 more tok across all prompt components vs balanced)"
+          : "";
+    notifyApplied(h.ctx, h.pi, h.manager, h.getters, `Prompt compression set to ${level}${savingsLabel}`);
+    return;
+  }
+}
+
 export async function showSettings(
   ctx: ExtensionCommandContext,
   manager: AgentManager,
@@ -48,202 +277,34 @@ export async function showSettings(
   ]);
   if (!choice) return;
 
+  const h: SettingsHandlerCtx = { ctx, pi, manager, getters, setters, scheduler };
+
   if (choice.startsWith("Max concurrency")) {
-    const val = await ctx.ui.input("Max concurrent background agents", String(manager.getMaxConcurrent()));
-    if (val) {
-      const n = parseInt(val, 10);
-      if (n >= 1) {
-        manager.setMaxConcurrent(n);
-        notifyApplied(ctx, pi, manager, getters, `Max concurrency set to ${n}`);
-      } else {
-        ctx.ui.notify("Must be a positive integer.", "warning");
-      }
-    }
+    await handleMaxConcurrency(h);
   } else if (choice.startsWith("Session limits")) {
-    const current = manager.getSessionLimits();
-    const agentVal = await ctx.ui.input(
-      "Max agents per session (0 = unlimited)",
-      String(current.maxAgentsPerSession ?? 0),
-    );
-    if (agentVal === undefined) return;
-    const turnVal = await ctx.ui.input(
-      "Max total turns per session (0 = unlimited)",
-      String(current.maxTotalTurnsPerSession ?? 0),
-    );
-    if (turnVal === undefined) return;
-    const maxAgents = parseInt(agentVal, 10);
-    const maxTurns = parseInt(turnVal, 10);
-    if (Number.isNaN(maxAgents) || maxAgents < 0 || Number.isNaN(maxTurns) || maxTurns < 0) {
-      ctx.ui.notify("Use 0 (unlimited) or a positive integer.", "warning");
-    } else {
-      manager.setSessionLimits({
-        maxAgentsPerSession: maxAgents === 0 ? undefined : maxAgents,
-        maxTotalTurnsPerSession: maxTurns === 0 ? undefined : maxTurns,
-      });
-      notifyApplied(ctx, pi, manager, getters, "Session limits updated");
-    }
+    await handleSessionLimits(h);
   } else if (choice.startsWith("Default max turns")) {
-    const val = await ctx.ui.input(
-      "Default max turns before wrap-up (0 = unlimited)",
-      String(getters.getDefaultMaxTurns() ?? 0),
-    );
-    if (val) {
-      const n = parseInt(val, 10);
-      if (n === 0) {
-        setters.setDefaultMaxTurns(undefined);
-        notifyApplied(ctx, pi, manager, getters, "Default max turns set to unlimited");
-      } else if (n >= 1) {
-        setters.setDefaultMaxTurns(n);
-        notifyApplied(ctx, pi, manager, getters, `Default max turns set to ${n}`);
-      } else {
-        ctx.ui.notify("Must be 0 (unlimited) or a positive integer.", "warning");
-      }
-    }
+    await handleDefaultMaxTurns(h);
   } else if (choice.startsWith("Grace turns")) {
-    const val = await ctx.ui.input("Grace turns after wrap-up steer", String(getters.getGraceTurns()));
-    if (val) {
-      const n = parseInt(val, 10);
-      if (n >= 1) {
-        setters.setGraceTurns(n);
-        notifyApplied(ctx, pi, manager, getters, `Grace turns set to ${n}`);
-      } else {
-        ctx.ui.notify("Must be a positive integer.", "warning");
-      }
-    }
+    await handleGraceTurns(h);
   } else if (choice.startsWith("Coordination")) {
     await showCoordinationMenu(ctx, pi, manager, getters, setters);
   } else if (choice.startsWith("Scheduling")) {
-    const val = await ctx.ui.select("Schedule subagent feature", [
-      "enabled — Agent tool accepts a `schedule` param; /agents → Scheduled jobs visible",
-      "disabled — `schedule` removed from Agent tool spec (no LLM-context cost); menu hidden",
-    ]);
-    if (val) {
-      const enabled = val.startsWith("enabled");
-      if (enabled === getters.isSchedulingEnabled()) {
-        ctx.ui.notify(`Scheduling already ${enabled ? "enabled" : "disabled"}.`, "info");
-      } else {
-        setters.setSchedulingEnabled(enabled);
-        if (!enabled) scheduler.stop(); // immediate kill — outstanding fires stop ticking
-        notifyApplied(
-          ctx,
-          pi,
-          manager,
-          getters,
-          `Scheduling ${enabled ? "enabled" : "disabled"}. Tool spec change takes effect on next pi session.`,
-        );
-      }
-    }
+    await handleScheduling(h);
   } else if (choice.startsWith("Tracing")) {
-    const val = await ctx.ui.select("OpenTelemetry span emission", [
-      "enabled — agent lifecycle spans are emitted to the configured TracerProvider (default)",
-      "disabled — span helpers short-circuit to a shared no-op; no TracerProvider is consulted",
-    ]);
-    if (val) {
-      const enabled = val.startsWith("enabled");
-      if (enabled === getters.isTracingEnabled()) {
-        ctx.ui.notify(`Tracing already ${enabled ? "enabled" : "disabled"}.`, "info");
-      } else {
-        setters.setTracingEnabled(enabled);
-        notifyApplied(ctx, pi, manager, getters, `Tracing ${enabled ? "enabled" : "disabled"}.`);
-      }
-    }
+    await handleTracing(h);
   } else if (choice.startsWith("Animation Style")) {
-    const val = await ctx.ui.select("Animation Style", [
-      "braille — standard 10-frame spinner (default)",
-      "dots — minimal 8-frame dots",
-      "lines — classic 4-frame rotating lines",
-      "classic — asterisk only (*)",
-      "none — no spinner",
-    ]);
-    if (val) {
-      const style = val.split(" ")[0] as "braille" | "dots" | "lines" | "classic" | "none";
-      setAnimationStyle(style);
-      const { setSpinnerStyle } = await import("./animation.js");
-      setSpinnerStyle(style);
-      notifyApplied(ctx, pi, manager, getters, `Animation style set to ${style}`);
-    }
+    await handleAnimationStyle(h);
   } else if (choice.startsWith("UI/UX Style")) {
-    const val = await ctx.ui.select("UI/UX Style", [
-      "premium — truecolor gradients and rounded connectors (default)",
-      "retro — 16-color fallback and straight box lines",
-      "plain — minimal markers, plain text with no ANSI styles",
-    ]);
-    if (val) {
-      const style = val.split(" ")[0] as "premium" | "retro" | "plain";
-      setUiStyle(style);
-      notifyApplied(ctx, pi, manager, getters, `UI/UX style set to ${style}`);
-    }
+    await handleUiStyle(h);
   } else if (choice.startsWith("Dashboard refresh interval")) {
-    const val = await ctx.ui.input(
-      "Dashboard refresh interval in milliseconds (100-60000)",
-      String(getDashboardRefreshInterval()),
-    );
-    if (val) {
-      const n = parseInt(val, 10);
-      if (n >= 100 && n <= 60000) {
-        setDashboardRefreshInterval(n);
-        notifyApplied(ctx, pi, manager, getters, `Dashboard refresh interval set to ${n}ms`);
-      } else {
-        ctx.ui.notify("Must be between 100 and 60000 milliseconds.", "warning");
-      }
-    }
+    await handleDashboardRefresh(h);
   } else if (choice.startsWith("Session spawn limit")) {
-    const val = await ctx.ui.input("Session max spawns", String(manager.getSessionMaxSpawns()));
-    if (val) {
-      const n = parseInt(val, 10);
-      if (n >= 1) {
-        manager.setSessionMaxSpawns(n);
-        notifyApplied(ctx, pi, manager, getters, `Session spawn limit set to ${n}`);
-      } else {
-        ctx.ui.notify("Must be a positive integer.", "warning");
-      }
-    }
+    await handleSessionSpawnLimit(h);
   } else if (choice.startsWith("Session turn limit")) {
-    const val = await ctx.ui.input("Session max turns", String(manager.getSessionMaxTurns()));
-    if (val) {
-      const n = parseInt(val, 10);
-      if (n >= 1) {
-        manager.setSessionMaxTurns(n);
-        notifyApplied(ctx, pi, manager, getters, `Session turn limit set to ${n}`);
-      } else {
-        ctx.ui.notify("Must be a positive integer.", "warning");
-      }
-    }
+    await handleSessionTurnLimit(h);
   } else if (choice.startsWith("Prompt compression")) {
-    // Interactive submenu: shows token previews inline and allows level-by-level
-    // comparison. Uses a while loop so that after "📊 Compare" the user returns
-    // directly to the compression level selection rather than the full Settings menu.
-    while (true) {
-      const currentLevel = getPromptCompressionLevel();
-      const currentMark = (lvl: string) => (lvl === currentLevel ? " ◀ current" : "");
-      const val = await ctx.ui.select("Prompt compression level", [
-        `minimal — full prompts (~1482 tok, +70%) — max quality${currentMark("minimal")}`,
-        `balanced — concise prompts (~873 tok, baseline) — default${currentMark("balanced")}`,
-        `aggressive — ultra-short (~487 tok, ~44% less) — max savings${currentMark("aggressive")}`,
-        "📊 Compare compression levels — side-by-side token breakdown",
-      ]);
-      if (!val) return;
-
-      if (val.startsWith("📊")) {
-        await showCompressionComparison(ctx);
-        continue; // re-show compression menu
-      }
-
-      const level = val.split(" ")[0] as PromptCompressionLevel;
-      if (level === currentLevel) {
-        ctx.ui.notify(`Prompt compression already set to ${level}.`, "info");
-        continue; // re-show menu
-      }
-      setPromptCompressionLevel(level);
-      const savingsLabel =
-        level === "aggressive"
-          ? " (~386 tok less across all prompt components vs balanced)"
-          : level === "minimal"
-            ? " (~609 more tok across all prompt components vs balanced)"
-            : "";
-      notifyApplied(ctx, pi, manager, getters, `Prompt compression set to ${level}${savingsLabel}`);
-      return;
-    }
+    await handlePromptCompression(h);
   }
 }
 

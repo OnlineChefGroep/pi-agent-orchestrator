@@ -215,68 +215,94 @@ function validateEnum<T extends string>(
   return fallback;
 }
 
+/** Int-field specs for sanitize: key + min + max. */
+const INT_FIELD_SPECS = [
+  { key: "maxConcurrent", min: 1, max: MAX_CONCURRENT_CEILING },
+  { key: "maxAgentsPerSession", min: 1, max: MAX_AGENTS_PER_SESSION_CEILING },
+  { key: "maxTotalTurnsPerSession", min: 1, max: MAX_TOTAL_TURNS_PER_SESSION_CEILING },
+  { key: "graceTurns", min: 1, max: GRACE_TURNS_CEILING },
+  { key: "dashboardRefreshInterval", min: 100, max: 60000 },
+  { key: "sessionMaxSpawns", min: 1, max: SESSION_MAX_SPAWNS_CEILING },
+  { key: "sessionMaxTurns", min: 1, max: SESSION_MAX_TURNS_CEILING },
+] as const;
+
+/** Enum-field specs for sanitize: key + valid values. */
+const ENUM_FIELD_SPECS = [
+  { key: "defaultJoinMode" as const, valid: VALID_JOIN_MODES as readonly string[] },
+  { key: "animationStyle" as const, valid: VALID_ANIMATION_STYLES as readonly string[] },
+  { key: "uiStyle" as const, valid: VALID_UI_STYLES as readonly string[] },
+  { key: "orchestrationMode" as const, valid: VALID_ORCHESTRATION_MODES as readonly string[] },
+  { key: "promptCompressionLevel" as const, valid: VALID_COMPRESSION_LEVELS as readonly string[] },
+];
+
+/** Boolean keys recognized by sanitize. */
+const BOOL_KEYS = [
+  "schedulingEnabled",
+  "tracingEnabled",
+  "showActivityStream",
+  "showTokenUsage",
+  "showTurnProgress",
+  "debugCapture",
+] as const;
+
+/** Sanitize integer fields into the output object. */
+function sanitizeIntFields(r: Record<string, unknown>, out: SubagentsSettings): void {
+  for (const { key, min, max } of INT_FIELD_SPECS) {
+    const v = validateInt(r, key, min, max, 0);
+    if (v) (out as Record<string, unknown>)[key] = v;
+  }
+  const dmt = validateInt(r, "defaultMaxTurns", 0, MAX_TURNS_CEILING, -1);
+  if (dmt >= 0) out.defaultMaxTurns = dmt;
+}
+
+/** Sanitize enum fields into the output object. */
+function sanitizeEnumFields(r: Record<string, unknown>, out: SubagentsSettings): void {
+  for (const { key, valid } of ENUM_FIELD_SPECS) {
+    const v = validateEnum(r, key, valid, "");
+    if (v) (out as Record<string, unknown>)[key] = v;
+  }
+}
+
+/** Sanitize boolean fields into the output object. */
+function sanitizeBoolFields(r: Record<string, unknown>, out: SubagentsSettings): void {
+  for (const key of BOOL_KEYS) {
+    if (typeof r[key] === "boolean") {
+      out[key] = validateBool(r, key, false);
+    }
+  }
+}
+
+/** Sanitize the debugCapturePaths override map into the output object. */
+function sanitizeDebugCapturePaths(r: Record<string, unknown>, out: SubagentsSettings): void {
+  const rawPaths = r.debugCapturePaths;
+  if (!rawPaths || typeof rawPaths !== "object") return;
+
+  const outPaths: DebugCapturePathOverrides = {};
+  const proj = (rawPaths as Record<string, unknown>).project;
+  const pers = (rawPaths as Record<string, unknown>).personal;
+  if (typeof proj === "string" && proj) outPaths.project = proj;
+  if (typeof pers === "string" && pers) outPaths.personal = pers;
+  if (outPaths.project !== undefined || outPaths.personal !== undefined) {
+    out.debugCapturePaths = outPaths;
+  }
+}
+
 /** Drop fields that don't match the expected shape. Silent — garbage becomes absent. */
 function sanitize(raw: unknown): SubagentsSettings {
   if (!raw || typeof raw !== "object") return {};
   const r = raw as Record<string, unknown>;
   const out: SubagentsSettings = {};
 
-  for (const { key, min, max } of [
-    { key: "maxConcurrent", min: 1, max: MAX_CONCURRENT_CEILING },
-    { key: "maxAgentsPerSession", min: 1, max: MAX_AGENTS_PER_SESSION_CEILING },
-    { key: "maxTotalTurnsPerSession", min: 1, max: MAX_TOTAL_TURNS_PER_SESSION_CEILING },
-    { key: "graceTurns", min: 1, max: GRACE_TURNS_CEILING },
-    { key: "dashboardRefreshInterval", min: 100, max: 60000 },
-    { key: "sessionMaxSpawns", min: 1, max: SESSION_MAX_SPAWNS_CEILING },
-    { key: "sessionMaxTurns", min: 1, max: SESSION_MAX_TURNS_CEILING },
-  ]) {
-    const v = validateInt(r, key, min, max, 0);
-    if (v) (out as Record<string, unknown>)[key] = v;
-  }
-
-  const dmt = validateInt(r, "defaultMaxTurns", 0, MAX_TURNS_CEILING, -1);
-  if (dmt >= 0) out.defaultMaxTurns = dmt;
-
-  for (const { key, valid } of [
-    { key: "defaultJoinMode" as const, valid: VALID_JOIN_MODES as readonly string[] },
-    { key: "animationStyle" as const, valid: VALID_ANIMATION_STYLES as readonly string[] },
-    { key: "uiStyle" as const, valid: VALID_UI_STYLES as readonly string[] },
-    { key: "orchestrationMode" as const, valid: VALID_ORCHESTRATION_MODES as readonly string[] },
-    { key: "promptCompressionLevel" as const, valid: VALID_COMPRESSION_LEVELS as readonly string[] },
-  ]) {
-    const v = validateEnum(r, key, valid, "");
-    if (v) (out as Record<string, unknown>)[key] = v;
-  }
-
-  for (const key of [
-    "schedulingEnabled",
-    "tracingEnabled",
-    "showActivityStream",
-    "showTokenUsage",
-    "showTurnProgress",
-    "debugCapture",
-  ] as const) {
-    if (typeof r[key] === "boolean") {
-      out[key] = validateBool(r, key, false);
-    }
-  }
+  sanitizeIntFields(r, out);
+  sanitizeEnumFields(r, out);
+  sanitizeBoolFields(r, out);
 
   // debugCapturePaths is a free-form string→string map. Each key is optional;
   // missing fields intentionally fall through so the consumer (agent-registry)
   // can fall back to defaults. We accept any string shape because the
   // downstream sanitiser (`validateCapturePath` in `src/debug-capture.ts`)
   // rejects non-absolute / `..`-traversal / oversized values at enable time.
-  const rawPaths = r.debugCapturePaths;
-  if (rawPaths && typeof rawPaths === "object") {
-    const outPaths: DebugCapturePathOverrides = {};
-    const proj = (rawPaths as Record<string, unknown>).project;
-    const pers = (rawPaths as Record<string, unknown>).personal;
-    if (typeof proj === "string" && proj) outPaths.project = proj;
-    if (typeof pers === "string" && pers) outPaths.personal = pers;
-    if (outPaths.project !== undefined || outPaths.personal !== undefined) {
-      out.debugCapturePaths = outPaths;
-    }
-  }
+  sanitizeDebugCapturePaths(r, out);
 
   return out;
 }
