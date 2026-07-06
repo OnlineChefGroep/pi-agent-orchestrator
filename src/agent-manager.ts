@@ -20,7 +20,7 @@ import { type HookRegistry } from "./hooks.js";
 import { generateCorrelationId } from "./telemetry-otel.js";
 import type { AgentInvocation, AgentRecord, IsolationMode, SubagentType, ThinkingLevel } from "./types.js";
 import { addUsage } from "./usage.js";
-import { cleanupWorktree, createWorktree, pruneWorktrees, } from "./worktree.js";
+import { cleanupWorktree, createWorktree, pruneWorktrees } from "./worktree.js";
 
 export type OnAgentComplete = (record: AgentRecord) => void;
 export type OnAgentStart = (record: AgentRecord) => void;
@@ -28,7 +28,11 @@ export type OnAgentCompact = (record: AgentRecord, info: CompactionInfo) => void
 export type CompactionInfo = { reason: "manual" | "threshold" | "overflow"; tokensBefore: number };
 
 export type BudgetWarningType = "agents_at_80" | "turns_at_80" | "agents_at_90" | "turns_at_90";
-export type OnBudgetWarning = (type: BudgetWarningType, usage: { spawnedAgents: number; totalTurns: number }, limits: { maxAgents: number; maxTurns: number }) => void;
+export type OnBudgetWarning = (
+  type: BudgetWarningType,
+  usage: { spawnedAgents: number; totalTurns: number },
+  limits: { maxAgents: number; maxTurns: number },
+) => void;
 
 /** Default max concurrent background agents. */
 const DEFAULT_MAX_CONCURRENT = 4;
@@ -163,12 +167,8 @@ export class AgentManager {
   setSessionLimits(limits: SessionLimits): void {
     const agents = limits.maxAgentsPerSession;
     const turns = limits.maxTotalTurnsPerSession;
-    this.setSessionMaxSpawns(
-      agents !== undefined && Number.isInteger(agents) && agents > 0 ? agents : 0,
-    );
-    this.setSessionMaxTurns(
-      turns !== undefined && Number.isInteger(turns) && turns > 0 ? turns : 0,
-    );
+    this.setSessionMaxSpawns(agents !== undefined && Number.isInteger(agents) && agents > 0 ? agents : 0);
+    this.setSessionMaxTurns(turns !== undefined && Number.isInteger(turns) && turns > 0 ? turns : 0);
   }
 
   getSessionLimits(): SessionLimits {
@@ -216,13 +216,7 @@ export class AgentManager {
    * Spawn an agent and return its ID immediately (for background use).
    * If the concurrency limit is reached, the agent is queued.
    */
-  spawn(
-    pi: ExtensionAPI,
-    ctx: ExtensionContext,
-    type: SubagentType,
-    prompt: string,
-    options: SpawnOptions,
-  ): string {
+  spawn(pi: ExtensionAPI, ctx: ExtensionContext, type: SubagentType, prompt: string, options: SpawnOptions): string {
     const maxAgents = this.sessionLimits.maxAgentsPerSession;
     if (maxAgents !== undefined && this.sessionUsage.spawnedAgents >= maxAgents) {
       throw new Error(`Session agent limit reached (${this.sessionUsage.spawnedAgents}/${maxAgents})`);
@@ -235,23 +229,17 @@ export class AgentManager {
     if (parentRecord) {
       const taskBudget = parentRecord.invocation?.taskBudget;
       if (taskBudget != null && parentRecord.totalSpawned >= taskBudget) {
-        throw new Error(
-          `Task budget exhausted (${parentRecord.totalSpawned}/${taskBudget})`,
-        );
+        throw new Error(`Task budget exhausted (${parentRecord.totalSpawned}/${taskBudget})`);
       }
       const levelLimit = parentRecord.invocation?.levelLimit ?? 5;
       const childLevel = (parentRecord.currentLevel ?? 0) + 1;
       if (childLevel > levelLimit) {
-        throw new Error(
-          `Max agent depth reached (${childLevel}/${levelLimit})`,
-        );
+        throw new Error(`Max agent depth reached (${childLevel}/${levelLimit})`);
       }
       parentRecord.totalSpawned++;
     }
 
-    const childLevel = parentRecord
-      ? (parentRecord.currentLevel ?? 0) + 1
-      : (options.currentLevel ?? 0);
+    const childLevel = parentRecord ? (parentRecord.currentLevel ?? 0) + 1 : (options.currentLevel ?? 0);
 
     // Inherit taskBudget/levelLimit from parent unless explicitly overridden
     const childInvocation: AgentInvocation = structuredClone(options.invocation ?? {});
@@ -334,7 +322,7 @@ export class AgentManager {
       if (!wt) {
         throw new Error(
           'Cannot run with isolation: "worktree" — not a git repo, no commits yet, or `git worktree add` failed. ' +
-          'Initialize git and commit at least once, or omit `isolation`.',
+            "Initialize git and commit at least once, or omit `isolation`.",
         );
       }
       record.worktree = wt;
@@ -367,72 +355,76 @@ export class AgentManager {
       options.signal.addEventListener("abort", onParentAbort, { once: true });
       detachParentSignal = () => options.signal!.removeEventListener("abort", onParentAbort);
     }
-    const detach = () => { detachParentSignal?.(); detachParentSignal = undefined; };
+    const detach = () => {
+      detachParentSignal?.();
+      detachParentSignal = undefined;
+    };
 
-    const promise = activeAgentStorage.run(id, () => {
-      return runAgent(ctx, type, prompt, {
-        pi,
-        agentId: id,
-        model: options.model,
-        maxTurns: options.maxTurns,
-        isolated: options.isolated,
-        inheritContext: options.inheritContext,
-        thinkingLevel: options.thinkingLevel,
-        currentLevel: record.currentLevel,
-        levelLimit: record.invocation?.levelLimit,
-        parentConfig,
-        partitions: childPartitions ? [...childPartitions] : undefined,
-        correlationId: record.correlationId,
-        cwd: worktreeCwd,
-        signal: record.abortController!.signal,
-        hooks: this.hooks,
-        spawnedAt: record.spawnedAt,
-        onContextBuilt: (timestamp) => {
-          record.contextBuiltAt = timestamp;
-        },
-        onToolActivity: (activity) => {
-          if (activity.type === "end") record.toolUses++;
-          options.onToolActivity?.(activity);
-        },
-        onTurnEnd: (turnCount) => {
-          const previous = this.lastTurnCounts.get(id) ?? 0;
-          const delta = Math.max(0, turnCount - previous);
-          this.lastTurnCounts.set(id, turnCount);
-          if (delta > 0) {
-            this.sessionUsage.totalTurns += delta;
-          }
-          const maxTurns = this.sessionLimits.maxTotalTurnsPerSession;
-          if (maxTurns !== undefined && this.sessionUsage.totalTurns >= maxTurns) {
-            record.abortController?.abort();
-            record.error = `Session turn limit reached (${this.sessionUsage.totalTurns}/${maxTurns})`;
-          }
-          // Budget warning at 80% of limits
-          this.checkBudgetWarning();
-          options.onTurnEnd?.(turnCount);
-        },
-        onTextDelta: options.onTextDelta,
-        onAssistantUsage: (usage) => {
-          addUsage(record.lifetimeUsage, usage);
-          options.onAssistantUsage?.(usage);
-        },
-        onCompaction: (info) => {
-          record.compactionCount++;
-          this.onCompact?.(record, info);
-          options.onCompaction?.(info);
-        },
-        onSessionCreated: (session) => {
-          record.session = session;
-          // Flush any steers that arrived before the session was ready
-          if (record.pendingSteers?.length) {
-            for (const msg of record.pendingSteers) {
-              session.steer(msg).catch(() => {});
+    const promise = activeAgentStorage
+      .run(id, () => {
+        return runAgent(ctx, type, prompt, {
+          pi,
+          agentId: id,
+          model: options.model,
+          maxTurns: options.maxTurns,
+          isolated: options.isolated,
+          inheritContext: options.inheritContext,
+          thinkingLevel: options.thinkingLevel,
+          currentLevel: record.currentLevel,
+          levelLimit: record.invocation?.levelLimit,
+          parentConfig,
+          partitions: childPartitions ? [...childPartitions] : undefined,
+          correlationId: record.correlationId,
+          cwd: worktreeCwd,
+          signal: record.abortController!.signal,
+          hooks: this.hooks,
+          spawnedAt: record.spawnedAt,
+          onContextBuilt: (timestamp) => {
+            record.contextBuiltAt = timestamp;
+          },
+          onToolActivity: (activity) => {
+            if (activity.type === "end") record.toolUses++;
+            options.onToolActivity?.(activity);
+          },
+          onTurnEnd: (turnCount) => {
+            const previous = this.lastTurnCounts.get(id) ?? 0;
+            const delta = Math.max(0, turnCount - previous);
+            this.lastTurnCounts.set(id, turnCount);
+            if (delta > 0) {
+              this.sessionUsage.totalTurns += delta;
             }
-            record.pendingSteers = undefined;
-          }
-          options.onSessionCreated?.(session);
-        },
-      });
-    })
+            const maxTurns = this.sessionLimits.maxTotalTurnsPerSession;
+            if (maxTurns !== undefined && this.sessionUsage.totalTurns >= maxTurns) {
+              record.abortController?.abort();
+              record.error = `Session turn limit reached (${this.sessionUsage.totalTurns}/${maxTurns})`;
+            }
+            // Budget warning at 80% of limits
+            this.checkBudgetWarning();
+            options.onTurnEnd?.(turnCount);
+          },
+          onTextDelta: options.onTextDelta,
+          onAssistantUsage: (usage) => {
+            addUsage(record.lifetimeUsage, usage);
+            options.onAssistantUsage?.(usage);
+          },
+          onCompaction: (info) => {
+            record.compactionCount++;
+            this.onCompact?.(record, info);
+            options.onCompaction?.(info);
+          },
+          onSessionCreated: (session) => {
+            record.session = session;
+            // Flush any steers that arrived before the session was ready
+            if (record.pendingSteers?.length) {
+              for (const msg of record.pendingSteers) {
+                session.steer(msg).catch(() => {});
+              }
+              record.pendingSteers = undefined;
+            }
+            options.onSessionCreated?.(session);
+          },
+        });
+      })
       .then(({ responseText, session, aborted, steered, validationResults, validated }) => {
         record.result = responseText;
         record.session = session;
@@ -457,8 +449,7 @@ export class AgentManager {
               if (failedFeedback) failedFeedback += "\n\n";
               failedFeedback += `[${r.agentId}] ${r.summary}${details}`;
             }
-            record.result = (record.result ?? "") +
-              `\n\n---\n## Validation Feedback (FAILED)\n${failedFeedback}`;
+            record.result = `${record.result ?? ""}\n\n---\n## Validation Feedback (FAILED)\n${failedFeedback}`;
           }
         }
 
@@ -503,7 +494,11 @@ export class AgentManager {
 
     // Final flush of streaming output file
     if (record.outputCleanup) {
-      try { record.outputCleanup(); } catch { /* ignore */ }
+      try {
+        record.outputCleanup();
+      } catch {
+        /* ignore */
+      }
       record.outputCleanup = undefined;
     }
 
@@ -513,16 +508,23 @@ export class AgentManager {
         const wtResult = cleanupWorktree(ctx.cwd, record.worktree, description);
         record.worktreeResult = wtResult;
         if (!error && wtResult.hasChanges && wtResult.branch) {
-          record.result = (record.result ?? "") +
+          record.result =
+            (record.result ?? "") +
             `\n\n---\nChanges saved to branch \`${wtResult.branch}\`. Merge with: \`git merge ${wtResult.branch}\``;
         }
-      } catch { /* ignore cleanup errors */ }
+      } catch {
+        /* ignore cleanup errors */
+      }
     }
 
     // Background agent bookkeeping
     if (isBackground) {
       this.runningBackground--;
-      try { this.onComplete?.(record); } catch { /* ignore completion side-effect errors */ }
+      try {
+        this.onComplete?.(record);
+      } catch {
+        /* ignore completion side-effect errors */
+      }
       this.drainQueue();
     }
   }
@@ -570,11 +572,7 @@ export class AgentManager {
   /**
    * Resume an existing agent session with a new prompt.
    */
-  async resume(
-    id: string,
-    prompt: string,
-    signal?: AbortSignal,
-  ): Promise<AgentRecord | undefined> {
+  async resume(id: string, prompt: string, signal?: AbortSignal): Promise<AgentRecord | undefined> {
     const record = this.agents.get(id);
     if (!record?.session) return undefined;
 
@@ -615,9 +613,7 @@ export class AgentManager {
   }
 
   listAgents(): AgentRecord[] {
-    return [...this.agents.values()].sort(
-      (a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0),
-    );
+    return [...this.agents.values()].sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0));
   }
 
   /**
@@ -636,7 +632,7 @@ export class AgentManager {
 
     // Remove from queue if queued
     if (record.status === "queued") {
-      this.queue = this.queue.filter(q => q.id !== id);
+      this.queue = this.queue.filter((q) => q.id !== id);
       record.status = "stopped";
       record.completedAt = Date.now();
       return true;
@@ -672,18 +668,30 @@ export class AgentManager {
       const pct = used / maxAgentsPerSession;
       // 90% critical first, then 80% warning — don't double-fire if already at 90%
       if (pct >= 0.9) {
-        handler("agents_at_90", this.sessionUsage, { maxAgents: maxAgentsPerSession, maxTurns: maxTotalTurnsPerSession ?? 0 });
+        handler("agents_at_90", this.sessionUsage, {
+          maxAgents: maxAgentsPerSession,
+          maxTurns: maxTotalTurnsPerSession ?? 0,
+        });
       } else if (pct >= 0.8) {
-        handler("agents_at_80", this.sessionUsage, { maxAgents: maxAgentsPerSession, maxTurns: maxTotalTurnsPerSession ?? 0 });
+        handler("agents_at_80", this.sessionUsage, {
+          maxAgents: maxAgentsPerSession,
+          maxTurns: maxTotalTurnsPerSession ?? 0,
+        });
       }
     }
     if (maxTotalTurnsPerSession !== undefined && maxTotalTurnsPerSession > 0) {
       const used = this.sessionUsage.totalTurns;
       const pct = used / maxTotalTurnsPerSession;
       if (pct >= 0.9) {
-        handler("turns_at_90", this.sessionUsage, { maxAgents: maxAgentsPerSession ?? 0, maxTurns: maxTotalTurnsPerSession });
+        handler("turns_at_90", this.sessionUsage, {
+          maxAgents: maxAgentsPerSession ?? 0,
+          maxTurns: maxTotalTurnsPerSession,
+        });
       } else if (pct >= 0.8) {
-        handler("turns_at_80", this.sessionUsage, { maxAgents: maxAgentsPerSession ?? 0, maxTurns: maxTotalTurnsPerSession });
+        handler("turns_at_80", this.sessionUsage, {
+          maxAgents: maxAgentsPerSession ?? 0,
+          maxTurns: maxTotalTurnsPerSession,
+        });
       }
     }
   }
@@ -717,9 +725,7 @@ export class AgentManager {
 
   /** Whether any agents are still running or queued. */
   hasRunning(): boolean {
-    return [...this.agents.values()].some(
-      r => r.status === "running" || r.status === "queued",
-    );
+    return [...this.agents.values()].some((r) => r.status === "running" || r.status === "queued");
   }
 
   /** Abort all running and queued agents immediately. */
@@ -754,8 +760,8 @@ export class AgentManager {
     while (true) {
       this.drainQueue();
       const pending = [...this.agents.values()]
-        .filter(r => r.status === "running" || r.status === "queued")
-        .map(r => r.promise)
+        .filter((r) => r.status === "running" || r.status === "queued")
+        .map((r) => r.promise)
         .filter(Boolean);
       if (pending.length === 0) break;
       await Promise.allSettled(pending);
@@ -772,6 +778,10 @@ export class AgentManager {
     }
     this.agents.clear();
     // Prune any orphaned git worktrees (crash recovery)
-    try { pruneWorktrees(process.cwd()); } catch (err) { logger.warn("Failed to prune worktrees", { error: err instanceof Error ? err.message : String(err) }); }
+    try {
+      pruneWorktrees(process.cwd());
+    } catch (err) {
+      logger.warn("Failed to prune worktrees", { error: err instanceof Error ? err.message : String(err) });
+    }
   }
 }

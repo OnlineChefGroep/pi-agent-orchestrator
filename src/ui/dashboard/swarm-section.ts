@@ -36,7 +36,9 @@ export function renderSwarmSection(
     const mode = members[0]?.joinMode ?? "group";
     const header = ` ${swarmId} · ${mode} · ${members.length} agents `;
     const dash = box.h.repeat(Math.max(2, cardW - visibleWidth(header) - 2));
-    lines.push(` ${th.border}${box.tl}${box.h}${th.reset}${th.highlight}${header}${th.reset}${th.border}${dash}${box.tr}${th.reset}`);
+    lines.push(
+      ` ${th.border}${box.tl}${box.h}${th.reset}${th.highlight}${header}${th.reset}${th.border}${dash}${box.tr}${th.reset}`,
+    );
     for (const member of members) {
       focus.set(member.id, baseLine + lines.length);
       const activity = state.agentActivity.get(member.id);
@@ -47,7 +49,9 @@ export function renderSwarmSection(
       const name = fastTruncate(getDisplayName(member.type), 16);
       const act = fastTruncate(activityText(member, activity), Math.max(8, contentW - 38));
       const stats = agentStats(member, activity);
-      lines.push(` ${th.border}${box.l}${th.reset} ${padAndTruncate(`${prefix}${checked} ${icon} ${th.title}${name}${th.reset}  ${th.muted}${act}${th.reset} ${th.dim}${stats}${th.reset}`, contentW)} ${th.border}${box.r}${th.reset}`);
+      lines.push(
+        ` ${th.border}${box.l}${th.reset} ${padAndTruncate(`${prefix}${checked} ${icon} ${th.title}${name}${th.reset}  ${th.muted}${act}${th.reset} ${th.dim}${stats}${th.reset}`, contentW)} ${th.border}${box.r}${th.reset}`,
+      );
     }
     lines.push(` ${th.border}${box.bl}${box.h.repeat(Math.max(0, cardW - 2))}${box.br}${th.reset}`);
   }

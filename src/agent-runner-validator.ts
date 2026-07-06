@@ -24,12 +24,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AgentSession, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { HookRegistry } from "./hooks.js";
 import type { AgentConfig, ValidationResult } from "./types.js";
-import {
-  buildValidatorPrompt,
-  getAgentDescription,
-  hasValidators,
-  parseValidationResult,
-} from "./validators.js";
+import { buildValidatorPrompt, getAgentDescription, hasValidators, parseValidationResult } from "./validators.js";
 
 // ── Injected dependency types ──────────────────────────────────────────────
 //
@@ -70,11 +65,7 @@ export interface ValidatorResumeOptions {
 }
 
 /** Signature of `resumeAgent` as consumed by this module. */
-export type ResumeAgentFn = (
-  session: AgentSession,
-  prompt: string,
-  options: ValidatorResumeOptions,
-) => Promise<string>;
+export type ResumeAgentFn = (session: AgentSession, prompt: string, options: ValidatorResumeOptions) => Promise<string>;
 
 /** All external dependencies the validation loop needs. */
 export interface ValidationDeps {
@@ -140,21 +131,24 @@ export async function runAdversarialValidation(
   let retries = 0;
 
   while (retries <= VALIDATION_MAX_RETRIES) {
-    deps.hooks?.dispatch("validation:start", agentId, {
-      attempt: retries + 1,
-      validatorCount: validators.length,
-    }).catch(() => {});
+    deps.hooks
+      ?.dispatch("validation:start", agentId, {
+        attempt: retries + 1,
+        validatorCount: validators.length,
+      })
+      .catch(() => {});
 
     const validatorPromises = validators.map((v) =>
-      deps.runAgent(ctx, v.agentId, buildValidatorPrompt(currentText, v.criteria, agentDescription), {
-        pi: deps.pi,
-        model: deps.model,
-        isolated: true,
-        skipValidators: true,
-        levelLimit: 0,
-        signal: deps.signal,
-        quotas: { maxTokens: 50_000, maxDurationMs: 120_000, maxToolCalls: 10 },
-      })
+      deps
+        .runAgent(ctx, v.agentId, buildValidatorPrompt(currentText, v.criteria, agentDescription), {
+          pi: deps.pi,
+          model: deps.model,
+          isolated: true,
+          skipValidators: true,
+          levelLimit: 0,
+          signal: deps.signal,
+          quotas: { maxTokens: 50_000, maxDurationMs: 120_000, maxToolCalls: 10 },
+        })
         .then((result) => parseValidationResult(result.responseText, v.agentId))
         .catch((err) => ({
           agentId: v.agentId,
@@ -167,10 +161,12 @@ export async function runAdversarialValidation(
     validationResults = await Promise.all(validatorPromises);
     validated = validationResults.every((r) => r.passed);
 
-    deps.hooks?.dispatch("validation:end", agentId, {
-      passed: validated,
-      results: validationResults,
-    }).catch(() => {});
+    deps.hooks
+      ?.dispatch("validation:end", agentId, {
+        passed: validated,
+        results: validationResults,
+      })
+      .catch(() => {});
 
     if (validated || retries >= VALIDATION_MAX_RETRIES) {
       deps.onValidationComplete?.(validationResults);
@@ -182,9 +178,10 @@ export async function runAdversarialValidation(
       .filter((r) => !r.passed)
       .map((r) => {
         const failedCriteria = r.criteria.filter((c) => !c.passed);
-        const details = failedCriteria.length > 0
-          ? `\n${failedCriteria.map((c) => `  - ${c.criterion}: ${c.feedback}`).join("\n")}`
-          : "";
+        const details =
+          failedCriteria.length > 0
+            ? `\n${failedCriteria.map((c) => `  - ${c.criterion}: ${c.feedback}`).join("\n")}`
+            : "";
         return `[${r.agentId}] ${r.summary}${details}`;
       })
       .join("\n\n");

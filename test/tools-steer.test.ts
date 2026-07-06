@@ -70,7 +70,13 @@ describe("createSteerTool", () => {
     const ctx = makeCtx();
     ctx.manager.getRecord.mockReturnValue(undefined);
     const tool = createSteerTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "missing", message: "hi" }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute(
+      "call-1",
+      { agent_id: "missing", message: "hi" },
+      undefined as any,
+      undefined as any,
+      ctx,
+    );
     expect(result.content[0].text).toMatch(/Agent not found/);
   });
 
@@ -78,15 +84,34 @@ describe("createSteerTool", () => {
     const ctx = makeCtx();
     ctx.manager.getRecord.mockReturnValue({ id: "agent-1", status: "completed" });
     const tool = createSteerTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "agent-1", message: "hi" }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute(
+      "call-1",
+      { agent_id: "agent-1", message: "hi" },
+      undefined as any,
+      undefined as any,
+      ctx,
+    );
     expect(result.content[0].text).toMatch(/not running/);
   });
 
   it("execute queues message when agent has no session yet", async () => {
     const ctx = makeCtx();
-    ctx.manager.getRecord.mockReturnValue({ id: "agent-1", status: "running", session: undefined, compactionCount: 0, toolUses: 0, lifetimeUsage: { input: 0, output: 0 } });
+    ctx.manager.getRecord.mockReturnValue({
+      id: "agent-1",
+      status: "running",
+      session: undefined,
+      compactionCount: 0,
+      toolUses: 0,
+      lifetimeUsage: { input: 0, output: 0 },
+    });
     const tool = createSteerTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "agent-1", message: "turn around!" }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute(
+      "call-1",
+      { agent_id: "agent-1", message: "turn around!" },
+      undefined as any,
+      undefined as any,
+      ctx,
+    );
     expect(result.content[0].text).toMatch(/queued/);
   });
 
@@ -105,7 +130,13 @@ describe("createSteerTool", () => {
       lifetimeUsage: { input: 1000, output: 500, cacheWrite: 0 },
     });
     const tool = createSteerTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "agent-1", message: "check that" }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute(
+      "call-1",
+      { agent_id: "agent-1", message: "check that" },
+      undefined as any,
+      undefined as any,
+      ctx,
+    );
     expect(result.content[0].text).toMatch(/Steering message sent/);
   });
 
@@ -123,7 +154,13 @@ describe("createSteerTool", () => {
       lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
     });
     const tool = createSteerTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "agent-1", message: "hi" }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute(
+      "call-1",
+      { agent_id: "agent-1", message: "hi" },
+      undefined as any,
+      undefined as any,
+      ctx,
+    );
     expect(result.content[0].text).toMatch(/Failed to steer/);
   });
 });

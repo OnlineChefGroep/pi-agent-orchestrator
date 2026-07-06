@@ -154,12 +154,8 @@ function buildVirtualBodyLines(
   const winQEnd = Math.min(queuedCount, windowEnd);
 
   const doneOffset = selectedIndex - runningCount - queuedCount;
-  const winDStart = doneOffset < 0
-    ? Math.max(0, doneCount - VIRTUAL_WINDOW)
-    : Math.max(0, doneOffset - halfWindow);
-  const winDEnd = doneOffset < 0
-    ? doneCount
-    : Math.min(doneCount, doneOffset + halfWindow);
+  const winDStart = doneOffset < 0 ? Math.max(0, doneCount - VIRTUAL_WINDOW) : Math.max(0, doneOffset - halfWindow);
+  const winDEnd = doneOffset < 0 ? doneCount : Math.min(doneCount, doneOffset + halfWindow);
 
   // Extract slices using a single pass over the original array
   const runningSlice: AgentRecord[] = [];

@@ -22,27 +22,32 @@ describe("CVE-002: additional validations", () => {
     writeFileSync(join(dir, `${name}.md`), content);
   }
 
-
   test("redacts overlong agent names and content in telemetry", async () => {
     const longName = "a".repeat(150);
-    writeAgent("agent..traversal", `---
+    writeAgent(
+      "agent..traversal",
+      `---
 description: valid
 ---
-Prompt`);
-    writeAgent(longName, `---
+Prompt`,
+    );
+    writeAgent(
+      longName,
+      `---
 description: valid
 ---
-Prompt`);
+Prompt`,
+    );
 
     let loggedName = "";
     let loggedError = "";
 
     const unsub = onTelemetry("agent:validation-failed", (payload) => {
-      if (payload.errors.some(e => e.includes("[REDACTED]"))) {
-         loggedError = payload.errors.find(e => e.includes("[REDACTED]"));
+      if (payload.errors.some((e) => e.includes("[REDACTED]"))) {
+        loggedError = payload.errors.find((e) => e.includes("[REDACTED]"));
       }
-      if (payload.name && payload.name.length === 100 && payload.name.includes('a')) {
-         loggedName = payload.name;
+      if (payload.name && payload.name.length === 100 && payload.name.includes("a")) {
+        loggedName = payload.name;
       }
     });
 
@@ -77,18 +82,18 @@ Prompt`);
 
     let loggedTools = [];
     const unsub = onTelemetry("agent:unknown-tools", (payload) => {
-        if (payload.name === "bad-tool") {
-            loggedTools = payload.tools;
-        }
+      if (payload.name === "bad-tool") {
+        loggedTools = payload.tools;
+      }
     });
 
     try {
-        const agents = await loadCustomAgents(tmpDir);
-        expect(agents.get("bad-tool")?.enabled).toBe(false);
-        expect(loggedTools.length).toBeGreaterThan(0);
-        expect(loggedTools[0].length).toBeLessThanOrEqual(53); // 50 + "..."
+      const agents = await loadCustomAgents(tmpDir);
+      expect(agents.get("bad-tool")?.enabled).toBe(false);
+      expect(loggedTools.length).toBeGreaterThan(0);
+      expect(loggedTools[0].length).toBeLessThanOrEqual(53); // 50 + "..."
     } finally {
-        unsub();
+      unsub();
     }
   });
 

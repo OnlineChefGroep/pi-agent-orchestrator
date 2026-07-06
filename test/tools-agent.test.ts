@@ -74,7 +74,9 @@ describe("setupSessionCallbacks", () => {
   it("sets onSessionCreated when none exists", () => {
     const target: { onSessionCreated?: (s: any) => void } = {};
     let called = false;
-    setupSessionCallbacks(target, () => { called = true; });
+    setupSessionCallbacks(target, () => {
+      called = true;
+    });
     target.onSessionCreated?.("session");
     expect(called).toBe(true);
   });

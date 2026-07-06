@@ -69,14 +69,10 @@ async function reopenMenu(ctx: ExtensionCommandContext, deps: AgentsMenuDeps): P
 }
 
 /** Build the dashboard callbacks and launch the rich TUI. */
-async function launchAgentDashboard(
-  ctx: ExtensionCommandContext,
-  deps: AgentsMenuDeps,
-): Promise<void> {
+async function launchAgentDashboard(ctx: ExtensionCommandContext, deps: AgentsMenuDeps): Promise<void> {
   const { manager, agentActivity, scheduler } = deps;
 
-  const viewConv = (rec: import("./types.js").AgentRecord) =>
-    viewAgentConversation(ctx, rec, agentActivity);
+  const viewConv = (rec: import("./types.js").AgentRecord) => viewAgentConversation(ctx, rec, agentActivity);
 
   const onAbort = (id: string) => manager.abort(id);
 
@@ -178,23 +174,38 @@ class AgentsTopComponent implements Component {
       this.page = Math.min(totalPages - 1, this.page + 1);
     } else if (matchesKey(data, "t")) {
       if (this.sortKey === "tokens") this.sortAsc = !this.sortAsc;
-      else { this.sortKey = "tokens"; this.sortAsc = false; }
+      else {
+        this.sortKey = "tokens";
+        this.sortAsc = false;
+      }
       this.page = 0;
     } else if (matchesKey(data, "r")) {
       if (this.sortKey === "turns") this.sortAsc = !this.sortAsc;
-      else { this.sortKey = "turns"; this.sortAsc = false; }
+      else {
+        this.sortKey = "turns";
+        this.sortAsc = false;
+      }
       this.page = 0;
     } else if (matchesKey(data, "d")) {
       if (this.sortKey === "duration") this.sortAsc = !this.sortAsc;
-      else { this.sortKey = "duration"; this.sortAsc = false; }
+      else {
+        this.sortKey = "duration";
+        this.sortAsc = false;
+      }
       this.page = 0;
     } else if (matchesKey(data, "u")) {
       if (this.sortKey === "toolUses") this.sortAsc = !this.sortAsc;
-      else { this.sortKey = "toolUses"; this.sortAsc = false; }
+      else {
+        this.sortKey = "toolUses";
+        this.sortAsc = false;
+      }
       this.page = 0;
     } else if (matchesKey(data, "n")) {
       if (this.sortKey === "name") this.sortAsc = !this.sortAsc;
-      else { this.sortKey = "name"; this.sortAsc = false; }
+      else {
+        this.sortKey = "name";
+        this.sortAsc = false;
+      }
       this.page = 0;
     }
   }
@@ -202,7 +213,11 @@ class AgentsTopComponent implements Component {
   render(width: number): string[] {
     const th = getThemeColors();
     // Simple passthrough theme — real theme injected by the TUI framework
-    const entries = sortEntries(getAgentTopEntries(this.manager.listAgents(), this.activity), this.sortKey, this.sortAsc);
+    const entries = sortEntries(
+      getAgentTopEntries(this.manager.listAgents(), this.activity),
+      this.sortKey,
+      this.sortAsc,
+    );
     const rows = this.tui.terminal.rows;
     this.pageSize = Math.max(5, rows - 5);
     return renderTopTable(entries, this.sortKey, this.sortAsc, this.page, this.pageSize, th, width);
@@ -213,7 +228,10 @@ class AgentsTopComponent implements Component {
   }
 
   dispose(): void {
-    if (this.refreshTimer) { clearInterval(this.refreshTimer); this.refreshTimer = null; }
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
     this.closed = true;
   }
 
@@ -229,18 +247,18 @@ async function showAgentsTop(
   manager: AgentManager,
   activity: Map<string, AgentActivity>,
 ): Promise<void> {
-  await ctx.ui.custom<undefined>((tui, _theme, _kb, done) => {
-    return new AgentsTopComponent(tui, manager, activity, done);
-  }, { overlay: true, overlayOptions: { anchor: "center", width: "95%", maxHeight: "80%" } });
+  await ctx.ui.custom<undefined>(
+    (tui, _theme, _kb, done) => {
+      return new AgentsTopComponent(tui, manager, activity, done);
+    },
+    { overlay: true, overlayOptions: { anchor: "center", width: "95%", maxHeight: "80%" } },
+  );
 }
 
 /**
  * Display the main agents menu with options for dashboard, agent types, scheduling, and settings.
  */
-export async function showAgentsMenu(
-  ctx: ExtensionCommandContext,
-  deps: AgentsMenuDeps,
-): Promise<void> {
+export async function showAgentsMenu(ctx: ExtensionCommandContext, deps: AgentsMenuDeps): Promise<void> {
   await reloadCustomAgents();
   const allNames = getAllTypes();
   const agents = deps.manager.listAgents();
@@ -278,11 +296,12 @@ export async function showAgentsMenu(
   options.push("Settings");
   options.push("Agent top (live stats — CPU, tokens, turns)");
 
-  const noAgentsMsg = allNames.length === 0 && agents.length === 0
-    ? "No agents found. Create specialized subagents that can be delegated to.\n\n" +
-      "Each subagent has its own context window, custom system prompt, and specific tools.\n\n" +
-      "Try creating: Code Reviewer, Security Auditor, Test Writer, or Documentation Writer.\n\n"
-    : "";
+  const noAgentsMsg =
+    allNames.length === 0 && agents.length === 0
+      ? "No agents found. Create specialized subagents that can be delegated to.\n\n" +
+        "Each subagent has its own context window, custom system prompt, and specific tools.\n\n" +
+        "Try creating: Code Reviewer, Security Auditor, Test Writer, or Documentation Writer.\n\n"
+      : "";
 
   if (noAgentsMsg) {
     ctx.ui.notify(noAgentsMsg, "info");
@@ -301,13 +320,13 @@ export async function showAgentsMenu(
     const treeFormat = await ctx.ui.select("Execution Tree Format", [
       "Formatted Text Tree",
       "Mermaid Diagram Graph",
-      "Raw JSON Tree"
+      "Raw JSON Tree",
     ]);
     if (treeFormat) {
       let format: "text" | "mermaid" | "json" = "text";
       if (treeFormat.includes("Mermaid")) format = "mermaid";
       if (treeFormat.includes("JSON")) format = "json";
-      
+
       const treeData = buildExecutionTree(agents, format);
       await ctx.ui.editor(`Execution Tree (${format})`, treeData);
     }
@@ -332,10 +351,7 @@ export async function showAgentsMenu(
     });
     await reopenMenu(ctx, deps);
   } else if (choice === "Settings") {
-    await showSettings(
-      ctx, deps.manager, deps.pi, deps.scheduler,
-      deps.settingsGetters, deps.settingsSetters,
-    );
+    await showSettings(ctx, deps.manager, deps.pi, deps.scheduler, deps.settingsGetters, deps.settingsSetters);
     await reopenMenu(ctx, deps);
   } else if (choice === "Agent top (live stats — CPU, tokens, turns)") {
     await showAgentsTop(ctx, deps.manager, deps.agentActivity);

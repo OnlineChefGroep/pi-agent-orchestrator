@@ -145,28 +145,36 @@ describe("createActivityTracker", () => {
 
   it("stream update callback fires on tool activity", () => {
     let fired = false;
-    const { callbacks } = createActivityTracker(undefined, () => { fired = true; });
+    const { callbacks } = createActivityTracker(undefined, () => {
+      fired = true;
+    });
     callbacks.onToolActivity({ type: "start", toolName: "grep" });
     expect(fired).toBe(true);
   });
 
   it("stream update callback fires on text delta", () => {
     let fired = false;
-    const { callbacks } = createActivityTracker(undefined, () => { fired = true; });
+    const { callbacks } = createActivityTracker(undefined, () => {
+      fired = true;
+    });
     callbacks.onTextDelta("x", "new text");
     expect(fired).toBe(true);
   });
 
   it("stream update callback fires on turn end", () => {
     let fired = false;
-    const { callbacks } = createActivityTracker(undefined, () => { fired = true; });
+    const { callbacks } = createActivityTracker(undefined, () => {
+      fired = true;
+    });
     callbacks.onTurnEnd(2);
     expect(fired).toBe(true);
   });
 
   it("stream update callback fires on usage", () => {
     let fired = false;
-    const { callbacks } = createActivityTracker(undefined, () => { fired = true; });
+    const { callbacks } = createActivityTracker(undefined, () => {
+      fired = true;
+    });
     callbacks.onAssistantUsage({ input: 1, output: 2, cacheWrite: 3 });
     expect(fired).toBe(true);
   });
@@ -232,9 +240,7 @@ describe("escapeXml", () => {
   });
 
   it("escapes all together", () => {
-    expect(escapeXml("<tag attr=\"val\">&amp;</tag>")).toBe(
-      "&lt;tag attr=\"val\"&gt;&amp;amp;&lt;/tag&gt;"
-    );
+    expect(escapeXml('<tag attr="val">&amp;</tag>')).toBe('&lt;tag attr="val"&gt;&amp;amp;&lt;/tag&gt;');
   });
 
   it("leaves normal text unchanged", () => {
@@ -291,9 +297,9 @@ describe("formatTaskNotification", () => {
       outputFile: "out.txt",
       session: {
         getSessionStats: () => ({
-          contextUsage: { percent: 45.6 }
-        })
-      }
+          contextUsage: { percent: 45.6 },
+        }),
+      },
     };
     const xml = formatTaskNotification(record, 200);
     expect(xml).toContain("<tool-use-id>call-123</tool-use-id>");

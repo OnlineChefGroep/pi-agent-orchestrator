@@ -62,10 +62,7 @@ describe("agent-templates", () => {
 
   describe("checkForUpdate", () => {
     it("returns null when template is not installed", async () => {
-      const result = await checkForUpdate(
-        "adversarial-validator",
-        "/tmp/nonexistent-project",
-      );
+      const result = await checkForUpdate("adversarial-validator", "/tmp/nonexistent-project");
       expect(result).toBeNull();
     });
   });

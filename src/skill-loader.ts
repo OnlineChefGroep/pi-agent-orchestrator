@@ -111,11 +111,7 @@ function getSkillRoots(cwd: string): string[] {
   ];
 }
 
-function loadSkillContent(
-  name: string,
-  cwd: string,
-  ctx: SkillLoaderContext,
-): string {
+function loadSkillContent(name: string, cwd: string, ctx: SkillLoaderContext): string {
   if (isUnsafeName(name)) {
     return `(Skill "${name}" skipped: name contains path traversal characters)`;
   }
@@ -126,11 +122,7 @@ function loadSkillContent(
   return `(Skill "${name}" not found in .pi/skills/, .agents/skills/, or global skill locations)`;
 }
 
-function findInRoot(
-  root: string,
-  name: string,
-  ctx: SkillLoaderContext,
-): string | undefined {
+function findInRoot(root: string, name: string, ctx: SkillLoaderContext): string | undefined {
   if (isSymlink(root)) return undefined; // reject symlinked roots entirely
   const flat = safeReadFile(join(root, `${name}.md`))?.trim();
   if (flat !== undefined) return flat;
@@ -144,11 +136,7 @@ function findInRoot(
  * Uses ctx.dirEntries to cache readdirSync results across BFS traversals,
  * so subsequent skill names skip redundant I/O on already-scanned dirs.
  */
-function bfsForSkill(
-  name: string,
-  initialQueue: string[],
-  ctx: SkillLoaderContext,
-): string | undefined {
+function bfsForSkill(name: string, initialQueue: string[], ctx: SkillLoaderContext): string | undefined {
   const queue = [...initialQueue];
   // Index-based head pointer: O(1) per pop vs Array.shift() which is O(N).
   // At depth D with B total branches, the old shift() made the BFS O(B*D^2)
@@ -167,9 +155,7 @@ function bfsForSkill(
         // Sort on cache miss only: entries are immutable post-readdirSync,
         // so caching the sorted result and reusing it across BFS visits
         // is sound and saves an O(K log K) sort per visit.
-        entries.sort((a, b) =>
-          a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
-        );
+        entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
         ctx.dirEntries.set(current, entries);
       } catch {
         continue;
@@ -211,11 +197,7 @@ function bfsForSkill(
  *   2. Falls back to BFS only for nested skills (cached directory listings)
  *   3. Both caches are populated lazily, reused by later names
  */
-function findSkillDirectory(
-  root: string,
-  name: string,
-  ctx: SkillLoaderContext,
-): string | undefined {
+function findSkillDirectory(root: string, name: string, ctx: SkillLoaderContext): string | undefined {
   // Get or lazily build the root-level index
   let index = ctx.rootIndices.get(root);
   if (!index) {

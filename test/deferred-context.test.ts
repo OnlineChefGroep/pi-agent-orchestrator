@@ -16,9 +16,7 @@ const {
   getAgentDir: vi.fn(() => "/mock/agent-dir"),
   sessionManagerInMemory: vi.fn(() => ({ kind: "memory-session-manager" })),
   settingsManagerCreate: vi.fn(() => ({ kind: "settings-manager" })),
-  buildParentContextFn: vi.fn(
-    () => "# Parent Conversation Context\n[User]: prior work\n\n---\n# Your Task (below)\n",
-  ),
+  buildParentContextFn: vi.fn(() => "# Parent Conversation Context\n[User]: prior work\n\n---\n# Your Task (below)\n"),
 }));
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
@@ -84,7 +82,10 @@ vi.mock("../src/skill-loader.js", () => ({
 vi.mock("../src/context.js", () => ({
   buildParentContext: buildParentContextFn,
   extractText: vi.fn((content: any[]) =>
-    content.filter((c: any) => c.type === "text").map((c: any) => c.text ?? "").join("\n"),
+    content
+      .filter((c: any) => c.type === "text")
+      .map((c: any) => c.text ?? "")
+      .join("\n"),
   ),
 }));
 

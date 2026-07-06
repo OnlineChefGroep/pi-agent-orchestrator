@@ -4,12 +4,19 @@ import type { AgentRecord } from "../src/types.js";
 
 // Mock theme functions
 vi.mock("../src/ui/theme.js", () => ({
-  borderLine: vi.fn((w: number, _th: unknown, box: { h: string; ml: string; mr: string; bl: string; br: string; tl: string; tr: string; l: string; r: string }, edge: string) => {
-    if (edge === "top") return `┌${box.h.repeat(Math.max(0, w - 2))}┐`;
-    if (edge === "mid") return `├${box.h.repeat(Math.max(0, w - 2))}┤`;
-    if (edge === "bot") return `└${box.h.repeat(Math.max(0, w - 2))}┘`;
-    return "";
-  }),
+  borderLine: vi.fn(
+    (
+      w: number,
+      _th: unknown,
+      box: { h: string; ml: string; mr: string; bl: string; br: string; tl: string; tr: string; l: string; r: string },
+      edge: string,
+    ) => {
+      if (edge === "top") return `┌${box.h.repeat(Math.max(0, w - 2))}┐`;
+      if (edge === "mid") return `├${box.h.repeat(Math.max(0, w - 2))}┤`;
+      if (edge === "bot") return `└${box.h.repeat(Math.max(0, w - 2))}┘`;
+      return "";
+    },
+  ),
   framedRow: vi.fn((content: string, innerW: number, _th: unknown, box: { l: string; r: string }) => {
     return `${box.l} ${content.padEnd(innerW)} ${box.r}`;
   }),

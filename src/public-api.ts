@@ -38,12 +38,7 @@ import {
   PROTOCOL_VERSION,
   type SubagentsRpcClient,
 } from "./cross-extension-rpc.js";
-import {
-  type HookEvent,
-  type HookPayload,
-  HookRegistry,
-  type HookResponse,
-} from "./hooks.js";
+import { type HookEvent, type HookPayload, HookRegistry, type HookResponse } from "./hooks.js";
 
 // ---------------------------------------------------------------------------
 // Symbol-based discovery keys.
@@ -329,7 +324,10 @@ function buildManagerHandle(manager: SubagentManagerLike): SubagentManagerHandle
       };
     },
     listAgentIds: (type: string) =>
-      manager.listAgents().filter((a) => a.type === type).map((a) => a.id),
+      manager
+        .listAgents()
+        .filter((a) => a.type === type)
+        .map((a) => a.id),
   };
 }
 
@@ -382,16 +380,12 @@ export function clearSubagentsApi(): void {
  * Returns `undefined` if the extension is not loaded.
  */
 export function getSubagentsApi(): SubagentsPublicApi | undefined {
-  return (globalThis as unknown as Record<symbol, unknown>)[SUBAGENTS_API_SYMBOL] as
-    | SubagentsPublicApi
-    | undefined;
+  return (globalThis as unknown as Record<symbol, unknown>)[SUBAGENTS_API_SYMBOL] as SubagentsPublicApi | undefined;
 }
 
 /** Discover the orchestrator's raw `HookRegistry`. Returns `undefined` if not loaded. */
 export function getSubagentsHooks(): HookRegistry | undefined {
-  return (globalThis as unknown as Record<symbol, unknown>)[SUBAGENTS_HOOKS_SYMBOL] as
-    | HookRegistry
-    | undefined;
+  return (globalThis as unknown as Record<symbol, unknown>)[SUBAGENTS_HOOKS_SYMBOL] as HookRegistry | undefined;
 }
 
 /** Discover the orchestrator's read-only `SubagentManagerHandle`. Returns `undefined` if not loaded. */

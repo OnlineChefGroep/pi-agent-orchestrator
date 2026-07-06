@@ -21,9 +21,7 @@ function dashboardSummaryBar(
     else if (s === "completed" || s === "steered") completed++;
     else if (s === "error" || s === "aborted") errored++;
   }
-  const selected = state.selectedIds.size > 0
-    ? `  ${th.highlight}◆ ${state.selectedIds.size} selected${th.reset}`
-    : "";
+  const selected = state.selectedIds.size > 0 ? `  ${th.highlight}◆ ${state.selectedIds.size} selected${th.reset}` : "";
   const sep = `  ${th.border}│${th.reset}  `;
   const parts = [
     `${th.accent}● ${running} running${th.reset}`,
@@ -85,7 +83,9 @@ export function renderDashboardHeader(
   return [
     wrapBg(borderLine(width, th, box, "top")),
     wrapBg(framedRow(`${titleLeft}${" ".repeat(titleGap)}${titleRight}`, innerW, th, box)),
-    wrapBg(`${th.border}${box.ml}${th.reset}${th.dim}${box.h.repeat(Math.max(0, width - 2))}${th.reset}${th.border}${box.mr}${th.reset}`),
+    wrapBg(
+      `${th.border}${box.ml}${th.reset}${th.dim}${box.h.repeat(Math.max(0, width - 2))}${th.reset}${th.border}${box.mr}${th.reset}`,
+    ),
     wrapBg(framedRow(summary, innerW, th, box)),
     wrapBg(borderLine(width, th, box, "mid")),
   ];

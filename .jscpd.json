@@ -1,0 +1,17 @@
+{
+  "threshold": 5,
+  "reporters": ["console", "html"],
+  "output": "./reports/jscpd",
+  "format": ["typescript"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/test/**",
+    "**/*.d.ts",
+    "**/graphify-out/**",
+    "**/droid-wiki/**"
+  ],
+  "min-lines": 15,
+  "min-tokens": 50,
+  "absolute": true
+}

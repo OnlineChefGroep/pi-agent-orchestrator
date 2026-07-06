@@ -185,9 +185,7 @@ export function getAgentConfig(name: string): AgentConfig | undefined {
 
 /** Get all enabled type names (for spawning and tool descriptions). */
 export function getAvailableTypes(): string[] {
-  return [...agents.entries()]
-    .filter(([_, config]) => config.enabled !== false)
-    .map(([name]) => name);
+  return [...agents.entries()].filter(([_, config]) => config.enabled !== false).map(([name]) => name);
 }
 
 /** Get all type names including disabled (for UI listing). */
@@ -197,16 +195,12 @@ export function getAllTypes(): string[] {
 
 /** Get names of default agents currently in the registry. */
 export function getDefaultAgentNames(): string[] {
-  return [...agents.entries()]
-    .filter(([_, config]) => config.isDefault === true)
-    .map(([name]) => name);
+  return [...agents.entries()].filter(([_, config]) => config.isDefault === true).map(([name]) => name);
 }
 
 /** Get names of user-defined agents (non-defaults) currently in the registry. */
 export function getUserAgentNames(): string[] {
-  return [...agents.entries()]
-    .filter(([_, config]) => config.isDefault !== true)
-    .map(([name]) => name);
+  return [...agents.entries()].filter(([_, config]) => config.isDefault !== true).map(([name]) => name);
 }
 
 /** Check if a type is valid and enabled (case-insensitive). */
@@ -223,7 +217,7 @@ const MEMORY_TOOL_NAMES = ["read", "write", "edit"];
  * Get memory tool names (read/write/edit) not already in the provided set.
  */
 export function getMemoryToolNames(existingToolNames: Set<string>): string[] {
-  return MEMORY_TOOL_NAMES.filter(n => !existingToolNames.has(n));
+  return MEMORY_TOOL_NAMES.filter((n) => !existingToolNames.has(n));
 }
 
 // Re-export for backward compatibility — the canonical definition lives in readonly-helpers.ts.
@@ -237,7 +231,7 @@ export function getToolNamesForType(type: string): string[] {
   // Expand `*` to the full built-in list (audit A1). Falls back to a fresh
   // copy of BUILTIN_TOOL_NAMES when the agent omits the field entirely.
   const names = config?.builtinToolNames?.length
-    ? normalizeBuiltinToolNames(config.builtinToolNames) ?? [...BUILTIN_TOOL_NAMES]
+    ? (normalizeBuiltinToolNames(config.builtinToolNames) ?? [...BUILTIN_TOOL_NAMES])
     : [...BUILTIN_TOOL_NAMES];
   return names;
 }
@@ -255,7 +249,7 @@ function intersectPermission(
   if (parent === true) return child === true || child === false ? child : [...child];
   if (child === false) return false;
   if (child === true) return [...parent];
-  
+
   // Both are arrays - return intersection
   const parentSet = new Set(parent);
   return child.filter((item) => parentSet.has(item));
@@ -274,7 +268,7 @@ function intersectToolNames(childNames: string[], parentNames: string[]): string
  */
 function applyParentRestrictions(
   raw: { builtinToolNames: string[]; extensions: true | string[] | false; skills: true | string[] | false },
-  parentConfig?: EffectiveConfig
+  parentConfig?: EffectiveConfig,
 ) {
   if (!parentConfig) return raw;
   return {
@@ -342,21 +336,25 @@ export function getConfig(
   const key = resolveKey(type);
   const config = key ? agents.get(key) : undefined;
 
-
   if (config && config.enabled !== false) {
-    const restricted = applyParentRestrictions({
-      // Expand `*` to the full built-in list (audit A1) BEFORE parent
-      // restrictions are applied, so a wildcard child is intersected with
-      // the parent's concrete list rather than yielding an empty set.
-      builtinToolNames: normalizeBuiltinToolNames(config.builtinToolNames) ?? BUILTIN_TOOL_NAMES,
-      extensions: config.extensions === true || config.extensions === false ? config.extensions : [...config.extensions],
-      skills: config.skills === true || config.skills === false ? config.skills : [...config.skills],
-    }, parentConfig);
+    const restricted = applyParentRestrictions(
+      {
+        // Expand `*` to the full built-in list (audit A1) BEFORE parent
+        // restrictions are applied, so a wildcard child is intersected with
+        // the parent's concrete list rather than yielding an empty set.
+        builtinToolNames: normalizeBuiltinToolNames(config.builtinToolNames) ?? BUILTIN_TOOL_NAMES,
+        extensions:
+          config.extensions === true || config.extensions === false ? config.extensions : [...config.extensions],
+        skills: config.skills === true || config.skills === false ? config.skills : [...config.skills],
+      },
+      parentConfig,
+    );
 
     // Inject ctx_* tools when context-mode is installed and agent opts in
-    const builtinToolNames = config.useContextMode && isContextModeAvailable()
-      ? [...restricted.builtinToolNames, ...CTX_TOOL_NAMES]
-      : restricted.builtinToolNames;
+    const builtinToolNames =
+      config.useContextMode && isContextModeAvailable()
+        ? [...restricted.builtinToolNames, ...CTX_TOOL_NAMES]
+        : restricted.builtinToolNames;
 
     return {
       displayName: config.displayName ?? config.name,
@@ -377,11 +375,14 @@ export function getConfig(
   // fallback is a hard-coded read-only allowlist with extensions and skills
   // explicitly disabled, then intersected with the caller's parentConfig so
   // permission inheritance still works on this path.
-  const restricted = applyParentRestrictions({
-    builtinToolNames: [...SAFE_FALLBACK_TOOL_NAMES],
-    extensions: false,
-    skills: false,
-  }, parentConfig);
+  const restricted = applyParentRestrictions(
+    {
+      builtinToolNames: [...SAFE_FALLBACK_TOOL_NAMES],
+      extensions: false,
+      skills: false,
+    },
+    parentConfig,
+  );
   return {
     displayName: "Agent",
     description: "Safe fallback agent with minimal read-only permissions",
@@ -391,4 +392,3 @@ export function getConfig(
     promptMode: "append",
   };
 }
-

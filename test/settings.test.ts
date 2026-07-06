@@ -604,12 +604,7 @@ describe("settings persistence", () => {
       writeFileSync(filePosingAsCwd, "");
       const emit = vi.fn();
       try {
-        const toast = saveAndEmitChanged(
-          { maxConcurrent: 5 },
-          "Max concurrency set to 5",
-          emit,
-          filePosingAsCwd,
-        );
+        const toast = saveAndEmitChanged({ maxConcurrent: 5 }, "Max concurrency set to 5", emit, filePosingAsCwd);
         expect(emit).toHaveBeenCalledWith("subagents:settings_changed", {
           settings: { maxConcurrent: 5 },
           persisted: false,

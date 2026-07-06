@@ -8,12 +8,14 @@ import type { OrchestrationMode } from "../agent-registry.js";
 import {
   getAnimationStyle,
   getDashboardRefreshInterval,
-  getOrchestrationMode, getPromptCompressionLevel,
+  getOrchestrationMode,
+  getPromptCompressionLevel,
   getUiStyle,
   setAnimationStyle,
   setDashboardRefreshInterval,
-  setOrchestrationMode, setPromptCompressionLevel,
-  setUiStyle
+  setOrchestrationMode,
+  setPromptCompressionLevel,
+  setUiStyle,
 } from "../agent-registry.js";
 import type { SubagentScheduler } from "../schedule.js";
 import type { SettingsGetters, SettingsSetters } from "../settings.js";
@@ -59,9 +61,15 @@ export async function showSettings(
     }
   } else if (choice.startsWith("Session limits")) {
     const current = manager.getSessionLimits();
-    const agentVal = await ctx.ui.input("Max agents per session (0 = unlimited)", String(current.maxAgentsPerSession ?? 0));
+    const agentVal = await ctx.ui.input(
+      "Max agents per session (0 = unlimited)",
+      String(current.maxAgentsPerSession ?? 0),
+    );
     if (agentVal === undefined) return;
-    const turnVal = await ctx.ui.input("Max total turns per session (0 = unlimited)", String(current.maxTotalTurnsPerSession ?? 0));
+    const turnVal = await ctx.ui.input(
+      "Max total turns per session (0 = unlimited)",
+      String(current.maxTotalTurnsPerSession ?? 0),
+    );
     if (turnVal === undefined) return;
     const maxAgents = parseInt(agentVal, 10);
     const maxTurns = parseInt(turnVal, 10);
@@ -75,7 +83,10 @@ export async function showSettings(
       notifyApplied(ctx, pi, manager, getters, "Session limits updated");
     }
   } else if (choice.startsWith("Default max turns")) {
-    const val = await ctx.ui.input("Default max turns before wrap-up (0 = unlimited)", String(getters.getDefaultMaxTurns() ?? 0));
+    const val = await ctx.ui.input(
+      "Default max turns before wrap-up (0 = unlimited)",
+      String(getters.getDefaultMaxTurns() ?? 0),
+    );
     if (val) {
       const n = parseInt(val, 10);
       if (n === 0) {
@@ -102,20 +113,17 @@ export async function showSettings(
   } else if (choice.startsWith("Coordination")) {
     await showCoordinationMenu(ctx, pi, manager, getters, setters);
   } else if (choice.startsWith("Scheduling")) {
-    const val = await ctx.ui.select(
-      "Schedule subagent feature",
-      [
-        "enabled — Agent tool accepts a `schedule` param; /agents → Scheduled jobs visible",
-        "disabled — `schedule` removed from Agent tool spec (no LLM-context cost); menu hidden",
-      ],
-    );
+    const val = await ctx.ui.select("Schedule subagent feature", [
+      "enabled — Agent tool accepts a `schedule` param; /agents → Scheduled jobs visible",
+      "disabled — `schedule` removed from Agent tool spec (no LLM-context cost); menu hidden",
+    ]);
     if (val) {
       const enabled = val.startsWith("enabled");
       if (enabled === getters.isSchedulingEnabled()) {
         ctx.ui.notify(`Scheduling already ${enabled ? "enabled" : "disabled"}.`, "info");
       } else {
         setters.setSchedulingEnabled(enabled);
-        if (!enabled) scheduler.stop();  // immediate kill — outstanding fires stop ticking
+        if (!enabled) scheduler.stop(); // immediate kill — outstanding fires stop ticking
         notifyApplied(
           ctx,
           pi,
@@ -126,26 +134,17 @@ export async function showSettings(
       }
     }
   } else if (choice.startsWith("Tracing")) {
-    const val = await ctx.ui.select(
-      "OpenTelemetry span emission",
-      [
-        "enabled — agent lifecycle spans are emitted to the configured TracerProvider (default)",
-        "disabled — span helpers short-circuit to a shared no-op; no TracerProvider is consulted",
-      ],
-    );
+    const val = await ctx.ui.select("OpenTelemetry span emission", [
+      "enabled — agent lifecycle spans are emitted to the configured TracerProvider (default)",
+      "disabled — span helpers short-circuit to a shared no-op; no TracerProvider is consulted",
+    ]);
     if (val) {
       const enabled = val.startsWith("enabled");
       if (enabled === getters.isTracingEnabled()) {
         ctx.ui.notify(`Tracing already ${enabled ? "enabled" : "disabled"}.`, "info");
       } else {
         setters.setTracingEnabled(enabled);
-        notifyApplied(
-          ctx,
-          pi,
-          manager,
-          getters,
-          `Tracing ${enabled ? "enabled" : "disabled"}.`,
-        );
+        notifyApplied(ctx, pi, manager, getters, `Tracing ${enabled ? "enabled" : "disabled"}.`);
       }
     }
   } else if (choice.startsWith("Animation Style")) {
@@ -175,7 +174,10 @@ export async function showSettings(
       notifyApplied(ctx, pi, manager, getters, `UI/UX style set to ${style}`);
     }
   } else if (choice.startsWith("Dashboard refresh interval")) {
-    const val = await ctx.ui.input("Dashboard refresh interval in milliseconds (100-60000)", String(getDashboardRefreshInterval()));
+    const val = await ctx.ui.input(
+      "Dashboard refresh interval in milliseconds (100-60000)",
+      String(getDashboardRefreshInterval()),
+    );
     if (val) {
       const n = parseInt(val, 10);
       if (n >= 100 && n <= 60000) {
@@ -213,7 +215,7 @@ export async function showSettings(
     // directly to the compression level selection rather than the full Settings menu.
     while (true) {
       const currentLevel = getPromptCompressionLevel();
-      const currentMark = (lvl: string) => lvl === currentLevel ? " ◀ current" : "";
+      const currentMark = (lvl: string) => (lvl === currentLevel ? " ◀ current" : "");
       const val = await ctx.ui.select("Prompt compression level", [
         `minimal — full prompts (~1482 tok, +70%) — max quality${currentMark("minimal")}`,
         `balanced — concise prompts (~873 tok, baseline) — default${currentMark("balanced")}`,
@@ -224,16 +226,21 @@ export async function showSettings(
 
       if (val.startsWith("📊")) {
         await showCompressionComparison(ctx);
-        continue;  // re-show compression menu
+        continue; // re-show compression menu
       }
 
       const level = val.split(" ")[0] as PromptCompressionLevel;
       if (level === currentLevel) {
         ctx.ui.notify(`Prompt compression already set to ${level}.`, "info");
-        continue;  // re-show menu
+        continue; // re-show menu
       }
       setPromptCompressionLevel(level);
-      const savingsLabel = level === "aggressive" ? " (~386 tok less across all prompt components vs balanced)" : level === "minimal" ? " (~609 more tok across all prompt components vs balanced)" : "";
+      const savingsLabel =
+        level === "aggressive"
+          ? " (~386 tok less across all prompt components vs balanced)"
+          : level === "minimal"
+            ? " (~609 more tok across all prompt components vs balanced)"
+            : "";
       notifyApplied(ctx, pi, manager, getters, `Prompt compression set to ${level}${savingsLabel}`);
       return;
     }
@@ -251,10 +258,10 @@ const JOIN_MODE_OPTIONS: ReadonlyArray<{ mode: JoinMode; desc: string }> = [
 ];
 
 const ORCH_MODE_OPTIONS: ReadonlyArray<{ mode: OrchestrationMode; desc: string }> = [
-  { mode: "auto",   desc: "smart selection based on task complexity (default)" },
+  { mode: "auto", desc: "smart selection based on task complexity (default)" },
   { mode: "single", desc: "one agent at a time" },
-  { mode: "swarm",  desc: "dynamic collaborative groups" },
-  { mode: "crew",   desc: "structured team coordination (planner/executor/reviewer)" },
+  { mode: "swarm", desc: "dynamic collaborative groups" },
+  { mode: "crew", desc: "structured team coordination (planner/executor/reviewer)" },
 ];
 
 /**
@@ -275,7 +282,7 @@ export async function showCoordinationMenu(
   getters: SettingsGetters,
   setters: SettingsSetters,
 ): Promise<void> {
-  const mark = (current: string, candidate: string): string => candidate === current ? " ◀ current" : "";
+  const mark = (current: string, candidate: string): string => (candidate === current ? " ◀ current" : "");
 
   while (true) {
     const curJoin = getters.getDefaultJoinMode();
@@ -326,7 +333,7 @@ async function showCompressionComparison(ctx: Ctx): Promise<void> {
 Estimates based on combined handoff + read-only prompt components.
 Env block, bridge section, and agent identity are identical across levels.
 
-${'─'.repeat(80)}
+${"─".repeat(80)}
 | Component            | Minimal         | Balanced        | Aggressive         | Savings (agg vs bal) |
 |──────────────────────|─────────────────|─────────────────|────────────────────|───────────────────────|
 | Handoff prompt       | 2,334 / 584 tok |   971 / 243 tok |    118 /  30 tok  | −87.8% (−213 tok)     |
@@ -335,7 +342,7 @@ ${'─'.repeat(80)}
 | Analysis readonly    | 1,244 / 311 tok |   887 / 222 tok |    656 / 164 tok  | −26.0% (−58 tok)      |
 |──────────────────────|─────────────────|─────────────────|────────────────────|───────────────────────|
 | COMBINED             | 5,925 / 1482 tok| 3,491 / 873 tok |  1,945 / 487 tok  | ~44% (−386 tok)       |
-${'─'.repeat(80)}
+${"─".repeat(80)}
 
 SCOPE: Affects replace-mode built-in agents (Explore, Plan, Analysis)
        and handoff prompts for all agents with handoff: true.
@@ -370,10 +377,8 @@ export function notifyApplied(
   successMsg: string,
 ): void {
   const snapshot = buildSettingsSnapshot(manager, getters);
-  const { message, level } = saveAndEmitChanged(
-    snapshot,
-    successMsg,
-    (event, payload) => pi.events.emit(event, payload),
+  const { message, level } = saveAndEmitChanged(snapshot, successMsg, (event, payload) =>
+    pi.events.emit(event, payload),
   );
   ctx.ui.notify(message, level);
 }

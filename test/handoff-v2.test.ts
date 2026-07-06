@@ -71,7 +71,9 @@ describe("Handoff v2 \u2014 typed artifacts", () => {
 }
 \`\`\``;
       const r = parseHandoff(text);
-      expect(r!.artifacts).toEqual([{ type: "branch", branch: "fix/x", base: "main", commits: ["abc1234", "def5678"], title: "Fix branch" }]);
+      expect(r!.artifacts).toEqual([
+        { type: "branch", branch: "fix/x", base: "main", commits: ["abc1234", "def5678"], title: "Fix branch" },
+      ]);
     });
 
     it("rejects a branch artifact with empty branch name", () => {
@@ -104,7 +106,9 @@ describe("Handoff v2 \u2014 typed artifacts", () => {
 }
 \`\`\``;
       const r = parseHandoff(text);
-      expect(r!.artifacts).toEqual([{ type: "url", url: "https://example.com/spec", title: "Spec", description: "External reference" }]);
+      expect(r!.artifacts).toEqual([
+        { type: "url", url: "https://example.com/spec", title: "Spec", description: "External reference" },
+      ]);
     });
 
     it("rejects a url artifact with empty url", () => {
@@ -137,7 +141,9 @@ describe("Handoff v2 \u2014 typed artifacts", () => {
 }
 \`\`\``;
       const r = parseHandoff(text);
-      expect(r!.artifacts).toEqual([{ type: "note", title: "Follow-up", value: "Investigate the backoff curve", mimeType: "text/markdown" }]);
+      expect(r!.artifacts).toEqual([
+        { type: "note", title: "Follow-up", value: "Investigate the backoff curve", mimeType: "text/markdown" },
+      ]);
     });
 
     it("rejects a note artifact with missing value", () => {
@@ -212,7 +218,9 @@ describe("Handoff v2 \u2014 typed artifacts", () => {
 }
 \`\`\``;
       const r = parseHandoff(text);
-      expect(r!.artifacts).toEqual([{ type: "note", title: "Reminder", value: "Check the failing test", mimeType: "text/plain" }]);
+      expect(r!.artifacts).toEqual([
+        { type: "note", title: "Reminder", value: "Check the failing test", mimeType: "text/plain" },
+      ]);
     });
 
     it("rejects handoffs with completely unrecognised artifacts (no path/branch/url/title+value)", () => {
@@ -373,19 +381,12 @@ describe("Handoff v2 \u2014 typed artifacts", () => {
 
 // ── Benchmark: parseHandoff — parse time ──────────────────────────────
 
-function benchmarkLog(
-  label: string,
-  measured: number,
-  threshold: number,
-  unit = "ms",
-): void {
+function benchmarkLog(label: string, measured: number, threshold: number, unit = "ms"): void {
   const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
   let status: string;
   if (measured > threshold) {
     status = "FAIL";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`,
-    );
+    console.warn(`\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`);
   } else if (pct > 80) {
     status = "WARN";
     console.warn(
@@ -394,22 +395,12 @@ function benchmarkLog(
   } else {
     status = "OK";
   }
-  const measuredStr = unit === "\u00b5s"
-    ? `${(measured * 1000).toFixed(1)}\u00b5s`
-    : `${measured.toFixed(3)}ms`;
-  const thresholdStr = unit === "\u00b5s"
-    ? `${(threshold * 1000).toFixed(1)}\u00b5s`
-    : `${threshold.toFixed(3)}ms`;
-  process.stdout.write(
-    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
-  );
+  const measuredStr = unit === "\u00b5s" ? `${(measured * 1000).toFixed(1)}\u00b5s` : `${measured.toFixed(3)}ms`;
+  const thresholdStr = unit === "\u00b5s" ? `${(threshold * 1000).toFixed(1)}\u00b5s` : `${threshold.toFixed(3)}ms`;
+  process.stdout.write(`[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`);
 }
 
-function buildHandoffText(opts: {
-  findingsCount: number;
-  artifactCount: number;
-  legacy?: boolean;
-}): string {
+function buildHandoffText(opts: { findingsCount: number; artifactCount: number; legacy?: boolean }): string {
   const findings = Array.from({ length: opts.findingsCount }, (_, i) => `Finding ${i + 1}: something noteworthy`);
   const artifacts = Array.from({ length: opts.artifactCount }, (_, i) => {
     if (opts.legacy) {
@@ -423,7 +414,7 @@ function buildHandoffText(opts: {
   "type": "handoff",
   "status": "success",
   "summary": "Implemented the feature with findings and artifacts to share",
-  "findings": [${findings.map(f => `"${f}"`).join(", ")}],
+  "findings": [${findings.map((f) => `"${f}"`).join(", ")}],
   "artifacts": [${artifacts.join(", ")}]
 }
 \`\`\``;

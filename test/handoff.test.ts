@@ -52,9 +52,7 @@ describe("parseHandoff", () => {
 
     const result = parseHandoff(text);
     expect(result).toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("malformed JSON"),
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("malformed JSON"));
 
     warnSpy.mockRestore();
   });
@@ -72,9 +70,7 @@ describe("parseHandoff", () => {
 
     const result = parseHandoff(text);
     expect(result).toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("summary"),
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("summary"));
 
     warnSpy.mockRestore();
   });
@@ -140,8 +136,8 @@ describe("parseHandoff", () => {
     expect(result).not.toBeNull();
     expect(result!.files).toEqual(["/path/a.ts"]);
     expect(result!.artifacts).toEqual([
-      {"type": "file", "path": "/path/b.md", "title": "Design doc"},
-      {"type": "branch", "branch": "feat/x", "base": "main"},
+      { type: "file", path: "/path/b.md", title: "Design doc" },
+      { type: "branch", branch: "feat/x", base: "main" },
     ]);
   });
 
@@ -159,9 +155,7 @@ describe("parseHandoff", () => {
     const result = parseHandoff(text);
     expect(result).not.toBeNull();
     // Legacy `type: "design"` + `path` is coerced into a v2 file artifact
-    expect(result!.artifacts).toEqual([
-      { type: "file", path: "/path/b.md", mimeType: undefined, title: "old-shape" },
-    ]);
+    expect(result!.artifacts).toEqual([{ type: "file", path: "/path/b.md", mimeType: undefined, title: "old-shape" }]);
   });
 
   it("returns null when type is not 'handoff'", () => {
@@ -178,9 +172,7 @@ describe("parseHandoff", () => {
 
     const result = parseHandoff(text);
     expect(result).toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("type"),
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("type"));
 
     warnSpy.mockRestore();
   });
@@ -307,19 +299,23 @@ describe("renderHandoffForParent", () => {
   });
 
   it("handles 'partial' and 'failed' statuses", () => {
-    expect(renderHandoffForParent({
-      type: "handoff",
-      status: "partial",
-      summary: "s",
-      findings: ["f"],
-    })).toContain("partially completed");
+    expect(
+      renderHandoffForParent({
+        type: "handoff",
+        status: "partial",
+        summary: "s",
+        findings: ["f"],
+      }),
+    ).toContain("partially completed");
 
-    expect(renderHandoffForParent({
-      type: "handoff",
-      status: "failed",
-      summary: "s",
-      findings: ["f"],
-    })).toContain("failed");
+    expect(
+      renderHandoffForParent({
+        type: "handoff",
+        status: "failed",
+        summary: "s",
+        findings: ["f"],
+      }),
+    ).toContain("failed");
   });
 
   it("omits optional sections when not provided", () => {

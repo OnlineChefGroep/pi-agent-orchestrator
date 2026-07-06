@@ -1,7 +1,14 @@
 import { getUiStyle } from "../agent-registry.js";
 import type { AgentRecord } from "../types.js";
 import { getLifetimeTotal, getSessionContextPercent } from "../usage.js";
-import { describeActivity, formatMs, formatSessionTokens, formatTurns, getDisplayName, getPromptModeLabel } from "./agent-format.js";
+import {
+  describeActivity,
+  formatMs,
+  formatSessionTokens,
+  formatTurns,
+  getDisplayName,
+  getPromptModeLabel,
+} from "./agent-format.js";
 import type { AgentActivity } from "./agent-ui-types.js";
 import { getSpinnerFrame } from "./animation.js";
 import { activeTheme, fastTruncate, type Theme } from "./theme.js";
@@ -93,10 +100,12 @@ function renderActivityHeatmap(
 
   const maxBucket = Math.max(1, ...buckets);
   const blocks = ["░", "▒", "▓", "█"];
-  const heatBar = buckets.map((count) => {
-    const level = count === 0 ? 0 : count < maxBucket * 0.33 ? 1 : count < maxBucket * 0.66 ? 2 : 3;
-    return blocks[level];
-  }).join("");
+  const heatBar = buckets
+    .map((count) => {
+      const level = count === 0 ? 0 : count < maxBucket * 0.33 ? 1 : count < maxBucket * 0.66 ? 2 : 3;
+      return blocks[level];
+    })
+    .join("");
 
   const label = `${theme.fg("dim", "heat:")} ${heatBar}  ${theme.fg("accent", `◉ ${activeCount} active`)}`;
 
@@ -115,7 +124,7 @@ function renderActivityHeatmap(
 function renderFinishedLine(a: AgentRecord, activity: AgentActivity | undefined, theme: Theme): string {
   const name = getDisplayName(a.type);
   const modeLabel = getPromptModeLabel(a.type);
-  const duration = formatMs(((a.completedAt ?? Date.now()) - (a.startedAt ?? 0)));
+  const duration = formatMs((a.completedAt ?? Date.now()) - (a.startedAt ?? 0));
   const activeUiStyle = getUiStyle();
 
   let icon: string;
@@ -196,7 +205,9 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
 
   const finishedLines: string[] = [];
   for (const a of finished) {
-    finishedLines.push(truncate(`${theme.fg("dim", c_tree)} ${renderFinishedLine(a, options.agentActivity.get(a.id), theme)}`));
+    finishedLines.push(
+      truncate(`${theme.fg("dim", c_tree)} ${renderFinishedLine(a, options.agentActivity.get(a.id), theme)}`),
+    );
   }
 
   // ── Compact batch rendering ──
@@ -219,7 +230,9 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
   for (const [, group] of queuedByType) {
     if (group.count >= BATCH_COMPACT_THRESHOLD) {
       queuedLines.push(
-        truncate(`${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("accent", `${group.count}× ${group.name}`)} ${theme.fg("dim", "queued")}`),
+        truncate(
+          `${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("accent", `${group.count}× ${group.name}`)} ${theme.fg("dim", "queued")}`,
+        ),
       );
     }
   }
@@ -227,7 +240,9 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     const group = queuedByType.get(a.type);
     if (!group || group.count >= BATCH_COMPACT_THRESHOLD) continue; // already rendered as compact
     queuedLines.push(
-      truncate(`${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("dim", group.name)}  ${theme.fg("muted", a.description)}`),
+      truncate(
+        `${theme.fg("dim", c_tree)} ${theme.fg("muted", "◦")} ${theme.fg("dim", group.name)}  ${theme.fg("muted", a.description)}`,
+      ),
     );
   }
 
@@ -257,22 +272,20 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     const statsText = parts.join(" · ");
 
     // Thinking level indicator
-    const thinkingLabel = a.invocation?.thinking
-      ? ` ${theme.fg("dim", `🧠${a.invocation.thinking}`)}`
-      : "";
+    const thinkingLabel = a.invocation?.thinking ? ` ${theme.fg("dim", `🧠${a.invocation.thinking}`)}` : "";
 
     const activity = bg ? describeActivity(bg.activeTools, bg.responseText) : "thinking…";
 
     runningLines.push([
-      truncate(`${theme.fg("dim", c_tree)} ${theme.fg("accent", frame)} ${theme.bold(name)}${modeTag}${thinkingLabel}  ${theme.fg("muted", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", statsText)}`),
+      truncate(
+        `${theme.fg("dim", c_tree)} ${theme.fg("accent", frame)} ${theme.bold(name)}${modeTag}${thinkingLabel}  ${theme.fg("muted", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", statsText)}`,
+      ),
       truncate(theme.fg("dim", c_bar) + theme.fg("dim", `${c_ind}${activity}`)),
     ]);
   }
 
   // Activity heatmap: shown when there are active (running/queued) agents
-  const heatLine = hasActive
-    ? renderActivityHeatmap(options.agentActivity, theme, w)
-    : undefined;
+  const heatLine = hasActive ? renderActivityHeatmap(options.agentActivity, theme, w) : undefined;
 
   const totalQueuedLines = queuedLines.length;
 
@@ -289,9 +302,11 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
   if (heatLine) {
     lines.push(truncate(heatLine));
   } else if (pageCount > 1) {
-    lines.push(truncate(
-      `${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}  ${theme.fg("dim", `[${pageIndex + 1}/${pageCount}]`)}`,
-    ));
+    lines.push(
+      truncate(
+        `${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}  ${theme.fg("dim", `[${pageIndex + 1}/${pageCount}]`)}`,
+      ),
+    );
   } else {
     lines.push(truncate(`${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}`));
   }
@@ -316,7 +331,8 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
         {
           const idx = lines[last - 1].indexOf(c_tree);
           if (idx >= 0) {
-            lines[last - 1] = lines[last - 1].substring(0, idx) + c_angle + lines[last - 1].substring(idx + c_tree.length);
+            lines[last - 1] =
+              lines[last - 1].substring(0, idx) + c_angle + lines[last - 1].substring(idx + c_tree.length);
           }
         }
         lines[last] = lines[last].replace(c_bar, " ".repeat(c_bar.length));
@@ -356,18 +372,23 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     if (hiddenRunning > 0) overflowParts.push(`${hiddenRunning} running`);
     if (hiddenFinished > 0) overflowParts.push(`${hiddenFinished} finished`);
     const overflowText = overflowParts.join(", ");
-    lines.push(truncate(`${theme.fg("dim", c_angle)} ${theme.fg("dim", `+${hiddenRunning + hiddenFinished} more (${overflowText})`)}`));
+    lines.push(
+      truncate(
+        `${theme.fg("dim", c_angle)} ${theme.fg("dim", `+${hiddenRunning + hiddenFinished} more (${overflowText})`)}`,
+      ),
+    );
   }
 
   // ── Scroll hint: show when there are multiple pages ──
   if (pageCount > 1 && lines.length < MAX_WIDGET_LINES) {
     const hasPrev = pageIndex > 0;
     const hasNext = pageIndex < pageCount - 1;
-    const hint = hasPrev && hasNext
-      ? `${theme.fg("dim", "↑↓ scroll for more")}`
-      : hasPrev
-        ? `${theme.fg("dim", "↑ scroll up")}`
-        : `${theme.fg("dim", "↓ scroll down")}`;
+    const hint =
+      hasPrev && hasNext
+        ? `${theme.fg("dim", "↑↓ scroll for more")}`
+        : hasPrev
+          ? `${theme.fg("dim", "↑ scroll up")}`
+          : `${theme.fg("dim", "↓ scroll down")}`;
     lines.push(truncate(`${theme.fg("dim", c_angle)} ${hint}`));
   }
 

@@ -24,15 +24,22 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { getPromptCompressionLevel } from "./agent-registry.js";
+import { runAdversarialValidation } from "./agent-runner-validator.js";
 import {
-  runAdversarialValidation,
-} from "./agent-runner-validator.js";
-import { type EffectiveConfig, getAgentConfig, getConfig, getMemoryToolNames, getReadOnlyMemoryToolNames, getToolNamesForType } from "./agent-types.js";
+  type EffectiveConfig,
+  getAgentConfig,
+  getConfig,
+  getMemoryToolNames,
+  getReadOnlyMemoryToolNames,
+  getToolNamesForType,
+} from "./agent-types.js";
+import { trackEvent } from "./analytics.js";
 import { buildParentContext, extractText } from "./context.js";
 import { buildCtxInjection } from "./context-mode-bridge.js";
 import { DEFAULT_AGENTS } from "./default-agents.js";
 import { detectEnv } from "./env.js";
 import { buildEnvFromContext } from "./env-context.js";
+import { captureException, setErrorTrackingUser } from "./error-tracking.js";
 import { type AgentHandoff, parseHandoff, renderHandoffForParent } from "./handoff.js";
 import { type HookRegistry } from "./hooks.js";
 import { logger } from "./logger.js";
@@ -52,20 +59,14 @@ import {
   startTurnSpan,
 } from "./telemetry-otel.js";
 import type { SubagentType, ThinkingLevel, ValidationResult } from "./types.js";
-import {
-  hasValidators,
-} from "./validators.js";
+import { hasValidators } from "./validators.js";
 
 // ============================================================================
 // Constants & Error Types
 // ============================================================================
 
 /** Names of tools registered by this extension that subagents must NOT inherit. */
-const EXCLUDED_TOOL_NAMES: ReadonlySet<string> = new Set([
-  "Agent",
-  "get_subagent_result",
-  "steer_subagent",
-]);
+const EXCLUDED_TOOL_NAMES: ReadonlySet<string> = new Set(["Agent", "get_subagent_result", "steer_subagent"]);
 
 /** Default max turns. undefined = unlimited. */
 let defaultMaxTurns: number | undefined;
@@ -173,9 +174,7 @@ const globalCircuitBreaker = new ModelCircuitBreaker();
 let _cachedRegistry: unknown = null;
 let _cachedKeys: Set<string> | null = null;
 
-function getAvailableKeys(
-  registry: { getAvailable?(): Model<Api>[] },
-): Set<string> | undefined {
+function getAvailableKeys(registry: { getAvailable?(): Model<Api>[] }): Set<string> | undefined {
   if (registry === _cachedRegistry && _cachedKeys) return _cachedKeys;
   const available = registry.getAvailable?.();
   if (!available) return undefined;
@@ -199,8 +198,7 @@ function resolveDefaultModel(
       const modelId = configModel.slice(slashIdx + 1);
 
       const availableKeys = getAvailableKeys(registry);
-      const isAvailable = (p: string, id: string) =>
-        !availableKeys || availableKeys.has(`${p}/${id}`);
+      const isAvailable = (p: string, id: string) => !availableKeys || availableKeys.has(`${p}/${id}`);
 
       const found = registry.find(provider, modelId);
       if (found && isAvailable(provider, modelId)) return found;
@@ -339,11 +337,7 @@ function forwardAbortSignal(session: AgentSession, signal?: AbortSignal): () => 
 // Deferred Context
 // ============================================================================
 
-function buildEffectivePrompt(
-  ctx: ExtensionContext,
-  prompt: string,
-  options: RunOptions,
-): string {
+function buildEffectivePrompt(ctx: ExtensionContext, prompt: string, options: RunOptions): string {
   if (!options.inheritContext) return prompt;
 
   const parentContext = buildParentContext(ctx);
@@ -377,11 +371,10 @@ export async function runAgent(
   // Check duration quota early
   const checkDurationQuota = () => {
     if (Date.now() - startTime > quotas.maxDurationMs) {
-      throw new AgentRunnerError(
-        `Agent exceeded max duration quota (${quotas.maxDurationMs}ms)`,
-        "timeout",
-        { elapsedMs: Date.now() - startTime, maxDurationMs: quotas.maxDurationMs },
-      );
+      throw new AgentRunnerError(`Agent exceeded max duration quota (${quotas.maxDurationMs}ms)`, "timeout", {
+        elapsedMs: Date.now() - startTime,
+        maxDurationMs: quotas.maxDurationMs,
+      });
     }
   };
 
@@ -392,11 +385,10 @@ export async function runAgent(
   const currentLevel = options.currentLevel ?? 0;
   const depthLimit = options.levelLimit ?? 5;
   if (currentLevel >= depthLimit) {
-    throw new AgentRunnerError(
-      `Max agent depth reached (${currentLevel}/${depthLimit})`,
-      "depth_exceeded",
-      { currentLevel, depthLimit },
-    );
+    throw new AgentRunnerError(`Max agent depth reached (${currentLevel}/${depthLimit})`, "depth_exceeded", {
+      currentLevel,
+      depthLimit,
+    });
   }
 
   // Telemetry
@@ -407,11 +399,19 @@ export async function runAgent(
     budget: options.maxTurns,
   });
 
+  // Analytics (no-op when not configured)
+  trackEvent("agent:spawned", options.agentId ?? "unknown", {
+    type,
+    parentType: options.parentConfig ? type : undefined,
+    depth: currentLevel,
+    maxTurns: options.maxTurns,
+  });
+
   const effectiveCwd = options.cwd ?? ctx.cwd;
   // CHEF-100 Phase 1 dual-read: consume host workspaceContext when
   // available (zero shell-out), fall back to legacy detectEnv on pre-RFC
   // hosts. See src/env-context.ts and docs/chef-rfcs/CHEF-100-workspace-context.md.
-  const env = buildEnvFromContext(options.pi) ?? await detectEnv(options.pi, effectiveCwd);
+  const env = buildEnvFromContext(options.pi) ?? (await detectEnv(options.pi, effectiveCwd));
   const parentSystemPrompt = ctx.getSystemPrompt();
 
   // Resolve extensions/skills
@@ -436,11 +436,21 @@ export async function runAgent(
     if (hasWriteTools) {
       const extraNames = getMemoryToolNames(existingNames);
       if (extraNames.length > 0) toolNames = [...toolNames, ...extraNames];
-      extras.memoryBlock = buildMemoryBlock(agentConfig.name, agentConfig.memory, effectiveCwd, agentConfig.maxMemoryLines);
+      extras.memoryBlock = buildMemoryBlock(
+        agentConfig.name,
+        agentConfig.memory,
+        effectiveCwd,
+        agentConfig.maxMemoryLines,
+      );
     } else {
       const extraNames = getReadOnlyMemoryToolNames(existingNames);
       if (extraNames.length > 0) toolNames = [...toolNames, ...extraNames];
-      extras.memoryBlock = buildReadOnlyMemoryBlock(agentConfig.name, agentConfig.memory, effectiveCwd, agentConfig.maxMemoryLines);
+      extras.memoryBlock = buildReadOnlyMemoryBlock(
+        agentConfig.name,
+        agentConfig.memory,
+        effectiveCwd,
+        agentConfig.maxMemoryLines,
+      );
     }
   }
 
@@ -456,12 +466,16 @@ export async function runAgent(
   } else {
     const fallback = DEFAULT_AGENTS.get("general-purpose");
     if (!fallback) {
-      throw new AgentRunnerError(
-        `No fallback config available for unknown type "${type}"`,
-        "unknown",
-      );
+      throw new AgentRunnerError(`No fallback config available for unknown type "${type}"`, "unknown");
     }
-    systemPrompt = buildAgentPrompt({ ...fallback, name: type }, effectiveCwd, env, parentSystemPrompt, extras, compressionLevel);
+    systemPrompt = buildAgentPrompt(
+      { ...fallback, name: type },
+      effectiveCwd,
+      env,
+      parentSystemPrompt,
+      extras,
+      compressionLevel,
+    );
   }
 
   // Context-mode injection
@@ -489,15 +503,10 @@ export async function runAgent(
   await loader.reload();
 
   // Resolve model with circuit breaker
-  const model = options.model ?? resolveDefaultModel(
-    ctx.model, ctx.modelRegistry, agentConfig?.model,
-  );
+  const model = options.model ?? resolveDefaultModel(ctx.model, ctx.modelRegistry, agentConfig?.model);
 
   if (!model) {
-    throw new AgentRunnerError(
-      "No model available for agent execution",
-      "model_unavailable",
-    );
+    throw new AgentRunnerError("No model available for agent execution", "model_unavailable");
   }
 
   const thinkingLevel = options.thinkingLevel ?? agentConfig?.thinking;
@@ -515,6 +524,13 @@ export async function runAgent(
   if (thinkingLevel) {
     sessionOpts.thinkingLevel = thinkingLevel;
   }
+
+  // Set error tracking user context so crashes are attributed to this agent
+  setErrorTrackingUser({
+    id: options.agentId ?? "unknown",
+    agentType: type,
+    piVersion: process.env.npm_package_version,
+  });
 
   // Hook: subagent:start
   if (options.hooks) {
@@ -534,9 +550,7 @@ export async function runAgent(
   const { session } = await globalCircuitBreaker.call(() => createAgentSession(sessionOpts));
 
   const baseSessionName = agentConfig?.name ?? type;
-  session.setSessionName(
-    options.agentId ? `${baseSessionName}#${options.agentId.slice(0, 8)}` : baseSessionName,
-  );
+  session.setSessionName(options.agentId ? `${baseSessionName}#${options.agentId.slice(0, 8)}` : baseSessionName);
 
   // Swarm integration: register heartbeat
   let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
@@ -563,9 +577,7 @@ export async function runAgent(
   }
 
   // Tool filtering
-  const disallowedSet = agentConfig?.disallowedTools
-    ? new Set(agentConfig.disallowedTools)
-    : undefined;
+  const disallowedSet = agentConfig?.disallowedTools ? new Set(agentConfig.disallowedTools) : undefined;
 
   if (extensions !== false) {
     const builtinToolNameSet = new Set(toolNames);
@@ -632,13 +644,14 @@ export async function runAgent(
 
     if (event.type === "turn_end") {
       // End previous turn span
-      if (currentTurnSpan) { endTurnSpan(currentTurnSpan); currentTurnSpan = undefined; }
+      if (currentTurnSpan) {
+        endTurnSpan(currentTurnSpan);
+        currentTurnSpan = undefined;
+      }
 
-      options.hooks
-        ?.dispatch("turn:end", options.agentId ?? "unknown")
-        .catch((err) => {
-          logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
-        });
+      options.hooks?.dispatch("turn:end", options.agentId ?? "unknown").catch((err) => {
+        logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
+      });
       turnCount++;
       options.onTurnEnd?.(turnCount);
       if (maxTurns != null) {
@@ -654,15 +667,16 @@ export async function runAgent(
 
     if (event.type === "turn_start") {
       // End any prior turn span (safety)
-      if (currentTurnSpan) { endTurnSpan(currentTurnSpan); currentTurnSpan = undefined; }
+      if (currentTurnSpan) {
+        endTurnSpan(currentTurnSpan);
+        currentTurnSpan = undefined;
+      }
       // Start new turn span
       currentTurnSpan = startTurnSpan(options.agentId ?? "unknown", turnCount + 1, agentCtx);
 
-      options.hooks
-        ?.dispatch("turn:start", options.agentId ?? "unknown")
-        .catch((err) => {
-          logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
-        });
+      options.hooks?.dispatch("turn:start", options.agentId ?? "unknown").catch((err) => {
+        logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
+      });
     }
 
     if (event.type === "message_start") {
@@ -685,7 +699,11 @@ export async function runAgent(
       activeToolSpans.set(toolSpanKey, toolSpan);
 
       if (toolCallCount > quotas.maxToolCalls) {
-        logger.warn(`Tool call quota exceeded`, { agentId: options.agentId, toolCallCount, maxToolCalls: quotas.maxToolCalls });
+        logger.warn(`Tool call quota exceeded`, {
+          agentId: options.agentId,
+          toolCallCount,
+          maxToolCalls: quotas.maxToolCalls,
+        });
         session.abort();
         aborted = true;
         return;
@@ -724,12 +742,7 @@ export async function runAgent(
     if (event.type === "compaction_end" && !event.aborted) {
       const tokensBefore = event.result?.tokensBefore ?? 0;
       options.onCompaction?.({ reason: event.reason, tokensBefore });
-      const compactionSpan = startCompactionSpan(
-        options.agentId ?? "unknown",
-        event.reason,
-        tokensBefore,
-        agentCtx,
-      );
+      const compactionSpan = startCompactionSpan(options.agentId ?? "unknown", event.reason, tokensBefore, agentCtx);
       endCompactionSpan(compactionSpan);
 
       options.hooks
@@ -780,6 +793,8 @@ export async function runAgent(
       error: err instanceof Error ? err.message : String(err),
     });
 
+    // Report to Sentry (no-op when not configured) for production error tracking
+    captureException(err, { agentType: type });
     options.hooks
       ?.dispatch("subagent:error", options.agentId ?? "unknown", {
         error: err instanceof Error ? err.message : String(err),
@@ -793,8 +808,13 @@ export async function runAgent(
     collector.unsubscribe();
     cleanupAbort();
     // Clean up any dangling turn/tool spans
-    if (currentTurnSpan) { endTurnSpan(currentTurnSpan); currentTurnSpan = undefined; }
-    for (const ts of activeToolSpans.values()) { endToolSpan(ts); }
+    if (currentTurnSpan) {
+      endTurnSpan(currentTurnSpan);
+      currentTurnSpan = undefined;
+    }
+    for (const ts of activeToolSpans.values()) {
+      endToolSpan(ts);
+    }
     activeToolSpans.clear();
     if (heartbeatInterval) clearInterval(heartbeatInterval);
     if (messagePollInterval) clearInterval(messagePollInterval);
@@ -849,6 +869,17 @@ export async function runAgent(
     validatorResults: validationResults?.map((r) => ({ passed: r.passed, summary: r.summary })),
   });
 
+  // Analytics (no-op when not configured)
+  trackEvent("agent:completed", options.agentId ?? "unknown", {
+    type,
+    duration,
+    aborted,
+    steered: softLimitReached,
+    validated,
+    turnCount,
+    toolCallCount,
+  });
+
   // End OpenTelemetry agent span
   const finalStatus = aborted ? "aborted" : softLimitReached ? "steered" : "completed";
   endAgentSpan(agentSpan, {
@@ -894,20 +925,23 @@ export async function resumeAgent(
   const collector = collectResponseText(session);
   const cleanupAbort = forwardAbortSignal(session, options.signal);
 
-  const unsubEvents = (options.onToolActivity || options.onAssistantUsage || options.onCompaction)
-    ? session.subscribe((event: AgentSessionEvent) => {
-        if (event.type === "tool_execution_start") options.onToolActivity?.({ type: "start", toolName: event.toolName });
-        if (event.type === "tool_execution_end") options.onToolActivity?.({ type: "end", toolName: event.toolName });
-        if (event.type === "message_end" && event.message.role === "assistant") {
-          const msg = event.message as { usage?: { input?: number; output?: number; cacheWrite?: number } };
-          const u = msg.usage;
-          if (u) options.onAssistantUsage?.({ input: u.input ?? 0, output: u.output ?? 0, cacheWrite: u.cacheWrite ?? 0 });
-        }
-        if (event.type === "compaction_end" && !event.aborted) {
-          options.onCompaction?.({ reason: event.reason, tokensBefore: event.result?.tokensBefore ?? 0 });
-        }
-      })
-    : () => {};
+  const unsubEvents =
+    options.onToolActivity || options.onAssistantUsage || options.onCompaction
+      ? session.subscribe((event: AgentSessionEvent) => {
+          if (event.type === "tool_execution_start")
+            options.onToolActivity?.({ type: "start", toolName: event.toolName });
+          if (event.type === "tool_execution_end") options.onToolActivity?.({ type: "end", toolName: event.toolName });
+          if (event.type === "message_end" && event.message.role === "assistant") {
+            const msg = event.message as { usage?: { input?: number; output?: number; cacheWrite?: number } };
+            const u = msg.usage;
+            if (u)
+              options.onAssistantUsage?.({ input: u.input ?? 0, output: u.output ?? 0, cacheWrite: u.cacheWrite ?? 0 });
+          }
+          if (event.type === "compaction_end" && !event.aborted) {
+            options.onCompaction?.({ reason: event.reason, tokensBefore: event.result?.tokensBefore ?? 0 });
+          }
+        })
+      : () => {};
 
   let effectivePrompt = prompt;
   if (options.inheritContext && options.ctx) {

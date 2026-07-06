@@ -150,9 +150,7 @@ describe("E2E: RPC audit logging & rate limiting", () => {
       await client.spawn({ type: "Explore", prompt: "ok 2" });
 
       // Third spawn should be rate-limited
-      await expect(
-        client.spawn({ type: "Explore", prompt: "blocked" }),
-      ).rejects.toThrow(/Rate limit/);
+      await expect(client.spawn({ type: "Explore", prompt: "blocked" })).rejects.toThrow(/Rate limit/);
 
       const log = getAuditLog();
       expect(log).toHaveLength(3);
@@ -185,9 +183,7 @@ describe("E2E: RPC audit logging & rate limiting", () => {
       const client = createSubagentsRpcClient(events);
       await client.spawn({ type: "Explore", prompt: "ok" }); // first spawn succeeds
 
-      await expect(
-        client.spawn({ type: "Explore", prompt: "blocked" }),
-      ).rejects.toThrow(/Rate limit/);
+      await expect(client.spawn({ type: "Explore", prompt: "blocked" })).rejects.toThrow(/Rate limit/);
 
       const log = getAuditLog();
       expect(log[0].outcome).toBe("success");
@@ -237,9 +233,7 @@ describe("E2E: RPC audit logging & rate limiting", () => {
       });
 
       const client = createSubagentsRpcClient(events);
-      await expect(
-        client.spawn({ type: "Explore", prompt: "nope" }),
-      ).rejects.toThrow(/Unauthorized/);
+      await expect(client.spawn({ type: "Explore", prompt: "nope" })).rejects.toThrow(/Unauthorized/);
 
       const log = getAuditLog();
       expect(log).toHaveLength(1);

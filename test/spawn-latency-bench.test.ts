@@ -17,19 +17,12 @@ import type { AgentConfig, EnvInfo } from "../src/types.js";
 
 // ── Benchmark logging ──────────────────────────────────────────────────────
 
-function benchmarkLog(
-  label: string,
-  measured: number,
-  threshold: number,
-  unit = "ms",
-): void {
+function benchmarkLog(label: string, measured: number, threshold: number, unit = "ms"): void {
   const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
   let status: string;
   if (measured > threshold) {
     status = "FAIL";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`,
-    );
+    console.warn(`\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`);
   } else if (pct > 80) {
     status = "WARN";
     console.warn(
@@ -38,15 +31,9 @@ function benchmarkLog(
   } else {
     status = "OK";
   }
-  const measuredStr = unit === "\u00b5s"
-    ? `${(measured * 1000).toFixed(1)}\u00b5s`
-    : `${measured.toFixed(3)}ms`;
-  const thresholdStr = unit === "\u00b5s"
-    ? `${(threshold * 1000).toFixed(1)}\u00b5s`
-    : `${threshold.toFixed(3)}ms`;
-  process.stdout.write(
-    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
-  );
+  const measuredStr = unit === "\u00b5s" ? `${(measured * 1000).toFixed(1)}\u00b5s` : `${measured.toFixed(3)}ms`;
+  const thresholdStr = unit === "\u00b5s" ? `${(threshold * 1000).toFixed(1)}\u00b5s` : `${threshold.toFixed(3)}ms`;
+  process.stdout.write(`[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`);
 }
 
 // ── Conversation helpers ───────────────────────────────────────────────────
@@ -61,10 +48,7 @@ interface BranchEntry {
  * Build N conversation entries with alternating user/assistant messages.
  * Each entry has ~100 chars of text to simulate realistic context size.
  */
-function buildConversation(
-  count: number,
-  messageLen = 100,
-): BranchEntry[] {
+function buildConversation(count: number, messageLen = 100): BranchEntry[] {
   const entries: BranchEntry[] = [];
   for (let i = 0; i < count; i++) {
     const text = "x".repeat(messageLen);
@@ -90,10 +74,7 @@ function buildConversation(
  * Build a conversation with compaction summaries every 10 entries,
  * simulating real agent sessions that have been compacted.
  */
-function buildCompactedConversation(
-  messageCount: number,
-  compactInterval = 10,
-): BranchEntry[] {
+function buildCompactedConversation(messageCount: number, compactInterval = 10): BranchEntry[] {
   const entries: BranchEntry[] = [];
   for (let i = 0; i < messageCount; i++) {
     const text = "Detailed analysis and implementation of feature X with multiple steps completed successfully.";
@@ -277,7 +258,8 @@ describe("Benchmark: buildAgentPrompt — system prompt construction", () => {
     const { buildAgentPrompt } = await import("../src/prompts.js");
     const config = buildAgentConfig({ promptMode: "append" });
     const env = buildEnvInfo();
-    const parentPrompt = "You are a senior developer. You have extensive experience with TypeScript, React, and Node.js. Always write clean, well-documented code.";
+    const parentPrompt =
+      "You are a senior developer. You have extensive experience with TypeScript, React, and Node.js. Always write clean, well-documented code.";
 
     const start = performance.now();
     for (let i = 0; i < 1000; i++) {
@@ -294,7 +276,10 @@ describe("Benchmark: buildAgentPrompt — system prompt construction", () => {
     const { buildAgentPrompt } = await import("../src/prompts.js");
     const config = buildAgentConfig({ promptMode: "append" });
     const env = buildEnvInfo();
-    const memoryBlock = Array.from({ length: 50 }, (_, i) => `Memory line ${i + 1}: some relevant context from previous sessions.`).join("\n");
+    const memoryBlock = Array.from(
+      { length: 50 },
+      (_, i) => `Memory line ${i + 1}: some relevant context from previous sessions.`,
+    ).join("\n");
 
     const start = performance.now();
     for (let i = 0; i < 500; i++) {
@@ -314,8 +299,14 @@ describe("Benchmark: buildAgentPrompt — system prompt construction", () => {
     const config = buildAgentConfig({ handoff: true });
     const env = buildEnvInfo();
     const skills = [
-      { name: "typescript-patterns", content: "TypeScript idioms: use strict mode, prefer interfaces over types, use generics sparingly." },
-      { name: "testing", content: "Write unit tests for all business logic. Use vitest for testing. Mock external dependencies." },
+      {
+        name: "typescript-patterns",
+        content: "TypeScript idioms: use strict mode, prefer interfaces over types, use generics sparingly.",
+      },
+      {
+        name: "testing",
+        content: "Write unit tests for all business logic. Use vitest for testing. Mock external dependencies.",
+      },
     ];
 
     const start = performance.now();
@@ -417,7 +408,11 @@ describe("Benchmark: preloadSkills — skill loading from disk", () => {
 
   afterAll(() => {
     for (const dir of tempDirs) {
-      try { rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
     }
   });
 
@@ -484,7 +479,10 @@ describe("Benchmark: preloadSkills — skill loading from disk", () => {
     for (let i = 0; i < 5; i++) {
       const name = `bench-skill-found-${i}`;
       names.push(name);
-      writeFileSync(join(skillsDir, `${name}.md`), `# Skill ${i}\n\nThis is content for benchmark skill ${i}.\nIt has realistic content that an agent skill would have.`);
+      writeFileSync(
+        join(skillsDir, `${name}.md`),
+        `# Skill ${i}\n\nThis is content for benchmark skill ${i}.\nIt has realistic content that an agent skill would have.`,
+      );
     }
 
     const start = performance.now();
@@ -509,7 +507,10 @@ describe("Benchmark: preloadSkills — skill loading from disk", () => {
     for (let i = 0; i < 10; i++) {
       const name = `bench-skill-found-${i}`;
       names.push(name);
-      writeFileSync(join(skillsDir, `${name}.md`), `# Skill ${i}\n\nThis is content for benchmark skill ${i}.\nIt has realistic content that an agent skill would have.\nWith multiple lines and some code examples.`);
+      writeFileSync(
+        join(skillsDir, `${name}.md`),
+        `# Skill ${i}\n\nThis is content for benchmark skill ${i}.\nIt has realistic content that an agent skill would have.\nWith multiple lines and some code examples.`,
+      );
     }
 
     const start = performance.now();
@@ -538,10 +539,7 @@ describe("Benchmark: preloadSkills — skill loading from disk", () => {
       mkdirSync(join(skillsDir, `distractor-${d}`), { recursive: true });
       // Add a nested file inside each distractor to force deeper BFS traversal
       mkdirSync(join(skillsDir, `distractor-${d}`, "nested", "deep"), { recursive: true });
-      writeFileSync(
-        join(skillsDir, `distractor-${d}`, "nested", "deep", "some-file.txt"),
-        "irrelevant content",
-      );
+      writeFileSync(join(skillsDir, `distractor-${d}`, "nested", "deep", "some-file.txt"), "irrelevant content");
     }
 
     // Create 5 skill subdirectories, each with SKILL.md

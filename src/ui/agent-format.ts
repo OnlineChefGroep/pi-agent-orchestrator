@@ -21,12 +21,7 @@ export function formatTokens(count: number): string {
   return `${count} token`;
 }
 
-export function formatSessionTokens(
-  tokens: number,
-  percent: number | null,
-  theme: Theme,
-  compactions = 0,
-): string {
+export function formatSessionTokens(tokens: number, percent: number | null, theme: Theme, compactions = 0): string {
   const tokenStr = formatTokens(tokens);
   const annot: string[] = [];
   if (percent !== null) {
@@ -62,9 +57,7 @@ export function getPromptModeLabel(type: SubagentType): string | undefined {
   return config.promptMode === "append" ? "twin" : undefined;
 }
 
-export function buildInvocationTags(
-  invocation: AgentInvocation | undefined,
-): { modelName?: string; tags: string[] } {
+export function buildInvocationTags(invocation: AgentInvocation | undefined): { modelName?: string; tags: string[] } {
   const tags: string[] = [];
   if (!invocation) return { tags };
   if (invocation.thinking) tags.push(`thinking: ${invocation.thinking}`);
@@ -77,7 +70,11 @@ export function buildInvocationTags(
 }
 
 function truncateLine(text: string, len = 60): string {
-  const line = text.split("\n").find(l => l.trim())?.trim() ?? "";
+  const line =
+    text
+      .split("\n")
+      .find((l) => l.trim())
+      ?.trim() ?? "";
   if (line.length <= len) return line;
   return `${line.slice(0, len)}…`;
 }

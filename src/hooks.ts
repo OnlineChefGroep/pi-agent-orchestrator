@@ -55,9 +55,7 @@ const PRIORITY_MAP: Record<HookPriority, number> = {
 
 /** A hook handler function with metadata. */
 export interface HookHandler {
-  fn: (
-    payload: HookPayload,
-  ) => Promise<HookResponse | undefined> | HookResponse | undefined;
+  fn: (payload: HookPayload) => Promise<HookResponse | undefined> | HookResponse | undefined;
   priority: number;
   id: string;
   /** If true, handler errors are fatal (default: false). */
@@ -116,7 +114,11 @@ async function executeHandler(
       // Circuit breaker check
       if (handler.circuitBreakerThreshold && metrics.consecutiveErrors >= handler.circuitBreakerThreshold) {
         metrics.disabled = true;
-        logger.warn(`Hook circuit breaker opened`, { handlerId: handler.id, event: payload.event, threshold: handler.circuitBreakerThreshold });
+        logger.warn(`Hook circuit breaker opened`, {
+          handlerId: handler.id,
+          event: payload.event,
+          threshold: handler.circuitBreakerThreshold,
+        });
       }
 
       if (handler.fatal) {
@@ -152,7 +154,8 @@ export class HookRegistry {
   private handlers = new Map<HookEvent, HookHandler[]>();
   private metrics = new Map<string, HookMetrics>();
   private handlerEventMap = new Map<string, HookEvent>();
-  private globalMiddleware: Array<(payload: HookPayload, next: () => Promise<HookResponse>) => Promise<HookResponse>> = [];
+  private globalMiddleware: Array<(payload: HookPayload, next: () => Promise<HookResponse>) => Promise<HookResponse>> =
+    [];
 
   /** Register a handler for a specific event with priority. */
   register(
@@ -167,9 +170,8 @@ export class HookRegistry {
     },
   ): string {
     const id = options?.id || `${event}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
-    const priority = typeof options?.priority === "number"
-      ? options.priority
-      : PRIORITY_MAP[options?.priority ?? "normal"];
+    const priority =
+      typeof options?.priority === "number" ? options.priority : PRIORITY_MAP[options?.priority ?? "normal"];
 
     const hookHandler: HookHandler = {
       fn: handler,
@@ -202,10 +204,13 @@ export class HookRegistry {
   }
 
   /** Register multiple handlers at once. */
-  registerAll(handlers: Record<string, HookHandler["fn"]>, options?: {
-    priority?: HookPriority | number;
-    circuitBreakerThreshold?: number;
-  }): string[] {
+  registerAll(
+    handlers: Record<string, HookHandler["fn"]>,
+    options?: {
+      priority?: HookPriority | number;
+      circuitBreakerThreshold?: number;
+    },
+  ): string[] {
     const ids: string[] = [];
     for (const [event, handler] of Object.entries(handlers)) {
       ids.push(this.register(event as HookEvent, handler, options));
@@ -295,11 +300,7 @@ export class HookRegistry {
     return this.runHandlers(list, payload, timeoutMs);
   }
 
-  private async runHandlers(
-    list: HookHandler[],
-    payload: HookPayload,
-    timeoutMs: number,
-  ): Promise<HookResponse> {
+  private async runHandlers(list: HookHandler[], payload: HookPayload, timeoutMs: number): Promise<HookResponse> {
     let hasModify = false;
 
     for (const handler of list) {

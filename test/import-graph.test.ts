@@ -42,21 +42,19 @@ import { platform } from "node:os";
 import { beforeAll, describe, expect, it } from "vitest";
 
 function runMadgeCycles(): readonly (readonly string[])[] {
-  const stdout = execFileSync(
-    "npx",
-    ["--yes", "madge", "--circular", "--extensions", "ts", "--json", "src/"],
-    { encoding: "utf8", shell: platform() === "win32" },
-  );
+  const stdout = execFileSync("npx", ["--yes", "madge", "--circular", "--extensions", "ts", "--json", "src/"], {
+    encoding: "utf8",
+    shell: platform() === "win32",
+  });
   return JSON.parse(stdout) as readonly (readonly string[])[];
 }
 
 /** Deps map keyed by BARE filenames within src/. One call: `--json` only. */
 function runMadgeDeps(): Readonly<Record<string, readonly string[]>> {
-  const stdout = execFileSync(
-    "npx",
-    ["--yes", "madge", "--extensions", "ts", "--json", "src/"],
-    { encoding: "utf8", shell: platform() === "win32" },
-  );
+  const stdout = execFileSync("npx", ["--yes", "madge", "--extensions", "ts", "--json", "src/"], {
+    encoding: "utf8",
+    shell: platform() === "win32",
+  });
   return JSON.parse(stdout) as Readonly<Record<string, readonly string[]>>;
 }
 
@@ -72,73 +70,56 @@ describe("src/ import graph", () => {
   //
   // 60s hook timeout: npx cold-start of `madge` plus two madge invocations
   // (each parses the full src/ tree) can take 15-30s on a fresh CI runner.
-  beforeAll(
-    () => {
-      cycles = runMadgeCycles();
-      deps = runMadgeDeps();
-    },
-    60_000,
-  );
+  beforeAll(() => {
+    cycles = runMadgeCycles();
+    deps = runMadgeDeps();
+  }, 60_000);
 
-  it(
-    "has no circular imports (regression guard for agent-types ↔ context-mode-bridge cycle)",
-    () => {
-      if (cycles.length > 0) {
-        const formatted = cycles
-          .map((cycle) => `  ${cycle.join(" → ")} → ${cycle[0] ?? ""}`)
-          .join("\n");
-        throw new Error(
-          `Circular imports detected in src/:\n${formatted}\n` +
-            `Fix: extract the shared dependency into a third, dependency-free module ` +
-            `(see src/ctx-tool-names.ts for the previous fix).`,
-        );
-      }
-      expect(cycles).toEqual([]);
-    },
-    60_000,
-  );
+  it("has no circular imports (regression guard for agent-types ↔ context-mode-bridge cycle)", () => {
+    if (cycles.length > 0) {
+      const formatted = cycles.map((cycle) => `  ${cycle.join(" → ")} → ${cycle[0] ?? ""}`).join("\n");
+      throw new Error(
+        `Circular imports detected in src/:\n${formatted}\n` +
+          `Fix: extract the shared dependency into a third, dependency-free module ` +
+          `(see src/ctx-tool-names.ts for the previous fix).`,
+      );
+    }
+    expect(cycles).toEqual([]);
+  }, 60_000);
 
-  it(
-    "agent-types.ts no longer imports from context-mode-bridge.ts in the wrong direction — the historical cycle edge is closed",
-    () => {
-      // The two historical cycle edges:
-      //   1. agent-types.ts → context-mode-bridge.ts (still allowed — it's the
-      //      one-way runtime check for `isContextModeAvailable`)
-      //   2. context-mode-bridge.ts → agent-types.ts (REMOVED by extracting
-      //      CTX_TOOL_NAMES to src/ctx-tool-names.ts)
-      //
-      // Edge #2 must stay gone forever. Edge #1 is fine and expected, but we
-      // also assert it is still present so future cleanup that accidentally
-      // removes the runtime check surfaces too.
-      //
-      // LOOKUP-KEY SHAPE: madge's --json (no --circular) emits keys as BARE
-      // filenames within the root you pass, so passing `src/` yields
-      // `"context-mode-bridge.ts"` — NOT `"src/context-mode-bridge.ts"`.
-      // Values are also bare filenames.
+  it("agent-types.ts no longer imports from context-mode-bridge.ts in the wrong direction — the historical cycle edge is closed", () => {
+    // The two historical cycle edges:
+    //   1. agent-types.ts → context-mode-bridge.ts (still allowed — it's the
+    //      one-way runtime check for `isContextModeAvailable`)
+    //   2. context-mode-bridge.ts → agent-types.ts (REMOVED by extracting
+    //      CTX_TOOL_NAMES to src/ctx-tool-names.ts)
+    //
+    // Edge #2 must stay gone forever. Edge #1 is fine and expected, but we
+    // also assert it is still present so future cleanup that accidentally
+    // removes the runtime check surfaces too.
+    //
+    // LOOKUP-KEY SHAPE: madge's --json (no --circular) emits keys as BARE
+    // filenames within the root you pass, so passing `src/` yields
+    // `"context-mode-bridge.ts"` — NOT `"src/context-mode-bridge.ts"`.
+    // Values are also bare filenames.
 
-      const bridgeDeps = deps["context-mode-bridge.ts"] ?? [];
-      const agentTypesDeps = deps["agent-types.ts"] ?? [];
+    const bridgeDeps = deps["context-mode-bridge.ts"] ?? [];
+    const agentTypesDeps = deps["agent-types.ts"] ?? [];
 
-      expect(bridgeDeps.includes("agent-types.ts")).toBe(false);
-      expect(agentTypesDeps.includes("context-mode-bridge.ts")).toBe(true);
-    },
-    60_000,
-  );
+    expect(bridgeDeps.includes("agent-types.ts")).toBe(false);
+    expect(agentTypesDeps.includes("context-mode-bridge.ts")).toBe(true);
+  }, 60_000);
 
-  it(
-    "ctx-tool-names.ts exists and is dependency-free (canonical leaf for CTX_TOOL_NAMES)",
-    () => {
-      // ctx-tool-names.ts is the canonical leaf for CTX_TOOL_NAMES — it must
-      // stay runtime-isolated so the agent-types ↔ context-mode-bridge cycle
-      // never reappears. Asserting the deps array is empty is sufficient: the
-      // leaf currently has ZERO imports, so any non-empty result would mean
-      // someone added one (local OR external — madge emits both). The leaf
-      // genuinely cannot import from agent-types.ts or context-mode-bridge.ts
-      // without re-introducing the cycle — that's the property the empty-array
-      // assertion actually guards against.
-      const ctxToolNameDeps = deps["ctx-tool-names.ts"] ?? [];
-      expect(ctxToolNameDeps).toEqual([]);
-    },
-    60_000,
-  );
+  it("ctx-tool-names.ts exists and is dependency-free (canonical leaf for CTX_TOOL_NAMES)", () => {
+    // ctx-tool-names.ts is the canonical leaf for CTX_TOOL_NAMES — it must
+    // stay runtime-isolated so the agent-types ↔ context-mode-bridge cycle
+    // never reappears. Asserting the deps array is empty is sufficient: the
+    // leaf currently has ZERO imports, so any non-empty result would mean
+    // someone added one (local OR external — madge emits both). The leaf
+    // genuinely cannot import from agent-types.ts or context-mode-bridge.ts
+    // without re-introducing the cycle — that's the property the empty-array
+    // assertion actually guards against.
+    const ctxToolNameDeps = deps["ctx-tool-names.ts"] ?? [];
+    expect(ctxToolNameDeps).toEqual([]);
+  }, 60_000);
 });

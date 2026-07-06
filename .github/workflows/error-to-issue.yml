@@ -1,0 +1,85 @@
+name: Error to Issue Pipeline
+
+# Creates GitHub issues from Sentry error webhooks.
+# When a Sentry error spike is detected, this workflow creates an issue
+# linking back to the Sentry event for tracking and resolution.
+#
+# Setup:
+#   1. In Sentry, go to Settings → Developer Settings → New Internal Integration
+#   2. Set Webhook URL to: https://api.github.com/repos/{owner}/{repo}/dispatches
+#   3. Set the secret to your SENTRY_WEBHOOK_SECRET
+#   4. This workflow is triggered by the Sentry webhook payload
+#
+# Alternatively, configure a Sentry-GitHub integration in Sentry's
+# organization settings → Integrations → GitHub to auto-create issues.
+# This workflow handles the case where that integration isn't configured.
+
+on:
+  repository_dispatch:
+    types: [sentry-error]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  create-issue:
+    name: Create Issue from Sentry Error
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Parse Sentry webhook payload
+        id: parse
+        run: |
+          # Extract key fields from the Sentry webhook payload
+          EVENT_ID=$(echo '${{ toJson(github.event.client_payload) }}' | jq -r '.event.id // "unknown"')
+          TITLE=$(echo '${{ toJson(github.event.client_payload) }}' | jq -r '.event.title // "Unknown Sentry Error"')
+          ERROR_TYPE=$(echo '${{ toJson(github.event.client_payload) }}' | jq -r '.event.entries[0].data.type // "Unknown"')
+          ERROR_VALUE=$(echo '${{ toJson(github.event.client_payload) }}' | jq -r '.event.entries[0].data.value // "No details"')
+          SENTRY_URL=$(echo '${{ toJson(github.event.client_payload) }}' | jq -r '.event.url // ""')
+          RELEASE=$(echo '${{ toJson(github.event.client_payload) }}' | jq -r '.event.release // ""')
+          ENVIRONMENT=$(echo '${{ toJson(github.event.client_payload) }}' | jq -r '.event.environment // ""')
+
+          echo "event_id=${EVENT_ID}" >> $GITHUB_OUTPUT
+          echo "title=[Sentry] ${TITLE}" >> $GITHUB_OUTPUT
+          echo "type=${ERROR_TYPE}" >> $GITHUB_OUTPUT
+          echo "value=${ERROR_VALUE}" >> $GITHUB_OUTPUT
+          echo "sentrurl=${SENTRY_URL}" >> $GITHUB_OUTPUT
+
+          BODY="## Sentry Error Report\n\n**Event:** ${TITLE}\n**Environment:** ${ENVIRONMENT}\n**Release:** ${RELEASE}\n"
+          if [ -n "${SENTRY_URL}" ]; then
+            BODY="${BODY}\n**Sentry Link:** [View in Sentry](${SENTRY_URL})"
+          fi
+          BODY="${BODY}\n\n**Error:** \`${ERROR_TYPE}: ${ERROR_VALUE}\`"
+          BODY="${BODY}\n\n---\n_Automatically created from Sentry error webhook (ID: ${EVENT_ID})_"
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "${BODY}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Check for duplicate issue
+        id: dedup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Search for existing issues with the same Sentry event ID
+          EXISTING=$(gh issue list \
+            --repo ${{ github.repository }} \
+            --search "${{ steps.parse.outputs.event_id }}" \
+            --state all \
+            --json number \
+            --jq 'length')
+          if [ "$EXISTING" -gt 0 ]; then
+            echo "Duplicate issue found for Sentry event ${{ steps.parse.outputs.event_id }}, skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub issue
+        if: steps.dedup.outputs.skip != 'true'
+        uses: dacbd/create-issue-action@v2
+        with:
+          token: ${{ github.token }}
+          title: ${{ steps.parse.outputs.title }}
+          body: ${{ steps.parse.outputs.body }}
+          labels: sentry,bug

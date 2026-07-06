@@ -18,9 +18,9 @@ import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-
  */
 export function encodeCwd(cwd: string): string {
   return cwd
-    .replace(/[/\\]/g, "-")        // both separators → dash
-    .replace(/^[A-Za-z]:-/, "")    // strip Windows drive prefix ("C:-")
-    .replace(/^-+/, "");           // strip leading dashes (POSIX root, UNC)
+    .replace(/[/\\]/g, "-") // both separators → dash
+    .replace(/^[A-Za-z]:-/, "") // strip Windows drive prefix ("C:-")
+    .replace(/^-+/, ""); // strip leading dashes (POSIX root, UNC)
 }
 
 /** Create the output file path, ensuring the directory exists.
@@ -58,12 +58,7 @@ export function writeInitialEntry(path: string, agentId: string, prompt: string,
  * Subscribe to session events and flush new messages to the output file on each turn_end.
  * Returns a cleanup function that does a final flush and unsubscribes.
  */
-export function streamToOutputFile(
-  session: AgentSession,
-  path: string,
-  agentId: string,
-  cwd: string,
-): () => void {
+export function streamToOutputFile(session: AgentSession, path: string, agentId: string, cwd: string): () => void {
   let writtenCount = 1; // initial user prompt already written
 
   const flush = () => {
@@ -80,7 +75,9 @@ export function streamToOutputFile(
       };
       try {
         appendFileSync(path, `${JSON.stringify(entry)}\n`, "utf-8");
-      } catch { /* ignore write errors */ }
+      } catch {
+        /* ignore write errors */
+      }
       writtenCount++;
     }
   };

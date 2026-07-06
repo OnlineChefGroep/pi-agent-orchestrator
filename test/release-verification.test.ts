@@ -62,18 +62,9 @@ describe("license verification", () => {
   });
 
   it("no proprietary markings in source files", () => {
-    const proprietaryTerms = [
-      "All Rights Reserved",
-      "Proprietary",
-      "Confidential",
-    ];
+    const proprietaryTerms = ["All Rights Reserved", "Proprietary", "Confidential"];
     // Spot-check a few key source files
-    const sourceFiles = [
-      "src/index.ts",
-      "src/types.ts",
-      "src/settings.ts",
-      "src/agent-runner.ts",
-    ];
+    const sourceFiles = ["src/index.ts", "src/types.ts", "src/settings.ts", "src/agent-runner.ts"];
     for (const file of sourceFiles) {
       if (!fileExists(file)) continue;
       const content = readRoot(file);

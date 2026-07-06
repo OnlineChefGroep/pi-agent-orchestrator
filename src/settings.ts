@@ -204,7 +204,12 @@ function validateBool(raw: Record<string, unknown>, key: string, fallback: boole
   return fallback;
 }
 
-function validateEnum<T extends string>(raw: Record<string, unknown>, key: string, valid: readonly T[], fallback: T): T {
+function validateEnum<T extends string>(
+  raw: Record<string, unknown>,
+  key: string,
+  valid: readonly T[],
+  fallback: T,
+): T {
   const val = raw[key];
   if (typeof val === "string" && (valid as readonly string[]).includes(val)) return val as T;
   return fallback;
@@ -243,7 +248,14 @@ function sanitize(raw: unknown): SubagentsSettings {
     if (v) (out as Record<string, unknown>)[key] = v;
   }
 
-  for (const key of ["schedulingEnabled", "tracingEnabled", "showActivityStream", "showTokenUsage", "showTurnProgress", "debugCapture"] as const) {
+  for (const key of [
+    "schedulingEnabled",
+    "tracingEnabled",
+    "showActivityStream",
+    "showTokenUsage",
+    "showTurnProgress",
+    "debugCapture",
+  ] as const) {
     if (typeof r[key] === "boolean") {
       out[key] = validateBool(r, key, false);
     }

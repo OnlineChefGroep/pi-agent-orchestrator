@@ -46,7 +46,12 @@ vi.mock("../src/custom-agents.js", () => ({ customAgents: new Map() }));
 vi.mock("../src/output-file.js", () => ({}));
 
 import type { AgentManager } from "../src/agent-manager.js";
-import { getDefaultJoinMode, getOrchestrationMode, setDefaultJoinMode, setOrchestrationMode } from "../src/agent-registry.js";
+import {
+  getDefaultJoinMode,
+  getOrchestrationMode,
+  setDefaultJoinMode,
+  setOrchestrationMode,
+} from "../src/agent-registry.js";
 import type { SettingsGetters, SettingsSetters } from "../src/settings.js";
 import { showCoordinationMenu } from "../src/ui/settings-menu.js";
 

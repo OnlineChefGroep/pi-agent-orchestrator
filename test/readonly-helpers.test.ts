@@ -17,19 +17,19 @@ describe("READ_ONLY_TOOLS", () => {
 });
 
 describe("getReadOnlyMemoryToolNames", () => {
-  it("returns [\"read\"] when the set is empty", () => {
+  it('returns ["read"] when the set is empty', () => {
     expect(getReadOnlyMemoryToolNames(new Set())).toEqual(["read"]);
   });
 
-  it("returns [] when the set already contains \"read\"", () => {
+  it('returns [] when the set already contains "read"', () => {
     expect(getReadOnlyMemoryToolNames(new Set(["read"]))).toEqual([]);
   });
 
-  it("returns [\"read\"] when the set contains unrelated tools", () => {
+  it('returns ["read"] when the set contains unrelated tools', () => {
     expect(getReadOnlyMemoryToolNames(new Set(["write", "edit", "bash"]))).toEqual(["read"]);
   });
 
-  it("returns [] when the set contains \"read\" alongside other tools", () => {
+  it('returns [] when the set contains "read" alongside other tools', () => {
     expect(getReadOnlyMemoryToolNames(new Set(["read", "write", "edit"]))).toEqual([]);
   });
 
@@ -42,7 +42,7 @@ describe("getReadOnlyMemoryToolNames", () => {
     expect(result).toEqual(["read"]);
   });
 
-  it("handles a large set that includes \"read\"", () => {
+  it('handles a large set that includes "read"', () => {
     const large = new Set<string>();
     large.add("read");
     for (let i = 0; i < 999; i++) {

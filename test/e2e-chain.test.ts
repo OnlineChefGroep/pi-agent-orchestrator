@@ -30,7 +30,7 @@ import { runAgent } from "../src/agent-runner.js";
 
 const mockPi = {} as any;
 const mockCtx = { cwd: "/tmp" } as any;
-const mockSession = () => ({ dispose: vi.fn() } as any);
+const mockSession = () => ({ dispose: vi.fn() }) as any;
 
 const resolvedRun = (responseText = "done") =>
   vi.mocked(runAgent).mockResolvedValue({
@@ -556,7 +556,11 @@ describe("E2E: full chain — spawn → run → validators → handoff → resul
           agentId: "validator-1",
           passed: true,
           criteria: [
-            { criterion: "All findings have evidence", passed: true, feedback: "All findings are backed by file references" },
+            {
+              criterion: "All findings have evidence",
+              passed: true,
+              feedback: "All findings are backed by file references",
+            },
           ],
           summary: "Validation passed",
         },
@@ -566,13 +570,9 @@ describe("E2E: full chain — spawn → run → validators → handoff → resul
     });
 
     // spawnAndWait runs the full spawn → run → result pipeline
-    const record = await manager.spawnAndWait(
-      mockPi,
-      mockCtx,
-      "general-purpose",
-      "Audit the auth module",
-      { description: "Auth audit" },
-    );
+    const record = await manager.spawnAndWait(mockPi, mockCtx, "general-purpose", "Audit the auth module", {
+      description: "Auth audit",
+    });
 
     // Verify the record after completion
     expect(record.status).toBe("completed");

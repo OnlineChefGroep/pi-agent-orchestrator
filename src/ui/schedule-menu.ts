@@ -29,7 +29,7 @@ function relTime(iso: string | undefined, now = Date.now()): string {
   const diff = t - now;
   const abs = Math.abs(diff);
   const future = diff > 0;
-  
+
   let timeStr = "";
   if (abs < 60_000) timeStr = future ? "in <1m" : "<1m ago";
   else {
@@ -149,11 +149,9 @@ function formatJob(j: ScheduledSubagent, scheduler: SubagentScheduler): string {
 function formatDetails(j: ScheduledSubagent, scheduler: SubagentScheduler): string {
   const uiStyle = getUiStyle();
   const next = scheduler.getNextRun(j.id) ?? "—";
-  
+
   const width = 64;
-  const promptSnippet = j.prompt.length > width - 22 
-    ? `${j.prompt.slice(0, width - 25)}…` 
-    : j.prompt;
+  const promptSnippet = j.prompt.length > width - 22 ? `${j.prompt.slice(0, width - 25)}…` : j.prompt;
 
   if (uiStyle === "plain") {
     const lines = [
@@ -213,10 +211,7 @@ function formatDetails(j: ScheduledSubagent, scheduler: SubagentScheduler): stri
  * List scheduled jobs; selecting one opens a cancel-confirm with details.
  * Returns when the user backs out or after a cancellation.
  */
-export async function showSchedulesMenu(
-  ctx: ExtensionCommandContext,
-  scheduler: SubagentScheduler,
-): Promise<void> {
+export async function showSchedulesMenu(ctx: ExtensionCommandContext, scheduler: SubagentScheduler): Promise<void> {
   if (!scheduler.isActive()) {
     ctx.ui.notify("Scheduler is not active in this session.", "warning");
     return;
@@ -238,7 +233,7 @@ export async function showSchedulesMenu(
     padVisible("RELIABILITY", 16),
     padVisible("NEXT RUN", 18),
   ];
-  
+
   let headers = "";
   if (uiStyle === "plain") {
     headers = headersList.join("   ");
@@ -247,11 +242,11 @@ export async function showSchedulesMenu(
   } else {
     headers = headersList.join(" │ ");
   }
-  
+
   const separator = (uiStyle === "plain" ? "-" : "─").repeat(headers.length);
   const menuTitle = `Scheduled subagents (${jobs.length})\n\n${headers}\n${separator}`;
 
-  const labels = jobs.map(j => formatJob(j, scheduler));
+  const labels = jobs.map((j) => formatJob(j, scheduler));
   const choice = await ctx.ui.select(menuTitle, labels);
   if (!choice) return;
 

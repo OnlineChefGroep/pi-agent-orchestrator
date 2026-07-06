@@ -156,10 +156,7 @@ export class SwarmCoordinator {
   /** Global metrics aggregator. */
   private metrics: SwarmMetricsCollector;
 
-  constructor(
-    deliverCb: SwarmDeliveryCallback,
-    messageCbOrTimeout?: SwarmMessageCallback | number,
-  ) {
+  constructor(deliverCb: SwarmDeliveryCallback, messageCbOrTimeout?: SwarmMessageCallback | number) {
     this.deliverCb = deliverCb;
     if (typeof messageCbOrTimeout === "function") {
       this.messageCb = messageCbOrTimeout;
@@ -184,9 +181,10 @@ export class SwarmCoordinator {
   createSwarm(name?: string): string;
   createSwarm(config: Omit<SwarmConfig, "swarmId"> & { swarmId?: string }): string;
   createSwarm(configOrName?: string | (Omit<SwarmConfig, "swarmId"> & { swarmId?: string })): string {
-    const config = typeof configOrName === "string"
-      ? { name: configOrName || `Swarm ${this.swarms.size + 1}` }
-      : ((configOrName || {}) as Partial<Omit<SwarmConfig, "swarmId"> & { swarmId?: string }>);
+    const config =
+      typeof configOrName === "string"
+        ? { name: configOrName || `Swarm ${this.swarms.size + 1}` }
+        : ((configOrName || {}) as Partial<Omit<SwarmConfig, "swarmId"> & { swarmId?: string }>);
     const swarmId = config.swarmId || `swarm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     const fullConfig: SwarmConfig = {
       swarmTimeout: this.defaultSwarmTimeout,
@@ -630,11 +628,7 @@ export class SwarmCoordinator {
     }
   }
 
-  private deliverBatch(
-    swarm: SwarmInternal,
-    partial: boolean,
-    opts: { quorumMet: boolean; timedOut: boolean },
-  ): void {
+  private deliverBatch(swarm: SwarmInternal, partial: boolean, opts: { quorumMet: boolean; timedOut: boolean }): void {
     if (swarm.timeoutHandle) {
       clearTimeout(swarm.timeoutHandle);
       swarm.timeoutHandle = undefined;
@@ -734,7 +728,13 @@ export class SwarmCoordinator {
   // Query APIs (Dashboard / UI)
   // --------------------------------------------------------------------------
 
-  listSwarms(): Array<{ swarmId: string; name: string; agentCount: number; strategy: SwarmStrategy; leaderId?: string }> {
+  listSwarms(): Array<{
+    swarmId: string;
+    name: string;
+    agentCount: number;
+    strategy: SwarmStrategy;
+    leaderId?: string;
+  }> {
     return [...this.swarms.values()].map((swarm) => ({
       swarmId: swarm.config.swarmId,
       name: swarm.config.name,
@@ -786,12 +786,15 @@ export interface SwarmMetrics {
   partialDeliveries: number;
   timedOutDeliveries: number;
   averageLatencyMs?: number;
-  bySwarm: Record<string, {
-    deliveries: number;
-    records: number;
-    partials: number;
-    timeouts: number;
-  }>;
+  bySwarm: Record<
+    string,
+    {
+      deliveries: number;
+      records: number;
+      partials: number;
+      timeouts: number;
+    }
+  >;
 }
 
 class SwarmMetricsCollector {
@@ -826,14 +829,15 @@ class SwarmMetricsCollector {
   }
 
   getMetrics(swarmId?: string): SwarmMetrics {
-    const avg = this.latencies.length > 0
-      ? this.latencies.reduce((a, b) => a + b, 0) / this.latencies.length
-      : undefined;
+    const avg =
+      this.latencies.length > 0 ? this.latencies.reduce((a, b) => a + b, 0) / this.latencies.length : undefined;
 
     return {
       ...this.data,
       averageLatencyMs: avg,
-      bySwarm: swarmId ? { [swarmId]: this.data.bySwarm[swarmId] || { deliveries: 0, records: 0, partials: 0, timeouts: 0 } } : { ...this.data.bySwarm },
+      bySwarm: swarmId
+        ? { [swarmId]: this.data.bySwarm[swarmId] || { deliveries: 0, records: 0, partials: 0, timeouts: 0 } }
+        : { ...this.data.bySwarm },
     };
   }
 
@@ -866,10 +870,7 @@ export function getSwarmCoordinator(): SwarmCoordinator | null {
 /**
  * UI convenience: create a swarm from selected agents with full config.
  */
-export function uiCreateSwarm(
-  agentIds: string[],
-  config?: Partial<Omit<SwarmConfig, "swarmId">>,
-): string | null {
+export function uiCreateSwarm(agentIds: string[], config?: Partial<Omit<SwarmConfig, "swarmId">>): string | null {
   const coord = getSwarmCoordinator();
   if (!coord || agentIds.length === 0) return null;
 

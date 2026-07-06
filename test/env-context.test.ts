@@ -19,9 +19,7 @@ import { buildEnvFromContext } from "../src/env-context.js";
 import type { WorkspaceContext } from "../src/types.js";
 
 /** Minimal ExtensionAPI stub whose `workspaceContext` is the given value. */
-function mockPiWithContext(
-  workspaceContext: WorkspaceContext | null,
-): ExtensionAPI {
+function mockPiWithContext(workspaceContext: WorkspaceContext | null): ExtensionAPI {
   return { workspaceContext } as unknown as ExtensionAPI;
 }
 
@@ -56,17 +54,19 @@ describe("buildEnvFromContext", () => {
 
   // 4. platform flows through for every NodeJS.Platform value.
   //    Parametrised via it.each; one assertion per platform.
-  it.each(["darwin", "linux", "win32", "freebsd"] as const)(
-    "preserves platform '%s' through to EnvInfo",
-    (platform) => {
-      const pi = mockPiWithContext({
-        cwd: "/repo",
-        git: { isRepo: true, branch: "main" },
-        platform,
-      });
-      expect(buildEnvFromContext(pi)?.platform).toBe(platform);
-    },
-  );
+  it.each([
+    "darwin",
+    "linux",
+    "win32",
+    "freebsd",
+  ] as const)("preserves platform '%s' through to EnvInfo", (platform) => {
+    const pi = mockPiWithContext({
+      cwd: "/repo",
+      git: { isRepo: true, branch: "main" },
+      platform,
+    });
+    expect(buildEnvFromContext(pi)?.platform).toBe(platform);
+  });
 
   // 4. Explicit-null is a host-misconfiguration edge case: helper
   //    must treat `workspaceContext: null` identically to absent —

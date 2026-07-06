@@ -3,7 +3,13 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { type AgentToolResult, defineTool, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import type { AgentManager } from "../agent-manager.js";
-import { buildTypeListText, getDefaultJoinMode, getOrchestrationMode, isSchedulingEnabled, reloadCustomAgents } from "../agent-registry.js";
+import {
+  buildTypeListText,
+  getDefaultJoinMode,
+  getOrchestrationMode,
+  isSchedulingEnabled,
+  reloadCustomAgents,
+} from "../agent-registry.js";
 import { getDefaultMaxTurns, normalizeMaxTurns } from "../agent-runner.js";
 import { getAgentConfig, getAvailableTypes, resolveType } from "../agent-types.js";
 import type { BatchOrchestrator } from "../batch-orchestrator.js";
@@ -15,11 +21,21 @@ import { resolveModel } from "../model-resolver.js";
 import { type OrchestrationDecision, resolveOrchestrationMode } from "../orchestration-dispatch.js";
 import { createOutputFilePath, streamToOutputFile, writeInitialEntry } from "../output-file.js";
 import {
-  buildDetails, createActivityTracker, formatLifetimeTokens,
-  getStatusNote, textResult,
+  buildDetails,
+  createActivityTracker,
+  formatLifetimeTokens,
+  getStatusNote,
+  textResult,
 } from "../tool-result-helpers.js";
 import type { AgentInvocation, AgentRecord, IsolationMode, SubagentType, ThinkingLevel } from "../types.js";
-import { buildInvocationTags, describeActivity, formatMs, formatTurns, getDisplayName, getPromptModeLabel } from "../ui/agent-format.js";
+import {
+  buildInvocationTags,
+  describeActivity,
+  formatMs,
+  formatTurns,
+  getDisplayName,
+  getPromptModeLabel,
+} from "../ui/agent-format.js";
 import type { AgentDetails, UICtx } from "../ui/agent-ui-types.js";
 import { getSpinnerFrame } from "../ui/animation.js";
 import type { Theme } from "../ui/theme.js";
@@ -80,7 +96,7 @@ export function renderAgentResult(
     }
     if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
     if (d.tokens) parts.push(d.tokens);
-    return parts.map(p => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `);
+    return parts.map((p) => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `);
   };
 
   // ---- While running (streaming) ----
@@ -108,9 +124,7 @@ export function renderAgentResult(
 
     // Validation badge
     if (details.validated !== undefined) {
-      line += details.validated
-        ? ` ${theme.fg("success", "✅")}`
-        : ` ${theme.fg("error", "❌")}`;
+      line += details.validated ? ` ${theme.fg("success", "✅")}` : ` ${theme.fg("error", "❌")}`;
     }
 
     if (opts.expanded) {
@@ -256,7 +270,11 @@ async function runOrchestratedDispatch(
 ): Promise<AgentToolResult<unknown>> {
   const members =
     dispatch.kind === "crew"
-      ? dispatch.roles.map((r) => ({ description: r.description, prompt: r.prompt, role: r.role as string | undefined }))
+      ? dispatch.roles.map((r) => ({
+          description: r.description,
+          prompt: r.prompt,
+          role: r.role as string | undefined,
+        }))
       : dispatch.agents.map((a) => ({ description: a.description, prompt: a.prompt, role: undefined }));
 
   const spawned: { id: string; description: string; role?: string }[] = [];
@@ -346,9 +364,7 @@ async function runOrchestratedDispatch(
   // returns, startAgent is scheduled and the promise is set on the next
   // microtask. We assert non-null at this point: if it ever IS null we're
   // already broken and want to surface it.
-  const settled = await Promise.allSettled(
-    records.map((r) => r.promise as Promise<string>),
-  );
+  const settled = await Promise.allSettled(records.map((r) => r.promise as Promise<string>));
   const aggregate = formatOrchestratedAggregate(args, dispatch, spawned, records, settled);
   return textResult(aggregate);
 }
@@ -360,7 +376,9 @@ function formatOrchestratedAggregate(
   records: (AgentRecord | undefined)[],
   settled: PromiseSettledResult<string>[],
 ): string {
-  const fallbackNote = args.fellBack ? `Note: Unknown agent type "${args.rawType}" — using ${args.displayName}.\n\n` : "";
+  const fallbackNote = args.fellBack
+    ? `Note: Unknown agent type "${args.rawType}" — using ${args.displayName}.\n\n`
+    : "";
   const label = dispatch.kind === "crew" ? "Crew" : "Swarm";
   const header = `${label} completed (${spawned.length} members, join mode: ${dispatch.joinMode}).\n\n`;
   const sections = spawned.map((s, i) => {
@@ -419,14 +437,13 @@ export function createAgentTool(ctx: ToolContext) {
     schedule: Type.Optional(
       Type.String({
         description:
-          'Opt-in only — fire later instead of now. Omit to run immediately (the default, almost always correct). ' +
+          "Opt-in only — fire later instead of now. Omit to run immediately (the default, almost always correct). " +
           'Formats: 6-field cron ("0 0 9 * * 1" = 9am Mon), interval ("5m"/"1h"), one-shot ("+10m" or ISO). ' +
-          'Forces run_in_background; incompatible with inherit_context and resume. Returns job ID.',
+          "Forces run_in_background; incompatible with inherit_context and resume. Returns job ID.",
       }),
     ),
   };
-  const scheduleParam: Partial<typeof scheduleParamShape> =
-    isSchedulingEnabled() ? scheduleParamShape : {};
+  const scheduleParam: Partial<typeof scheduleParamShape> = isSchedulingEnabled() ? scheduleParamShape : {};
 
   const scheduleGuideline = isSchedulingEnabled()
     ? `\n- Use \`schedule\` only when the user explicitly asked for scheduled / recurring / delayed execution (e.g. "every Monday", "in an hour"). Don't auto-schedule from vague intent like "monitor X" — run once now or ask.`
@@ -487,7 +504,8 @@ Guidelines:
       ),
       run_in_background: Type.Optional(
         Type.Boolean({
-          description: "Set to true to run in background. Returns agent ID immediately. You will be notified on completion.",
+          description:
+            "Set to true to run in background. Returns agent ID immediately. You will be notified on completion.",
         }),
       ),
       resume: Type.Optional(
@@ -512,7 +530,8 @@ Guidelines:
       ),
       isolation: Type.Optional(
         Type.Literal("worktree", {
-          description: 'Set to "worktree" to run the agent in a temporary git worktree (isolated copy of the repo). Changes are saved to a branch on completion.',
+          description:
+            'Set to "worktree" to run the agent in a temporary git worktree (isolated copy of the repo). Changes are saved to a branch on completion.',
         }),
       ),
       ...scheduleParam,
@@ -523,7 +542,11 @@ Guidelines:
     renderCall(args, theme) {
       const displayName = args.subagent_type ? getDisplayName(args.subagent_type) : "Agent";
       const desc = args.description ?? "";
-      return new Text(`▸ ${theme.fg("toolTitle", theme.bold(displayName))}${desc ? `  ${theme.fg("muted", desc)}` : ""}`, 0, 0);
+      return new Text(
+        `▸ ${theme.fg("toolTitle", theme.bold(displayName))}${desc ? `  ${theme.fg("muted", desc)}` : ""}`,
+        0,
+        0,
+      );
     },
 
     renderResult(result, { expanded, isPartial }, theme) {
@@ -536,7 +559,7 @@ Guidelines:
       const { pi, manager, widget, agentActivity, batchOrchestrator, scheduler } = ctx;
 
       // Ensure we have UI context for widget rendering
-      const uiCtx = piCtx && typeof piCtx.ui === 'object' ? (piCtx.ui as UICtx) : undefined;
+      const uiCtx = piCtx && typeof piCtx.ui === "object" ? (piCtx.ui as UICtx) : undefined;
       if (uiCtx) widget.setUICtx(uiCtx);
 
       // Reload custom agents so new .pi/agents/*.md files are picked up without restart
@@ -573,9 +596,10 @@ Guidelines:
 
       const parentModelId = piCtx.model?.id;
       const effectiveModelId = model?.id;
-      const modelName = effectiveModelId && effectiveModelId !== parentModelId
-        ? (model?.name ?? effectiveModelId).replace(/^Claude\s+/i, "").toLowerCase()
-        : undefined;
+      const modelName =
+        effectiveModelId && effectiveModelId !== parentModelId
+          ? (model?.name ?? effectiveModelId).replace(/^Claude\s+/i, "").toLowerCase()
+          : undefined;
       const effectiveMaxTurns = normalizeMaxTurns(resolvedConfig.maxTurns ?? getDefaultMaxTurns());
       const agentInvocation: AgentInvocation = {
         modelName,
@@ -603,14 +627,16 @@ Guidelines:
       if (params.estimate_only) {
         if (params.resume) return textResult("Cannot combine `estimate_only` with `resume`.");
         if (params.schedule) return textResult("Cannot combine `estimate_only` with `schedule`.");
-        return textResult(buildAgentEstimate({
-          prompt: params.prompt as string,
-          description: params.description as string,
-          type: subagentType,
-          config: customConfig,
-          inheritContext,
-          maxTurns: effectiveMaxTurns,
-        }));
+        return textResult(
+          buildAgentEstimate({
+            prompt: params.prompt as string,
+            description: params.description as string,
+            type: subagentType,
+            config: customConfig,
+            inheritContext,
+            maxTurns: effectiveMaxTurns,
+          }),
+        );
       }
 
       // ---- Schedule: register a job, don't spawn now ----
@@ -622,13 +648,19 @@ Guidelines:
           return textResult("Cannot combine `schedule` with `resume` — schedules create fresh agents.");
         }
         if (params.inherit_context) {
-          return textResult("Cannot combine `schedule` with `inherit_context` — there is no parent conversation at fire time.");
+          return textResult(
+            "Cannot combine `schedule` with `inherit_context` — there is no parent conversation at fire time.",
+          );
         }
         if (params.run_in_background === false) {
-          return textResult("Cannot combine `schedule` with `run_in_background: false` — scheduled jobs always run in background.");
+          return textResult(
+            "Cannot combine `schedule` with `run_in_background: false` — scheduled jobs always run in background.",
+          );
         }
         if (!scheduler.isActive()) {
-          return textResult("Scheduler is not active in this session yet. Try again after the session has fully started.");
+          return textResult(
+            "Scheduler is not active in this session yet. Try again after the session has fully started.",
+          );
         }
         try {
           const job = await scheduler.addJob({
@@ -646,8 +678,8 @@ Guidelines:
           const next = scheduler.getNextRun(job.id);
           return textResult(
             `Scheduled "${job.name}" (id: ${job.id}, type: ${job.scheduleType}). ` +
-            `Next run: ${next ?? "(unknown)"}. ` +
-            `Manage via /agents → Scheduled jobs.`,
+              `Next run: ${next ?? "(unknown)"}. ` +
+              `Manage via /agents → Scheduled jobs.`,
           );
         } catch (err) {
           return textResult(err instanceof Error ? err.message : String(err));
@@ -772,7 +804,7 @@ Guidelines:
           writeInitialEntry(record.outputFile, id, params.prompt, piCtx.cwd);
         }
 
-        if (joinMode == null || joinMode === 'async') {
+        if (joinMode == null || joinMode === "async") {
           // Foreground/no join mode or explicit async — not part of any batch
         } else {
           // smart / group / swarm — add to current batch (orchestrator routes by joinMode)
@@ -794,14 +826,14 @@ Guidelines:
         const isQueued = record?.status === "queued";
         return textResult(
           `Agent ${isQueued ? "queued" : "started"} in background.\n` +
-          `Agent ID: ${id}\n` +
-          `Type: ${displayName}\n` +
-          `Description: ${params.description}\n` +
-          (record?.outputFile ? `Output file: ${record.outputFile}\n` : "") +
-          (isQueued ? `Position: queued (max ${manager.getMaxConcurrent()} concurrent)\n` : "") +
-          `\nYou will be notified when this agent completes.\n` +
-          `Use get_subagent_result to retrieve full results, or steer_subagent to send it messages.\n` +
-          `Do not duplicate this agent's work.`,
+            `Agent ID: ${id}\n` +
+            `Type: ${displayName}\n` +
+            `Description: ${params.description}\n` +
+            (record?.outputFile ? `Output file: ${record.outputFile}\n` : "") +
+            (isQueued ? `Position: queued (max ${manager.getMaxConcurrent()} concurrent)\n` : "") +
+            `\nYou will be notified when this agent completes.\n` +
+            `Use get_subagent_result to retrieve full results, or steer_subagent to send it messages.\n` +
+            `Do not duplicate this agent's work.`,
           { ...detailBase, toolUses: 0, tokens: "", durationMs: 0, status: "background" as const, agentId: id },
         );
       }
@@ -883,11 +915,11 @@ Guidelines:
       // Get final token count
       const tokenText = formatLifetimeTokens(fgState);
 
-      const details = buildDetails(detailBase, { ...record, startedAt: record.startedAt ?? 0 }, fgState, { tokens: tokenText });
+      const details = buildDetails(detailBase, { ...record, startedAt: record.startedAt ?? 0 }, fgState, {
+        tokens: tokenText,
+      });
 
-      const fallbackNote = fellBack
-        ? `Note: Unknown agent type "${rawType}" — using general-purpose.\n\n`
-        : "";
+      const fallbackNote = fellBack ? `Note: Unknown agent type "${rawType}" — using general-purpose.\n\n` : "";
 
       if (record.status === "error") {
         return textResult(`${fallbackNote}Agent failed: ${record.error}`, details);
@@ -898,7 +930,7 @@ Guidelines:
       if (tokenText) statsParts.push(tokenText);
       return textResult(
         `${fallbackNote}Agent completed in ${formatMs(durationMs)} (${statsParts.join(", ")})${getStatusNote(record.status)}.\n\n` +
-        (record.result?.trim() || "No output."),
+          (record.result?.trim() || "No output."),
         details,
       );
     },

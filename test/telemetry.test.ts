@@ -81,7 +81,7 @@ describe("telemetry", () => {
       expect(successfulHandler).toHaveBeenCalledTimes(1);
       expect(logger.warn).toHaveBeenCalledWith(
         expect.stringContaining("Telemetry handler error"),
-        expect.objectContaining({ error: "Handler failed" })
+        expect.objectContaining({ error: "Handler failed" }),
       );
     });
   });
@@ -91,10 +91,7 @@ describe("telemetry", () => {
       const payload = { name: "test-agent", errors: ["validation failed"] };
       emitTelemetry("agent:validation-failed", payload);
 
-      expect(logger.warn).toHaveBeenCalledWith(
-        "[telemetry] security event: agent:validation-failed",
-        { payload }
-      );
+      expect(logger.warn).toHaveBeenCalledWith("[telemetry] security event: agent:validation-failed", { payload });
     });
 
     it("should not log to logger.warn for non-security events when no handlers are registered", () => {

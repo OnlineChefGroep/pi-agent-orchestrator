@@ -80,15 +80,11 @@ export interface HandoffNoteArtifact {
 }
 
 /** v2 typed handoff artifact — discriminated union on `type`. */
-export type HandoffArtifactV2 =
-  | HandoffFileArtifact
-  | HandoffBranchArtifact
-  | HandoffUrlArtifact
-  | HandoffNoteArtifact;
+export type HandoffArtifactV2 = HandoffFileArtifact | HandoffBranchArtifact | HandoffUrlArtifact | HandoffNoteArtifact;
 
 /** All known v2 artifact types. */
 export const HANDOFF_ARTIFACT_TYPES = ["file", "branch", "url", "note"] as const;
-export type HandoffArtifactType = typeof HANDOFF_ARTIFACT_TYPES[number];
+export type HandoffArtifactType = (typeof HANDOFF_ARTIFACT_TYPES)[number];
 
 /**
  * Loose handoff artifact — the pre-v2 shape that older agents may still emit.
@@ -111,9 +107,9 @@ export interface HandoffArtifact {
 const VALID_STATUSES = new Set(["success", "partial", "failed"]);
 
 // CVE-008 FIX: JSON parsing limits
-const MAX_JSON_SIZE = 1024 * 1024;  // 1MB max JSON
-const MAX_JSON_KEYS = 1000;  // Total key count limit (renamed from MAX_JSON_DEPTH for clarity)
-const MAX_JSON_DEPTH = 20;   // Maximum nesting depth to prevent stack overflow
+const MAX_JSON_SIZE = 1024 * 1024; // 1MB max JSON
+const MAX_JSON_KEYS = 1000; // Total key count limit (renamed from MAX_JSON_DEPTH for clarity)
+const MAX_JSON_DEPTH = 20; // Maximum nesting depth to prevent stack overflow
 const MAX_FINDINGS_COUNT = 100;
 const MAX_SUMMARY_LENGTH = 10000;
 const MAX_STRING_LENGTH = 50000;
@@ -157,7 +153,7 @@ function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS, maxDepth:
     if (inString) {
       if (escapeNext) {
         escapeNext = false;
-      } else if (char === '\\') {
+      } else if (char === "\\") {
         escapeNext = true;
       } else if (char === '"') {
         inString = false;
@@ -168,14 +164,14 @@ function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS, maxDepth:
       if (char === '"') {
         inString = true;
         stringStart = i;
-      } else if (char === '{' || char === '[') {
+      } else if (char === "{" || char === "[") {
         currentDepth++;
         if (currentDepth > maxDepth) {
           throw new Error(`JSON depth exceeds maximum of ${maxDepth}`);
         }
-      } else if (char === '}' || char === ']') {
+      } else if (char === "}" || char === "]") {
         currentDepth--;
-      } else if (char === ':') {
+      } else if (char === ":") {
         keyCount++;
         if (keyCount > maxKeys) {
           throw new Error(`JSON key count exceeds maximum of ${maxKeys}`);
@@ -197,7 +193,7 @@ function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS, maxDepth:
 }
 
 function truncateStrings(obj: any): any {
-  if (typeof obj === 'string') {
+  if (typeof obj === "string") {
     if (obj.length > MAX_STRING_LENGTH) {
       return obj.slice(0, MAX_STRING_LENGTH);
     }
@@ -213,7 +209,7 @@ function truncateStrings(obj: any): any {
     }
     return obj;
   }
-  if (obj !== null && typeof obj === 'object') {
+  if (obj !== null && typeof obj === "object") {
     // Object.keys() vs for...in + Object.hasOwn: the latter walks the
     // prototype chain and runs a hasOwn check per iteration; Object.keys()
     // returns own enumerable string-keyed properties in a single array.
@@ -323,11 +319,10 @@ function isCoercibleArtifactShape(value: unknown): boolean {
   // ~50 saved calls for a handoff with MAX_ARTIFACTS_COUNT=50 artifacts.
   const obj = value as Record<string, unknown>;
   return (
-    (typeof obj.path === "string" && obj.path.length > 0)
-    || (typeof obj.url === "string" && obj.url.length > 0)
-    || (typeof obj.branch === "string" && obj.branch.length > 0)
-    || (typeof obj.title === "string" && obj.title.length > 0
-        && typeof obj.value === "string" && obj.value.length > 0)
+    (typeof obj.path === "string" && obj.path.length > 0) ||
+    (typeof obj.url === "string" && obj.url.length > 0) ||
+    (typeof obj.branch === "string" && obj.branch.length > 0) ||
+    (typeof obj.title === "string" && obj.title.length > 0 && typeof obj.value === "string" && obj.value.length > 0)
   );
 }
 
@@ -352,17 +347,21 @@ function isHandoffArtifactV2(value: unknown): value is HandoffArtifactV2 {
 
   switch (obj.type) {
     case "file":
-      return isValidStringField(obj.path, MAX_ARTIFACT_PATH_LENGTH)
-        && (obj.mimeType === undefined || isValidStringField(obj.mimeType, 200))
-        && (obj.title === undefined || isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH));
+      return (
+        isValidStringField(obj.path, MAX_ARTIFACT_PATH_LENGTH) &&
+        (obj.mimeType === undefined || isValidStringField(obj.mimeType, 200)) &&
+        (obj.title === undefined || isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH))
+      );
 
     case "branch":
       if (!isValidStringField(obj.branch, MAX_ARTIFACT_BRANCH_NAME_LENGTH)) return false;
       if (obj.base !== undefined && !isValidStringField(obj.base, MAX_ARTIFACT_BRANCH_NAME_LENGTH)) return false;
       if (obj.commits !== undefined) {
-        if (!Array.isArray(obj.commits)
-            || obj.commits.length > MAX_ARTIFACT_COMMITS_COUNT
-            || obj.commits.some((c) => typeof c !== "string" || c.length === 0 || c.length > MAX_ARTIFACT_COMMITS_LENGTH)) {
+        if (
+          !Array.isArray(obj.commits) ||
+          obj.commits.length > MAX_ARTIFACT_COMMITS_COUNT ||
+          obj.commits.some((c) => typeof c !== "string" || c.length === 0 || c.length > MAX_ARTIFACT_COMMITS_LENGTH)
+        ) {
           return false;
         }
       }
@@ -370,14 +369,18 @@ function isHandoffArtifactV2(value: unknown): value is HandoffArtifactV2 {
       return true;
 
     case "url":
-      return isValidStringField(obj.url, MAX_ARTIFACT_URL_LENGTH)
-        && (obj.title === undefined || isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH))
-        && (obj.description === undefined || isValidStringField(obj.description, MAX_ARTIFACT_DESCRIPTION_LENGTH));
+      return (
+        isValidStringField(obj.url, MAX_ARTIFACT_URL_LENGTH) &&
+        (obj.title === undefined || isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH)) &&
+        (obj.description === undefined || isValidStringField(obj.description, MAX_ARTIFACT_DESCRIPTION_LENGTH))
+      );
 
     case "note":
-      return isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH)
-        && isValidStringField(obj.value, MAX_ARTIFACT_VALUE_LENGTH)
-        && (obj.mimeType === undefined || isValidStringField(obj.mimeType, 200));
+      return (
+        isValidStringField(obj.title, MAX_ARTIFACT_TITLE_LENGTH) &&
+        isValidStringField(obj.value, MAX_ARTIFACT_VALUE_LENGTH) &&
+        (obj.mimeType === undefined || isValidStringField(obj.mimeType, 200))
+      );
 
     default:
       // Unknown / legacy type. Reject strict-mode artifacts so validateHandoffShape
@@ -413,8 +416,12 @@ function coerceLegacyArtifact(value: unknown): HandoffArtifactV2 | null {
   }
 
   // Note-shaped: title + value
-  if (typeof obj.title === "string" && obj.title.trim().length > 0
-      && typeof obj.value === "string" && obj.value.length > 0) {
+  if (
+    typeof obj.title === "string" &&
+    obj.title.trim().length > 0 &&
+    typeof obj.value === "string" &&
+    obj.value.length > 0
+  ) {
     return {
       type: "note",
       title: obj.title,
@@ -443,7 +450,9 @@ function coerceLegacyArtifact(value: unknown): HandoffArtifactV2 | null {
     };
   }
 
-  logger.warn(`Dropped legacy handoff artifact of unknown type "${originalType}" — no path/title+value/branch/url fields found`);
+  logger.warn(
+    `Dropped legacy handoff artifact of unknown type "${originalType}" — no path/title+value/branch/url fields found`,
+  );
   return null;
 }
 
@@ -476,7 +485,7 @@ export function parseHandoff(text: string): AgentHandoff | null {
     // CVE-008 FIX: Use safe JSON parser with limits
     parsed = safeJsonParse(jsonBlock);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'unknown error';
+    const msg = err instanceof Error ? err.message : "unknown error";
     logger.warn(`Failed to parse handoff JSON — malformed JSON: ${msg}`);
     return null;
   }
@@ -497,9 +506,9 @@ export function parseHandoff(text: string): AgentHandoff | null {
   // v2-strict artifacts pass through unchanged.
   const rawArtifacts = Array.isArray(obj.artifacts) ? obj.artifacts : undefined;
   const coercedArtifacts: HandoffArtifactV2[] | undefined = rawArtifacts
-    ? (rawArtifacts
+    ? rawArtifacts
         .map((a) => (isHandoffArtifactV2(a) ? a : coerceLegacyArtifact(a)))
-        .filter((a): a is HandoffArtifactV2 => a !== null))
+        .filter((a): a is HandoffArtifactV2 => a !== null)
     : undefined;
 
   return {
@@ -507,10 +516,10 @@ export function parseHandoff(text: string): AgentHandoff | null {
     status: obj.status as AgentHandoff["status"],
     summary: (obj.summary as string).trim(),
     findings: obj.findings as string[],
-    nextSteps: Array.isArray(obj.nextSteps) ? obj.nextSteps as string[] : undefined,
+    nextSteps: Array.isArray(obj.nextSteps) ? (obj.nextSteps as string[]) : undefined,
     confidence: typeof obj.confidence === "number" ? obj.confidence : undefined,
-    evidence: Array.isArray(obj.evidence) ? obj.evidence as string[] : undefined,
-    files: Array.isArray(obj.files) ? obj.files as string[] : undefined,
+    evidence: Array.isArray(obj.evidence) ? (obj.evidence as string[]) : undefined,
+    files: Array.isArray(obj.files) ? (obj.files as string[]) : undefined,
     artifacts: coercedArtifacts && coercedArtifacts.length > 0 ? coercedArtifacts : undefined,
   };
 }
@@ -631,14 +640,13 @@ export function buildHandoffPrompt(level: PromptCompressionLevel = "balanced"): 
  */
 export function renderHandoffForParent(handoff: AgentHandoff): string {
   const statusLabel =
-    handoff.status === "success" ? "completed successfully"
-    : handoff.status === "partial" ? "partially completed"
-    : "failed";
+    handoff.status === "success"
+      ? "completed successfully"
+      : handoff.status === "partial"
+        ? "partially completed"
+        : "failed";
 
-  const parts: string[] = [
-    `[Handoff: ${statusLabel}]`,
-    `Summary: ${handoff.summary}`,
-  ];
+  const parts: string[] = [`[Handoff: ${statusLabel}]`, `Summary: ${handoff.summary}`];
 
   if (handoff.findings.length > 0) {
     parts.push("Findings:");
@@ -693,9 +701,10 @@ function renderArtifactForParent(artifact: HandoffArtifactV2): string {
     case "branch": {
       const title = artifact.title ? `${artifact.title} ` : "";
       const base = artifact.base ? ` (from ${artifact.base})` : "";
-      const commits = artifact.commits && artifact.commits.length > 0
-        ? ` +${artifact.commits.length} commit${artifact.commits.length === 1 ? "" : "s"}`
-        : "";
+      const commits =
+        artifact.commits && artifact.commits.length > 0
+          ? ` +${artifact.commits.length} commit${artifact.commits.length === 1 ? "" : "s"}`
+          : "";
       return `[branch] ${title}${artifact.branch}${base}${commits}`;
     }
     case "url": {

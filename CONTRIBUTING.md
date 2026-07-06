@@ -104,7 +104,7 @@ docs/                   # Documentation
 
 ## Lint & Format
 
-We use **Biome** for both linting and formatting.
+We use **Biome** for both linting and formatting (2-space indent, 120 char width, double quotes).
 
 ```bash
 # Check (no write)
@@ -115,6 +115,9 @@ node_modules/.bin/biome check --write src/ test/
 
 # Check + auto-fix unsafe issues too
 node_modules/.bin/biome check --write --unsafe src/ test/
+
+# Format only
+npm run format
 ```
 
 **Never run Prettier or ESLint** — they have been removed from the project.
@@ -220,6 +223,10 @@ By contributing, you agree that your contributions will be licensed under the [M
 ## Questions?
 
 Open an issue or refer to `docs/` for architecture, API reference, and troubleshooting guides.
+
+## Incident Response
+
+If you encounter a production issue (broken publish, CI red on main, security report), follow the [incident response runbooks](docs/runbooks.md). The runbooks define severity levels, investigation steps, and remediation procedures.
 
 ## Branch Protection
 

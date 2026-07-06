@@ -1,9 +1,9 @@
 import { pruneOldToolOutputs } from "../src/compaction.js";
 
 const toolResult = (contentLength = 1000, toolName = "read") => ({
-    role: "toolResult" as const,
-    content: "x".repeat(contentLength),
-    toolName,
+  role: "toolResult" as const,
+  content: "x".repeat(contentLength),
+  toolName,
 });
 const assistant = (text = "response") => ({ role: "assistant" as const, content: text });
 const user = (text = "question") => ({ role: "user" as const, content: text });

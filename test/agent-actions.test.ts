@@ -174,10 +174,7 @@ describe("disableAgent", () => {
     const ctx = makeCtx();
     await disableAgent(ctx as any, "test-agent");
 
-    expect(ctx.ui.notify).toHaveBeenCalledWith(
-      expect.stringContaining("already disabled"),
-      "info",
-    );
+    expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining("already disabled"), "info");
   });
 
   it("adds enabled: false to existing file", async () => {

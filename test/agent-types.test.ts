@@ -137,9 +137,7 @@ describe("agent type registry", () => {
     it("BUILTIN_TOOL_NAMES excludes non-pi tools (audit B8)", () => {
       expect(BUILTIN_TOOL_NAMES).not.toContain("find");
       expect(BUILTIN_TOOL_NAMES).not.toContain("ls");
-      expect(new Set(BUILTIN_TOOL_NAMES)).toEqual(
-        new Set(["read", "bash", "edit", "write", "grep"]),
-      );
+      expect(new Set(BUILTIN_TOOL_NAMES)).toEqual(new Set(["read", "bash", "edit", "write", "grep"]));
     });
   });
 
@@ -175,13 +173,18 @@ describe("agent type registry", () => {
     });
 
     it("getConfig returns config for user agents", () => {
-      const agents = new Map([["auditor", makeAgentConfig({
-        name: "auditor",
-        description: "Security auditor",
-        builtinToolNames: ["read", "grep"],
-        extensions: false,
-        skills: true,
-      })]]);
+      const agents = new Map([
+        [
+          "auditor",
+          makeAgentConfig({
+            name: "auditor",
+            description: "Security auditor",
+            builtinToolNames: ["read", "grep"],
+            extensions: false,
+            skills: true,
+          }),
+        ],
+      ]);
       registerAgents(agents);
 
       const config = getConfig("auditor");
@@ -193,11 +196,16 @@ describe("agent type registry", () => {
     });
 
     it("getConfig returns extension allowlist for user agents", () => {
-      const agents = new Map([["partial", makeAgentConfig({
-        name: "partial",
-        extensions: ["web-search"],
-        skills: ["planning"],
-      })]]);
+      const agents = new Map([
+        [
+          "partial",
+          makeAgentConfig({
+            name: "partial",
+            extensions: ["web-search"],
+            skills: ["planning"],
+          }),
+        ],
+      ]);
       registerAgents(agents);
 
       const config = getConfig("partial");
@@ -206,10 +214,15 @@ describe("agent type registry", () => {
     });
 
     it("getToolNamesForType works for user agents", () => {
-      const agents = new Map([["auditor", makeAgentConfig({
-        name: "auditor",
-        builtinToolNames: ["read", "grep"],
-      })]]);
+      const agents = new Map([
+        [
+          "auditor",
+          makeAgentConfig({
+            name: "auditor",
+            builtinToolNames: ["read", "grep"],
+          }),
+        ],
+      ]);
       registerAgents(agents);
 
       const names = getToolNamesForType("auditor");
@@ -238,11 +251,16 @@ describe("agent type registry", () => {
     });
 
     it("user agent overrides default with same name", () => {
-      const agents = new Map([["Explore", makeAgentConfig({
-        name: "Explore",
-        description: "Custom Explore",
-        builtinToolNames: BUILTIN_TOOL_NAMES,
-      })]]);
+      const agents = new Map([
+        [
+          "Explore",
+          makeAgentConfig({
+            name: "Explore",
+            description: "Custom Explore",
+            builtinToolNames: BUILTIN_TOOL_NAMES,
+          }),
+        ],
+      ]);
       registerAgents(agents);
 
       const config = getConfig("Explore");
@@ -251,10 +269,15 @@ describe("agent type registry", () => {
     });
 
     it("disabled agent is excluded from available types", () => {
-      const agents = new Map([["Plan", makeAgentConfig({
-        name: "Plan",
-        enabled: false,
-      })]]);
+      const agents = new Map([
+        [
+          "Plan",
+          makeAgentConfig({
+            name: "Plan",
+            enabled: false,
+          }),
+        ],
+      ]);
       registerAgents(agents);
 
       expect(isValidType("Plan")).toBe(false);
@@ -262,10 +285,15 @@ describe("agent type registry", () => {
     });
 
     it("general-purpose can be disabled but fallback still works", () => {
-      const agents = new Map([["general-purpose", makeAgentConfig({
-        name: "general-purpose",
-        enabled: false,
-      })]]);
+      const agents = new Map([
+        [
+          "general-purpose",
+          makeAgentConfig({
+            name: "general-purpose",
+            enabled: false,
+          }),
+        ],
+      ]);
       registerAgents(agents);
 
       expect(isValidType("general-purpose")).toBe(false);
@@ -415,12 +443,17 @@ describe("agent type registry", () => {
 
     it("parent restricts extensions → child inherits restriction", () => {
       // Register a user agent with extensions: true
-      const agents = new Map([["worker", makeAgentConfig({
-        name: "worker",
-        description: "Worker agent",
-        extensions: true,
-        skills: true,
-      })]]);
+      const agents = new Map([
+        [
+          "worker",
+          makeAgentConfig({
+            name: "worker",
+            description: "Worker agent",
+            extensions: true,
+            skills: true,
+          }),
+        ],
+      ]);
       registerAgents(agents);
 
       // Parent only allows web-search extension
@@ -437,12 +470,17 @@ describe("agent type registry", () => {
     });
 
     it("parent denies all extensions → child gets none", () => {
-      const agents = new Map([["worker", makeAgentConfig({
-        name: "worker",
-        description: "Worker agent",
-        extensions: true,
-        skills: true,
-      })]]);
+      const agents = new Map([
+        [
+          "worker",
+          makeAgentConfig({
+            name: "worker",
+            description: "Worker agent",
+            extensions: true,
+            skills: true,
+          }),
+        ],
+      ]);
       registerAgents(agents);
 
       const parentConfig: EffectiveConfig = {
@@ -457,12 +495,17 @@ describe("agent type registry", () => {
     });
 
     it("parent restricts skills → child inherits restriction", () => {
-      const agents = new Map([["worker", makeAgentConfig({
-        name: "worker",
-        description: "Worker agent",
-        extensions: true,
-        skills: true,
-      })]]);
+      const agents = new Map([
+        [
+          "worker",
+          makeAgentConfig({
+            name: "worker",
+            description: "Worker agent",
+            extensions: true,
+            skills: true,
+          }),
+        ],
+      ]);
       registerAgents(agents);
 
       // Parent only allows specific skills
@@ -479,12 +522,17 @@ describe("agent type registry", () => {
     });
 
     it("both parent and child have extension allowlists → intersection", () => {
-      const agents = new Map([["worker", makeAgentConfig({
-        name: "worker",
-        description: "Worker agent",
-        extensions: ["web-search", "file-ops", "tools"],
-        skills: true,
-      })]]);
+      const agents = new Map([
+        [
+          "worker",
+          makeAgentConfig({
+            name: "worker",
+            description: "Worker agent",
+            extensions: ["web-search", "file-ops", "tools"],
+            skills: true,
+          }),
+        ],
+      ]);
       registerAgents(agents);
 
       const parentConfig: EffectiveConfig = {
@@ -535,12 +583,12 @@ describe("agent type registry", () => {
   // agent's tool list, leaving it with zero working tools and no error.
   describe("wildcard (*) expansion in builtinToolNames", () => {
     describe("normalizeBuiltinToolNames helper", () => {
-      it("expands `[\"*\"]` to a copy of BUILTIN_TOOL_NAMES", () => {
+      it('expands `["*"]` to a copy of BUILTIN_TOOL_NAMES', () => {
         const result = normalizeBuiltinToolNames(["*"]);
         expect(result).toEqual(BUILTIN_TOOL_NAMES);
       });
 
-      it("expands `[\"*\"]` to a fresh array (not a reference to BUILTIN_TOOL_NAMES)", () => {
+      it('expands `["*"]` to a fresh array (not a reference to BUILTIN_TOOL_NAMES)', () => {
         const result = normalizeBuiltinToolNames(["*"]);
         expect(result).not.toBe(BUILTIN_TOOL_NAMES);
       });
@@ -593,11 +641,16 @@ describe("agent type registry", () => {
     });
 
     describe("getConfig resolution with wildcard", () => {
-      it("custom agent with `[\"*\"]` resolves to BUILTIN_TOOL_NAMES", () => {
-        const agents = new Map([["wildcard-agent", makeAgentConfig({
-          name: "wildcard-agent",
-          builtinToolNames: ["*"],
-        })]]);
+      it('custom agent with `["*"]` resolves to BUILTIN_TOOL_NAMES', () => {
+        const agents = new Map([
+          [
+            "wildcard-agent",
+            makeAgentConfig({
+              name: "wildcard-agent",
+              builtinToolNames: ["*"],
+            }),
+          ],
+        ]);
         registerAgents(agents);
 
         const config = getConfig("wildcard-agent");
@@ -606,11 +659,16 @@ describe("agent type registry", () => {
         expect(config.builtinToolNames).toHaveLength(BUILTIN_TOOL_NAMES.length);
       });
 
-      it("custom agent with `[\"*\", \"bash\"]` resolves to BUILTIN_TOOL_NAMES (no duplicates)", () => {
-        const agents = new Map([["wildcard-mixed", makeAgentConfig({
-          name: "wildcard-mixed",
-          builtinToolNames: ["*", "bash"],
-        })]]);
+      it('custom agent with `["*", "bash"]` resolves to BUILTIN_TOOL_NAMES (no duplicates)', () => {
+        const agents = new Map([
+          [
+            "wildcard-mixed",
+            makeAgentConfig({
+              name: "wildcard-mixed",
+              builtinToolNames: ["*", "bash"],
+            }),
+          ],
+        ]);
         registerAgents(agents);
 
         const config = getConfig("wildcard-mixed");
@@ -620,10 +678,15 @@ describe("agent type registry", () => {
 
       it("getConfig does not mutate the agent's stored builtinToolNames array", () => {
         const inputNames: string[] = ["*"];
-        const agents = new Map([["immutable-wildcard", makeAgentConfig({
-          name: "immutable-wildcard",
-          builtinToolNames: inputNames,
-        })]]);
+        const agents = new Map([
+          [
+            "immutable-wildcard",
+            makeAgentConfig({
+              name: "immutable-wildcard",
+              builtinToolNames: inputNames,
+            }),
+          ],
+        ]);
         registerAgents(agents);
 
         // Call getConfig a few times — the stored array must remain untouched.
@@ -647,10 +710,15 @@ describe("agent type registry", () => {
           skills: true,
         };
 
-        const agents = new Map([["wildcard-child", makeAgentConfig({
-          name: "wildcard-child",
-          builtinToolNames: ["*"],
-        })]]);
+        const agents = new Map([
+          [
+            "wildcard-child",
+            makeAgentConfig({
+              name: "wildcard-child",
+              builtinToolNames: ["*"],
+            }),
+          ],
+        ]);
         registerAgents(agents);
 
         const child = getConfig("wildcard-child", parentConfig);
@@ -667,10 +735,15 @@ describe("agent type registry", () => {
           skills: true,
         };
 
-        const agents = new Map([["wildcard-rw", makeAgentConfig({
-          name: "wildcard-rw",
-          builtinToolNames: ["*"],
-        })]]);
+        const agents = new Map([
+          [
+            "wildcard-rw",
+            makeAgentConfig({
+              name: "wildcard-rw",
+              builtinToolNames: ["*"],
+            }),
+          ],
+        ]);
         registerAgents(agents);
 
         const child = getConfig("wildcard-rw", parentConfig);
@@ -684,12 +757,17 @@ describe("agent type registry", () => {
         // triggers the fallback (e.g. with a malicious or unregistered
         // type name) cannot escalate permissions by mutating the
         // general-purpose config in the registry.
-        const agents = new Map([["general-purpose", makeAgentConfig({
-          name: "general-purpose",
-          builtinToolNames: ["*"],
-          extensions: true,
-          skills: true,
-        })]]);
+        const agents = new Map([
+          [
+            "general-purpose",
+            makeAgentConfig({
+              name: "general-purpose",
+              builtinToolNames: ["*"],
+              extensions: true,
+              skills: true,
+            }),
+          ],
+        ]);
         registerAgents(agents);
 
         const config = getConfig("nonexistent-type");
@@ -705,11 +783,16 @@ describe("agent type registry", () => {
     });
 
     describe("getToolNamesForType with wildcard", () => {
-      it("returns BUILTIN_TOOL_NAMES for an agent configured with `[\"*\"]`", () => {
-        const agents = new Map([["wildcard-names", makeAgentConfig({
-          name: "wildcard-names",
-          builtinToolNames: ["*"],
-        })]]);
+      it('returns BUILTIN_TOOL_NAMES for an agent configured with `["*"]`', () => {
+        const agents = new Map([
+          [
+            "wildcard-names",
+            makeAgentConfig({
+              name: "wildcard-names",
+              builtinToolNames: ["*"],
+            }),
+          ],
+        ]);
         registerAgents(agents);
 
         const names = getToolNamesForType("wildcard-names");
@@ -719,7 +802,7 @@ describe("agent type registry", () => {
     });
 
     describe("filterByPartitions with wildcard", () => {
-      it("normalizes `[\"*\"]` on a config before partition filtering", () => {
+      it('normalizes `["*"]` on a config before partition filtering', () => {
         const config: AgentConfig = makeAgentConfig({
           name: "wildcard-partition",
           builtinToolNames: ["*"],
@@ -730,7 +813,7 @@ describe("agent type registry", () => {
         expect(tools).not.toContain("*");
       });
 
-      it("normalizes `[\"*\"]` even when partitions are specified", () => {
+      it('normalizes `["*"]` even when partitions are specified', () => {
         const config: AgentConfig = makeAgentConfig({
           name: "wildcard-partition-filtered",
           builtinToolNames: ["*"],
@@ -803,10 +886,15 @@ describe("agent type registry", () => {
     it("absolute fallback (general-purpose disabled) is also safe-minimal", () => {
       // Even when general-purpose is disabled in the registry, the
       // unknown-type path must not regress to a permissive default.
-      const agents = new Map([["general-purpose", makeAgentConfig({
-        name: "general-purpose",
-        enabled: false,
-      })]]);
+      const agents = new Map([
+        [
+          "general-purpose",
+          makeAgentConfig({
+            name: "general-purpose",
+            enabled: false,
+          }),
+        ],
+      ]);
       registerAgents(agents);
 
       const config = getConfig("general-purpose");
@@ -831,9 +919,7 @@ describe("agent type registry", () => {
     it("BUILTIN_TOOL_NAMES contains exactly the official pi builtin tools", () => {
       // The full expected list. A future regression that drops a tool
       // or adds a non-pi tool will fail this test.
-      expect([...BUILTIN_TOOL_NAMES].sort()).toEqual(
-        ["bash", "edit", "grep", "read", "write"].sort(),
-      );
+      expect([...BUILTIN_TOOL_NAMES].sort()).toEqual(["bash", "edit", "grep", "read", "write"].sort());
     });
 
     it("default read-only agents (Explore, Plan, Analysis) do not list find/ls", () => {

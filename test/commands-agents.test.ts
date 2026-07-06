@@ -66,11 +66,14 @@ describe("registerAgentsCommand", () => {
     const ctx = { ui: {}, session: {} };
     await handler([], ctx);
 
-    expect(showAgentsMenu).toHaveBeenCalledWith(ctx, expect.objectContaining({
-      pi,
-      manager,
-      scheduler,
-      agentActivity,
-    }));
+    expect(showAgentsMenu).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        pi,
+        manager,
+        scheduler,
+        agentActivity,
+      }),
+    );
   });
 });

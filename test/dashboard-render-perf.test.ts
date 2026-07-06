@@ -20,7 +20,7 @@ import type { AgentActivity } from "../src/ui/agent-ui-types.js";
 // ── Mocks ───────────────────────────────────────────────────────────────────
 
 vi.mock("../src/ui/tui-shim.js", () => ({
-    truncateToWidth: (str: string) => str,
+  truncateToWidth: (str: string) => str,
   visibleWidth: (str: string) => str.length,
   matchesKey: (data: string, key: string) => {
     const keyMap: Record<string, string[]> = {
@@ -32,9 +32,17 @@ vi.mock("../src/ui/tui-shim.js", () => ({
     };
     return (keyMap[key] ?? [key]).includes(data);
   },
-    wrapTextWithAnsi: (text) => text.split(/\n/),
-    Text: class { constructor(c) { this.content = c; } render() { return [this.content]; } },
-      getAnsiSequenceLength: (_str: string, _i: number) => 0 }));
+  wrapTextWithAnsi: (text) => text.split(/\n/),
+  Text: class {
+    constructor(c) {
+      this.content = c;
+    }
+    render() {
+      return [this.content];
+    }
+  },
+  getAnsiSequenceLength: (_str: string, _i: number) => 0,
+}));
 
 vi.mock("../src/agent-registry.js", () => ({
   getUiStyle: () => "premium",
@@ -45,13 +53,7 @@ vi.mock("../src/agent-types.js", () => ({
   getConfig: (type: string) => ({
     name: type,
     displayName:
-      type === "Explore"
-        ? "Explore"
-        : type === "Plan"
-          ? "Plan"
-          : type === "general-purpose"
-            ? "General"
-            : type,
+      type === "Explore" ? "Explore" : type === "Plan" ? "Plan" : type === "general-purpose" ? "General" : type,
     promptMode: undefined,
     maxMemoryLines: 20,
   }),
@@ -64,19 +66,12 @@ vi.mock("../src/usage.js", () => ({
 
 // ── Benchmark logging ──────────────────────────────────────────────────────
 
-function benchmarkLog(
-  label: string,
-  measured: number,
-  threshold: number,
-  unit = "ms",
-): void {
+function benchmarkLog(label: string, measured: number, threshold: number, unit = "ms"): void {
   const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
   let status: string;
   if (measured > threshold) {
     status = "FAIL";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`,
-    );
+    console.warn(`\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`);
   } else if (pct > 80) {
     status = "WARN";
     console.warn(
@@ -87,9 +82,7 @@ function benchmarkLog(
   }
   const measuredStr = `${measured.toFixed(3)}${unit}`;
   const thresholdStr = `${threshold.toFixed(3)}${unit}`;
-  process.stdout.write(
-    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
-  );
+  process.stdout.write(`[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`);
 }
 
 // ── Agent helpers ───────────────────────────────────────────────────────────
@@ -121,10 +114,7 @@ function makeAgent(overrides: Partial<AgentRecord> = {}): AgentRecord {
   } as AgentRecord;
 }
 
-function buildAgentList(
-  count: number,
-  dist: { running?: number; queued?: number; finished?: number },
-): AgentRecord[] {
+function buildAgentList(count: number, dist: { running?: number; queued?: number; finished?: number }): AgentRecord[] {
   const agents: AgentRecord[] = [];
   const runPct = (dist.running ?? 0) / 100;
   const queuedPct = (dist.queued ?? 0) / 100;
@@ -142,12 +132,7 @@ function buildAgentList(
 
     const a = makeAgent({
       status,
-      type:
-        i % 3 === 0
-          ? "Explore"
-          : i % 3 === 1
-            ? "Plan"
-            : "general-purpose",
+      type: i % 3 === 0 ? "Explore" : i % 3 === 1 ? "Plan" : "general-purpose",
       completedAt: status === "completed" ? Date.now() : undefined,
     });
     agents.push(a);
@@ -184,9 +169,7 @@ class MockManager {
 
 // ── Mock AgentActivity ─────────────────────────────────────────────────────
 
-function buildActivityData(
-  agents: AgentRecord[],
-): Map<string, AgentActivity> {
+function buildActivityData(agents: AgentRecord[]): Map<string, AgentActivity> {
   const activity = new Map<string, AgentActivity>();
   for (const a of agents) {
     if (a.status === "running" || a.status === "queued") {
@@ -237,19 +220,11 @@ describe("Benchmark: AgentDashboard.render() — normal view", () => {
     vi.useRealTimers();
   });
 
-  function createDash(
-    agents: AgentRecord[],
-    activity: Map<string, AgentActivity>,
-    tui: any,
-  ) {
+  function createDash(agents: AgentRecord[], activity: Map<string, AgentActivity>, tui: any) {
     const manager = new MockManager();
     manager.agents = agents;
     const done = () => {};
-    const dash = new AgentDashboardClass(
-      tui,
-      { manager, agentActivity: activity },
-      done,
-    );
+    const dash = new AgentDashboardClass(tui, { manager, agentActivity: activity }, done);
     return dash;
   }
 
@@ -385,19 +360,11 @@ describe("Benchmark: AgentDashboard.render() — with activity data", () => {
     vi.useRealTimers();
   });
 
-  function createDash(
-    agents: AgentRecord[],
-    activity: Map<string, AgentActivity>,
-    tui: any,
-  ) {
+  function createDash(agents: AgentRecord[], activity: Map<string, AgentActivity>, tui: any) {
     const manager = new MockManager();
     manager.agents = agents;
     const done = () => {};
-    return new AgentDashboardClass(
-      tui,
-      { manager, agentActivity: activity },
-      done,
-    );
+    return new AgentDashboardClass(tui, { manager, agentActivity: activity }, done);
   }
 
   it(`renders ${MEDIUM} agents with ${MEDIUM} activity entries under 5ms`, () => {
@@ -459,19 +426,11 @@ describe("Benchmark: AgentDashboard.render() — help screen", () => {
     vi.useRealTimers();
   });
 
-  function createDash(
-    agents: AgentRecord[],
-    activity: Map<string, AgentActivity>,
-    tui: any,
-  ) {
+  function createDash(agents: AgentRecord[], activity: Map<string, AgentActivity>, tui: any) {
     const manager = new MockManager();
     manager.agents = agents;
     const done = () => {};
-    return new AgentDashboardClass(
-      tui,
-      { manager, agentActivity: activity },
-      done,
-    );
+    return new AgentDashboardClass(tui, { manager, agentActivity: activity }, done);
   }
 
   it(`help screen with ${MEDIUM} agents under 3ms`, () => {
@@ -514,19 +473,11 @@ describe("Benchmark: AgentDashboard.render() — perf panel", () => {
     vi.useRealTimers();
   });
 
-  function createDash(
-    agents: AgentRecord[],
-    activity: Map<string, AgentActivity>,
-    tui: any,
-  ) {
+  function createDash(agents: AgentRecord[], activity: Map<string, AgentActivity>, tui: any) {
     const manager = new MockManager();
     manager.agents = agents;
     const done = () => {};
-    return new AgentDashboardClass(
-      tui,
-      { manager, agentActivity: activity },
-      done,
-    );
+    return new AgentDashboardClass(tui, { manager, agentActivity: activity }, done);
   }
 
   it(`perf panel with ${MEDIUM} agents under 3ms`, () => {

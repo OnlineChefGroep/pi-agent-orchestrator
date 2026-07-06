@@ -1,18 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  createAgentSession,
-  defaultResourceLoaderCtor,
-  getAgentDir,
-  sessionManagerInMemory,
-  settingsManagerCreate,
-} = vi.hoisted(() => ({
-  createAgentSession: vi.fn(),
-  defaultResourceLoaderCtor: vi.fn(),
-  getAgentDir: vi.fn(() => "/mock/agent-dir"),
-  sessionManagerInMemory: vi.fn(() => ({ kind: "memory-session-manager" })),
-  settingsManagerCreate: vi.fn(() => ({ kind: "settings-manager" })),
-}));
+const { createAgentSession, defaultResourceLoaderCtor, getAgentDir, sessionManagerInMemory, settingsManagerCreate } =
+  vi.hoisted(() => ({
+    createAgentSession: vi.fn(),
+    defaultResourceLoaderCtor: vi.fn(),
+    getAgentDir: vi.fn(() => "/mock/agent-dir"),
+    sessionManagerInMemory: vi.fn(() => ({ kind: "memory-session-manager" })),
+    settingsManagerCreate: vi.fn(() => ({ kind: "settings-manager" })),
+  }));
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
   createAgentSession,
@@ -71,7 +66,14 @@ vi.mock("../src/skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
 }));
 
-import { AgentRunnerError, getGraceTurns, globalCircuitBreaker, resumeAgent, runAgent, setGraceTurns } from "../src/agent-runner.js";
+import {
+  AgentRunnerError,
+  getGraceTurns,
+  globalCircuitBreaker,
+  resumeAgent,
+  runAgent,
+  setGraceTurns,
+} from "../src/agent-runner.js";
 
 function createSession(finalText: string) {
   const listeners: Array<(event: any) => void> = [];
@@ -132,9 +134,7 @@ describe("agent-runner final output capture", () => {
     await runAgent(ctx, "Explore", "Say BOUND", { pi });
 
     expect(session.bindExtensions).toHaveBeenCalledTimes(1);
-    expect(session.bindExtensions).toHaveBeenCalledWith(
-      expect.objectContaining({ onError: expect.any(Function) }),
-    );
+    expect(session.bindExtensions).toHaveBeenCalledWith(expect.objectContaining({ onError: expect.any(Function) }));
 
     const bindOrder = session.bindExtensions.mock.invocationCallOrder[0];
     const promptOrder = session.prompt.mock.invocationCallOrder[0];
@@ -148,16 +148,20 @@ describe("agent-runner final output capture", () => {
     await runAgent(ctx, "Explore", "Say CONFIGURED", { pi, cwd: "/tmp/worktree" });
 
     expect(getAgentDir).toHaveBeenCalledTimes(1);
-    expect(defaultResourceLoaderCtor).toHaveBeenCalledWith(expect.objectContaining({
-      cwd: "/tmp/worktree",
-      agentDir: "/mock/agent-dir",
-    }));
+    expect(defaultResourceLoaderCtor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: "/tmp/worktree",
+        agentDir: "/mock/agent-dir",
+      }),
+    );
     expect(settingsManagerCreate).toHaveBeenCalledWith("/tmp/worktree", "/mock/agent-dir");
     expect(sessionManagerInMemory).toHaveBeenCalledWith("/tmp/worktree");
-    expect(createAgentSession).toHaveBeenCalledWith(expect.objectContaining({
-      cwd: "/tmp/worktree",
-      agentDir: "/mock/agent-dir",
-    }));
+    expect(createAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: "/tmp/worktree",
+        agentDir: "/mock/agent-dir",
+      }),
+    );
   });
 
   it("suppresses AGENTS.md/CLAUDE.md/APPEND_SYSTEM.md for subagents", async () => {
@@ -298,19 +302,21 @@ describe("agent-runner usage callback wiring", () => {
     const seen: any[] = [];
     session.prompt = vi.fn(async () => {
       // Successful compaction — should fire
-      for (const l of listeners) l({
-        type: "compaction_end",
-        aborted: false,
-        reason: "threshold",
-        result: { tokensBefore: 12345 },
-      });
+      for (const l of listeners)
+        l({
+          type: "compaction_end",
+          aborted: false,
+          reason: "threshold",
+          result: { tokensBefore: 12345 },
+        });
       // Aborted compaction — should NOT fire
-      for (const l of listeners) l({
-        type: "compaction_end",
-        aborted: true,
-        reason: "manual",
-        result: { tokensBefore: 99999 },
-      });
+      for (const l of listeners)
+        l({
+          type: "compaction_end",
+          aborted: true,
+          reason: "manual",
+          result: { tokensBefore: 99999 },
+        });
       session.messages.push({ role: "assistant", content: [{ type: "text", text: "OK" }] });
     });
 
@@ -322,7 +328,6 @@ describe("agent-runner usage callback wiring", () => {
     expect(seen).toEqual([{ reason: "threshold", tokensBefore: 12345 }]);
   });
 });
-
 
 describe("getGraceTurns / setGraceTurns", () => {
   let originalTurns: number;

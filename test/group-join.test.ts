@@ -70,9 +70,12 @@ describe("GroupJoinManager", () => {
         onEvent,
       });
 
-      expect(onEvent).toHaveBeenCalledWith("group-1", expect.objectContaining({
-        type: "group:created",
-      }));
+      expect(onEvent).toHaveBeenCalledWith(
+        "group-1",
+        expect.objectContaining({
+          type: "group:created",
+        }),
+      );
     });
   });
 

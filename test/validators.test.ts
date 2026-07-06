@@ -119,10 +119,7 @@ describe("parseValidationResult", () => {
   });
 
   it("handles malformed JSON gracefully", () => {
-    const result = parseValidationResult(
-      "```json\n{ this is not valid json }\n```",
-      "v-broken",
-    );
+    const result = parseValidationResult("```json\n{ this is not valid json }\n```", "v-broken");
     expect(result.passed).toBe(false);
     expect(result.summary).toBe("Could not parse validator output");
   });

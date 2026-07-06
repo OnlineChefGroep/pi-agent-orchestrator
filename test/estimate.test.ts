@@ -53,7 +53,7 @@ describe("buildAgentEstimate", () => {
     expect(lines).toContain("Estimated launch tokens: ~2");
     expect(lines).toContain("Max turns: unlimited");
     expect(lines).toContain(
-      "Parent context was requested; actual usage depends on conversation size and is not included in this estimate."
+      "Parent context was requested; actual usage depends on conversation size and is not included in this estimate.",
     );
   });
 

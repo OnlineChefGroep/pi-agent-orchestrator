@@ -89,10 +89,7 @@ beforeEach(() => {
 
 describe("buildSettingsSnapshot — manager-owned fields", () => {
   it("pulls maxConcurrent from the manager", () => {
-    const snapshot = buildSettingsSnapshot(
-      asManager(makeManager({ getMaxConcurrent: () => 8 })),
-      makeGetters(),
-    );
+    const snapshot = buildSettingsSnapshot(asManager(makeManager({ getMaxConcurrent: () => 8 })), makeGetters());
     expect(snapshot.maxConcurrent).toBe(8);
   });
 
@@ -180,11 +177,8 @@ describe("buildSettingsSnapshot — getter-owned fields", () => {
     expect(snapshot.defaultMaxTurns).toBe(0);
   });
 
-  it("preserves defaultMaxTurns: 0 explicitly (0 means unlimited, not \"unset\")", () => {
-    const snapshot = buildSettingsSnapshot(
-      asManager(makeManager()),
-      makeGetters({ getDefaultMaxTurns: () => 0 }),
-    );
+  it('preserves defaultMaxTurns: 0 explicitly (0 means unlimited, not "unset")', () => {
+    const snapshot = buildSettingsSnapshot(asManager(makeManager()), makeGetters({ getDefaultMaxTurns: () => 0 }));
     expect(snapshot.defaultMaxTurns).toBe(0);
   });
 });

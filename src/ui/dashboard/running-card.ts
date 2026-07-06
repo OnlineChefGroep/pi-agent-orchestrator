@@ -29,7 +29,7 @@ export function renderRunningCard(
 
   // TrueColor background for card (empty string for retro/plain)
   const bg = th.bgCard || "";
-  const bgSel = selected ? (th.bgSelected || "") : "";
+  const bgSel = selected ? th.bgSelected || "" : "";
   const wrapBg = (s: string, useBg: string) => {
     if (!useBg) return s;
     // Re-apply bg after each internal reset so the background persists across the full line
@@ -37,8 +37,14 @@ export function renderRunningCard(
   };
 
   const top = wrapBg(` ${th.border}${box.tl}${box.h.repeat(Math.max(0, cardW - 2))}${box.tr}${th.reset}`, bgSel || bg);
-  const line1 = wrapBg(` ${th.border}${box.l}${th.reset} ${padAndTruncate(`${checked}${icon} ${name}${" ".repeat(gap)}${stats}`, contentW)} ${th.border}${box.r}${th.reset}`, bgSel || bg);
-  const line2 = wrapBg(` ${th.border}${box.l}${th.reset} ${padAndTruncate(`${th.muted}${description}${th.reset}`, contentW)} ${th.border}${box.r}${th.reset}`, bgSel || bg);
+  const line1 = wrapBg(
+    ` ${th.border}${box.l}${th.reset} ${padAndTruncate(`${checked}${icon} ${name}${" ".repeat(gap)}${stats}`, contentW)} ${th.border}${box.r}${th.reset}`,
+    bgSel || bg,
+  );
+  const line2 = wrapBg(
+    ` ${th.border}${box.l}${th.reset} ${padAndTruncate(`${th.muted}${description}${th.reset}`, contentW)} ${th.border}${box.r}${th.reset}`,
+    bgSel || bg,
+  );
   const bottom = wrapBg(` ${th.border}${box.bl}${box.h.repeat(Math.max(0, cardW - 2))}${box.br}${th.reset}`, bg);
   const actPad = " ".repeat(Math.max(1, 3));
   const actLine = `${actPad}${actIcon} ${th.dim}${fastTruncate(act, Math.max(8, innerW - 8))}${th.reset}`;
@@ -47,7 +53,10 @@ export function renderRunningCard(
   // Progress bar inside the card (between description and bottom border) — only when data exists
   if (rec.status === "running" && activity?.maxTurns) {
     const progressContent = `  ${renderTurnProgress(activity.turnCount, activity.maxTurns, 10, th)}`;
-    const line3 = wrapBg(` ${th.border}${box.l}${th.reset} ${padAndTruncate(progressContent, contentW)} ${th.border}${box.r}${th.reset}`, bgSel || bg);
+    const line3 = wrapBg(
+      ` ${th.border}${box.l}${th.reset} ${padAndTruncate(progressContent, contentW)} ${th.border}${box.r}${th.reset}`,
+      bgSel || bg,
+    );
     lines.splice(3, 0, line3); // insert before bottom border
   }
   return lines;

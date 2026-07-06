@@ -1,4 +1,3 @@
-
 /**
  * schedule.ts — `SubagentScheduler`: timer-driven dispatcher of scheduled subagents.
  *
@@ -27,10 +26,10 @@ import type { ScheduleStore } from "./schedule-store.js";
 import type { IsolationMode, ScheduledSubagent, SubagentType, ThinkingLevel } from "./types.js";
 
 // CVE-005 FIX: Schedule input bounds
-const MAX_INTERVAL = 2147483647;   // ~24.8 days (setTimeout limit)
-const MIN_INTERVAL = (process.env.NODE_ENV === "test" || process.env.VITEST === "true") ? 10 : 60000;        // 1 minute minimum
-const MAX_SCHEDULES = 100;         // Per session limit
-const MAX_PROMPT_SIZE = 50000;     // 50KB max prompt
+const MAX_INTERVAL = 2147483647; // ~24.8 days (setTimeout limit)
+const MIN_INTERVAL = process.env.NODE_ENV === "test" || process.env.VITEST === "true" ? 10 : 60000; // 1 minute minimum
+const MAX_SCHEDULES = 100; // Per session limit
+const MAX_PROMPT_SIZE = 50000; // 50KB max prompt
 const MAX_NAME_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 500;
 
@@ -103,29 +102,32 @@ export class SubagentScheduler {
    */
   private validateScheduleInput(input: NewJobInput): string[] {
     const errors: string[] = [];
-    
+
     // Validate name
-    if (!input.name || typeof input.name !== 'string' || input.name.length > MAX_NAME_LENGTH) {
+    if (!input.name || typeof input.name !== "string" || input.name.length > MAX_NAME_LENGTH) {
       errors.push(`Schedule name is required and must be a string <= ${MAX_NAME_LENGTH} characters`);
     }
-    
+
     // Validate description
-    if (input.description !== undefined && (typeof input.description !== 'string' || input.description.length > MAX_DESCRIPTION_LENGTH)) {
+    if (
+      input.description !== undefined &&
+      (typeof input.description !== "string" || input.description.length > MAX_DESCRIPTION_LENGTH)
+    ) {
       errors.push(`Description must be a string <= ${MAX_DESCRIPTION_LENGTH} characters`);
     }
-    
+
     // Validate prompt size
-    if (!input.prompt || typeof input.prompt !== 'string' || input.prompt.length > MAX_PROMPT_SIZE) {
+    if (!input.prompt || typeof input.prompt !== "string" || input.prompt.length > MAX_PROMPT_SIZE) {
       errors.push(`Prompt is required and must be a string <= ${MAX_PROMPT_SIZE} characters`);
     }
-    
+
     // Validate schedule format and bounds
-    if (typeof input.schedule !== 'string') {
-      errors.push('Schedule must be a string');
+    if (typeof input.schedule !== "string") {
+      errors.push("Schedule must be a string");
     } else {
       try {
         const detected = SubagentScheduler.detectSchedule(input.schedule);
-        if (detected.type === 'interval' && detected.intervalMs) {
+        if (detected.type === "interval" && detected.intervalMs) {
           if (detected.intervalMs < MIN_INTERVAL) {
             errors.push(`Interval ${detected.intervalMs}ms is below minimum ${MIN_INTERVAL}ms (1 minute)`);
           }
@@ -137,7 +139,7 @@ export class SubagentScheduler {
         errors.push(err instanceof Error ? err.message : String(err));
       }
     }
-    
+
     return errors;
   }
 
@@ -149,9 +151,9 @@ export class SubagentScheduler {
     // CVE-005 FIX: Validate input before building
     const errors = this.validateScheduleInput(input);
     if (errors.length > 0) {
-      throw new Error(`Invalid schedule input: ${errors.join(', ')}`);
+      throw new Error(`Invalid schedule input: ${errors.join(", ")}`);
     }
-    
+
     const detected = SubagentScheduler.detectSchedule(input.schedule);
     return {
       id: nanoid(10),
@@ -176,11 +178,13 @@ export class SubagentScheduler {
   /** Add a job, persist, and arm if enabled. Returns the stored job. */
   async addJob(input: NewJobInput): Promise<ScheduledSubagent> {
     const store = this.requireStore();
-    
+
     // Fast-fail checks (checked again strictly inside the store lock to prevent TOCTOU races)
     const currentJobs = store.list();
     if (currentJobs.length >= MAX_SCHEDULES) {
-      throw new Error(`Maximum number of schedules reached (${MAX_SCHEDULES}). Remove existing schedules before adding new ones.`);
+      throw new Error(
+        `Maximum number of schedules reached (${MAX_SCHEDULES}). Remove existing schedules before adding new ones.`,
+      );
     }
     if (store.hasName(input.name)) {
       throw new Error(`A scheduled job named "${input.name}" already exists.`);
@@ -206,13 +210,16 @@ export class SubagentScheduler {
   /** Toggle / mutate a job. Re-arms based on the new `enabled` state. */
   async updateJob(id: string, patch: Partial<ScheduledSubagent>): Promise<ScheduledSubagent | undefined> {
     // CVE-005 FIX: Enforce bounds on updates to prevent bypassing size limits
-    if (patch.name !== undefined && (typeof patch.name !== 'string' || patch.name.length > MAX_NAME_LENGTH)) {
+    if (patch.name !== undefined && (typeof patch.name !== "string" || patch.name.length > MAX_NAME_LENGTH)) {
       throw new Error(`Schedule name must be a string <= ${MAX_NAME_LENGTH} characters`);
     }
-    if (patch.description !== undefined && (typeof patch.description !== 'string' || patch.description.length > MAX_DESCRIPTION_LENGTH)) {
+    if (
+      patch.description !== undefined &&
+      (typeof patch.description !== "string" || patch.description.length > MAX_DESCRIPTION_LENGTH)
+    ) {
       throw new Error(`Description must be a string <= ${MAX_DESCRIPTION_LENGTH} characters`);
     }
-    if (patch.prompt !== undefined && (typeof patch.prompt !== 'string' || patch.prompt.length > MAX_PROMPT_SIZE)) {
+    if (patch.prompt !== undefined && (typeof patch.prompt !== "string" || patch.prompt.length > MAX_PROMPT_SIZE)) {
       throw new Error(`Prompt must be a string <= ${MAX_PROMPT_SIZE} characters`);
     }
 
@@ -223,7 +230,7 @@ export class SubagentScheduler {
       const merged: NewJobInput = { ...existing, ...patch };
       const errors = this.validateScheduleInput(merged);
       if (errors.length > 0) {
-        throw new Error(`Invalid schedule update: ${errors.join(', ')}`);
+        throw new Error(`Invalid schedule update: ${errors.join(", ")}`);
       }
     }
     const updated = await store.update(id, patch);
@@ -321,76 +328,76 @@ export class SubagentScheduler {
     try {
       await store.update(id, { lastStatus: "running" });
 
-    // Resolve model at fire time — registry contents may have changed since the
-    // job was created (auth added/removed). Fall back silently to spawn-default
-    // if resolution fails; the spawn path handles undefined model gracefully.
-    let resolvedModel: any | undefined;
-    if (job.model) {
-      const r = resolveModel(job.model, ctx.modelRegistry);
-      if (typeof r !== "string") resolvedModel = r;
-    }
-
-    let agentId: string;
-    try {
-      agentId = manager.spawn(pi, ctx, job.subagent_type, job.prompt, {
-        description: job.description,
-        isBackground: true,
-        bypassQueue: true,
-        model: resolvedModel,
-        maxTurns: job.max_turns,
-        isolated: job.isolated,
-        thinkingLevel: job.thinking,
-        isolation: job.isolation,
-      });
-    } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
-      this.emit({ type: "error", jobId: id, error });
-      await store.update(id, { lastRun: new Date().toISOString(), lastStatus: "error" });
-      return;
-    }
-
-    this.emit({ type: "fired", jobId: id, agentId, name: job.name });
-
-    const record = manager.getRecord(agentId);
-    const finalize = async (status: "success" | "error") => {
-      const next = this.getNextRun(id);
-      const current = store.get(id);
-      await store.update(id, {
-        lastRun: new Date().toISOString(),
-        lastStatus: status,
-        runCount: (current?.runCount ?? 0) + 1,
-        nextRun: next,
-        // Auto-disable one-shots atomically with the status update to
-        // prevent races with a concurrent store.update from the Cron callback.
-        ...(current?.scheduleType === "once" ? { enabled: false } : {}),
-      });
-      if (current?.scheduleType === "once") {
-        const updated = store.get(id);
-        if (updated) this.emit({ type: "updated", job: updated });
+      // Resolve model at fire time — registry contents may have changed since the
+      // job was created (auth added/removed). Fall back silently to spawn-default
+      // if resolution fails; the spawn path handles undefined model gracefully.
+      let resolvedModel: any | undefined;
+      if (job.model) {
+        const r = resolveModel(job.model, ctx.modelRegistry);
+        if (typeof r !== "string") resolvedModel = r;
       }
-    };
 
-    // AgentManager's promise resolves either way (its .catch returns ""), so we
-    // can't infer success/failure from the promise — read record.status instead.
-    // Terminal states: completed/steered = success; error/aborted/stopped = error.
-    // Await the full chain so executeJob doesn't return before finalize completes.
-    // This ensures runCount/lastStatus are reflected before the Cron callback or
-    // interval tick resolves, preventing races with scheduler.stop() cleanup.
-    if (record?.promise) {
+      let agentId: string;
       try {
-        await record.promise;
-        const r = manager.getRecord(agentId);
-        const failed = r?.status === "error" || r?.status === "aborted" || r?.status === "stopped";
-        await finalize(failed ? "error" : "success");
-      } catch {
-        // record.promise rejected (defensive — the real AgentManager's .catch
-        // returns "" so this should never fire, but handle it for safety).
-        await finalize("error").catch(() => {});
+        agentId = manager.spawn(pi, ctx, job.subagent_type, job.prompt, {
+          description: job.description,
+          isBackground: true,
+          bypassQueue: true,
+          model: resolvedModel,
+          maxTurns: job.max_turns,
+          isolated: job.isolated,
+          thinkingLevel: job.thinking,
+          isolation: job.isolation,
+        });
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        this.emit({ type: "error", jobId: id, error });
+        await store.update(id, { lastRun: new Date().toISOString(), lastStatus: "error" });
+        return;
       }
-    } else {
-      // Spawn returned without a promise (defensive — bypassQueue path always sets one).
-      await finalize("success").catch(() => {});
-    }
+
+      this.emit({ type: "fired", jobId: id, agentId, name: job.name });
+
+      const record = manager.getRecord(agentId);
+      const finalize = async (status: "success" | "error") => {
+        const next = this.getNextRun(id);
+        const current = store.get(id);
+        await store.update(id, {
+          lastRun: new Date().toISOString(),
+          lastStatus: status,
+          runCount: (current?.runCount ?? 0) + 1,
+          nextRun: next,
+          // Auto-disable one-shots atomically with the status update to
+          // prevent races with a concurrent store.update from the Cron callback.
+          ...(current?.scheduleType === "once" ? { enabled: false } : {}),
+        });
+        if (current?.scheduleType === "once") {
+          const updated = store.get(id);
+          if (updated) this.emit({ type: "updated", job: updated });
+        }
+      };
+
+      // AgentManager's promise resolves either way (its .catch returns ""), so we
+      // can't infer success/failure from the promise — read record.status instead.
+      // Terminal states: completed/steered = success; error/aborted/stopped = error.
+      // Await the full chain so executeJob doesn't return before finalize completes.
+      // This ensures runCount/lastStatus are reflected before the Cron callback or
+      // interval tick resolves, preventing races with scheduler.stop() cleanup.
+      if (record?.promise) {
+        try {
+          await record.promise;
+          const r = manager.getRecord(agentId);
+          const failed = r?.status === "error" || r?.status === "aborted" || r?.status === "stopped";
+          await finalize(failed ? "error" : "success");
+        } catch {
+          // record.promise rejected (defensive — the real AgentManager's .catch
+          // returns "" so this should never fire, but handle it for safety).
+          await finalize("error").catch(() => {});
+        }
+      } else {
+        // Spawn returned without a promise (defensive — bypassQueue path always sets one).
+        await finalize("success").catch(() => {});
+      }
     } catch (err) {
       this.emit({ type: "error", jobId: id, error: err instanceof Error ? err.message : String(err) });
     }
@@ -436,7 +443,7 @@ export class SubagentScheduler {
     const cronCheck = SubagentScheduler.validateCronExpression(trimmed);
     if (cronCheck.valid) return { type: "cron", normalized: trimmed };
     throw new Error(
-      `Invalid schedule "${s}". Use 6-field cron (e.g. "0 0 9 * * 1" — 9am every Monday), interval ("5m"/"1h"), or one-shot ("+10m" / ISO).`
+      `Invalid schedule "${s}". Use 6-field cron (e.g. "0 0 9 * * 1" — 9am every Monday), interval ("5m"/"1h"), or one-shot ("+10m" / ISO).`,
     );
   }
 

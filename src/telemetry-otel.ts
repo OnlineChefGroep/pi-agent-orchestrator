@@ -23,14 +23,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import {
-  type Context,
-  context,
-  type Span,
-  SpanStatusCode,
-  type Tracer,
-  trace,
-} from "@opentelemetry/api";
+import { type Context, context, type Span, SpanStatusCode, type Tracer, trace } from "@opentelemetry/api";
 import { isTracingEnabled, setTracingEnabled } from "./agent-registry.js";
 
 // Re-export the tracing-enabled setter so callers (tests, future runtime
@@ -91,15 +84,33 @@ export function resetTracer(): void {
  */
 const NOOP_SPAN = {
   spanContext: () => ({ traceId: "", spanId: "", traceFlags: 0 }),
-  setAttribute: function () { return this; },
-  setAttributes: function () { return this; },
-  addEvent: function () { return this; },
-  addLink: function () { return this; },
-  addLinks: function () { return this; },
-  recordException: function () { return this; },
-  updateName: function () { return this; },
-  setStatus: function () { return this; },
-  end: function () { return this; },
+  setAttribute: function () {
+    return this;
+  },
+  setAttributes: function () {
+    return this;
+  },
+  addEvent: function () {
+    return this;
+  },
+  addLink: function () {
+    return this;
+  },
+  addLinks: function () {
+    return this;
+  },
+  recordException: function () {
+    return this;
+  },
+  updateName: function () {
+    return this;
+  },
+  setStatus: function () {
+    return this;
+  },
+  end: function () {
+    return this;
+  },
   isRecording: () => false,
 } as unknown as Span;
 
@@ -146,9 +157,7 @@ export function startAgentSpan(
       ...(options?.description ? { "agent.description": options.description } : {}),
       ...(options?.depth !== undefined ? { "agent.depth": options.depth } : {}),
       ...(options?.model ? { "agent.model": options.model } : {}),
-      ...(options?.correlationId
-        ? { [CORRELATION_ID_ATTRIBUTE]: options.correlationId }
-        : {}),
+      ...(options?.correlationId ? { [CORRELATION_ID_ATTRIBUTE]: options.correlationId } : {}),
     },
   });
   const ctx = trace.setSpan(context.active(), span);
@@ -200,11 +209,7 @@ export function endAgentSpan(
 /**
  * Start a tool call sub-span as a child of the agent span context.
  */
-export function startToolSpan(
-  agentId: string,
-  toolName: string,
-  parentCtx?: Context,
-): Span {
+export function startToolSpan(agentId: string, toolName: string, parentCtx?: Context): Span {
   if (!isTracingEnabled()) return NOOP_SPAN;
   const tracer = getTracer();
   return tracer.startSpan(
@@ -234,11 +239,7 @@ export function endToolSpan(span: Span, error?: string): void {
 /**
  * Start a turn sub-span as a child of the agent span context.
  */
-export function startTurnSpan(
-  agentId: string,
-  turnNumber: number,
-  parentCtx?: Context,
-): Span {
+export function startTurnSpan(agentId: string, turnNumber: number, parentCtx?: Context): Span {
   if (!isTracingEnabled()) return NOOP_SPAN;
   const tracer = getTracer();
   return tracer.startSpan(
@@ -264,12 +265,7 @@ export function endTurnSpan(span: Span): void {
 /**
  * Add a compaction sub-span (event/duration ~0) as a child of the agent context.
  */
-export function startCompactionSpan(
-  agentId: string,
-  reason: string,
-  tokensBefore: number,
-  parentCtx?: Context,
-): Span {
+export function startCompactionSpan(agentId: string, reason: string, tokensBefore: number, parentCtx?: Context): Span {
   if (!isTracingEnabled()) return NOOP_SPAN;
   const tracer = getTracer();
   return tracer.startSpan(

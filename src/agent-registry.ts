@@ -15,7 +15,7 @@ import type { JoinMode, PromptCompressionLevel } from "./types.js";
 
 // ---- Join mode configuration ----
 
-let defaultJoinMode: JoinMode = 'smart';
+let defaultJoinMode: JoinMode = "smart";
 
 /** Get the default join mode for background agents. */
 export function getDefaultJoinMode(): JoinMode {
@@ -29,9 +29,9 @@ export function setDefaultJoinMode(mode: JoinMode): void {
 
 // ---- Orchestration mode configuration ----
 
-export type OrchestrationMode = 'auto' | 'single' | 'swarm' | 'crew';
+export type OrchestrationMode = "auto" | "single" | "swarm" | "crew";
 
-let defaultOrchestrationMode: OrchestrationMode = 'auto';
+let defaultOrchestrationMode: OrchestrationMode = "auto";
 
 /** Get the default orchestration mode for agent execution. */
 export function getOrchestrationMode(): OrchestrationMode {

@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAuditLog, resetAuditLogger } from "../src/audit-logger.js";
-import { configureRateLimit, type EventBus, getRateLimitConfig, PROTOCOL_VERSION, type RpcDeps, registerRpcHandlers, resetRpcRateLimitsForTests, type SpawnCapable } from "../src/cross-extension-rpc.js";
+import {
+  configureRateLimit,
+  type EventBus,
+  getRateLimitConfig,
+  PROTOCOL_VERSION,
+  type RpcDeps,
+  registerRpcHandlers,
+  resetRpcRateLimitsForTests,
+  type SpawnCapable,
+} from "../src/cross-extension-rpc.js";
 
 /** Simple in-process event bus for testing. */
 function createEventBus(): EventBus {
@@ -9,7 +18,9 @@ function createEventBus(): EventBus {
     on(event, handler) {
       if (!listeners.has(event)) listeners.set(event, new Set());
       listeners.get(event)!.add(handler);
-      return () => { listeners.get(event)?.delete(handler); };
+      return () => {
+        listeners.get(event)?.delete(handler);
+      };
     },
     emit(event, data) {
       for (const handler of listeners.get(event) ?? []) handler(data);
@@ -80,14 +91,14 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-s1", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-s1", type: "general-purpose", prompt: "do stuff",
+        requestId: "req-s1",
+        type: "general-purpose",
+        prompt: "do stuff",
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
       expect(reply).toHaveBeenCalledWith({ success: true, data: { id: "agent-42" } });
-      expect(manager.spawn).toHaveBeenCalledWith(
-        deps.pi, ctx, "general-purpose", "do stuff", {},
-      );
+      expect(manager.spawn).toHaveBeenCalledWith(deps.pi, ctx, "general-purpose", "do stuff", {});
     });
 
     it("passes options through to manager.spawn", async () => {
@@ -95,15 +106,17 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-s2", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-s2", type: "Explore", prompt: "find it",
+        requestId: "req-s2",
+        type: "Explore",
+        prompt: "find it",
         options: { description: "search", isBackground: true },
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(manager.spawn).toHaveBeenCalledWith(
-        deps.pi, ctx, "Explore", "find it",
-        { description: "search", isBackground: true },
-      );
+      expect(manager.spawn).toHaveBeenCalledWith(deps.pi, ctx, "Explore", "find it", {
+        description: "search",
+        isBackground: true,
+      });
     });
 
     it("returns error when no active session", async () => {
@@ -112,15 +125,15 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-s3", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-s3", type: "general-purpose", prompt: "x",
+        requestId: "req-s3",
+        type: "general-purpose",
+        prompt: "x",
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
       expect(reply).toHaveBeenCalledWith({
         success: false,
-        error: expect.stringMatching(
-          /^No active session for rpc:spawn \(type=general-purpose, requestId=[^)]+\)$/,
-        ),
+        error: expect.stringMatching(/^No active session for rpc:spawn \(type=general-purpose, requestId=[^)]+\)$/),
       });
       expect(manager.spawn).not.toHaveBeenCalled();
     });
@@ -133,7 +146,9 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-s4", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-s4", type: "bad-type", prompt: "x",
+        requestId: "req-s4",
+        type: "bad-type",
+        prompt: "x",
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
@@ -147,7 +162,9 @@ describe("cross-extension RPC", () => {
       events.on("subagents:rpc:spawn:reply:req-other", wrongReply);
       events.on("subagents:rpc:spawn:reply:req-s5", rightReply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-s5", type: "general-purpose", prompt: "x",
+        requestId: "req-s5",
+        type: "general-purpose",
+        prompt: "x",
       });
 
       await vi.waitFor(() => expect(rightReply).toHaveBeenCalled());
@@ -161,7 +178,9 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-s6", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-s6", type: "general-purpose", prompt: "x",
+        requestId: "req-s6",
+        type: "general-purpose",
+        prompt: "x",
       });
 
       // Give any potential async handler time to fire
@@ -342,16 +361,15 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-m1", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-m1", type: "general-purpose", prompt: "x",
+        requestId: "req-m1",
+        type: "general-purpose",
+        prompt: "x",
         options: { model: "openai-codex/gpt-5.5" },
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
       expect(reply).toHaveBeenCalledWith({ success: true, data: { id: "agent-42" } });
-      expect(manager.spawn).toHaveBeenCalledWith(
-        deps.pi, ctx, "general-purpose", "x",
-        { model: fakeModel },
-      );
+      expect(manager.spawn).toHaveBeenCalledWith(deps.pi, ctx, "general-purpose", "x", { model: fakeModel });
     });
 
     it("passes a Model object through unchanged", async () => {
@@ -359,15 +377,14 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-m2", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-m2", type: "general-purpose", prompt: "x",
+        requestId: "req-m2",
+        type: "general-purpose",
+        prompt: "x",
         options: { model: fakeModel },
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
-      expect(manager.spawn).toHaveBeenCalledWith(
-        deps.pi, ctx, "general-purpose", "x",
-        { model: fakeModel },
-      );
+      expect(manager.spawn).toHaveBeenCalledWith(deps.pi, ctx, "general-purpose", "x", { model: fakeModel });
     });
 
     it("surfaces a clear error when the model string can't be resolved", async () => {
@@ -375,7 +392,9 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-m3", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-m3", type: "general-purpose", prompt: "x",
+        requestId: "req-m3",
+        type: "general-purpose",
+        prompt: "x",
         options: { model: "nope/does-not-exist" },
       });
 
@@ -392,7 +411,9 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:req-m4", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "req-m4", type: "general-purpose", prompt: "x",
+        requestId: "req-m4",
+        type: "general-purpose",
+        prompt: "x",
         options: { model: "openai-codex/gpt-5.5" },
       });
 
@@ -415,7 +436,9 @@ describe("cross-extension RPC", () => {
       // First 2 should succeed.
       for (let i = 0; i < 2; i++) {
         events.emit("subagents:rpc:spawn", {
-          requestId: `cfg-${i}`, type: "general-purpose", prompt: "x",
+          requestId: `cfg-${i}`,
+          type: "general-purpose",
+          prompt: "x",
         });
       }
 
@@ -423,12 +446,15 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:cfg-blocked", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "cfg-blocked", type: "general-purpose", prompt: "x",
+        requestId: "cfg-blocked",
+        type: "general-purpose",
+        prompt: "x",
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
       expect(reply).toHaveBeenCalledWith({
-        success: false, error: "Rate limit exceeded for extension cfg-ext",
+        success: false,
+        error: "Rate limit exceeded for extension cfg-ext",
       });
     });
 
@@ -444,7 +470,9 @@ describe("cross-extension RPC", () => {
       const reply1 = vi.fn();
       events.on("subagents:rpc:spawn:reply:dep-1", reply1);
       events.emit("subagents:rpc:spawn", {
-        requestId: "dep-1", type: "general-purpose", prompt: "x",
+        requestId: "dep-1",
+        type: "general-purpose",
+        prompt: "x",
       });
       await vi.waitFor(() => expect(reply1).toHaveBeenCalled());
       expect(reply1).toHaveBeenCalledWith({ success: true, data: { id: "agent-42" } });
@@ -453,11 +481,14 @@ describe("cross-extension RPC", () => {
       const reply2 = vi.fn();
       events.on("subagents:rpc:spawn:reply:dep-2", reply2);
       events.emit("subagents:rpc:spawn", {
-        requestId: "dep-2", type: "general-purpose", prompt: "x",
+        requestId: "dep-2",
+        type: "general-purpose",
+        prompt: "x",
       });
       await vi.waitFor(() => expect(reply2).toHaveBeenCalled());
       expect(reply2).toHaveBeenCalledWith({
-        success: false, error: "Rate limit exceeded for extension dep-ext",
+        success: false,
+        error: "Rate limit exceeded for extension dep-ext",
       });
     });
 
@@ -498,7 +529,9 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:aud-s1", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "aud-s1", type: "Explore", prompt: "audit test",
+        requestId: "aud-s1",
+        type: "Explore",
+        prompt: "audit test",
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
@@ -529,7 +562,9 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:aud-err", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "aud-err", type: "general-purpose", prompt: "x",
+        requestId: "aud-err",
+        type: "general-purpose",
+        prompt: "x",
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
@@ -548,13 +583,17 @@ describe("cross-extension RPC", () => {
 
       // First request consumes the single allowed slot.
       events.emit("subagents:rpc:spawn", {
-        requestId: "aud-rl0", type: "general-purpose", prompt: "x",
+        requestId: "aud-rl0",
+        type: "general-purpose",
+        prompt: "x",
       });
       // Second hits the limit.
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:aud-rl1", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "aud-rl1", type: "general-purpose", prompt: "x",
+        requestId: "aud-rl1",
+        type: "general-purpose",
+        prompt: "x",
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
@@ -570,7 +609,9 @@ describe("cross-extension RPC", () => {
       const reply = vi.fn();
       events.on("subagents:rpc:spawn:reply:aud-unauth", reply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "aud-unauth", type: "general-purpose", prompt: "x",
+        requestId: "aud-unauth",
+        type: "general-purpose",
+        prompt: "x",
       });
 
       await vi.waitFor(() => expect(reply).toHaveBeenCalled());
@@ -592,7 +633,9 @@ describe("cross-extension RPC", () => {
       const spawnReply = vi.fn();
       events.on("subagents:rpc:spawn:reply:multi-2", spawnReply);
       events.emit("subagents:rpc:spawn", {
-        requestId: "multi-2", type: "general-purpose", prompt: "x",
+        requestId: "multi-2",
+        type: "general-purpose",
+        prompt: "x",
       });
       await vi.waitFor(() => expect(spawnReply).toHaveBeenCalled());
 

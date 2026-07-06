@@ -22,10 +22,7 @@ import {
   setUiStyle,
 } from "../src/agent-registry.js";
 import { getDefaultMaxTurns, getGraceTurns, setDefaultMaxTurns, setGraceTurns } from "../src/agent-runner.js";
-import {
-  recordDispatchDecision,
-  resetDispatchHistory,
-} from "../src/dispatch-history.js";
+import { recordDispatchDecision, resetDispatchHistory } from "../src/dispatch-history.js";
 import { buildHealthReport, formatDuration, formatHealthReport } from "../src/health-report.js";
 import type { SubagentScheduler } from "../src/schedule.js";
 import type { SettingsGetters } from "../src/settings.js";
@@ -36,8 +33,12 @@ import type { SwarmCoordinator } from "../src/swarm-join.js";
 class StubScheduler {
   active = true;
   jobs: Array<{ id: string }> = [];
-  isActive() { return this.active; }
-  list() { return this.jobs; }
+  isActive() {
+    return this.active;
+  }
+  list() {
+    return this.jobs;
+  }
 }
 
 class StubSwarm {
@@ -47,7 +48,15 @@ class StubSwarm {
     return this.swarms.map((s) => ({ ...s, strategy: "live" as const }));
   }
   getSwarmMetrics(swarmId: string) {
-    return this.metrics.get(swarmId) ?? { totalDeliveries: 0, totalRecordsDelivered: 0, partialDeliveries: 0, timedOutDeliveries: 0, bySwarm: {} };
+    return (
+      this.metrics.get(swarmId) ?? {
+        totalDeliveries: 0,
+        totalRecordsDelivered: 0,
+        partialDeliveries: 0,
+        timedOutDeliveries: 0,
+        bySwarm: {},
+      }
+    );
   }
 }
 
@@ -59,17 +68,20 @@ const baseGetters: SettingsGetters = {
   isTracingEnabled,
 };
 
-function makeDeps(overrides: Partial<{
-  manager: AgentManager;
-  scheduler: StubScheduler;
-  swarmJoin: StubSwarm | null;
-  cbState: { state: string; failures: number; lastFailureAt: number };
-  now: () => Date;
-}> = {}) {
+function makeDeps(
+  overrides: Partial<{
+    manager: AgentManager;
+    scheduler: StubScheduler;
+    swarmJoin: StubSwarm | null;
+    cbState: { state: string; failures: number; lastFailureAt: number };
+    now: () => Date;
+  }> = {},
+) {
   return {
     manager: overrides.manager ?? new AgentManager(),
     scheduler: (overrides.scheduler ?? new StubScheduler()) as unknown as SubagentScheduler,
-    swarmJoin: overrides.swarmJoin === null ? null : (overrides.swarmJoin ?? new StubSwarm()) as unknown as SwarmCoordinator,
+    swarmJoin:
+      overrides.swarmJoin === null ? null : ((overrides.swarmJoin ?? new StubSwarm()) as unknown as SwarmCoordinator),
     getters: baseGetters,
     circuitBreakerState: overrides.cbState ?? { state: "closed", failures: 0, lastFailureAt: 0 },
     now: overrides.now ?? (() => new Date("2026-06-16T12:00:00.000Z")),
@@ -82,8 +94,16 @@ describe("buildHealthReport — basic shape", () => {
   it("returns a report with the documented top-level sections", () => {
     const r = buildHealthReport(makeDeps());
     expect(Object.keys(r).sort()).toEqual([
-      "agents", "circuitBreaker", "dispatchHistogram", "process", "recentErrors",
-      "schedule", "settings", "swarm", "timestamp", "tracing",
+      "agents",
+      "circuitBreaker",
+      "dispatchHistogram",
+      "process",
+      "recentErrors",
+      "schedule",
+      "settings",
+      "swarm",
+      "timestamp",
+      "tracing",
     ]);
   });
 
@@ -120,9 +140,11 @@ describe("buildHealthReport — tracing section", () => {
 
 describe("buildHealthReport — circuit breaker section", () => {
   it("uses the provided circuitBreakerState override", () => {
-    const r = buildHealthReport(makeDeps({
-      cbState: { state: "open", failures: 7, lastFailureAt: 123456 },
-    }));
+    const r = buildHealthReport(
+      makeDeps({
+        cbState: { state: "open", failures: 7, lastFailureAt: 123456 },
+      }),
+    );
     expect(r.circuitBreaker).toEqual({ state: "open", failures: 7, lastFailureAt: 123456 });
   });
 });
@@ -191,8 +213,13 @@ describe("buildHealthReport — agents section", () => {
     expect(r.agents.running).toBe(0);
     expect(r.agents.queued).toBe(0);
     expect(r.agents.byStatus).toEqual({
-      queued: 0, running: 0, completed: 0,
-      steered: 0, aborted: 0, stopped: 0, error: 0,
+      queued: 0,
+      running: 0,
+      completed: 0,
+      steered: 0,
+      aborted: 0,
+      stopped: 0,
+      error: 0,
     });
   });
 
@@ -276,12 +303,18 @@ describe("buildHealthReport — recent errors", () => {
       // surface (listAgents) so this stays a black-box test.
       const baseTime = 1_000_000 + i * 1000;
       return {
-        id, type: "Explore", description: `t${i}`,
+        id,
+        type: "Explore",
+        description: `t${i}`,
         status: "error" as const,
         error: `error-${i}`,
-        toolUses: 0, spawnedAt: baseTime, completedAt: baseTime,
+        toolUses: 0,
+        spawnedAt: baseTime,
+        completedAt: baseTime,
         lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
-        compactionCount: 0, currentLevel: 0, totalSpawned: 0,
+        compactionCount: 0,
+        currentLevel: 0,
+        totalSpawned: 0,
         contextInputs: { inheritContext: false },
         correlationId: `c${i.toString(16).padStart(8, "0")}`,
       };
@@ -321,9 +354,15 @@ describe("formatHealthReport", () => {
     const text = formatHealthReport(r);
     for (const header of [
       "# /agents health",
-      "## Process", "## Tracing", "## Circuit Breaker",
-      "## Schedule", "## Swarm", "## Agents",
-      "## Settings", "## Recent Errors", "## Dispatch Decisions (recent)",
+      "## Process",
+      "## Tracing",
+      "## Circuit Breaker",
+      "## Schedule",
+      "## Swarm",
+      "## Agents",
+      "## Settings",
+      "## Recent Errors",
+      "## Dispatch Decisions (recent)",
     ]) {
       expect(text).toContain(header);
     }
@@ -337,15 +376,24 @@ describe("formatHealthReport", () => {
 
   it("emits the correlation id alongside each recent error", () => {
     const manager = new AgentManager();
-    vi.spyOn(manager, "listAgents").mockReturnValue([{
-      id: "x", type: "Plan", description: "d",
-      status: "error", error: "boom",
-      toolUses: 0, spawnedAt: 1, completedAt: 1,
-      lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
-      compactionCount: 0, currentLevel: 0, totalSpawned: 0,
-      contextInputs: { inheritContext: false },
-      correlationId: "abcd1234",
-    }]);
+    vi.spyOn(manager, "listAgents").mockReturnValue([
+      {
+        id: "x",
+        type: "Plan",
+        description: "d",
+        status: "error",
+        error: "boom",
+        toolUses: 0,
+        spawnedAt: 1,
+        completedAt: 1,
+        lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
+        compactionCount: 0,
+        currentLevel: 0,
+        totalSpawned: 0,
+        contextInputs: { inheritContext: false },
+        correlationId: "abcd1234",
+      },
+    ]);
     const r = buildHealthReport(makeDeps({ manager }));
     const text = formatHealthReport(r);
     expect(text).toContain("[corr=abcd1234]");
@@ -379,9 +427,27 @@ describe("buildHealthReport + formatHealthReport — dispatch histogram", () => 
   });
 
   it("carries explicit-mode decisions through the byKind + bySource histogram", () => {
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit",     promptLength: 30,  description: "x" });
-    recordDispatchDecision({ kind: "swarm",  configuredMode: "swarm",  source: "explicit",     promptLength: 40,  description: "x" });
-    recordDispatchDecision({ kind: "crew",   configuredMode: "crew",   source: "explicit",     promptLength: 50,  description: "x" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 30,
+      description: "x",
+    });
+    recordDispatchDecision({
+      kind: "swarm",
+      configuredMode: "swarm",
+      source: "explicit",
+      promptLength: 40,
+      description: "x",
+    });
+    recordDispatchDecision({
+      kind: "crew",
+      configuredMode: "crew",
+      source: "explicit",
+      promptLength: 50,
+      description: "x",
+    });
     const r = buildHealthReport(makeDeps());
     expect(r.dispatchHistogram.byKind).toEqual({ single: 1, swarm: 1, crew: 1 });
     expect(r.dispatchHistogram.bySource).toEqual({ explicit: 3, autoHeuristic: 0 });
@@ -390,10 +456,34 @@ describe("buildHealthReport + formatHealthReport — dispatch histogram", () => 
   });
 
   it("carries auto-heuristic decisions through both byKind AND autoPicks and exposes the →X breakdown", () => {
-    recordDispatchDecision({ kind: "single", configuredMode: "auto", source: "auto-heuristic", promptLength: 50, description: "auto1" });
-    recordDispatchDecision({ kind: "single", configuredMode: "auto", source: "auto-heuristic", promptLength: 50, description: "auto2" });
-    recordDispatchDecision({ kind: "swarm",  configuredMode: "auto", source: "auto-heuristic", promptLength: 50, description: "auto3" });
-    recordDispatchDecision({ kind: "crew",   configuredMode: "auto", source: "auto-heuristic", promptLength: 50, description: "auto4" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "auto",
+      source: "auto-heuristic",
+      promptLength: 50,
+      description: "auto1",
+    });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "auto",
+      source: "auto-heuristic",
+      promptLength: 50,
+      description: "auto2",
+    });
+    recordDispatchDecision({
+      kind: "swarm",
+      configuredMode: "auto",
+      source: "auto-heuristic",
+      promptLength: 50,
+      description: "auto3",
+    });
+    recordDispatchDecision({
+      kind: "crew",
+      configuredMode: "auto",
+      source: "auto-heuristic",
+      promptLength: 50,
+      description: "auto4",
+    });
     const r = buildHealthReport(makeDeps());
     expect(r.dispatchHistogram.byKind).toEqual({ single: 2, swarm: 1, crew: 1 });
     expect(r.dispatchHistogram.bySource).toEqual({ explicit: 0, autoHeuristic: 4 });
@@ -413,7 +503,13 @@ describe("buildHealthReport + formatHealthReport — dispatch histogram", () => 
   it("formatHealthReport surfaces the most-recent decision timestamp in ISO form", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-16T12:34:56.789Z"));
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 1, description: "x" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 1,
+      description: "x",
+    });
     const text = formatHealthReport(buildHealthReport(makeDeps()));
     expect(text).toContain("last decision: 2026-06-16T12:34:56.789Z");
     vi.useRealTimers();

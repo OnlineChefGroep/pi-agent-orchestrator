@@ -74,37 +74,86 @@ describe("buildInvocationTags", () => {
   });
 
   it("includes thinking tag", () => {
-    const result = buildInvocationTags({ type: "Explore", description: "", model: "", toolAllowList: [], level: 0, thinking: "high" } as any);
+    const result = buildInvocationTags({
+      type: "Explore",
+      description: "",
+      model: "",
+      toolAllowList: [],
+      level: 0,
+      thinking: "high",
+    } as any);
     expect(result.tags).toContain("thinking: high");
   });
 
   it("includes isolated tag", () => {
-    const result = buildInvocationTags({ type: "Explore", description: "", model: "", toolAllowList: [], level: 0, isolated: true } as any);
+    const result = buildInvocationTags({
+      type: "Explore",
+      description: "",
+      model: "",
+      toolAllowList: [],
+      level: 0,
+      isolated: true,
+    } as any);
     expect(result.tags).toContain("isolated");
   });
 
   it("includes worktree tag", () => {
-    const result = buildInvocationTags({ type: "Explore", description: "", model: "", toolAllowList: [], level: 0, isolation: "worktree" } as any);
+    const result = buildInvocationTags({
+      type: "Explore",
+      description: "",
+      model: "",
+      toolAllowList: [],
+      level: 0,
+      isolation: "worktree",
+    } as any);
     expect(result.tags).toContain("worktree");
   });
 
   it("includes background tag", () => {
-    const result = buildInvocationTags({ type: "Explore", description: "", model: "", toolAllowList: [], level: 0, runInBackground: true } as any);
+    const result = buildInvocationTags({
+      type: "Explore",
+      description: "",
+      model: "",
+      toolAllowList: [],
+      level: 0,
+      runInBackground: true,
+    } as any);
     expect(result.tags).toContain("background");
   });
 
   it("includes max turns tag", () => {
-    const result = buildInvocationTags({ type: "Explore", description: "", model: "", toolAllowList: [], level: 0, maxTurns: 5 } as any);
-    expect(result.tags.some(t => t.includes("max turns"))).toBe(true);
+    const result = buildInvocationTags({
+      type: "Explore",
+      description: "",
+      model: "",
+      toolAllowList: [],
+      level: 0,
+      maxTurns: 5,
+    } as any);
+    expect(result.tags.some((t) => t.includes("max turns"))).toBe(true);
   });
 
   it("extracts modelName", () => {
-    const result = buildInvocationTags({ type: "Explore", description: "", model: "", toolAllowList: [], level: 0, modelName: "claude" } as any);
+    const result = buildInvocationTags({
+      type: "Explore",
+      description: "",
+      model: "",
+      toolAllowList: [],
+      level: 0,
+      modelName: "claude",
+    } as any);
     expect(result.modelName).toBe("claude");
   });
 
   it("includes inherit context tag", () => {
-    const result = buildInvocationTags({ type: "Explore", description: "", model: "", toolAllowList: [], level: 0, inheritContext: true } as any);
+    const result = buildInvocationTags({
+      type: "Explore",
+      description: "",
+      model: "",
+      toolAllowList: [],
+      level: 0,
+      inheritContext: true,
+    } as any);
     expect(result.tags).toContain("inherit context");
   });
 });

@@ -61,7 +61,6 @@ export async function createWorktree(cwd: string, agentId: string): Promise<Work
   }
 }
 
-
 /**
  * Safely truncates a string to a maximum length without splitting surrogate pairs
  * or using O(N) array spread operations.
@@ -73,7 +72,7 @@ function safeTruncate(str: string, maxLen: number): string {
   for (let i = 0; i < maxLen; i++) {
     const code = str.charCodeAt(i);
     // High surrogate check
-    if (code >= 0xD800 && code <= 0xDBFF) {
+    if (code >= 0xd800 && code <= 0xdbff) {
       if (i + 1 >= maxLen) break;
       validLen += 2;
       i++; // Skip low surrogate
@@ -89,11 +88,7 @@ function safeTruncate(str: string, maxLen: number): string {
  * - If no changes: remove worktree entirely.
  * - If changes exist: create a branch, commit changes, return branch info.
  */
-export function cleanupWorktree(
-  cwd: string,
-  worktree: WorktreeInfo,
-  agentDescription: string,
-): WorktreeCleanupResult {
+export function cleanupWorktree(cwd: string, worktree: WorktreeInfo, agentDescription: string): WorktreeCleanupResult {
   if (!existsSync(worktree.path)) {
     return { hasChanges: false };
   }
@@ -104,7 +99,9 @@ export function cleanupWorktree(
       cwd: worktree.path,
       stdio: "pipe",
       timeout: 10000,
-    }).toString().trim();
+    })
+      .toString()
+      .trim();
 
     if (!status) {
       // No changes — remove worktree
@@ -114,20 +111,20 @@ export function cleanupWorktree(
 
     // Changes exist — stage, commit, and create a branch
     execFileSync("git", ["add", "-A"], { cwd: worktree.path, stdio: "pipe", timeout: 10000 });
-    
+
     // CVE-001 FIX: Sanitize commit message to prevent git hook injection
     // Remove newlines, carriage returns, control characters, and shell metacharacters
     const rawDesc = typeof agentDescription === "string" ? agentDescription : String(agentDescription);
     const safeDescStr = rawDesc
-      .replace(/[\r\n\x00-\x1F]/g, ' ')  // Remove newlines and control chars
-      .replace(/["`$\\]/g, '')            // Remove shell metacharacters
-      .replace(/\s+/g, ' ')               // Normalize whitespace
+      .replace(/[\r\n\x00-\x1F]/g, " ") // Remove newlines and control chars
+      .replace(/["`$\\]/g, "") // Remove shell metacharacters
+      .replace(/\s+/g, " ") // Normalize whitespace
       .trim();
 
     const safeDesc = safeTruncate(safeDescStr, 200);
-    
+
     const commitMsg = `pi-agent: ${safeDesc}`;
-    
+
     execFileSync("git", ["commit", "-m", commitMsg], {
       cwd: worktree.path,
       stdio: "pipe",
@@ -173,7 +170,11 @@ export function cleanupWorktree(
     };
   } catch {
     // Best effort cleanup on error
-    try { removeWorktree(cwd, worktree.path); } catch { /* ignore */ }
+    try {
+      removeWorktree(cwd, worktree.path);
+    } catch {
+      /* ignore */
+    }
     return { hasChanges: false };
   }
 }
@@ -192,7 +193,9 @@ function removeWorktree(cwd: string, worktreePath: string): void {
     // If git worktree remove fails, try pruning
     try {
       execFileSync("git", ["worktree", "prune"], { cwd, stdio: "pipe", timeout: 5000 });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -202,5 +205,7 @@ function removeWorktree(cwd: string, worktreePath: string): void {
 export function pruneWorktrees(cwd: string): void {
   try {
     execFileSync("git", ["worktree", "prune"], { cwd, stdio: "pipe", timeout: 5000 });
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }

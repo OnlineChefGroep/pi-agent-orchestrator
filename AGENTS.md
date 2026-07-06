@@ -26,7 +26,8 @@ Pi extension — runs inside the pi coding agent host, not standalone. Orchestra
 ## Quick commands
 
 ```bash
-npm run typecheck && npm run lint && npm test   # full verification
+npm run build                                # compile TypeScript to dist/
+npm run typecheck && npm run lint && npm test # full verification
 npm run lint:fix                                # auto-fix Biome warnings
 npm test -- test/some-file.test.ts              # run a single test file
 npm test -- --watch                             # watch mode
@@ -42,7 +43,7 @@ ES modules only (`"type": "module"`). No CommonJS.
 
 ## Lint
 
-**Biome only.** ESLint and Prettier were deliberately removed. The Biome formatter is disabled (`biome.json` formatter.enabled = false). Run `npm run lint` (check) or `npm run lint:fix` (auto-fix).
+**Biome only.** ESLint and Prettier were deliberately removed. The Biome formatter is enabled (`biome.json` formatter.enabled = true, 2-space indent, 120 char line width, double quotes). Run `npm run lint` (check), `npm run lint:fix` (auto-fix), or `npm run format` (format only).
 
 ## Test flakiness
 
@@ -97,9 +98,9 @@ Three distinct categories:
 
 `test/schedule.test.ts` and `test/schedule-store.test.ts` race on temp dirs in Windows CI. CI marks them `continue-on-error`. Local Windows runs may flake. This is a known issue, not a regression in your code.
 
-### 6. Biome formatter is disabled
+### 6. Biome formatter is enabled
 
-Don't run `prettier` or assume `biome format` works. `biome.json` has `formatter.enabled: false`. Use `biome check` for lint, `npm run lint:fix` to auto-fix.
+The Biome formatter is enabled (`biome.json` `formatter.enabled = true`). Run `npm run format` to auto-format, or `npm run lint:fix` to fix both lint and format issues. Use double quotes and 2-space indent.
 
 ### 7. Biome requires double quotes
 
@@ -171,3 +172,7 @@ See `docs/architecture.md` for the full module map and data-flow diagram.
 
 Ensure you run `npm run typecheck && npm run lint && npm test` before committing.
 Currently passing: **1693 tests** across **95 test files**, including performance benchmarks for render, snapshot, virtual scrolling, and spawn latency.
+
+## Operations & Incident Response
+
+For CI failures, publish issues, error tracking spikes, and security incidents, follow the [runbooks](docs/runbooks.md). The runbooks cover severity definitions, investigation steps, remediation procedures, and post-mortem templates.

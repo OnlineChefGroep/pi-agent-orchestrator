@@ -113,12 +113,8 @@ describe("buildSnapshotHash (dirty checking)", () => {
   });
 
   it("detects status changes", () => {
-    const before = [
-      { id: "a1", status: "running" },
-    ];
-    const after = [
-      { id: "a1", status: "completed" },
-    ];
+    const before = [{ id: "a1", status: "running" }];
+    const after = [{ id: "a1", status: "completed" }];
     expect(buildSnapshotHash(before)).not.toBe(buildSnapshotHash(after));
   });
 
@@ -189,11 +185,7 @@ describe("AgentWidget — debouncedUpdate (spawn batching)", () => {
 
     // First call should register the widget immediately
     expect(uiCtx.setWidget).toHaveBeenCalledOnce();
-    expect(uiCtx.setWidget).toHaveBeenCalledWith(
-      "agents",
-      expect.any(Function),
-      expect.any(Object),
-    );
+    expect(uiCtx.setWidget).toHaveBeenCalledWith("agents", expect.any(Function), expect.any(Object));
   });
 
   it("debouncedUpdate coalesces rapid calls", () => {
@@ -227,10 +219,7 @@ describe("AgentWidget — debouncedUpdate (spawn batching)", () => {
 
     // Direct update() call should clear the pending timer
     // Adding another agent changes the snapshot
-    manager.setAgents([
-      mockRecord({ status: "running" }),
-      mockRecord({ status: "queued" }),
-    ]);
+    manager.setAgents([mockRecord({ status: "running" }), mockRecord({ status: "queued" })]);
     widget.update();
 
     // Advance past the original debounce window
@@ -253,10 +242,7 @@ describe("AgentWidget — debouncedUpdate (spawn batching)", () => {
     expect(uiCtx.setWidget).toHaveBeenCalledTimes(1);
 
     // Second burst (e.g., another batch of spawns)
-    manager.setAgents([
-      mockRecord({ status: "running" }),
-      mockRecord({ status: "running" }),
-    ]);
+    manager.setAgents([mockRecord({ status: "running" }), mockRecord({ status: "running" })]);
     widget.debouncedUpdate();
     vi.advanceTimersByTime(20);
 
@@ -270,10 +256,7 @@ describe("AgentWidget — debouncedUpdate (spawn batching)", () => {
 
     // First update → shows "1 running agent"
     widget.update();
-    expect(uiCtx.setStatus).toHaveBeenCalledWith(
-      "subagents",
-      "1 running agent",
-    );
+    expect(uiCtx.setStatus).toHaveBeenCalledWith("subagents", "1 running agent");
 
     // Second update with same data → no status change (dedup)
     uiCtx.setStatus.mockClear();
@@ -281,15 +264,9 @@ describe("AgentWidget — debouncedUpdate (spawn batching)", () => {
     expect(uiCtx.setStatus).not.toHaveBeenCalled();
 
     // Adding a queued agent → status changes
-    manager.setAgents([
-      mockRecord({ status: "running" }),
-      mockRecord({ status: "queued" }),
-    ]);
+    manager.setAgents([mockRecord({ status: "running" }), mockRecord({ status: "queued" })]);
     widget.update();
-    expect(uiCtx.setStatus).toHaveBeenCalledWith(
-      "subagents",
-      "1 running, 1 queued agents",
-    );
+    expect(uiCtx.setStatus).toHaveBeenCalledWith("subagents", "1 running, 1 queued agents");
   });
 });
 
@@ -443,7 +420,7 @@ describe("renderAgentWidget — compact batch rendering", () => {
     const lines = await renderWidget(agents);
     const joined = lines.join("\n");
     // Should have two compact lines (one per type)
-    const compactLines = joined.split("\n").filter(l => l.includes("× "));
+    const compactLines = joined.split("\n").filter((l) => l.includes("× "));
     expect(compactLines.length).toBe(2);
   });
 
@@ -485,9 +462,7 @@ describe("renderAgentWidget — compact batch rendering", () => {
   });
 
   it("handles single queued agent", async () => {
-    const agents = [
-      mockRecord({ type: "Explore", status: "queued", description: "single search" }),
-    ];
+    const agents = [mockRecord({ type: "Explore", status: "queued", description: "single search" })];
     const lines = await renderWidget(agents);
     const joined = lines.join("\n");
     expect(joined).toContain("single search");
@@ -502,7 +477,7 @@ describe("renderAgentWidget — compact batch rendering", () => {
     const lines = await renderWidget(agents);
     const joined = lines.join("\n");
     // Should show one compact line (not one per agent)
-    const compactLines = joined.split("\n").filter(l => l.includes("× "));
+    const compactLines = joined.split("\n").filter((l) => l.includes("× "));
     expect(compactLines.length).toBe(1);
   });
 
@@ -518,9 +493,7 @@ describe("renderAgentWidget — compact batch rendering", () => {
   });
 
   it("respects shouldShowFinished to hide stale agents", async () => {
-    const agents = [
-      mockRecord({ type: "Explore", status: "completed", completedAt: Date.now() }),
-    ];
+    const agents = [mockRecord({ type: "Explore", status: "completed", completedAt: Date.now() })];
     // Don't show finished agents
     const lines = await renderWidget(agents, new Map(), () => false);
     expect(lines).toEqual([]);

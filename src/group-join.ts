@@ -77,10 +77,7 @@ export class GroupJoinManager {
   private deliverCb: DeliveryCallback;
   private defaultGroupTimeout?: number;
 
-  constructor(
-    deliverCb: DeliveryCallback,
-    groupTimeout?: number,
-  ) {
+  constructor(deliverCb: DeliveryCallback, groupTimeout?: number) {
     this.deliverCb = deliverCb;
     this.defaultGroupTimeout = groupTimeout;
   }
@@ -235,7 +232,13 @@ export class GroupJoinManager {
       retryAttempt: group.retryCount,
     };
 
-    this.emit(group, { type: "delivery:attempt", records, partial, attempt: group.retryCount + 1, timestamp: Date.now() });
+    this.emit(group, {
+      type: "delivery:attempt",
+      records,
+      partial,
+      attempt: group.retryCount + 1,
+      timestamp: Date.now(),
+    });
 
     try {
       this.deliverCb(records, partial, meta);
@@ -249,7 +252,8 @@ export class GroupJoinManager {
       const maxRetries = group.config.maxRetries ?? DEFAULT_MAX_RETRIES;
       if (group.retryCount < maxRetries) {
         group.retryCount++;
-        const delay = RETRY_BASE_DELAY_MS * Math.pow(group.config.retryBackoff ?? DEFAULT_RETRY_BACKOFF, group.retryCount - 1);
+        const delay =
+          RETRY_BASE_DELAY_MS * Math.pow(group.config.retryBackoff ?? DEFAULT_RETRY_BACKOFF, group.retryCount - 1);
         group.retryHandle = setTimeout(() => {
           group.delivered = false; // Reset to allow redelivery
           this.deliver(group, partial);
@@ -296,7 +300,9 @@ export class GroupJoinManager {
   }
 
   /** Get group info for dashboard. */
-  getGroupInfo(groupId: string): { total: number; completed: number; delivered: boolean; isStraggler: boolean } | undefined {
+  getGroupInfo(
+    groupId: string,
+  ): { total: number; completed: number; delivered: boolean; isStraggler: boolean } | undefined {
     const group = this.groups.get(groupId);
     if (!group) return undefined;
     return {

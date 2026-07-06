@@ -7,31 +7,31 @@
  * the cumulative cached prefix re-read on that one call.
  */
 export interface LifetimeUsage {
-    input: number;
-    output: number;
-    cacheWrite: number;
+  input: number;
+  output: number;
+  cacheWrite: number;
 }
 
 /** Sum of lifetime usage components, or 0 if undefined. */
 export function getLifetimeTotal(u?: LifetimeUsage): number {
-    return u ? u.input + u.output + u.cacheWrite : 0;
+  return u ? u.input + u.output + u.cacheWrite : 0;
 }
 
 /** Add a usage delta into a target accumulator (mutates target). */
 export function addUsage(into: LifetimeUsage, delta: LifetimeUsage): void {
-    into.input += delta.input;
-    into.output += delta.output;
-    into.cacheWrite += delta.cacheWrite;
+  into.input += delta.input;
+  into.output += delta.output;
+  into.cacheWrite += delta.cacheWrite;
 }
 
 /** Minimal shape we read from upstream `getSessionStats()`. */
 export interface SessionStatsLike {
-    tokens: { input: number; output: number; cacheWrite: number };
-    contextUsage?: { percent: number | null };
+  tokens: { input: number; output: number; cacheWrite: number };
+  contextUsage?: { percent: number | null };
 }
 
 export interface SessionLike {
-    getSessionStats(): SessionStatsLike;
+  getSessionStats(): SessionStatsLike;
 }
 
 /**
@@ -41,21 +41,21 @@ export interface SessionLike {
  * RESETS at compaction. For a lifetime total, use `getLifetimeTotal`.
  */
 export function getSessionTokens(session?: SessionLike): number {
-    try {
-        const t = session?.getSessionStats?.()?.tokens;
-        return t ? t.input + t.output + t.cacheWrite : 0;
-    } catch {
-        return 0;
-    }
+  try {
+    const t = session?.getSessionStats?.()?.tokens;
+    return t ? t.input + t.output + t.cacheWrite : 0;
+  } catch {
+    return 0;
+  }
 }
 
 /**
  * Context-window utilization (0–100), or null when unavailable.
  */
 export function getSessionContextPercent(session?: SessionLike): number | null {
-    try {
-        return session?.getSessionStats?.()?.contextUsage?.percent ?? null;
-    } catch {
-        return null;
-    }
+  try {
+    return session?.getSessionStats?.()?.contextUsage?.percent ?? null;
+  } catch {
+    return null;
+  }
 }

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Copy/Paste Detector Report</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #f7fafc; color: #2d3748; }
+    a { color: #3182ce; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .header { background: #fff; box-shadow: 0 1px 3px 0 rgba(0,0,0,.1), 0 1px 2px 0 rgba(0,0,0,.06); padding: 1rem 0; }
+    .header-inner { max-width: 80rem; margin: 0 auto; padding: 0 1rem; }
+    .header h1 { font-size: 1.875rem; font-weight: 600; color: #2d3748; margin: 0; }
+    .main { max-width: 80rem; margin: 2rem auto; padding: 0 1rem; }
+    .card { background: #fff; box-shadow: 0 1px 3px 0 rgba(0,0,0,.1), 0 1px 2px 0 rgba(0,0,0,.06); border-radius: 0.25rem; padding: 1.5rem; margin-bottom: 2rem; }
+    h2 { font-size: 1.5rem; font-weight: 600; color: #4a5568; margin: 0 0 1rem 0; }
+    .dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+    .stat-card { padding: 1rem; border-radius: 0.25rem; text-align: center; }
+    .stat-card h3 { font-size: 1.125rem; font-weight: 600; margin: 0 0 0.5rem 0; }
+    .stat-card .val { font-size: 2.25rem; font-weight: 700; }
+    .stat-blue { background: #bee3f8; color: #2a4365; }
+    .stat-green { background: #c6f6d5; color: #276749; }
+    .stat-yellow { background: #fefcbf; color: #975a16; }
+    .stat-red { background: #fed7d7; color: #9b2c2c; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { background: #edf2f7; color: #718096; text-transform: uppercase; font-size: 0.75rem; font-weight: 600; padding: 0.75rem 1.5rem; text-align: left; }
+    tbody td { padding: 0.75rem 1.5rem; border-bottom: 1px solid #edf2f7; font-size: 0.875rem; }
+    tbody tr:hover { background: #f7fafc; }
+    .clone-section { margin-bottom: 2rem; }
+    .clone-section h2 { border-bottom: 2px solid #edf2f7; padding-bottom: 0.5rem; }
+    .clone-item { padding: 1rem 0; border-bottom: 1px solid #edf2f7; }
+    .clone-item:last-child { border-bottom: none; }
+    .clone-info { color: #718096; font-size: 0.875rem; margin-bottom: 0.25rem; }
+    .toggle-btn { background: #a0aec0; color: #fff; border: none; padding: 0.125rem 0.5rem; font-size: 0.75rem; border-radius: 0.25rem; cursor: pointer; margin-left: 0.5rem; }
+    .toggle-btn:focus { outline: none; }
+    .code-block { background: #f7fafc; border: 1px solid #edf2f7; border-radius: 0.25rem; padding: 1rem; margin-top: 0.5rem; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 0.875rem; color: #2d3748; white-space: pre-wrap; overflow-x: auto; display: none; }
+    .code-block.visible { display: block; }
+    .no-dupes { color: #27ae60; font-weight: 700; font-size: 1.125rem; }
+    .footer { margin-top: 3rem; padding: 2rem 0; border-top: 1px solid #e0e0e0; text-align: center; font-family: -apple-system, sans-serif; color: #666; }
+    .footer p { margin: 0.5rem 0; font-size: 0.875rem; }
+    .footer a { color: #0066cc; }
+    .footer .small { font-size: 0.75rem; color: #999; }
+    @media (max-width: 768px) { .dashboard { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <h1>jscpd - copy/paste report</h1>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="card">
+      <section>
+        <h2>Dashboard</h2>
+        <div class="dashboard">
+          <div class="stat-card stat-blue">
+            <h3>Total Files</h3>
+            <div class="val">92</div>
+          </div>
+          <div class="stat-card stat-green">
+            <h3>Total Lines of Code</h3>
+            <div class="val">21640</div>
+          </div>
+          <div class="stat-card stat-yellow">
+            <h3>Number of Clones</h3>
+            <div class="val">3</div>
+          </div>
+          <div class="stat-card stat-red">
+            <h3>Duplicated Lines</h3>
+            <div class="val">169 (0.78%)</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="card">
+      <section>
+        <h2>Formats with Duplications</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Format</th>
+              <th>Files</th>
+              <th>Lines</th>
+              <th>Clones</th>
+              <th>Duplicated Lines</th>
+              <th>Duplicated Tokens</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td><a href="#typescript-clones">typescript</a></td>
+              <td>92</td>
+              <td>21640</td>
+              <td>3</td>
+              <td>169 (0.78%)</td>
+              <td>1396 (1.22%)</td>
+            </tr>
+            
+            <tr style="font-weight: 700;">
+              <td>Total</td>
+              <td>92</td>
+              <td>21640</td>
+              <td>3</td>
+              <td>169 (0.78%)</td>
+              <td>1396 (1.22%)</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    
+    
+    <div class="card">
+      <section class="clone-section">
+        <a name="typescript-clones"></a>
+        <h2>typescript</h2>
+        <div>
+          
+          <div class="clone-item">
+            <div class="clone-info">
+              /home/jan/OrgChefgroep/pi-agent-orchestrator/src/ui/agent-widget.ts (Line 335:26 - Line 350:42),
+              /home/jan/OrgChefgroep/pi-agent-orchestrator/src/ui/snapshot-hash.ts (Line 24:21 - Line 38:40)
+            </div>
+            <div>
+              <button class="toggle-btn" onclick="toggle('code-typescript-1')">Show code</button>
+            </div>
+            <pre id="code-typescript-1" class="code-block">      const a = allAgents[i];
+      // Hash: agent ID + status
+      const id = a.id;
+      for (let j = 0; j &lt; id.length; j++) {
+        hash ^= id.charCodeAt(j);
+        hash = Math.imul(hash, 0x01000193);
+      }
+      hash ^= 0x3a;
+      hash = Math.imul(hash, 0x01000193);
+      const status = a.status;
+      for (let j = 0; j &lt; status.length; j++) {
+        hash ^= status.charCodeAt(j);
+        hash = Math.imul(hash, 0x01000193);
+      }
+      hash ^= 0x2c;
+      hash = Math.imul(hash, 0x01000193);</pre>
+          </div>
+          
+          <div class="clone-item">
+            <div class="clone-info">
+              /home/jan/OrgChefgroep/pi-agent-orchestrator/src/ui/conversation-viewer.ts (Line 392:31 - Line 447:29),
+              /home/jan/OrgChefgroep/pi-agent-orchestrator/src/ui/conversation-viewer.ts (Line 592:35 - Line 647:31)
+            </div>
+            <div>
+              <button class="toggle-btn" onclick="toggle('code-typescript-2')">Show code</button>
+            </div>
+            <pre id="code-typescript-2" class="code-block">      if (!text.trim()) return;
+
+      let header = &quot; \x1b[48;2;0;100;160;38;2;255;255;255;1m 👤 USER \x1b[0m&quot;;
+      let border = &quot; \x1b[38;2;0;160;220m│\x1b[0m&quot;;
+      if (activeUiStyle === &quot;retro&quot;) {
+        header = &quot; \x1b[44;37;1m 👤 USER \x1b[0m&quot;;
+        border = &quot; \x1b[36m|\x1b[0m&quot;;
+      } else if (activeUiStyle === &quot;plain&quot;) {
+        header = &quot; 👤 USER &quot;;
+        border = &quot; |&quot;;
+      }
+
+      lines.push(header);
+      for (const line of wrapTextWithAnsi(text.trim(), width - 3)) {
+        lines.push(`${border} ${line}`);
+      }
+    } else if (msg.role === &quot;assistant&quot;) {
+      const textParts: string[] = [];
+      const toolCalls: string[] = [];
+      for (const c of msg.content) {
+        if (c.type === &quot;text&quot; &amp;&amp; c.text) textParts.push(c.text);
+        else if (c.type === &quot;toolCall&quot;) {
+          toolCalls.push((c as any).name ?? (c as any).toolName ?? &quot;unknown&quot;);
+        }
+      }
+
+      let header = &quot; \x1b[48;2;100;50;180;38;2;255;255;255;1m 🤖 HERMES \x1b[0m&quot;;
+      let border = &quot; \x1b[38;2;150;80;220m│\x1b[0m&quot;;
+      if (activeUiStyle === &quot;retro&quot;) {
+        header = &quot; \x1b[45;37;1m 🤖 HERMES \x1b[0m&quot;;
+        border = &quot; \x1b[35m|\x1b[0m&quot;;
+      } else if (activeUiStyle === &quot;plain&quot;) {
+        header = &quot; 🤖 HERMES &quot;;
+        border = &quot; |&quot;;
+      }
+
+      lines.push(header);
+      if (textParts.length &gt; 0) {
+        for (const line of wrapTextWithAnsi(textParts.join(&quot;\n&quot;).trim(), width - 3)) {
+          lines.push(`${border} ${line}`);
+        }
+      }
+      for (const name of toolCalls) {
+        let callLine = ` \x1b[38;2;150;80;220m│\x1b[0m   \x1b[38;2;220;120;0m⚡ [Tool Invoke: ${name}]\x1b[0m`;
+        if (activeUiStyle === &quot;retro&quot;) {
+          callLine = ` \x1b[35m|\x1b[0m   \x1b[33m⚡ [Tool Invoke: ${name}]\x1b[0m`;
+        } else if (activeUiStyle === &quot;plain&quot;) {
+          callLine = ` |   ⚡ [Tool Invoke: ${name}]`;
+        }
+        lines.push(callLine);
+      }
+    } else if (msg.role === &quot;toolResult&quot;) {
+      const text = extractText(msg.content);
+      const truncated = text.length &gt; 800 ? `${text.slice(0, 800)}\n... (truncated)` : text;
+      const trimmedTruncated = truncated.trim();
+      if (!trimmedTruncated) return;</pre>
+          </div>
+          
+          <div class="clone-item">
+            <div class="clone-info">
+              /home/jan/OrgChefgroep/pi-agent-orchestrator/src/ui/conversation-viewer.ts (Line 447:36 - Line 546:13),
+              /home/jan/OrgChefgroep/pi-agent-orchestrator/src/ui/conversation-viewer.ts (Line 647:40 - Line 746:15)
+            </div>
+            <div>
+              <button class="toggle-btn" onclick="toggle('code-typescript-3')">Show code</button>
+            </div>
+            <pre id="code-typescript-3" class="code-block">      if (!trimmedTruncated) return;
+
+      const innerW = width - 6;
+      if (innerW &gt; 10) {
+        const headerText = ` 🔧 Tool Result `;
+        const dashCount = Math.max(2, innerW - headerText.length - 2);
+
+        const box = getBoxChars();
+        let topBorder = `\x1b[38;2;220;120;0m${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}\x1b[0m`;
+        let bottomBorder = `\x1b[38;2;220;120;0m${box.bl}${box.h.repeat(innerW + 2)}${box.br}\x1b[0m`;
+        let leftBorder = &quot;\x1b[38;2;220;120;0m│\x1b[0m&quot;;
+        let rightBorder = &quot;\x1b[38;2;220;120;0m│\x1b[0m&quot;;
+
+        if (activeUiStyle === &quot;retro&quot;) {
+          topBorder = `\x1b[33m${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}\x1b[0m`;
+          bottomBorder = `\x1b[33m${box.bl}${box.h.repeat(innerW + 2)}${box.br}\x1b[0m`;
+          leftBorder = &quot;\x1b[33m|\x1b[0m&quot;;
+          rightBorder = &quot;\x1b[33m|\x1b[0m&quot;;
+        } else if (activeUiStyle === &quot;plain&quot;) {
+          topBorder = `${box.tl}${box.h}${box.h}${headerText}${box.h.repeat(dashCount)}${box.tr}`;
+          bottomBorder = `${box.bl}${box.h.repeat(innerW + 2)}${box.br}`;
+          leftBorder = &quot;|&quot;;
+          rightBorder = &quot;|&quot;;
+        }
+
+        lines.push(`   ${topBorder}`);
+        for (const line of wrapTextWithAnsi(trimmedTruncated, innerW)) {
+          const paddedLine = line + &quot; &quot;.repeat(Math.max(0, innerW - visibleWidth(line)));
+          lines.push(`   ${leftBorder} ${paddedLine} ${rightBorder}`);
+        }
+        lines.push(`   ${bottomBorder}`);
+      } else {
+        lines.push(th.fg(&quot;warning&quot;, &quot;[Result]&quot;));
+        for (const line of wrapTextWithAnsi(trimmedTruncated, width)) {
+          lines.push(th.fg(&quot;dim&quot;, line));
+        }
+      }
+    } else if (isBashExecution(msg)) {
+      const bash = msg;
+      const command = bash.command || &quot;&quot;;
+      const output = bash.output || &quot;&quot;;
+
+      const innerW = width - 6;
+      if (innerW &gt; 10) {
+        const headerText = ` 💻 Bash Command `;
+        const dashCount = Math.max(2, innerW - headerText.length - 2);
+
+        let topBorder = `\x1b[38;2;0;160;220m╭──${headerText}${&quot;─&quot;.repeat(dashCount)}╮\x1b[0m`;
+        let bottomBorder = `\x1b[38;2;0;160;220m╰${&quot;─&quot;.repeat(innerW + 2)}╯\x1b[0m`;
+        let leftBorder = &quot;\x1b[38;2;0;160;220m│\x1b[0m&quot;;
+        let rightBorder = &quot;\x1b[38;2;0;160;220m│\x1b[0m&quot;;
+        let midBorder = `\x1b[38;2;0;160;220m├${&quot;─&quot;.repeat(innerW + 2)}┤\x1b[0m`;
+        let cmdPrefix = &quot;\x1b[1m$ &quot;;
+        let cmdSuffix = &quot;\x1b[0m&quot;;
+        let outPrefix = &quot;\x1b[2m&quot;;
+        let outSuffix = &quot;\x1b[0m&quot;;
+
+        if (activeUiStyle === &quot;retro&quot;) {
+          topBorder = `\x1b[36m+--${headerText}${&quot;-&quot;.repeat(dashCount)}+\x1b[0m`;
+          bottomBorder = `\x1b[36m+${&quot;-&quot;.repeat(innerW + 2)}+\x1b[0m`;
+          leftBorder = &quot;\x1b[36m|\x1b[0m&quot;;
+          rightBorder = &quot;\x1b[36m|\x1b[0m&quot;;
+          midBorder = `\x1b[36m+${&quot;-&quot;.repeat(innerW + 2)}+\x1b[0m`;
+        } else if (activeUiStyle === &quot;plain&quot;) {
+          topBorder = `+--${headerText}${&quot;-&quot;.repeat(dashCount)}+`;
+          bottomBorder = `+${&quot;-&quot;.repeat(innerW + 2)}+`;
+          leftBorder = &quot;|&quot;;
+          rightBorder = &quot;|&quot;;
+          midBorder = `+${&quot;-&quot;.repeat(innerW + 2)}+`;
+          cmdPrefix = &quot;$ &quot;;
+          cmdSuffix = &quot;&quot;;
+          outPrefix = &quot;&quot;;
+          outSuffix = &quot;&quot;;
+        }
+
+        lines.push(`   ${topBorder}`);
+        const cmdLineStr = `${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`;
+        lines.push(
+          `   ${leftBorder} ${cmdLineStr}${&quot; &quot;.repeat(Math.max(0, innerW - visibleWidth(`${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`)))} ${rightBorder}`,
+        );
+
+        if (output.trim()) {
+          lines.push(`   ${midBorder}`);
+          const outTrunc = output.length &gt; 800 ? `${output.slice(0, 800)}\n... (truncated)` : output;
+          for (const line of wrapTextWithAnsi(outTrunc.trim(), innerW)) {
+            const paddedLine = line + &quot; &quot;.repeat(Math.max(0, innerW - visibleWidth(line)));
+            lines.push(`   ${leftBorder} ${outPrefix}${paddedLine}${outSuffix} ${rightBorder}`);
+          }
+        }
+        lines.push(`   ${bottomBorder}`);
+      } else {
+        lines.push(th.fg(&quot;accent&quot;, `$ ${command}`));
+        const trimmedOutput = output.trim();
+        if (trimmedOutput) {
+          for (const line of wrapTextWithAnsi(trimmedOutput, width)) {
+            lines.push(th.fg(&quot;dim&quot;, line));
+          }
+        }
+      }
+    } else {</pre>
+          </div>
+          
+        </div>
+      </section>
+    </div>
+    
+    
+  </div>
+
+  <div class="footer">
+    <p>Generated by <a href="https://jscpd.dev" target="_blank">jscpd</a> v0.1.7 by <a href="https://github.com/kucherenko" target="_blank">Andrey Kucherenko</a></p>
+    <p><a href="https://www.npmjs.com/package/jscpd" target="_blank"><img src="https://img.shields.io/npm/dw/jscpd.svg?style=flat-square" alt="npm weekly downloads" style="vertical-align: middle;"></a></p>
+  </div>
+
+  <script>
+    function toggle(id) {
+      var el = document.getElementById(id);
+      if (el) { el.classList.toggle('visible'); }
+    }
+  </script>
+</body>
+</html>

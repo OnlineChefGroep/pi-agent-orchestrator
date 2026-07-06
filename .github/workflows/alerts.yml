@@ -1,0 +1,54 @@
+name: Alerts
+
+# Sends notifications when critical events occur:
+# - CI fails on main (red trunk)
+# - Publish workflow fails (broken release)
+# - New release is published (deploy notification)
+#
+# Configure the destination via the ALERT_WEBHOOK_URL secret
+# (Slack incoming webhook, Discord webhook, or equivalent).
+# If no secret is set, the job is skipped silently.
+
+on:
+  workflow_run:
+    workflows: ["CI", "Publish to npmjs.org (Public)"]
+    types: [completed]
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  alert:
+    name: Send Alert
+    runs-on: ubuntu-latest
+    # Only alert on failures from workflow_run, and always on release
+    if: |
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure')
+
+    steps:
+      - name: Send release notification
+        if: github.event_name == 'release'
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook-url: ${{ secrets.ALERT_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "New release published: ${{ github.event.release.name }} (${{ github.event.release.tag_name }})\n${{ github.event.release.html_url }}"
+            }
+
+      - name: Send CI failure alert
+        if: github.event_name == 'workflow_run'
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook-url: ${{ secrets.ALERT_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "CI Failure: workflow \"${{ github.event.workflow_run.name }}\" failed on branch \"${{ github.event.workflow_run.head_branch }}\"\nThis workflow failed on main and may block merges or releases.\nRun: ${{ github.event.workflow_run.html_url }}"
+            }

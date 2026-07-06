@@ -4,11 +4,7 @@ import { fastTruncate, framedRow, padVisible } from "../theme.js";
 import { renderSectionTitle } from "./section-title.js";
 
 /** Format a single schedule row for the compact dashboard table. */
-function formatScheduleRow(
-  scheduler: SubagentScheduler,
-  th: DashboardTheme,
-  contentW: number,
-): string[] {
+function formatScheduleRow(scheduler: SubagentScheduler, th: DashboardTheme, contentW: number): string[] {
   const jobs = scheduler.list();
   const lines: string[] = [];
 
@@ -19,15 +15,11 @@ function formatScheduleRow(
 
   for (const job of jobs) {
     const next = scheduler.getNextRun(job.id);
-    const enabled = job.enabled
-      ? `${th.success}● enabled${th.reset}`
-      : `${th.error}○ disabled${th.reset}`;
+    const enabled = job.enabled ? `${th.success}● enabled${th.reset}` : `${th.error}○ disabled${th.reset}`;
     const name = fastTruncate(job.name, 20);
     const schedule = `${job.schedule} (${job.scheduleType})`;
     const type = fastTruncate(job.subagent_type, 14);
-    const nextRun = next
-      ? formatNextRun(next)
-      : `${th.muted}—${th.reset}`;
+    const nextRun = next ? formatNextRun(next) : `${th.muted}—${th.reset}`;
     const runs = `${job.runCount}×`;
 
     const row = [
@@ -74,7 +66,13 @@ export function renderSchedulesSection(
 
   const lines = [
     "",
-    renderSectionTitle("⏱ SCHEDULED JOBS", `${scheduler.list().length} job${scheduler.list().length === 1 ? "" : "s"}`, innerW, th, box),
+    renderSectionTitle(
+      "⏱ SCHEDULED JOBS",
+      `${scheduler.list().length} job${scheduler.list().length === 1 ? "" : "s"}`,
+      innerW,
+      th,
+      box,
+    ),
   ];
 
   lines.push(...formatScheduleRow(scheduler, th, innerW));

@@ -1,6 +1,13 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AgentManager } from "../agent-manager.js";
-import { getDefaultJoinMode, isSchedulingEnabled, isTracingEnabled, setDefaultJoinMode, setSchedulingEnabled, setTracingEnabled } from "../agent-registry.js";
+import {
+  getDefaultJoinMode,
+  isSchedulingEnabled,
+  isTracingEnabled,
+  setDefaultJoinMode,
+  setSchedulingEnabled,
+  setTracingEnabled,
+} from "../agent-registry.js";
 import { getDefaultMaxTurns, getGraceTurns, setDefaultMaxTurns, setGraceTurns } from "../agent-runner.js";
 import { showAgentsMenu } from "../output-handler.js";
 import type { SubagentScheduler } from "../schedule.js";

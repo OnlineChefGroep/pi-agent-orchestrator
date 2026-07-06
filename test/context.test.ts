@@ -12,7 +12,7 @@ describe("extractText", () => {
   it("extracts text from text blocks", () => {
     const content = [
       { type: "text", text: "Hello" },
-      { type: "text", text: " world" }
+      { type: "text", text: " world" },
     ];
     expect(extractText(content)).toBe("Hello\n world");
   });
@@ -22,7 +22,7 @@ describe("extractText", () => {
       { type: "text", text: "Hello" },
       { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "..." } },
       { type: "text", text: " world" },
-      { type: "tool_use", id: "123", name: "my_tool", input: {} }
+      { type: "tool_use", id: "123", name: "my_tool", input: {} },
     ];
     expect(extractText(content)).toBe("Hello\n world");
   });
@@ -31,7 +31,7 @@ describe("extractText", () => {
     const content = [
       { type: "text", text: "Hello" },
       { type: "text" }, // missing text property
-      { type: "text", text: "world" }
+      { type: "text", text: "world" },
     ];
     expect(extractText(content)).toBe("Hello\n\nworld");
   });
@@ -41,8 +41,8 @@ describe("buildParentContext", () => {
   function mockContext(entries: BranchEntries | undefined): ExtensionContext {
     return {
       sessionManager: {
-        getBranch: () => entries
-      }
+        getBranch: () => entries,
+      },
     } as unknown as ExtensionContext;
   }
 
@@ -58,23 +58,23 @@ describe("buildParentContext", () => {
         type: "message",
         message: {
           role: "user",
-          content: "User string message"
-        }
+          content: "User string message",
+        },
       },
       {
         type: "message",
         message: {
           role: "assistant",
-          content: [{ type: "text", text: "Assistant response" }]
-        }
+          content: [{ type: "text", text: "Assistant response" }],
+        },
       },
       {
         type: "message",
         message: {
           role: "user",
-          content: [{ type: "text", text: "User block message" }]
-        }
-      }
+          content: [{ type: "text", text: "User block message" }],
+        },
+      },
     ];
 
     const context = buildParentContext(mockContext(entries));
@@ -91,20 +91,20 @@ describe("buildParentContext", () => {
         type: "message",
         message: {
           role: "user",
-          content: "   " // blank string
-        }
+          content: "   ", // blank string
+        },
       },
       {
         type: "message",
         message: {
           role: "assistant",
-          content: [{ type: "text", text: "" }] // empty text
-        }
+          content: [{ type: "text", text: "" }], // empty text
+        },
       },
       {
         type: "compaction",
-        summary: "This is a summary"
-      }
+        summary: "This is a summary",
+      },
     ];
 
     const context = buildParentContext(mockContext(entries));
@@ -120,16 +120,16 @@ describe("buildParentContext", () => {
         type: "message",
         message: {
           role: "user",
-          content: "Visible user message"
-        }
+          content: "Visible user message",
+        },
       },
       {
         type: "message",
         message: {
           role: "toolResult",
-          content: "Internal tool output"
-        }
-      }
+          content: "Internal tool output",
+        },
+      },
     ];
 
     const context = buildParentContext(mockContext(entries));
@@ -140,8 +140,8 @@ describe("buildParentContext", () => {
   it("ignores compaction entries without summaries", () => {
     const entries = [
       {
-        type: "compaction"
-      }
+        type: "compaction",
+      },
     ];
 
     expect(buildParentContext(mockContext(entries))).toBe("");
@@ -151,8 +151,8 @@ describe("buildParentContext", () => {
     const entries = [
       {
         type: "unknown_event",
-        data: "..."
-      }
+        data: "...",
+      },
     ];
 
     expect(buildParentContext(mockContext(entries))).toBe("");

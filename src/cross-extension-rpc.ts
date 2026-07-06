@@ -35,9 +35,7 @@ export interface EventBus {
 }
 
 /** RPC reply envelope — matches pi-mono's RpcResponse shape. */
-export type RpcReply<T = void> =
-  | { success: true; data?: T }
-  | { success: false; error: string };
+export type RpcReply<T = void> = { success: true; data?: T } | { success: false; error: string };
 
 /** RPC protocol version — bumped when the envelope or method contracts change. */
 export const PROTOCOL_VERSION = 2;
@@ -134,14 +132,17 @@ export function configureRateLimit(config: RateLimitConfig): void {
   // Restart cleanup timer when the window changes so the interval stays aligned.
   if (windowChanged) {
     clearInterval(rateLimitCleanup);
-    rateLimitCleanup = setInterval(() => {
-      const now = Date.now();
-      for (const [key, entry] of rateLimitMap.entries()) {
-        if (now > entry.resetAt) {
-          rateLimitMap.delete(key);
+    rateLimitCleanup = setInterval(
+      () => {
+        const now = Date.now();
+        for (const [key, entry] of rateLimitMap.entries()) {
+          if (now > entry.resetAt) {
+            rateLimitMap.delete(key);
+          }
         }
-      }
-    }, Math.max(1_000, Math.floor(rateLimitWindow / 2)));
+      },
+      Math.max(1_000, Math.floor(rateLimitWindow / 2)),
+    );
     rateLimitCleanup.unref?.();
   }
 }
@@ -175,14 +176,17 @@ function checkRateLimit(extensionId: string, operation: string): boolean {
 // Clean up old rate limit entries periodically.
 // Derive interval from the configured window so expired entries don't linger
 // when the window is shorter than the old hardcoded 60 s.
-let rateLimitCleanup = setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of rateLimitMap.entries()) {
-    if (now > entry.resetAt) {
-      rateLimitMap.delete(key);
+let rateLimitCleanup = setInterval(
+  () => {
+    const now = Date.now();
+    for (const [key, entry] of rateLimitMap.entries()) {
+      if (now > entry.resetAt) {
+        rateLimitMap.delete(key);
+      }
     }
-  }
-}, Math.max(1_000, Math.floor(rateLimitWindow / 2)));
+  },
+  Math.max(1_000, Math.floor(rateLimitWindow / 2)),
+);
 rateLimitCleanup.unref?.();
 
 export function resetRpcRateLimitsForTests(): void {
@@ -198,8 +202,8 @@ export function getRateLimitConfig(): Required<RateLimitConfig> {
 
 export interface RpcDeps {
   events: EventBus;
-  pi: unknown;                    // passed through to manager.spawn
-  getCtx: () => unknown | undefined;  // returns current ExtensionContext
+  pi: unknown; // passed through to manager.spawn
+  getCtx: () => unknown | undefined; // returns current ExtensionContext
   manager: SpawnCapable;
   authProvider?: (requestId: string, payload: any) => AuthContext | undefined;
   /** Optional rate-limit tunables applied at registration time. */
@@ -245,7 +249,8 @@ function handleRpc<P extends { requestId: string }>(
     } catch (err: unknown) {
       const requestId = (raw as Record<string, unknown>)?.requestId;
       events.emit(`${channel}:reply:${requestId}`, {
-        success: false, error: err instanceof Error ? err.message : String(err),
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   });
@@ -255,12 +260,7 @@ function createRequestId(): string {
   return `rpc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function requestRpc<T>(
-  events: EventBus,
-  channel: string,
-  payload: object,
-  timeoutMs: number,
-): Promise<T> {
+function requestRpc<T>(events: EventBus, channel: string, payload: object, timeoutMs: number): Promise<T> {
   const requestId = createRequestId();
   const replyChannel = `${channel}:reply:${requestId}`;
   return new Promise((resolve, reject) => {
@@ -285,12 +285,35 @@ export function createSubagentsRpcClient(
 ): SubagentsRpcClient {
   const timeoutMs = options.timeoutMs ?? 30_000;
   return {
-    ping: () => requestRpc<PingRpcReply>(events, "subagents:rpc:ping", { authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs),
-    spawn: (request) => requestRpc<{ id: string }>(events, "subagents:rpc:spawn", { ...request, authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs),
+    ping: () =>
+      requestRpc<PingRpcReply>(
+        events,
+        "subagents:rpc:ping",
+        { authContext: { extensionId: options.extensionId ?? "legacy" } },
+        timeoutMs,
+      ),
+    spawn: (request) =>
+      requestRpc<{ id: string }>(
+        events,
+        "subagents:rpc:spawn",
+        { ...request, authContext: { extensionId: options.extensionId ?? "legacy" } },
+        timeoutMs,
+      ),
     stop: async (request) => {
-      await requestRpc<void>(events, "subagents:rpc:stop", { ...request, authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs);
+      await requestRpc<void>(
+        events,
+        "subagents:rpc:stop",
+        { ...request, authContext: { extensionId: options.extensionId ?? "legacy" } },
+        timeoutMs,
+      );
     },
-    sessionUsage: () => requestRpc<SessionUsageRpcReply>(events, "subagents:rpc:sessionUsage", { authContext: { extensionId: options.extensionId ?? "legacy" } }, timeoutMs),
+    sessionUsage: () =>
+      requestRpc<SessionUsageRpcReply>(
+        events,
+        "subagents:rpc:sessionUsage",
+        { authContext: { extensionId: options.extensionId ?? "legacy" } },
+        timeoutMs,
+      ),
   };
 }
 
@@ -344,11 +367,7 @@ function auditedRpc<P extends { requestId: string }>(
       return result;
     } catch (err: unknown) {
       if (err instanceof RpcError) {
-        outcome = err.code === "RATE_LIMITED"
-          ? "rate_limited"
-          : err.code === "UNAUTHORIZED"
-            ? "unauthorized"
-            : "error";
+        outcome = err.code === "RATE_LIMITED" ? "rate_limited" : err.code === "UNAUTHORIZED" ? "unauthorized" : "error";
       } else {
         outcome = "error";
       }
@@ -394,7 +413,13 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
     }),
   );
 
-  const unsubSpawn = handleRpc<{ requestId: string; type: string; prompt: string; options?: any; authContext?: AuthContext }>(
+  const unsubSpawn = handleRpc<{
+    requestId: string;
+    type: string;
+    prompt: string;
+    options?: any;
+    authContext?: AuthContext;
+  }>(
     events,
     "subagents:rpc:spawn",
     auditedRpc<{ requestId: string; type: string; prompt: string; options?: any; authContext?: AuthContext }>(

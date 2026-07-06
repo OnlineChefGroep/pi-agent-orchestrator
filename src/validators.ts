@@ -2,7 +2,7 @@ import { emitTelemetry } from "./telemetry.js";
 import type { AgentConfig, ValidationCriterion, ValidationResult } from "./types.js";
 
 // CVE-004 FIX: Maximum sizes for validation inputs
-const MAX_OUTPUT_SIZE = 100000;  // 100KB
+const MAX_OUTPUT_SIZE = 100000; // 100KB
 const MAX_CRITERIA_COUNT = 20;
 const MAX_CRITERION_LENGTH = 1000;
 const MAX_DESCRIPTION_LENGTH = 500;
@@ -19,13 +19,12 @@ const MAX_DESCRIPTION_LENGTH = 500;
  *      skipValidators=true, so even a compromised validator cannot recurse.
  */
 
-
 function truncateUnicode(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
   let count = 0;
   for (let i = 0; i < str.length; i++) {
     const code = str.charCodeAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF) i++;
+    if (code >= 0xd800 && code <= 0xdbff) i++;
     count++;
     if (count >= maxLength) return str.slice(0, i + 1);
   }
@@ -33,9 +32,9 @@ function truncateUnicode(str: string, maxLength: number): string {
 }
 
 function sanitizeValidatorInput(input: string, maxLength: number = MAX_OUTPUT_SIZE): string {
-  if (typeof input !== 'string') return '';
+  if (typeof input !== "string") return "";
   // Remove control chars (C0 and C1), preserving whitespace like tab/newline
-  const noControl = input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+  const noControl = input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, "");
   // Unicode-safe truncation to prevent lone surrogates
   return truncateUnicode(noControl, maxLength);
 }
@@ -66,13 +65,11 @@ export function buildValidatorPrompt(
     logCriteriaLimit(criteria.length, MAX_CRITERIA_COUNT);
     criteria = criteria.slice(0, MAX_CRITERIA_COUNT);
   }
-  
+
   const sanitizedOutput = sanitizeValidatorInput(originalOutput, MAX_OUTPUT_SIZE);
   const sanitizedDescription = sanitizeValidatorInput(mainAgentDescription, MAX_DESCRIPTION_LENGTH);
-  const sanitizedCriteria = criteria.map(c => 
-    sanitizeValidatorInput(c, MAX_CRITERION_LENGTH)
-  );
-  
+  const sanitizedCriteria = criteria.map((c) => sanitizeValidatorInput(c, MAX_CRITERION_LENGTH));
+
   const criteriaList = sanitizedCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n");
   return `You are a quality validator. Your job is to critically review another agent's output.
 
@@ -121,16 +118,11 @@ export function parseValidationResult(text: string, agentId: string): Validation
     if (jsonMatch) {
       const jsonText = jsonMatch[1].trim();
       if (jsonText.length > MAX_OUTPUT_SIZE) {
-        throw new Error(
-          `JSON payload exceeds maximum size (${jsonText.length} bytes > ${MAX_OUTPUT_SIZE} max)`,
-        );
+        throw new Error(`JSON payload exceeds maximum size (${jsonText.length} bytes > ${MAX_OUTPUT_SIZE} max)`);
       }
       const parsed = JSON.parse(jsonText);
-      const criteria: ValidationCriterion[] = Array.isArray(parsed.criteria)
-        ? parsed.criteria
-        : [];
-      const passed = parsed.overallPassed
-        ?? criteria.every((c: ValidationCriterion) => c.passed);
+      const criteria: ValidationCriterion[] = Array.isArray(parsed.criteria) ? parsed.criteria : [];
+      const passed = parsed.overallPassed ?? criteria.every((c: ValidationCriterion) => c.passed);
       return {
         agentId,
         passed,

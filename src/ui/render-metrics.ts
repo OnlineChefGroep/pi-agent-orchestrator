@@ -154,9 +154,10 @@ export class RenderMetrics {
     const elapsedMs = now - this.startedAt;
     const elapsedSecs = elapsedMs / 1000;
     const elapsedMins = elapsedSecs / 60;
-    const timeToFirstVisible = this.firstRenderTimestamp > 0 && this.firstSpawnTimestamp > 0
-      ? this.firstRenderTimestamp - this.firstSpawnTimestamp
-      : 0;
+    const timeToFirstVisible =
+      this.firstRenderTimestamp > 0 && this.firstSpawnTimestamp > 0
+        ? this.firstRenderTimestamp - this.firstSpawnTimestamp
+        : 0;
 
     return {
       label: this.label,
@@ -169,16 +170,14 @@ export class RenderMetrics {
 
       requestedRenderCount: this.requestedRenderCount,
       skippedRenderCount: this.skippedCount,
-      requestToActualRatio: this.renderCount > 0
-        ? Math.round((this.requestedRenderCount / this.renderCount) * 100) / 100
-        : 0,
+      requestToActualRatio:
+        this.renderCount > 0 ? Math.round((this.requestedRenderCount / this.renderCount) * 100) / 100 : 0,
 
       activeAgentCount: this.activeAgentCount,
       activeAgentMin: this.activeAgentMin === Infinity ? 0 : this.activeAgentMin,
       activeAgentMax: this.activeAgentMax,
-      activeAgentMean: this.activeAgentCount > 0
-        ? Math.round((this.activeAgentTotal / this.activeAgentCount) * 100) / 100
-        : 0,
+      activeAgentMean:
+        this.activeAgentCount > 0 ? Math.round((this.activeAgentTotal / this.activeAgentCount) * 100) / 100 : 0,
 
       firstRenderTimestamp: this.firstRenderTimestamp,
       firstSpawnTimestamp: this.firstSpawnTimestamp,
@@ -186,12 +185,8 @@ export class RenderMetrics {
 
       startedAt: this.startedAt,
       elapsedMs,
-      rendersPerSecond: elapsedSecs > 0
-        ? Math.round((this.renderCount / elapsedSecs) * 100) / 100
-        : 0,
-      rendersPerMinute: elapsedMins > 0
-        ? Math.round((this.renderCount / elapsedMins) * 100) / 100
-        : 0,
+      rendersPerSecond: elapsedSecs > 0 ? Math.round((this.renderCount / elapsedSecs) * 100) / 100 : 0,
+      rendersPerMinute: elapsedMins > 0 ? Math.round((this.renderCount / elapsedMins) * 100) / 100 : 0,
     };
   }
 

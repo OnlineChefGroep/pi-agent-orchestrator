@@ -111,10 +111,7 @@ export function getDebugCaptureManifest(): DebugCaptureManifest | null {
  * Returns null when no path is writable — capture stays disabled in that
  * case so we never silently drop data on the floor.
  */
-export function enable(
-  paths: DebugCapturePaths,
-  sessionUuidHint?: string,
-): DebugCaptureManifest | null {
+export function enable(paths: DebugCapturePaths, sessionUuidHint?: string): DebugCaptureManifest | null {
   if (enabled) return manifest;
 
   const nextManifest: DebugCaptureManifest = {
@@ -220,11 +217,7 @@ export function resetDebugCapture(): void {
  * Append one JSONL line per active root to
  * `<root>/agents/<agentId>/events.jsonl`. No-op when capture is disabled.
  */
-export function appendAgentEvent(
-  agentId: string,
-  event: string,
-  data?: unknown,
-): void {
+export function appendAgentEvent(agentId: string, event: string, data?: unknown): void {
   if (!enabled) return;
   const payload = {
     ts: new Date().toISOString(),
@@ -239,15 +232,10 @@ export function appendAgentEvent(
  * Append a structured error record (with stack trace for Error instances) to
  * `<root>/agents/<agentId>/errors.log`. No-op when capture is disabled.
  */
-export function appendError(
-  agentId: string,
-  err: unknown,
-  context?: Record<string, unknown>,
-): void {
+export function appendError(agentId: string, err: unknown, context?: Record<string, unknown>): void {
   if (!enabled || !agentId) return;
-  const error = err instanceof Error
-    ? { name: err.name, message: err.message, stack: err.stack }
-    : { raw: String(err) };
+  const error =
+    err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : { raw: String(err) };
   const payload = {
     ts: new Date().toISOString(),
     agentId,
@@ -262,10 +250,7 @@ export function appendError(
  * previous metrics atomically (write temp → rename) so concurrent reads
  * never see a half-written JSON object. No-op when capture is disabled.
  */
-export function upsertAgentMetrics(
-  agentId: string,
-  metrics: Record<string, unknown>,
-): void {
+export function upsertAgentMetrics(agentId: string, metrics: Record<string, unknown>): void {
   if (!enabled || !agentId) return;
   // Cast: cloneSafe returns `unknown` (it accepts primitives + arrays + records);
   // we know metrics is a record, so the spread is safe.
@@ -284,12 +269,7 @@ export function upsertAgentMetrics(
  * The jobId is included for correlation across renames; the jobName doubles
  * as the friendly filesystem key. No-op when capture is disabled.
  */
-export function appendScheduleEvent(
-  jobId: string,
-  jobName: string,
-  event: string,
-  data?: unknown,
-): void {
+export function appendScheduleEvent(jobId: string, jobName: string, event: string, data?: unknown): void {
   if (!enabled) return;
   const payload = {
     ts: new Date().toISOString(),
@@ -463,10 +443,16 @@ function cleanupStaleTempFiles(root: string): void {
     const entries = readdirSync(root);
     for (const name of entries) {
       if (name.endsWith(".tmp")) {
-        try { unlinkSync(join(root, name)); } catch { /* skip */ }
+        try {
+          unlinkSync(join(root, name));
+        } catch {
+          /* skip */
+        }
       }
     }
-  } catch { /* skip — directory unreadable is fine, capture proceeds */ }
+  } catch {
+    /* skip — directory unreadable is fine, capture proceeds */
+  }
 }
 
 /** Shallow-clone plain objects for safe JSON.stringify. Removes class

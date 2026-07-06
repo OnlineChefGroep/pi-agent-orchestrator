@@ -137,12 +137,7 @@ export function readMemoryIndex(memoryDir: string, maxLines?: number): string | 
  *
  * @param maxMemoryLines - Per-agent override for max memory lines.
  */
-export function buildMemoryBlock(
-  agentName: string,
-  scope: MemoryScope,
-  cwd: string,
-  maxMemoryLines?: number,
-): string {
+export function buildMemoryBlock(agentName: string, scope: MemoryScope, cwd: string, maxMemoryLines?: number): string {
   const memoryDir = resolveMemoryDir(agentName, scope, cwd);
   // Create the memory directory so the agent can immediately write to it
   ensureMemoryDir(memoryDir);

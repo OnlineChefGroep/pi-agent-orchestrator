@@ -112,11 +112,7 @@ const REFACTOR_KEYWORDS = [
   /\bmigrat(?:e|ing|ion)\b/i,
 ];
 
-const TEST_KEYWORDS = [
-  /\btest(?:s|ing)?\b/i,
-  /\bspec(?:s|ification)?\b/i,
-  /\bcoverage\b/i,
-];
+const TEST_KEYWORDS = [/\btest(?:s|ing)?\b/i, /\bspec(?:s|ification)?\b/i, /\bcoverage\b/i];
 
 /** Path-like: starts with `./` `/` `~/` or contains a `.ts`/`.js`/etc. extension segment. */
 const PATH_PATTERN = /(?:^|\s)(?:\.{0,2}\/|~?\/|\.{1,2}\b)\S*\.\w{1,6}\b/g;
@@ -219,11 +215,7 @@ export function buildSwarmPlan(prompt: string, description: string, n = SWARM_DE
  * The user prompt is passed verbatim to the executor; the planner and reviewer
  * get role-specific framing that quotes the user request.
  */
-export function buildCrewPlan(
-  prompt: string,
-  description: string,
-  _subagentType: SubagentType,
-): CrewRolePlan[] {
+export function buildCrewPlan(prompt: string, description: string, _subagentType: SubagentType): CrewRolePlan[] {
   const label = shortLabel(description) || "Crew task";
   return [
     {

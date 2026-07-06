@@ -29,10 +29,7 @@ export interface AgentTopEntry {
 
 // ── Data extraction ───────────────────────────────────────────────────────────
 
-export function getAgentTopEntries(
-  agents: AgentRecord[],
-  activity: Map<string, AgentActivity>,
-): AgentTopEntry[] {
+export function getAgentTopEntries(agents: AgentRecord[], activity: Map<string, AgentActivity>): AgentTopEntry[] {
   const now = Date.now();
   return agents.map((r) => {
     const act = activity.get(r.id);
@@ -55,11 +52,7 @@ export function getAgentTopEntries(
   });
 }
 
-export function sortEntries(
-  entries: AgentTopEntry[],
-  key: SortKey,
-  asc: boolean,
-): AgentTopEntry[] {
+export function sortEntries(entries: AgentTopEntry[], key: SortKey, asc: boolean): AgentTopEntry[] {
   return [...entries].sort((a, b) => {
     let cmp = 0;
     if (key === "name") cmp = a.name.localeCompare(b.name);
@@ -86,16 +79,25 @@ export function createTopThemeAdapter(th: DashboardTheme): {
   return {
     fg(color: string, text: string): string {
       const code = (
-        color === "title" ? th.title
-        : color === "dim" ? th.dim
-        : color === "muted" ? th.muted
-        : color === "highlight" ? th.highlight
-        : color === "accent" ? th.accent
-        : color === "success" ? th.success
-        : color === "error" ? th.error
-        : color === "warning" ? th.highlight
-        : color === "border" ? th.border
-        : th.dim
+        color === "title"
+          ? th.title
+          : color === "dim"
+            ? th.dim
+            : color === "muted"
+              ? th.muted
+              : color === "highlight"
+                ? th.highlight
+                : color === "accent"
+                  ? th.accent
+                  : color === "success"
+                    ? th.success
+                    : color === "error"
+                      ? th.error
+                      : color === "warning"
+                        ? th.highlight
+                        : color === "border"
+                          ? th.border
+                          : th.dim
       ) as string;
       return `${code}${text}${th.reset}`;
     },
@@ -167,8 +169,8 @@ export function renderTopTable(
   // Title line
   lines.push(
     `${theme.fg("title", theme.bold(" AGENT TOP "))}  ` +
-    `${theme.fg("dim", `sorted by ${sortKey} ${sortAsc ? "↑" : "↓"}  page ${page + 1}/${totalPages}`)}` +
-    (helpLine ? `  ${theme.fg("dim", helpLine)}` : ""),
+      `${theme.fg("dim", `sorted by ${sortKey} ${sortAsc ? "↑" : "↓"}  page ${page + 1}/${totalPages}`)}` +
+      (helpLine ? `  ${theme.fg("dim", helpLine)}` : ""),
   );
 
   // Column headers
@@ -178,13 +180,19 @@ export function renderTopTable(
     return theme.fg("highlight", `${marker}${label}`.padEnd(colW));
   };
   lines.push(
-    renderHeaderCell(headers[0], colWidths[0]) + " " +
-    renderHeaderCell(headers[1], colWidths[1]) + " " +
-    renderHeaderCell(headers[2], colWidths[2]) + " " +
-    renderHeaderCell(headers[3], colWidths[3]) + " " +
-    renderHeaderCell(headers[4], colWidths[4]) + " " +
-    renderHeaderCell(headers[5], colWidths[5]) + " " +
-    renderHeaderCell(headers[6], colWidths[6]),
+    renderHeaderCell(headers[0], colWidths[0]) +
+      " " +
+      renderHeaderCell(headers[1], colWidths[1]) +
+      " " +
+      renderHeaderCell(headers[2], colWidths[2]) +
+      " " +
+      renderHeaderCell(headers[3], colWidths[3]) +
+      " " +
+      renderHeaderCell(headers[4], colWidths[4]) +
+      " " +
+      renderHeaderCell(headers[5], colWidths[5]) +
+      " " +
+      renderHeaderCell(headers[6], colWidths[6]),
   );
 
   // Divider
@@ -197,9 +205,7 @@ export function renderTopTable(
 
   for (const e of slice) {
     const name =
-      e.name.length > colWidths[0] - 2
-        ? `${e.name.slice(0, colWidths[0] - 2)}…`
-        : e.name.padEnd(colWidths[0]);
+      e.name.length > colWidths[0] - 2 ? `${e.name.slice(0, colWidths[0] - 2)}…` : e.name.padEnd(colWidths[0]);
     const status = topStatusColor(e.status, theme.fg).padEnd(colWidths[1]);
     const tokens = formatTokens(e.tokens).padStart(colWidths[2]);
     const turns = formatTurns(e.turns).padStart(colWidths[3]);
@@ -210,12 +216,12 @@ export function renderTopTable(
     const lastColor = last === "now" ? "success" : last === "—" ? "dim" : "muted";
     lines.push(
       `${theme.fg("dim", "│")} ${theme.fg("accent", name)} ${theme.fg("dim", "|")} ` +
-      `${status} ${theme.fg("dim", "|")} ` +
-      `${theme.fg("muted", tokens)} ${theme.fg("dim", "|")} ` +
-      `${theme.fg("muted", turns)} ${theme.fg("dim", "|")} ` +
-      `${theme.fg("muted", tools)} ${theme.fg("dim", "|")} ` +
-      `${theme.fg("dim", dur)} ${theme.fg("dim", "|")} ` +
-      `${theme.fg(lastColor, last.padStart(colWidths[6]))}`,
+        `${status} ${theme.fg("dim", "|")} ` +
+        `${theme.fg("muted", tokens)} ${theme.fg("dim", "|")} ` +
+        `${theme.fg("muted", turns)} ${theme.fg("dim", "|")} ` +
+        `${theme.fg("muted", tools)} ${theme.fg("dim", "|")} ` +
+        `${theme.fg("dim", dur)} ${theme.fg("dim", "|")} ` +
+        `${theme.fg(lastColor, last.padStart(colWidths[6]))}`,
     );
   }
 

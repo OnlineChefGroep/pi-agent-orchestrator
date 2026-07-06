@@ -30,7 +30,7 @@ function getAvailableSet<T extends ModelEntry>(registry: ModelRegistry<T>): { se
   if (registry !== cachedRegistry || !cachedSet) {
     const all = registry.getAvailable?.() ?? registry.getAll();
     cachedAll = all;
-    cachedSet = new Set(all.map(m => `${m.provider}/${m.id}`.toLowerCase()));
+    cachedSet = new Set(all.map((m) => `${m.provider}/${m.id}`.toLowerCase()));
     cachedRegistry = registry;
   }
   return { set: cachedSet, all: cachedAll! as T[] };
@@ -52,10 +52,7 @@ export function invalidateModelCache(): void {
  * @param registry - Registry to resolve the model from
  * @returns The matched model of type `T` if found, otherwise an error message string that lists available models
  */
-export function resolveModel<T extends ModelEntry>(
-  input: string,
-  registry: ModelRegistry<T>,
-): T | string {
+export function resolveModel<T extends ModelEntry>(input: string, registry: ModelRegistry<T>): T | string {
   // Available models (those with auth configured) — cached per registry instance
   const { set: availableSet, all } = getAvailableSet(registry);
 
@@ -90,7 +87,11 @@ export function resolveModel<T extends ModelEntry>(
       score = 60 + (query.length / id.length) * 30; // substring, prefer tighter matches
     } else if (name.includes(query)) {
       score = 40 + (query.length / name.length) * 20;
-    } else if (query.split(/[\s\-/]+/).every(part => id.includes(part) || name.includes(part) || m.provider.toLowerCase().includes(part))) {
+    } else if (
+      query
+        .split(/[\s\-/]+/)
+        .every((part) => id.includes(part) || name.includes(part) || m.provider.toLowerCase().includes(part))
+    ) {
       score = 20; // all parts present somewhere
     }
 
@@ -107,7 +108,7 @@ export function resolveModel<T extends ModelEntry>(
 
   // 3. No match — list available models
   const modelList = all
-    .map(m => `  ${m.provider}/${m.id}`)
+    .map((m) => `  ${m.provider}/${m.id}`)
     .sort()
     .join("\n");
   return `Model not found: "${input}".\n\nAvailable models:\n${modelList}`;

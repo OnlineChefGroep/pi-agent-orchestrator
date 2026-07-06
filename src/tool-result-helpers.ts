@@ -4,7 +4,7 @@
  */
 
 import type { AgentRecord, NotificationDetails } from "./types.js";
-import { formatTokens, } from "./ui/agent-format.js";
+import { formatTokens } from "./ui/agent-format.js";
 import type { AgentActivity, AgentDetails } from "./ui/agent-ui-types.js";
 import { addUsage, getLifetimeTotal, getSessionContextPercent, type LifetimeUsage } from "./usage.js";
 
@@ -41,7 +41,10 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
         state.activeTools.set(`${activity.toolName}_${Date.now()}`, activity.toolName);
       } else {
         for (const [key, name] of state.activeTools) {
-          if (name === activity.toolName) { state.activeTools.delete(key); break; }
+          if (name === activity.toolName) {
+            state.activeTools.delete(key);
+            break;
+          }
         }
         state.toolUses++;
       }
@@ -73,21 +76,30 @@ export function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => 
 /** Human-readable status label for agent completion. */
 export function getStatusLabel(status: string, error?: string): string {
   switch (status) {
-    case "error": return `Error: ${error ?? "unknown"}`;
-    case "aborted": return "Aborted (max turns exceeded)";
-    case "steered": return "Wrapped up (turn limit)";
-    case "stopped": return "Stopped";
-    default: return "Done";
+    case "error":
+      return `Error: ${error ?? "unknown"}`;
+    case "aborted":
+      return "Aborted (max turns exceeded)";
+    case "steered":
+      return "Wrapped up (turn limit)";
+    case "stopped":
+      return "Stopped";
+    default:
+      return "Done";
   }
 }
 
 /** Parenthetical status note for completed agent result text. */
 export function getStatusNote(status: string): string {
   switch (status) {
-    case "aborted": return " (aborted — max turns exceeded, output may be incomplete)";
-    case "steered": return " (wrapped up — reached turn limit)";
-    case "stopped": return " (stopped by user)";
-    default: return "";
+    case "aborted":
+      return " (aborted — max turns exceeded, output may be incomplete)";
+    case "steered":
+      return " (wrapped up — reached turn limit)";
+    case "stopped":
+      return " (stopped by user)";
+    default:
+      return "";
   }
 }
 
@@ -121,13 +133,18 @@ export function formatTaskNotification(record: AgentRecord, resultMaxLen: number
     `<result>${escapeXml(resultPreview)}</result>`,
     `<usage><total_tokens>${totalTokens}</total_tokens><tool_uses>${record.toolUses}</tool_uses>${ctxXml}${compactXml}<duration_ms>${durationMs}</duration_ms></usage>`,
     `</task-notification>`,
-  ].filter(Boolean).join('\n');
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /** Build AgentDetails from a base + record-specific fields. */
 export function buildDetails(
   base: Pick<AgentDetails, "displayName" | "description" | "subagentType" | "modelName" | "tags">,
-  record: Pick<AgentRecord, "toolUses" | "startedAt" | "completedAt" | "status" | "error" | "id" | "session" | "lifetimeUsage" | "validated">,
+  record: Pick<
+    AgentRecord,
+    "toolUses" | "startedAt" | "completedAt" | "status" | "error" | "id" | "session" | "lifetimeUsage" | "validated"
+  >,
   activity?: AgentActivity,
   overrides?: Partial<AgentDetails>,
 ): AgentDetails {
@@ -147,7 +164,11 @@ export function buildDetails(
 }
 
 /** Build notification details for the custom message renderer. */
-export function buildNotificationDetails(record: AgentRecord, resultMaxLen: number, activity?: AgentActivity): NotificationDetails {
+export function buildNotificationDetails(
+  record: AgentRecord,
+  resultMaxLen: number,
+  activity?: AgentActivity,
+): NotificationDetails {
   const totalTokens = getLifetimeTotal(record.lifetimeUsage);
 
   return {

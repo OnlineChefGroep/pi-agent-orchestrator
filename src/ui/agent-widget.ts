@@ -202,9 +202,8 @@ export class AgentWidget {
     const processCategory = (targetStatus: string, linesPerAgent: number) => {
       for (let i = 0; i < agents.length; i++) {
         const a = agents[i];
-        const match = targetStatus === "finished"
-            ? (a.status !== "running" && a.status !== "queued")
-            : a.status === targetStatus;
+        const match =
+          targetStatus === "finished" ? a.status !== "running" && a.status !== "queued" : a.status === targetStatus;
 
         if (match) {
           if (skipped > 0) {
@@ -267,7 +266,7 @@ export class AgentWidget {
     return this.renderMetrics.snapshot();
   }
 
-private renderWidget(tui: TUI, theme: Theme): string[] {
+  private renderWidget(tui: TUI, theme: Theme): string[] {
     const renderStart = performance.now();
     const allAgents = this.manager.listAgents();
     try {
@@ -395,7 +394,10 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
         this.uiCtx.setStatus("subagents", undefined);
         this.lastStatusText = undefined;
       }
-      if (this.widgetInterval) { clearTimeout(this.widgetInterval); this.widgetInterval = undefined; }
+      if (this.widgetInterval) {
+        clearTimeout(this.widgetInterval);
+        this.widgetInterval = undefined;
+      }
       this.dirty = false;
       return;
     }
@@ -437,17 +439,21 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
       this.tui?.requestRender();
       this.dirty = false;
     } else {
-      this.uiCtx.setWidget("agents", (tui, theme) => {
-        this.tui = tui;
-        return {
-          render: () => this.renderWidget(tui, theme),
-          invalidate: () => {
-            // Theme changed — force re-registration so factory captures fresh theme.
-            this.widgetRegistered = false;
-            this.tui = undefined;
-          },
-        };
-      }, { placement: "aboveEditor" });
+      this.uiCtx.setWidget(
+        "agents",
+        (tui, theme) => {
+          this.tui = tui;
+          return {
+            render: () => this.renderWidget(tui, theme),
+            invalidate: () => {
+              // Theme changed — force re-registration so factory captures fresh theme.
+              this.widgetRegistered = false;
+              this.tui = undefined;
+            },
+          };
+        },
+        { placement: "aboveEditor" },
+      );
       this.widgetRegistered = true;
       this.dirty = false;
     }

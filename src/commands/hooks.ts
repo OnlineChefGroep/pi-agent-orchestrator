@@ -6,9 +6,7 @@ export function registerHooksCommand(pi: ExtensionAPI, hookRegistry: HookRegistr
     description: "Manage hooks",
     handler: async (_args, _ctx) => {
       const handlerMap = hookRegistry.getHandlers();
-      const entries = [...handlerMap.entries()].sort(
-        ([a], [b]) => a.localeCompare(b),
-      );
+      const entries = [...handlerMap.entries()].sort(([a], [b]) => a.localeCompare(b));
 
       if (entries.length === 0) {
         pi.sendMessage({
@@ -23,7 +21,9 @@ export function registerHooksCommand(pi: ExtensionAPI, hookRegistry: HookRegistr
       for (const [event, handlers] of entries) {
         lines.push(`- **${event}**: ${handlers.length} handler${handlers.length === 1 ? "" : "s"}`);
       }
-      lines.push(`\n*Total: ${entries.reduce((sum, [, h]) => sum + h.length, 0)} handler(s) across ${entries.length} event(s)*`);
+      lines.push(
+        `\n*Total: ${entries.reduce((sum, [, h]) => sum + h.length, 0)} handler(s) across ${entries.length} event(s)*`,
+      );
 
       pi.sendMessage({
         customType: "hooks-list",

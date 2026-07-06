@@ -45,11 +45,7 @@ const mock = vi.hoisted(() => {
 
   function createTracer() {
     return {
-      startSpan(
-        spanName: string,
-        options?: { attributes?: Record<string, unknown> },
-        ctx?: unknown,
-      ): MockSpan {
+      startSpan(spanName: string, options?: { attributes?: Record<string, unknown> }, ctx?: unknown): MockSpan {
         const span: MockSpan = {
           __id: ++nextSpanId,
           __name: spanName,
@@ -75,7 +71,8 @@ const mock = vi.hoisted(() => {
         return span;
       },
     };
-  }    const provider = {
+  }
+  const provider = {
     getTracer(name: string, version?: string) {
       const key = `${name}@${version ?? ""}`;
       let tracer = tracerCache.get(key);
@@ -117,19 +114,14 @@ vi.mock("@opentelemetry/api", () => mock);
 
 // ── Module mocks for the agent-runner session surface ───────────────────
 
-const {
-  createAgentSession,
-  defaultResourceLoaderCtor,
-  getAgentDir,
-  sessionManagerInMemory,
-  settingsManagerCreate,
-} = vi.hoisted(() => ({
-  createAgentSession: vi.fn(),
-  defaultResourceLoaderCtor: vi.fn(),
-  getAgentDir: vi.fn(() => "/mock/agent-dir"),
-  sessionManagerInMemory: vi.fn(() => ({ kind: "memory-session-manager" })),
-  settingsManagerCreate: vi.fn(() => ({ kind: "settings-manager" })),
-}));
+const { createAgentSession, defaultResourceLoaderCtor, getAgentDir, sessionManagerInMemory, settingsManagerCreate } =
+  vi.hoisted(() => ({
+    createAgentSession: vi.fn(),
+    defaultResourceLoaderCtor: vi.fn(),
+    getAgentDir: vi.fn(() => "/mock/agent-dir"),
+    sessionManagerInMemory: vi.fn(() => ({ kind: "memory-session-manager" })),
+    settingsManagerCreate: vi.fn(() => ({ kind: "settings-manager" })),
+  }));
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
   createAgentSession,
@@ -469,9 +461,7 @@ describe("agent-runner → OTel integration", () => {
       throw new Error("LLM provider unavailable");
     });
 
-    await expect(runAgent(ctx, "Explore", "go", { pi, agentId: "a1" })).rejects.toThrow(
-      "LLM provider unavailable",
-    );
+    await expect(runAgent(ctx, "Explore", "go", { pi, agentId: "a1" })).rejects.toThrow("LLM provider unavailable");
 
     // No events fired before the throw, so only the agent span exists.
     expect(mock.spans).toHaveLength(1);

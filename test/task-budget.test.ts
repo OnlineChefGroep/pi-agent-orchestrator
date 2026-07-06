@@ -20,7 +20,7 @@ import { runAgent } from "../src/agent-runner.js";
 
 const mockPi = {} as any;
 const mockCtx = { cwd: "/tmp" } as any;
-const mockSession = () => ({ dispose: vi.fn() } as any);
+const mockSession = () => ({ dispose: vi.fn() }) as any;
 
 const resolvedRun = () =>
   vi.mocked(runAgent).mockResolvedValue({

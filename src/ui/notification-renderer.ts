@@ -13,14 +13,9 @@ import { Text } from "./tui-shim.js";
 function renderOne(d: NotificationDetails, expanded: boolean, theme: any): string {
   const isError = d.status === "error" || d.status === "stopped" || d.status === "aborted";
   const icon = isError ? theme.fg("error", "✗") : theme.fg("success", "✓");
-  const statusText = isError
-    ? d.status
-    : d.status === "steered"
-      ? "completed (steered)"
-      : "completed";
-  const validationIcon = d.validated === undefined
-    ? ""
-    : (d.validated ? theme.fg("success", " ✅") : theme.fg("error", " ❌"));
+  const statusText = isError ? d.status : d.status === "steered" ? "completed (steered)" : "completed";
+  const validationIcon =
+    d.validated === undefined ? "" : d.validated ? theme.fg("success", " ✅") : theme.fg("error", " ❌");
 
   // Line 1: icon + agent description + validation + status
   let line = `${icon} ${theme.bold(d.description)}${validationIcon} ${theme.fg("dim", statusText)}`;
@@ -32,7 +27,7 @@ function renderOne(d: NotificationDetails, expanded: boolean, theme: any): strin
   if (d.totalTokens > 0) parts.push(formatTokens(d.totalTokens));
   if (d.durationMs > 0) parts.push(formatMs(d.durationMs));
   if (parts.length) {
-    line += `\n  ${parts.map(p => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `)}`;
+    line += `\n  ${parts.map((p) => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `)}`;
   }
 
   // Line 3: result preview (collapsed) or full (expanded)
@@ -60,6 +55,6 @@ export function createNotificationRenderer(theme: any) {
     const d = message.details;
     if (!d) return undefined;
     const all = [d, ...(d.others ?? [])];
-    return new Text(all.map(item => renderOne(item, expanded, theme)).join("\n"), 0, 0);
+    return new Text(all.map((item) => renderOne(item, expanded, theme)).join("\n"), 0, 0);
   };
 }

@@ -20,7 +20,18 @@ import type { DashboardRenderState } from "../src/ui/dashboard/types.js";
 import type { BoxChars, DashboardTheme } from "../src/ui/theme.js";
 
 const th: DashboardTheme = {
-  border: "", title: "", dim: "", muted: "", highlight: "", accent: "", success: "", error: "", reset: "", bgCard: "", bgSelected: "", bgHeader: ""
+  border: "",
+  title: "",
+  dim: "",
+  muted: "",
+  highlight: "",
+  accent: "",
+  success: "",
+  error: "",
+  reset: "",
+  bgCard: "",
+  bgSelected: "",
+  bgHeader: "",
 };
 const box: BoxChars = { tl: "", tr: "", bl: "", br: "", l: "", r: "", h: "", ml: "", mr: "" };
 
@@ -30,19 +41,12 @@ const box: BoxChars = { tl: "", tr: "", bl: "", br: "", l: "", r: "", h: "", ml:
  * `test/dashboard-render-perf.test.ts` so the CI threshold checker sees a
  * uniform protocol across every benchmark file.
  */
-function benchmarkLog(
-  label: string,
-  measured: number,
-  threshold: number,
-  unit = "ms",
-): void {
+function benchmarkLog(label: string, measured: number, threshold: number, unit = "ms"): void {
   const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
   let status: string;
   if (measured > threshold) {
     status = "FAIL";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`,
-    );
+    console.warn(`\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`);
   } else if (pct > 80) {
     status = "WARN";
     console.warn(
@@ -53,9 +57,7 @@ function benchmarkLog(
   }
   const measuredStr = `${measured.toFixed(3)}${unit}`;
   const thresholdStr = `${threshold.toFixed(3)}${unit}`;
-  process.stdout.write(
-    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
-  );
+  process.stdout.write(`[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`);
 }
 
 describe("Benchmark: Dashboard body rendering", () => {
@@ -81,7 +83,7 @@ describe("Benchmark: Dashboard body rendering", () => {
       selectedIndex: 0,
       agentActivity: new Map(),
       selectedIds: new Set(),
-      frame: 0
+      frame: 0,
     };
 
     const THRESHOLD_MS_PER_BUILD = 10;

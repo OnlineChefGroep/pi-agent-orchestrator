@@ -4,12 +4,20 @@ import type { AgentRecord } from "../src/types.js";
 
 // Mock external dependencies
 vi.mock("../src/ui/tui-shim.js", () => ({
-    visibleWidth: vi.fn((s: string) => s.replace(/\u001b\[\d+(;\d+)*m/g, "").length),
-    truncateToWidth: (text) => text,
-    wrapTextWithAnsi: (text) => text.split(/\n/),
-    matchesKey: (data, keyId) => data === keyId,
-    Text: class { constructor(c) { this.content = c; } render() { return [this.content]; } },
-      getAnsiSequenceLength: (_str: string, _i: number) => 0 }));
+  visibleWidth: vi.fn((s: string) => s.replace(/\u001b\[\d+(;\d+)*m/g, "").length),
+  truncateToWidth: (text) => text,
+  wrapTextWithAnsi: (text) => text.split(/\n/),
+  matchesKey: (data, keyId) => data === keyId,
+  Text: class {
+    constructor(c) {
+      this.content = c;
+    }
+    render() {
+      return [this.content];
+    }
+  },
+  getAnsiSequenceLength: (_str: string, _i: number) => 0,
+}));
 
 vi.mock("../src/ui/agent-format.js", () => ({
   getDisplayName: vi.fn((type: string) => (type === "Explore" ? "🔍 Explore" : `${type}`)),
@@ -54,7 +62,7 @@ vi.mock("../src/ui/dashboard/helpers.js", () => ({
 vi.mock("../src/ui/dashboard/progress.js", () => ({
   renderTurnProgress: vi.fn((turn: number, max: number, _barWidth: number, _th: unknown) => {
     const pct = Math.round((turn / max) * 100);
-    return `[${"▰".repeat(Math.round(turn / max * 10))}${"▱".repeat(Math.round((max - turn) / max * 10))}] ${pct}%`;
+    return `[${"▰".repeat(Math.round((turn / max) * 10))}${"▱".repeat(Math.round(((max - turn) / max) * 10))}] ${pct}%`;
   }),
 }));
 
@@ -105,13 +113,15 @@ const box = {
   r: "│",
 };
 
-function makeState(overrides: {
-  agents?: AgentRecord[];
-  selectedIndex?: number;
-  selectedIds?: Set<string>;
-  frame?: number;
-  agentActivity?: Map<string, unknown>;
-} = {}) {
+function makeState(
+  overrides: {
+    agents?: AgentRecord[];
+    selectedIndex?: number;
+    selectedIds?: Set<string>;
+    frame?: number;
+    agentActivity?: Map<string, unknown>;
+  } = {},
+) {
   const agents = overrides.agents ?? [makeRecord()];
   return {
     agents,

@@ -15,7 +15,16 @@
  *   - Resilience: a sink-level error does not propagate to the caller.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -38,7 +47,11 @@ function newWorkspace(): { projectRoot: string; personalRoot: string; cleanup: (
     projectRoot,
     personalRoot,
     cleanup: () => {
-      try { rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* best-effort */
+      }
     },
   };
 }
@@ -84,7 +97,9 @@ describe("debug-capture — enable / disable lifecycle", () => {
       expect(m?.paths.personal).toBeNull();
       expect(m?.sessionUuid).toBe("session-x");
       expect(debugCapture.isDebugCaptureEnabled()).toBe(true);
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 
   it("enable() respects both project + personal when provided", () => {
@@ -95,7 +110,9 @@ describe("debug-capture — enable / disable lifecycle", () => {
       expect(m?.paths.personal).toBe(ws.personalRoot);
       expect(existsSync(join(ws.projectRoot, "manifest.json"))).toBe(true);
       expect(existsSync(join(ws.personalRoot, "manifest.json"))).toBe(true);
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 
   it("enable() drops a path whose mkdir would fail", () => {
@@ -114,7 +131,9 @@ describe("debug-capture — enable / disable lifecycle", () => {
       // because parent is a regular file) and is silently dropped.
       expect(m?.paths.project).toBe(ws.projectRoot);
       expect(m?.paths.personal).toBeNull();
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 
   it("enable() is idempotent and returns the existing manifest", () => {
@@ -125,7 +144,9 @@ describe("debug-capture — enable / disable lifecycle", () => {
       // Second call should NOT overwrite sessionUuid with the new hint.
       expect(a?.sessionUuid).toBe("session-1");
       expect(b?.sessionUuid).toBe("session-1");
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 
   it("disable() writes an index.json after each capture root", () => {
@@ -140,7 +161,9 @@ describe("debug-capture — enable / disable lifecycle", () => {
       expect(typeof idx.closedAt).toBe("string");
       expect(idx.capturedAt).toBeDefined();
       expect(debugCapture.isDebugCaptureEnabled()).toBe(false);
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 
   it("disable(writeFinalIndex=false) skips index.json", () => {
@@ -149,7 +172,9 @@ describe("debug-capture — enable / disable lifecycle", () => {
       debugCapture.enable({ projectPath: ws.projectRoot }, "session-noi");
       debugCapture.disable(false);
       expect(existsSync(join(ws.projectRoot, "index.json"))).toBe(false);
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 });
 
@@ -172,7 +197,9 @@ describe("debug-capture — appendAgentEvent + sanity-check payload", () => {
       const e1 = JSON.parse(lines[1]);
       expect(e1.event).toBe("turn:start");
       expect(e1.data).toEqual({ turnIndex: 0 });
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 });
 
@@ -191,7 +218,9 @@ describe("debug-capture — appendError + stack trace", () => {
       expect(entry.error.message).toBe("boom");
       expect(entry.error.stack).toMatch(/TypeError: boom/);
       expect(entry.context.hookEvent).toBe("subagent:error");
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 
   it("captures non-Error throws via String() coercion", () => {
@@ -202,7 +231,9 @@ describe("debug-capture — appendError + stack trace", () => {
       const path = join(ws.projectRoot, "agents", "agent-raw", "errors.log");
       const entry = JSON.parse(readFileSync(path, "utf-8").trim());
       expect(entry.error).toEqual({ raw: "string-only" });
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 });
 
@@ -228,7 +259,9 @@ describe("debug-capture — upsertAgentMetrics (atomic JSON)", () => {
       // duration/ts still present on the newer write.
       expect(second.agentId).toBe("a1");
       expect(second.tokens).toBe(60);
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 });
 
@@ -245,7 +278,9 @@ describe("debug-capture — appendScheduleEvent + appendRpcAudit", () => {
       expect(lines).toHaveLength(2);
       expect(JSON.parse(lines[0]).event).toBe("fired");
       expect(JSON.parse(lines[1]).event).toBe("error");
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 
   it("writes rpc audit entries under <root>/rpc/audit.jsonl", () => {
@@ -260,7 +295,9 @@ describe("debug-capture — appendScheduleEvent + appendRpcAudit", () => {
       expect(lines).toHaveLength(2);
       expect(JSON.parse(lines[0]).operation).toBe("spawn");
       expect(JSON.parse(lines[1]).operation).toBe("stop");
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 });
 
@@ -276,7 +313,9 @@ describe("debug-capture — directory-name sanitization", () => {
       expect(dirs).toContain("a-b-c-e");
       const eventsPath = join(agentsDir, "a-b-c-e", "events.jsonl");
       expect(existsSync(eventsPath)).toBe(true);
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 
   it("falls back to '_' when sanitization produces an empty string", () => {
@@ -288,7 +327,9 @@ describe("debug-capture — directory-name sanitization", () => {
       const agentsDir = join(ws.projectRoot, "agents");
       const dirs = readdirSync(agentsDir);
       expect(dirs).toContain("_");
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 });
 
@@ -307,8 +348,7 @@ describe("debug-capture — rotation (tail-trim when file exceeds ceiling)", () 
       // Seed a file with monotonically-increasing seq values 0..19.
       // Each line is the same shape; only the seq digit-count varies, so
       // byte-aligned byte counts of the seed are predictable (~810 B).
-      const seed = (seq: number) =>
-        `${JSON.stringify({ ts: "2026-01-01T00:00:00Z", seq })}\n`;
+      const seed = (seq: number) => `${JSON.stringify({ ts: "2026-01-01T00:00:00Z", seq })}\n`;
       const lines = Array.from({ length: 20 }, (_, i) => seed(i)).join("");
       writeFileSync(eventPath, lines, "utf-8");
       expect(statSync(eventPath).size).toBeGreaterThan(200);
@@ -328,7 +368,13 @@ describe("debug-capture — rotation (tail-trim when file exceeds ceiling)", () 
       const surviving = readFileSync(eventPath, "utf-8");
       const parsed = surviving
         .split("\n")
-        .map((l) => { try { return JSON.parse(l) as { seq: number }; } catch { return null; }})
+        .map((l) => {
+          try {
+            return JSON.parse(l) as { seq: number };
+          } catch {
+            return null;
+          }
+        })
         .filter((p): p is { seq: number } => p !== null && typeof p?.seq === "number");
       expect(parsed.length).toBeGreaterThan(0);
       expect(parsed.some((p) => p.seq === 19)).toBe(true);
@@ -338,7 +384,9 @@ describe("debug-capture — rotation (tail-trim when file exceeds ceiling)", () 
       const minSuvSeq = Math.min(...parsed.map((p) => p.seq));
       expect(maxSuvSeq).toBe(19);
       expect(minSuvSeq).toBeGreaterThanOrEqual(15);
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 
   it("does nothing when the file is under the threshold", () => {
@@ -351,7 +399,9 @@ describe("debug-capture — rotation (tail-trim when file exceeds ceiling)", () 
       const beforeSize = statSync(eventPath).size;
       debugCapture.__test_rotateIfNeeded(eventPath, 4096);
       expect(statSync(eventPath).size).toBe(beforeSize);
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 });
 
@@ -367,7 +417,9 @@ describe("debug-capture — resilience to FS errors", () => {
       writeFileSync(blockedPath, "I am a file, not a dir", "utf-8");
       expect(() => debugCapture.appendAgentEvent("a-fail", "subagent:start", {})).not.toThrow();
       expect(debugCapture.isDebugCaptureEnabled()).toBe(true);
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 });
 
@@ -393,6 +445,8 @@ describe("debug-capture — cloneSafe strips functions/symbols/undefined", () =>
       expect("sym" in entry.data).toBe(false);
       expect("undef" in entry.data).toBe(false);
       expect(entry.data.arr).toEqual([1, 2, "three", null]);
-    } finally { ws.cleanup(); }
+    } finally {
+      ws.cleanup();
+    }
   });
 });

@@ -101,19 +101,14 @@ export function createReadOnlyPrompt(params: {
   compressionLevel?: PromptCompressionLevel;
 }): string {
   const level = params.compressionLevel ?? "balanced";
-  const sections = [
-    getReadonlyWarning(level).replace('{{ROLE}}', params.role)
-      .replace('{{TASK}}', params.task),
-  ];
+  const sections = [getReadonlyWarning(level).replace("{{ROLE}}", params.role).replace("{{TASK}}", params.task)];
 
   if (params.toolInstructions || params.additionalSections) {
-    sections.push(getToolUsage(level)
-      .replace('{{TOOL_INSTRUCTIONS}}', params.toolInstructions || ""));
+    sections.push(getToolUsage(level).replace("{{TOOL_INSTRUCTIONS}}", params.toolInstructions || ""));
   }
 
   if (params.outputInstructions) {
-    sections.push(OUTPUT_FORMAT
-      .replace('{{OUTPUT_INSTRUCTIONS}}', params.outputInstructions));
+    sections.push(OUTPUT_FORMAT.replace("{{OUTPUT_INSTRUCTIONS}}", params.outputInstructions));
   }
 
   if (params.additionalSections) {
@@ -129,18 +124,25 @@ export function createReadOnlyPrompt(params: {
  * compression level instead of always using the "balanced" bake-in.
  */
 export const READONLY_PROMPT_PARAMS: Map<string, ReadOnlyPromptParams> = new Map([
-  ["Explore", {
-    role: "a file search specialist. You excel at thoroughly navigating and exploring codebases",
-    task: "search and analyze existing code",
-    toolInstructions: "Use Bash ONLY for read-only operations: ls, git status, git log, git diff, find, cat, head, tail.\n- Make independent tool calls in parallel for efficiency\n- Adapt search approach based on thoroughness level specified",
-    outputInstructions: "- Use absolute file paths in all references\n- Report findings as regular messages\n- Do not use emojis\n- Be thorough and precise",
-  }],
-  ["Plan", {
-    role: "a software architect and planning specialist",
-    task: "explore the codebase and design implementation plans",
-    outputInstructions: "- Use absolute file paths\n- Do not use emojis",
-    additionalSections: [
-      `# Planning Process
+  [
+    "Explore",
+    {
+      role: "a file search specialist. You excel at thoroughly navigating and exploring codebases",
+      task: "search and analyze existing code",
+      toolInstructions:
+        "Use Bash ONLY for read-only operations: ls, git status, git log, git diff, find, cat, head, tail.\n- Make independent tool calls in parallel for efficiency\n- Adapt search approach based on thoroughness level specified",
+      outputInstructions:
+        "- Use absolute file paths in all references\n- Report findings as regular messages\n- Do not use emojis\n- Be thorough and precise",
+    },
+  ],
+  [
+    "Plan",
+    {
+      role: "a software architect and planning specialist",
+      task: "explore the codebase and design implementation plans",
+      outputInstructions: "- Use absolute file paths\n- Do not use emojis",
+      additionalSections: [
+        `# Planning Process
 1. Understand requirements
 2. Explore thoroughly (read files, find patterns, understand architecture)
 3. Design solution based on your assigned perspective
@@ -157,24 +159,30 @@ End your response with:
 
 ### Critical Files for Implementation
 List 3-5 files most critical for implementing this plan:
-- /absolute/path/to/file.ts - [Brief reason]`
-    ],
-  }],
-  ["Analysis", {
-    role: "a data analysis specialist with sandboxed code execution capabilities",
-    task: "analyze data, run computations, and produce insightful results",
-    toolInstructions: "Prefer ctx_execute over manual computation — never do data processing in your own context window.\n- Use ctx_search to discover prior context before duplicating work.",
-    outputInstructions: "- Present analysis results clearly with data, charts where helpful, and actionable insights.\n- Use absolute file paths in all references.\n- Do not use emojis.\n- Be thorough and precise.",
-    additionalSections: [
-      `# Core Workflow
+- /absolute/path/to/file.ts - [Brief reason]`,
+      ],
+    },
+  ],
+  [
+    "Analysis",
+    {
+      role: "a data analysis specialist with sandboxed code execution capabilities",
+      task: "analyze data, run computations, and produce insightful results",
+      toolInstructions:
+        "Prefer ctx_execute over manual computation — never do data processing in your own context window.\n- Use ctx_search to discover prior context before duplicating work.",
+      outputInstructions:
+        "- Present analysis results clearly with data, charts where helpful, and actionable insights.\n- Use absolute file paths in all references.\n- Do not use emojis.\n- Be thorough and precise.",
+      additionalSections: [
+        `# Core Workflow
 1. Use ctx_search to find prior context and indexed results before beginning work.
 2. Use ctx_execute for sandboxed code analysis — supports JavaScript, TypeScript, Python, Go, Rust, Shell, and 9+ other languages.
 3. Use ctx_execute_file to load large files into the sandbox without flooding context.
 4. Use ctx_index to persist important results for future ctx_search retrieval.
 5. Use ctx_batch_execute for multi-step analysis pipelines with auto-indexing.
-6. Use ctx_stats to monitor your token and cost usage.`
-    ],
-  }],
+6. Use ctx_stats to monitor your token and cost usage.`,
+      ],
+    },
+  ],
 ]);
 
 export const DEFAULT_AGENTS: Map<string, AgentConfig> = new Map([
@@ -208,8 +216,10 @@ export const DEFAULT_AGENTS: Map<string, AgentConfig> = new Map([
       systemPrompt: createReadOnlyPrompt({
         role: "a file search specialist. You excel at thoroughly navigating and exploring codebases",
         task: "search and analyze existing code",
-        toolInstructions: "Use Bash ONLY for read-only operations: ls, git status, git log, git diff, find, cat, head, tail.\n- Make independent tool calls in parallel for efficiency\n- Adapt search approach based on thoroughness level specified",
-        outputInstructions: "- Use absolute file paths in all references\n- Report findings as regular messages\n- Do not use emojis\n- Be thorough and precise",
+        toolInstructions:
+          "Use Bash ONLY for read-only operations: ls, git status, git log, git diff, find, cat, head, tail.\n- Make independent tool calls in parallel for efficiency\n- Adapt search approach based on thoroughness level specified",
+        outputInstructions:
+          "- Use absolute file paths in all references\n- Report findings as regular messages\n- Do not use emojis\n- Be thorough and precise",
       }),
       promptMode: "replace",
       isDefault: true,
@@ -247,8 +257,8 @@ End your response with:
 
 ### Critical Files for Implementation
 List 3-5 files most critical for implementing this plan:
-- /absolute/path/to/file.ts - [Brief reason]`
-        ]
+- /absolute/path/to/file.ts - [Brief reason]`,
+        ],
       }),
       promptMode: "replace",
       isDefault: true,
@@ -268,8 +278,10 @@ List 3-5 files most critical for implementing this plan:
       systemPrompt: createReadOnlyPrompt({
         role: "a data analysis specialist with sandboxed code execution capabilities",
         task: "analyze data, run computations, and produce insightful results",
-        toolInstructions: "Prefer ctx_execute over manual computation — never do data processing in your own context window.\n- Use ctx_search to discover prior context before duplicating work.",
-        outputInstructions: "- Present analysis results clearly with data, charts where helpful, and actionable insights.\n- Use absolute file paths in all references.\n- Do not use emojis.\n- Be thorough and precise.",
+        toolInstructions:
+          "Prefer ctx_execute over manual computation — never do data processing in your own context window.\n- Use ctx_search to discover prior context before duplicating work.",
+        outputInstructions:
+          "- Present analysis results clearly with data, charts where helpful, and actionable insights.\n- Use absolute file paths in all references.\n- Do not use emojis.\n- Be thorough and precise.",
         additionalSections: [
           `# Core Workflow
 1. Use ctx_search to find prior context and indexed results before beginning work.
@@ -277,8 +289,8 @@ List 3-5 files most critical for implementing this plan:
 3. Use ctx_execute_file to load large files into the sandbox without flooding context.
 4. Use ctx_index to persist important results for future ctx_search retrieval.
 5. Use ctx_batch_execute for multi-step analysis pipelines with auto-indexing.
-6. Use ctx_stats to monitor your token and cost usage.`
-        ]
+6. Use ctx_stats to monitor your token and cost usage.`,
+        ],
       }),
       promptMode: "replace",
       inheritContext: true,

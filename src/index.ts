@@ -11,7 +11,6 @@ import { logger } from "./logger.js";
  *   /agents                 — Interactive agent management menu
  */
 
-
 import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { AgentManager } from "./agent-manager.js";
 import {
@@ -34,6 +33,7 @@ import {
   setUiStyle,
 } from "./agent-registry.js";
 import { setDefaultMaxTurns, setGraceTurns } from "./agent-runner.js";
+import { initAnalytics } from "./analytics.js";
 import { BatchOrchestrator } from "./batch-orchestrator.js";
 import { registerAgentsCommand } from "./commands/agents.js";
 import { registerHooksCommand } from "./commands/hooks.js";
@@ -48,6 +48,8 @@ import {
   enable as enableDebugCapture,
   isDebugCaptureEnabled as isDebugCaptureSinkOn,
 } from "./debug-capture.js";
+import { initErrorTracking } from "./error-tracking.js";
+import { initFeatureFlags } from "./feature-flags.js";
 import { GroupJoinManager } from "./group-join.js";
 import { HookRegistry } from "./hooks.js";
 import { clearSubagentsApi, registerSubagentsApi } from "./public-api.js";
@@ -57,9 +59,7 @@ import { resolveStorePath, ScheduleStore } from "./schedule-store.js";
 import { applyAndEmitLoaded } from "./settings.js";
 import { SwarmCoordinator, setActiveSwarmCoordinator } from "./swarm-join.js";
 import { onTelemetry } from "./telemetry.js";
-import {
-  buildNotificationDetails, formatTaskNotification,
-} from "./tool-result-helpers.js";
+import { buildNotificationDetails, formatTaskNotification } from "./tool-result-helpers.js";
 import { createAgentTool } from "./tools/agent.js";
 import { createGetResultTool } from "./tools/get-result.js";
 import { createSteerTool } from "./tools/steer.js";
@@ -72,10 +72,18 @@ import { createNotificationRenderer } from "./ui/notification-renderer.js";
 import { getLifetimeTotal } from "./usage.js";
 
 export default async function (pi: ExtensionAPI) {
+  // ---- Initialize feature flags from environment ----
+  initFeatureFlags();
+
+  // ---- Initialize analytics (no-op if POSTHOG_KEY not set) ----
+  await initAnalytics();
+
+  // ---- Initialize error tracking (no-op if SENTRY_DSN not set) ----
+  await initErrorTracking();
+
   // ---- Register custom notification renderer ----
-  pi.registerMessageRenderer<NotificationDetails>(
-    "subagent-notification",
-    (message, opts, theme) => createNotificationRenderer(theme)(message, opts),
+  pi.registerMessageRenderer<NotificationDetails>("subagent-notification", (message, opts, theme) =>
+    createNotificationRenderer(theme)(message, opts),
   );
 
   // Initial load
@@ -92,10 +100,17 @@ export default async function (pi: ExtensionAPI) {
 
   function scheduleNudge(key: string, send: () => void, delay = NUDGE_HOLD_MS) {
     cancelNudge(key);
-    pendingNudges.set(key, setTimeout(() => {
-      pendingNudges.delete(key);
-      try { send(); } catch (err) { logger.debug(`Swallowed error: ${err instanceof Error ? err.message : String(err)}`); }
-    }, delay));
+    pendingNudges.set(
+      key,
+      setTimeout(() => {
+        pendingNudges.delete(key);
+        try {
+          send();
+        } catch (err) {
+          logger.debug(`Swallowed error: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }, delay),
+    );
   }
 
   function cancelNudge(key: string) {
@@ -108,17 +123,20 @@ export default async function (pi: ExtensionAPI) {
 
   // ---- Individual nudge helper (async join mode) ----
   function emitIndividualNudge(record: AgentRecord) {
-    if (record.resultConsumed) return;  // re-check at send time
+    if (record.resultConsumed) return; // re-check at send time
 
     const notification = formatTaskNotification(record, 500);
-    const footer = record.outputFile ? `\nFull transcript available at: ${record.outputFile}` : '';
+    const footer = record.outputFile ? `\nFull transcript available at: ${record.outputFile}` : "";
 
-    pi.sendMessage<NotificationDetails>({
-      customType: "subagent-notification",
-      content: notification + footer,
-      display: true,
-      details: buildNotificationDetails(record, 500, agentActivity.get(record.id)),
-    }, { deliverAs: "followUp", triggerTurn: true });
+    pi.sendMessage<NotificationDetails>(
+      {
+        customType: "subagent-notification",
+        content: notification + footer,
+        display: true,
+        details: buildNotificationDetails(record, 500, agentActivity.get(record.id)),
+      },
+      { deliverAs: "followUp", triggerTurn: true },
+    );
   }
 
   function sendIndividualNudge(record: AgentRecord) {
@@ -129,73 +147,85 @@ export default async function (pi: ExtensionAPI) {
   }
 
   // ---- Group join manager ----
-  const groupJoin = new GroupJoinManager(
-    (records, partial) => {
-      for (const r of records) { agentActivity.delete(r.id); widget.markFinished(r.id); }
+  const groupJoin = new GroupJoinManager((records, partial) => {
+    for (const r of records) {
+      agentActivity.delete(r.id);
+      widget.markFinished(r.id);
+    }
 
-      const groupKey = `group:${records.map(r => r.id).join(",")}`;
-      scheduleNudge(groupKey, () => {
-        // Re-check at send time
-        const unconsumed = records.filter(r => !r.resultConsumed);
-        if (unconsumed.length === 0) { widget.update(); return; }
+    const groupKey = `group:${records.map((r) => r.id).join(",")}`;
+    scheduleNudge(groupKey, () => {
+      // Re-check at send time
+      const unconsumed = records.filter((r) => !r.resultConsumed);
+      if (unconsumed.length === 0) {
+        widget.update();
+        return;
+      }
 
-        const notifications = unconsumed.map(r => formatTaskNotification(r, 300)).join('\n\n');
-        const label = partial
-          ? `${unconsumed.length} agent(s) finished (partial — others still running)`
-          : `${unconsumed.length} agent(s) finished`;
+      const notifications = unconsumed.map((r) => formatTaskNotification(r, 300)).join("\n\n");
+      const label = partial
+        ? `${unconsumed.length} agent(s) finished (partial — others still running)`
+        : `${unconsumed.length} agent(s) finished`;
 
-        const [first, ...rest] = unconsumed;
-        const details = buildNotificationDetails(first, 300, agentActivity.get(first.id));
-        if (rest.length > 0) {
-          details.others = rest.map(r => buildNotificationDetails(r, 300, agentActivity.get(r.id)));
-        }
+      const [first, ...rest] = unconsumed;
+      const details = buildNotificationDetails(first, 300, agentActivity.get(first.id));
+      if (rest.length > 0) {
+        details.others = rest.map((r) => buildNotificationDetails(r, 300, agentActivity.get(r.id)));
+      }
 
-        pi.sendMessage<NotificationDetails>({
+      pi.sendMessage<NotificationDetails>(
+        {
           customType: "subagent-notification",
           content: `Background agent group completed: ${label}\n\n${notifications}\n\nUse get_subagent_result for full output.`,
           display: true,
           details,
-        }, { deliverAs: "followUp", triggerTurn: true });
-      });
-      widget.update();
-    },
-    30_000,
-  );
+        },
+        { deliverAs: "followUp", triggerTurn: true },
+      );
+    });
+    widget.update();
+  }, 30_000);
 
   // ---- Swarm coordinator (dynamic collaborative groups) ----
   // Supports runtime join (the "swarm mode" feature) and provides query APIs
   // for the rich AgentDashboard.
-  const swarmJoin = new SwarmCoordinator(
-    (records, partial, swarmId) => {
-      for (const r of records) { agentActivity.delete(r.id); widget.markFinished(r.id); }
+  const swarmJoin = new SwarmCoordinator((records, partial, swarmId) => {
+    for (const r of records) {
+      agentActivity.delete(r.id);
+      widget.markFinished(r.id);
+    }
 
-      const swarmKey = `swarm:${swarmId}`;
-      scheduleNudge(swarmKey, () => {
-        const unconsumed = records.filter(r => !r.resultConsumed);
-        if (unconsumed.length === 0) { widget.update(); return; }
+    const swarmKey = `swarm:${swarmId}`;
+    scheduleNudge(swarmKey, () => {
+      const unconsumed = records.filter((r) => !r.resultConsumed);
+      if (unconsumed.length === 0) {
+        widget.update();
+        return;
+      }
 
-        const notifications = unconsumed.map(r => formatTaskNotification(r, 300)).join('\n\n');
-        const label = partial
-          ? `${unconsumed.length} swarm agent(s) finished (partial — swarm still active)`
-          : `Swarm ${swarmId} wave completed`;
+      const notifications = unconsumed.map((r) => formatTaskNotification(r, 300)).join("\n\n");
+      const label = partial
+        ? `${unconsumed.length} swarm agent(s) finished (partial — swarm still active)`
+        : `Swarm ${swarmId} wave completed`;
 
-        const [first, ...rest] = unconsumed;
-        const details = buildNotificationDetails(first, 300, agentActivity.get(first.id));
-        if (rest.length > 0) {
-          details.others = rest.map(r => buildNotificationDetails(r, 300, agentActivity.get(r.id)));
-        }
+      const [first, ...rest] = unconsumed;
+      const details = buildNotificationDetails(first, 300, agentActivity.get(first.id));
+      if (rest.length > 0) {
+        details.others = rest.map((r) => buildNotificationDetails(r, 300, agentActivity.get(r.id)));
+      }
 
-        pi.sendMessage<NotificationDetails>({
+      pi.sendMessage<NotificationDetails>(
+        {
           customType: "subagent-notification",
           content: `Swarm update: ${label}\n\n${notifications}\n\nUse get_subagent_result for full output.`,
           display: true,
           details,
-        }, { deliverAs: "followUp", triggerTurn: true });
-      });
-      widget.update();
-    },
-    30_000,
-  );
+        },
+        { deliverAs: "followUp", triggerTurn: true },
+      );
+    });
+    widget.update();
+  }, 30_000);
 
   // Make the real coordinator available to the dashboard / output-handler layer
   // so 'w' hotkey actions can actually create and join swarms at runtime.
@@ -203,16 +233,16 @@ export default async function (pi: ExtensionAPI) {
 
   /** Helper: build event data for lifecycle events from an AgentRecord. */
   function buildEventData(record: AgentRecord) {
-    const durationMs = record.completedAt ? record.completedAt - (record.startedAt ?? 0) : Date.now() - (record.startedAt ?? 0);
+    const durationMs = record.completedAt
+      ? record.completedAt - (record.startedAt ?? 0)
+      : Date.now() - (record.startedAt ?? 0);
     // All three fields are lifetime-accumulated (Σ over every assistant message_end),
     // so they survive compaction together — input + output ≤ total always.
     // tokens is omitted when nothing was ever produced (e.g. agent errored before
     // any message_end fired), preserving prior payload shape.
     const u = record.lifetimeUsage;
     const total = getLifetimeTotal(u);
-    const tokens = total > 0
-      ? { input: u.input, output: u.output, total }
-      : undefined;
+    const tokens = total > 0 ? { input: u.input, output: u.output, total } : undefined;
     return {
       id: record.id,
       type: record.type,
@@ -228,64 +258,74 @@ export default async function (pi: ExtensionAPI) {
 
   // Background completion: route through group join or send individual nudge
   const hookRegistry = new HookRegistry();
-  const manager = new AgentManager((record) => {
-    // Emit lifecycle event based on terminal status
-    const isError = record.status === "error" || record.status === "stopped" || record.status === "aborted";
-    const eventData = buildEventData(record);
-    if (isError) {
-      pi.events.emit("subagents:failed", eventData);
-    } else {
-      pi.events.emit("subagents:completed", eventData);
-    }
+  const manager = new AgentManager(
+    (record) => {
+      // Emit lifecycle event based on terminal status
+      const isError = record.status === "error" || record.status === "stopped" || record.status === "aborted";
+      const eventData = buildEventData(record);
+      if (isError) {
+        pi.events.emit("subagents:failed", eventData);
+      } else {
+        pi.events.emit("subagents:completed", eventData);
+      }
 
-    // Persist final record for cross-extension history reconstruction
-    pi.appendEntry("subagents:record", {
-      id: record.id, type: record.type, description: record.description,
-      status: record.status, result: record.result, error: record.error,
-      startedAt: record.startedAt, completedAt: record.completedAt,
-    });
+      // Persist final record for cross-extension history reconstruction
+      pi.appendEntry("subagents:record", {
+        id: record.id,
+        type: record.type,
+        description: record.description,
+        status: record.status,
+        result: record.result,
+        error: record.error,
+        startedAt: record.startedAt,
+        completedAt: record.completedAt,
+      });
 
-    // Skip notification if result was already consumed via get_subagent_result
-    if (record.resultConsumed) {
-      agentActivity.delete(record.id);
-      widget.markFinished(record.id);
+      // Skip notification if result was already consumed via get_subagent_result
+      if (record.resultConsumed) {
+        agentActivity.delete(record.id);
+        widget.markFinished(record.id);
+        widget.update();
+        return;
+      }
+
+      // If this agent is pending batch finalization (debounce window still open),
+      // don't send an individual nudge — batch orchestrator will pick it up retroactively.
+      if (batchOrchestrator.isPendingBatchFinalization(record.id)) {
+        widget.update();
+        return;
+      }
+
+      const groupResult = groupJoin.onAgentComplete(record);
+      const swarmResult = swarmJoin.onAgentComplete(record);
+
+      if (groupResult === "pass" && swarmResult === "pass") {
+        sendIndividualNudge(record);
+      }
+      // 'held' or 'delivered' for either → notification handled by the respective coordinator
       widget.update();
-      return;
-    }
-
-    // If this agent is pending batch finalization (debounce window still open),
-    // don't send an individual nudge — batch orchestrator will pick it up retroactively.
-    if (batchOrchestrator.isPendingBatchFinalization(record.id)) {
-      widget.update();
-      return;
-    }
-
-    const groupResult = groupJoin.onAgentComplete(record);
-    const swarmResult = swarmJoin.onAgentComplete(record);
-
-    if (groupResult === 'pass' && swarmResult === 'pass') {
-      sendIndividualNudge(record);
-    }
-    // 'held' or 'delivered' for either → notification handled by the respective coordinator
-    widget.update();
-  }, undefined, (record) => {
-    // Emit started event when agent transitions to running (including from queue)
-    pi.events.emit("subagents:started", {
-      id: record.id,
-      type: record.type,
-      description: record.description,
-    });
-  }, (record, info) => {
-    // Emit compacted event when agent's session compacts (preserves count on record).
-    pi.events.emit("subagents:compacted", {
-      id: record.id,
-      type: record.type,
-      description: record.description,
-      reason: info.reason,
-      tokensBefore: info.tokensBefore,
-      compactionCount: record.compactionCount,
-    });
-  });
+    },
+    undefined,
+    (record) => {
+      // Emit started event when agent transitions to running (including from queue)
+      pi.events.emit("subagents:started", {
+        id: record.id,
+        type: record.type,
+        description: record.description,
+      });
+    },
+    (record, info) => {
+      // Emit compacted event when agent's session compacts (preserves count on record).
+      pi.events.emit("subagents:compacted", {
+        id: record.id,
+        type: record.type,
+        description: record.description,
+        reason: info.reason,
+        tokensBefore: info.tokensBefore,
+        compactionCount: record.compactionCount,
+      });
+    },
+  );
 
   // Wire up agentActivity cleanup: when records are removed from the
   // manager (cleanup cycle, clearCompleted), purge corresponding activity entries.
@@ -389,9 +429,10 @@ export default async function (pi: ExtensionAPI) {
   // user sees it as a non-blocking alert even if the dashboard isn't open.
   manager.setBudgetWarningHandler((type, usage, limits) => {
     const isCritical = type === "agents_at_90" || type === "turns_at_90";
-    const threshold = type === "agents_at_80" || type === "agents_at_90"
-      ? `agent budget ${isCritical ? "90" : "80"}% used (${usage.spawnedAgents}/${limits.maxAgents})`
-      : `turn budget ${isCritical ? "90" : "80"}% used (${usage.totalTurns}/${limits.maxTurns})`;
+    const threshold =
+      type === "agents_at_80" || type === "agents_at_90"
+        ? `agent budget ${isCritical ? "90" : "80"}% used (${usage.spawnedAgents}/${limits.maxAgents})`
+        : `turn budget ${isCritical ? "90" : "80"}% used (${usage.totalTurns}/${limits.maxTurns})`;
     const prefix = isCritical ? "🚨" : "⚠️";
     const advice = isCritical
       ? "Session budget nearly exhausted — spawns will stop soon!"
@@ -403,7 +444,11 @@ export default async function (pi: ExtensionAPI) {
       threshold,
       message: `${prefix} Session ${threshold}. ${advice}`,
     });
-    pi.sendMessage({ customType: "subagent-notification", content: `${prefix} Session ${threshold}. ${advice}`, display: true });
+    pi.sendMessage({
+      customType: "subagent-notification",
+      content: `${prefix} Session ${threshold}. ${advice}`,
+      display: true,
+    });
   });
 
   // Publish the typed public API on `globalThis` so peer extensions and tests
@@ -429,7 +474,7 @@ export default async function (pi: ExtensionAPI) {
   async function startScheduler(ctx: ExtensionContext) {
     try {
       const sessionId = ctx.sessionManager?.getSessionId?.();
-      if (!sessionId) return;  // sessionId not yet available — try again on next event
+      if (!sessionId) return; // sessionId not yet available — try again on next event
       const path = resolveStorePath(ctx.cwd, sessionId);
       const store = await ScheduleStore.create(path);
       await scheduler.start(pi, ctx, manager, store);
@@ -472,9 +517,15 @@ export default async function (pi: ExtensionAPI) {
     scheduler.stop();
   });
 
-    // Auth provider validates caller identity using authContext provided in the payload.
+  // Auth provider validates caller identity using authContext provided in the payload.
   // Using the payload ensures each calling extension has its own rate-limit bucket.
-  const { unsubPing: unsubPingRpc, unsubSpawn: unsubSpawnRpc, unsubStop: unsubStopRpc, unsubSessionUsage: unsubSessionUsageRpc, unsubSwarmHealth: unsubSwarmHealthRpc } = registerRpcHandlers({
+  const {
+    unsubPing: unsubPingRpc,
+    unsubSpawn: unsubSpawnRpc,
+    unsubStop: unsubStopRpc,
+    unsubSessionUsage: unsubSessionUsageRpc,
+    unsubSwarmHealth: unsubSwarmHealthRpc,
+  } = registerRpcHandlers({
     events: pi.events,
     pi,
     getCtx: () => currentCtx,
@@ -540,7 +591,7 @@ export default async function (pi: ExtensionAPI) {
 
   // Grab UI context from first tool execution + clear lingering widget on new turn
   pi.on("tool_execution_start", async (_event, ctx) => {
-    const uiCtx = ctx && typeof ctx.ui === 'object' ? (ctx.ui as UICtx) : undefined;
+    const uiCtx = ctx && typeof ctx.ui === "object" ? (ctx.ui as UICtx) : undefined;
     if (uiCtx) widget.setUICtx(uiCtx);
     currentTurnToolCount++;
     if (currentTurnToolCount === 1) {
@@ -552,7 +603,6 @@ export default async function (pi: ExtensionAPI) {
   pi.on("turn_end", () => {
     currentTurnToolCount = 0;
   });
-
 
   // Apply persisted settings on startup and emit `subagents:settings_loaded`.
   // Global + project merged; missing → defaults; corrupt file emits a warning
@@ -587,8 +637,17 @@ export default async function (pi: ExtensionAPI) {
 
   // ---- Tool context — shared dependency bag for extracted tool modules ----
   const toolCtx = {
-    pi, manager, widget, agentActivity, batchOrchestrator, scheduler, swarmJoin, hookRegistry,
-    sendIndividualNudge, cancelNudge, scheduleNudge,
+    pi,
+    manager,
+    widget,
+    agentActivity,
+    batchOrchestrator,
+    scheduler,
+    swarmJoin,
+    hookRegistry,
+    sendIndividualNudge,
+    cancelNudge,
+    scheduleNudge,
   };
 
   // ---- Tools ----

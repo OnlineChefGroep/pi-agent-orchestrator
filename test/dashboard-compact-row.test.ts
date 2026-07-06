@@ -72,7 +72,13 @@ const th = {
 
 const baseState = (overrides: Partial<Parameters<typeof makeState>[0]> = {}) => makeState(overrides);
 
-function makeState(overrides: { agents?: AgentRecord[]; selectedIndex?: number; selectedIds?: Set<string>; frame?: number; agentActivity?: Map<string, unknown> }) {
+function makeState(overrides: {
+  agents?: AgentRecord[];
+  selectedIndex?: number;
+  selectedIds?: Set<string>;
+  frame?: number;
+  agentActivity?: Map<string, unknown>;
+}) {
   const agents = overrides.agents ?? [makeRecord()];
   return {
     agents,
@@ -173,7 +179,9 @@ describe("renderCompactRow", () => {
   });
 
   it("truncates long output to inner width", () => {
-    const rec = makeRecord({ description: "A very long description that should be truncated because it exceeds the available width" });
+    const rec = makeRecord({
+      description: "A very long description that should be truncated because it exceeds the available width",
+    });
     const state = baseState({ agents: [rec] });
     const result = renderCompactRow(rec, 40, th, state);
     // Visible chars (without ANSI) should be <= 40 or end with "…"

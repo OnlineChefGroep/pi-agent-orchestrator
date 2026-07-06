@@ -7,7 +7,14 @@ vi.mock("../src/logger.js", () => ({
   logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
-const { SwarmCoordinator, setActiveSwarmCoordinator, getSwarmCoordinator, uiCreateSwarm, uiJoinSwarm, uiCreateOrJoinSwarm } = await import("../src/swarm-join.js");
+const {
+  SwarmCoordinator,
+  setActiveSwarmCoordinator,
+  getSwarmCoordinator,
+  uiCreateSwarm,
+  uiJoinSwarm,
+  uiCreateOrJoinSwarm,
+} = await import("../src/swarm-join.js");
 
 function makeRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {
   return {

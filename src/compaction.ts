@@ -15,17 +15,17 @@ export const MIN_KEEP_TURNS = 2;
 
 /** Result of a compaction operation with token reduction metrics. */
 export interface CompactResult {
-    originalTokens: number;
-    compactedTokens: number;
-    reductionPercent: number;
-    turnCount: number;
+  originalTokens: number;
+  compactedTokens: number;
+  reductionPercent: number;
+  turnCount: number;
 }
 
 /** Minimal message shape needed for compaction — works with any message-like object. */
 export interface CompactableMessage {
-    role: "user" | "assistant" | "toolResult";
-    content: string | unknown[];
-    toolName?: string;
+  role: "user" | "assistant" | "toolResult";
+  content: string | unknown[];
+  toolName?: string;
 }
 
 /**
@@ -33,46 +33,43 @@ export interface CompactableMessage {
  * Rough heuristic: 1 token ≈ 4 characters for English text.
  */
 function estimateTokens(message: CompactableMessage): number {
-    let len = 0;
-    const { content } = message;
+  let len = 0;
+  const { content } = message;
 
-    if (typeof content === "string") {
-        len = content.length;
-    } else if (Array.isArray(content)) {
-        for (const block of content) {
-            const b = block as any;
-            if (b?.type === "text" && typeof b.text === "string") {
-                len += b.text.length;
-            } else if (b?.type === "tool_result") {
-                if (typeof b.content === "string") {
-                    len += b.content.length;
-                } else if (Array.isArray(b.content)) {
-                    for (const nested of b.content) {
-                        const n = nested as any;
-                        len +=
-                            n?.type === "text" && typeof n.text === "string"
-                                ? n.text.length
-                                : 50;
-                    }
-                } else {
-                    len += 50; // default penalty for non-text tool results
-                }
-            } else if (b?.type === "tool_use" && b.input != null) {
-                len += JSON.stringify(b.input).length;
-            } else {
-                len += 50; // fast heuristic for other unknown blocks
-            }
+  if (typeof content === "string") {
+    len = content.length;
+  } else if (Array.isArray(content)) {
+    for (const block of content) {
+      const b = block as any;
+      if (b?.type === "text" && typeof b.text === "string") {
+        len += b.text.length;
+      } else if (b?.type === "tool_result") {
+        if (typeof b.content === "string") {
+          len += b.content.length;
+        } else if (Array.isArray(b.content)) {
+          for (const nested of b.content) {
+            const n = nested as any;
+            len += n?.type === "text" && typeof n.text === "string" ? n.text.length : 50;
+          }
+        } else {
+          len += 50; // default penalty for non-text tool results
         }
-    } else {
-        len = JSON.stringify(content).length;
+      } else if (b?.type === "tool_use" && b.input != null) {
+        len += JSON.stringify(b.input).length;
+      } else {
+        len += 50; // fast heuristic for other unknown blocks
+      }
     }
+  } else {
+    len = JSON.stringify(content).length;
+  }
 
-    return Math.ceil(len / 4);
+  return Math.ceil(len / 4);
 }
 
 /** Sum estimated tokens across an array of messages. */
 function totalTokens(messages: readonly CompactableMessage[]): number {
-    return messages.reduce((sum, m) => sum + estimateTokens(m), 0);
+  return messages.reduce((sum, m) => sum + estimateTokens(m), 0);
 }
 
 /**
@@ -84,57 +81,50 @@ function totalTokens(messages: readonly CompactableMessage[]): number {
  * Never removes user messages regardless of their position.
  */
 export function pruneOldToolOutputs(
-    messages: readonly CompactableMessage[],
-    keepLastNTurns: number,
+  messages: readonly CompactableMessage[],
+  keepLastNTurns: number,
 ): CompactableMessage[] {
-    if (!messages.length) return [];
+  if (!messages.length) return [];
 
-    const keepTurns = Math.max(MIN_KEEP_TURNS, keepLastNTurns);
-    const result: CompactableMessage[] = [];
-    let assistantSeen = 0;
+  const keepTurns = Math.max(MIN_KEEP_TURNS, keepLastNTurns);
+  const result: CompactableMessage[] = [];
+  let assistantSeen = 0;
 
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const msg = messages[i];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
 
-        if (msg.role === "user") {
-            result.push(msg); // Always keep user prompts
-        } else if (msg.role === "assistant") {
-            assistantSeen++;
-            result.push(msg); // Always keep assistant reasoning
-        } else if (assistantSeen < keepTurns) {
-            result.push(msg); // Keep toolResult if it belongs to a recent turn
-        }
+    if (msg.role === "user") {
+      result.push(msg); // Always keep user prompts
+    } else if (msg.role === "assistant") {
+      assistantSeen++;
+      result.push(msg); // Always keep assistant reasoning
+    } else if (assistantSeen < keepTurns) {
+      result.push(msg); // Keep toolResult if it belongs to a recent turn
     }
+  }
 
-    return result.reverse();
+  return result.reverse();
 }
 
 /**
  * Estimate the reduction achieved by compaction.
  */
 export function estimateReduction(
-    original: readonly CompactableMessage[],
-    compacted: readonly CompactableMessage[],
+  original: readonly CompactableMessage[],
+  compacted: readonly CompactableMessage[],
 ): CompactResult {
-    const originalTokens = totalTokens(original);
-    const compactedTokens = totalTokens(compacted);
+  const originalTokens = totalTokens(original);
+  const compactedTokens = totalTokens(compacted);
 
-    const reductionPercent =
-        originalTokens > 0
-            ? Math.round(
-                  ((originalTokens - compactedTokens) / originalTokens) * 100,
-              )
-            : 0;
+  const reductionPercent =
+    originalTokens > 0 ? Math.round(((originalTokens - compactedTokens) / originalTokens) * 100) : 0;
 
-    const turnCount = original.filter((m) => m.role === "assistant").length;
+  const turnCount = original.filter((m) => m.role === "assistant").length;
 
-    return { originalTokens, compactedTokens, reductionPercent, turnCount };
+  return { originalTokens, compactedTokens, reductionPercent, turnCount };
 }
 
 /** Check whether a conversation exceeds a given token threshold. */
-export function shouldCompact(
-    messages: readonly CompactableMessage[],
-    thresholdTokens: number,
-): boolean {
-    return totalTokens(messages) > thresholdTokens;
+export function shouldCompact(messages: readonly CompactableMessage[], thresholdTokens: number): boolean {
+  return totalTokens(messages) > thresholdTokens;
 }

@@ -110,19 +110,12 @@ vi.mock("../src/worktree.js", () => ({
 // Helpers
 // ============================================================================
 
-function benchmarkLog(
-  label: string,
-  measured: number,
-  threshold: number,
-  unit = "ms",
-): void {
+function benchmarkLog(label: string, measured: number, threshold: number, unit = "ms"): void {
   const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
   let status: string;
   if (measured > threshold) {
     status = "FAIL";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`,
-    );
+    console.warn(`\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`);
   } else if (pct > 80) {
     status = "WARN";
     console.warn(
@@ -133,9 +126,7 @@ function benchmarkLog(
   }
   const measuredStr = `${measured.toFixed(3)}${unit}`;
   const thresholdStr = `${threshold.toFixed(3)}${unit}`;
-  process.stdout.write(
-    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
-  );
+  process.stdout.write(`[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`);
 }
 
 function createSession() {
@@ -149,7 +140,8 @@ function createSession() {
     prompt: vi.fn(async () => {
       // Fire events synchronously — same pattern as agent-runner.test.ts
       for (const l of listeners) l({ type: "message_start" });
-      for (const l of listeners) l({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Hello!" } });
+      for (const l of listeners)
+        l({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Hello!" } });
       session.messages.push({ role: "assistant", content: [{ type: "text", text: "Hello!" }] });
       for (const l of listeners) l({ type: "turn_end" });
     }),
@@ -357,7 +349,8 @@ describe("Benchmark: setup pipeline breakdown (performance.now() precision)", ()
       session.prompt = vi.fn(async () => {
         promptCalledAt = performance.now();
         for (const l of listeners) l({ type: "message_start" });
-        for (const l of listeners) l({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Hello!" } });
+        for (const l of listeners)
+          l({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Hello!" } });
         session.messages.push({ role: "assistant", content: [{ type: "text", text: "Hello!" }] });
         for (const l of listeners) l({ type: "turn_end" });
       });
@@ -404,7 +397,8 @@ describe("Benchmark: setup pipeline breakdown (performance.now() precision)", ()
       const { session, listeners } = createRawSession();
       session.prompt = vi.fn(async () => {
         for (const l of listeners) l({ type: "message_start" });
-        for (const l of listeners) l({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Hello!" } });
+        for (const l of listeners)
+          l({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Hello!" } });
         session.messages.push({ role: "assistant", content: [{ type: "text", text: "Hello!" }] });
         for (const l of listeners) l({ type: "turn_end" });
       });

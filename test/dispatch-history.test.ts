@@ -60,11 +60,29 @@ describe("dispatch-history ring buffer", () => {
   });
 
   it("preserves insertion order: newest → oldest for getDispatchHistory, oldest → newest for the sorted variant", () => {
-    recordDispatchDecision({ kind: "single", configuredMode: "auto", source: "auto-heuristic", promptLength: 50, description: "a" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "auto",
+      source: "auto-heuristic",
+      promptLength: 50,
+      description: "a",
+    });
     vi.setSystemTime(new Date(NOW + 1000));
-    recordDispatchDecision({ kind: "crew",   configuredMode: "auto", source: "auto-heuristic", promptLength: 60, description: "b" });
+    recordDispatchDecision({
+      kind: "crew",
+      configuredMode: "auto",
+      source: "auto-heuristic",
+      promptLength: 60,
+      description: "b",
+    });
     vi.setSystemTime(new Date(NOW + 2000));
-    recordDispatchDecision({ kind: "swarm",  configuredMode: "swarm", source: "explicit", promptLength: 70, description: "c" });
+    recordDispatchDecision({
+      kind: "swarm",
+      configuredMode: "swarm",
+      source: "explicit",
+      promptLength: 70,
+      description: "c",
+    });
 
     const newestFirst = getDispatchHistory().map((d) => d.description);
     expect(newestFirst).toEqual(["c", "b", "a"]);
@@ -79,28 +97,76 @@ describe("dispatch-history ring buffer", () => {
 
   it("slides oldest off the head when the cap is exceeded (true FIFO ring)", () => {
     configureDispatchHistory({ maxEntries: 3 });
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 10, description: "first" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 10,
+      description: "first",
+    });
     vi.setSystemTime(new Date(NOW + 1));
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 10, description: "second" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 10,
+      description: "second",
+    });
     vi.setSystemTime(new Date(NOW + 2));
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 10, description: "third" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 10,
+      description: "third",
+    });
     vi.setSystemTime(new Date(NOW + 3));
     // Evicts "first" → "second" → "third" → "fourth"
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 10, description: "fourth" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 10,
+      description: "fourth",
+    });
     expect(getDispatchHistory().map((d) => d.description)).toEqual(["fourth", "third", "second"]);
   });
 
   it("trims the existing buffer when configure lowers the cap below current length", () => {
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 10, description: "1" });
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 10, description: "2" });
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 10, description: "3" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 10,
+      description: "1",
+    });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 10,
+      description: "2",
+    });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 10,
+      description: "3",
+    });
     expect(getDispatchHistory()).toHaveLength(3);
     configureDispatchHistory({ maxEntries: 1 });
     expect(getDispatchHistory().map((d) => d.description)).toEqual(["3"]);
   });
 
   it("ignores a non-positive maxEntries override (defensive, no crash)", () => {
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 10, description: "x" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 10,
+      description: "x",
+    });
     configureDispatchHistory({ maxEntries: 0 });
     // Cap unchanged (still default) so the entry survives.
     expect(getDispatchHistory()).toHaveLength(1);
@@ -126,8 +192,20 @@ describe("dispatch-history ring buffer", () => {
   });
 
   it("ignores a kind-typed signature: any resolvable OrchestrationMode → explicit vs auto routing still works", () => {
-    recordDispatchDecision({ kind: "crew", configuredMode: "crew", source: "explicit", promptLength: 5, description: "explicit-crew" });
-    recordDispatchDecision({ kind: "single", configuredMode: "auto", source: "auto-heuristic", promptLength: 5, description: "auto-picked-single" });
+    recordDispatchDecision({
+      kind: "crew",
+      configuredMode: "crew",
+      source: "explicit",
+      promptLength: 5,
+      description: "explicit-crew",
+    });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "auto",
+      source: "auto-heuristic",
+      promptLength: 5,
+      description: "auto-picked-single",
+    });
     const tally = computeDispatchHistogram();
     expect(tally.byKind).toEqual({ single: 1, swarm: 0, crew: 1 });
     expect(tally.bySource).toEqual({ explicit: 1, autoHeuristic: 1 });
@@ -161,14 +239,50 @@ describe("computeDispatchHistogram", () => {
   it("aggregates per-kind, per-source, and per-auto-pick into the right buckets", () => {
     // 4 explicit + 4 auto-heuristic
     for (let i = 0; i < 2; i++) {
-      recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 1, description: "" });
-      recordDispatchDecision({ kind: "swarm", configuredMode: "swarm", source: "explicit", promptLength: 1, description: "" });
+      recordDispatchDecision({
+        kind: "single",
+        configuredMode: "single",
+        source: "explicit",
+        promptLength: 1,
+        description: "",
+      });
+      recordDispatchDecision({
+        kind: "swarm",
+        configuredMode: "swarm",
+        source: "explicit",
+        promptLength: 1,
+        description: "",
+      });
     }
     // auto picks: 1 single, 2 swarm, 1 crew
-    recordDispatchDecision({ kind: "single", configuredMode: "auto", source: "auto-heuristic", promptLength: 1, description: "" });
-    recordDispatchDecision({ kind: "swarm",  configuredMode: "auto", source: "auto-heuristic", promptLength: 1, description: "" });
-    recordDispatchDecision({ kind: "swarm",  configuredMode: "auto", source: "auto-heuristic", promptLength: 1, description: "" });
-    recordDispatchDecision({ kind: "crew",   configuredMode: "auto", source: "auto-heuristic", promptLength: 1, description: "" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "auto",
+      source: "auto-heuristic",
+      promptLength: 1,
+      description: "",
+    });
+    recordDispatchDecision({
+      kind: "swarm",
+      configuredMode: "auto",
+      source: "auto-heuristic",
+      promptLength: 1,
+      description: "",
+    });
+    recordDispatchDecision({
+      kind: "swarm",
+      configuredMode: "auto",
+      source: "auto-heuristic",
+      promptLength: 1,
+      description: "",
+    });
+    recordDispatchDecision({
+      kind: "crew",
+      configuredMode: "auto",
+      source: "auto-heuristic",
+      promptLength: 1,
+      description: "",
+    });
 
     const h = computeDispatchHistogram();
     expect(h.total).toBe(8);
@@ -179,15 +293,33 @@ describe("computeDispatchHistogram", () => {
 
   it("tracks the most recent timestamp from the buffer (relies on witnessing, not on insertion order)", () => {
     vi.setSystemTime(new Date(NOW));
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 1, description: "early" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 1,
+      description: "early",
+    });
     vi.setSystemTime(new Date(NOW + 5000));
-    recordDispatchDecision({ kind: "crew", configuredMode: "crew", source: "explicit", promptLength: 1, description: "later" });
+    recordDispatchDecision({
+      kind: "crew",
+      configuredMode: "crew",
+      source: "explicit",
+      promptLength: 1,
+      description: "later",
+    });
     // Out-of-order write: a smaller timestamp arrives third. The `max()`
     // policy picks the largest *value* seen, which is correct for a
     // "last decision" semantic — a regression here would surface as the
     // wrong timestamp leaking into the rendered report.
     vi.setSystemTime(new Date(NOW + 2500));
-    recordDispatchDecision({ kind: "swarm", configuredMode: "swarm", source: "explicit", promptLength: 1, description: "middle" });
+    recordDispatchDecision({
+      kind: "swarm",
+      configuredMode: "swarm",
+      source: "explicit",
+      promptLength: 1,
+      description: "middle",
+    });
 
     expect(computeDispatchHistogram().lastDecisionAt).toBe(NOW + 5000);
   });
@@ -199,7 +331,13 @@ describe("computeDispatchHistogram", () => {
 
   it("clearDispatchHistory zeroes the histogram without changing the cap", () => {
     configureDispatchHistory({ maxEntries: 50 });
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 1, description: "" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 1,
+      description: "",
+    });
     expect(computeDispatchHistogram().total).toBe(1);
     clearDispatchHistory();
     expect(computeDispatchHistogram().total).toBe(0);
@@ -208,7 +346,13 @@ describe("computeDispatchHistogram", () => {
 
   it("resetDispatchHistory(cap included) reverts to defaults too", () => {
     configureDispatchHistory({ maxEntries: 7 });
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 1, description: "" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 1,
+      description: "",
+    });
     resetDispatchHistory();
     const h = computeDispatchHistogram();
     expect(h.total).toBe(0);
@@ -238,8 +382,20 @@ describe("dispatch-history → subagent:dispatch_decision telemetry", () => {
   });
 
   it("emits exactly one subagent:dispatch_decision per recordDispatchDecision call", () => {
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 30, description: "fix typo" });
-    recordDispatchDecision({ kind: "crew",   configuredMode: "auto",   source: "auto-heuristic", promptLength: 800, description: "plan migration" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 30,
+      description: "fix typo",
+    });
+    recordDispatchDecision({
+      kind: "crew",
+      configuredMode: "auto",
+      source: "auto-heuristic",
+      promptLength: 800,
+      description: "plan migration",
+    });
     expect(emitTelemetry).toHaveBeenCalledTimes(2);
   });
 
@@ -282,11 +438,23 @@ describe("dispatch-history → subagent:dispatch_decision telemetry", () => {
 
   it("emits even when the call evicts an older entry (emit must run AFTER the push, not before)", () => {
     configureDispatchHistory({ maxEntries: 1 });
-    recordDispatchDecision({ kind: "single", configuredMode: "single", source: "explicit", promptLength: 1, description: "old" });
+    recordDispatchDecision({
+      kind: "single",
+      configuredMode: "single",
+      source: "explicit",
+      promptLength: 1,
+      description: "old",
+    });
     expect(emitTelemetry).toHaveBeenCalledTimes(1);
     // The 2nd call evicts "old"; emit MUST still fire for the new entry so
     // subscribers see the survivor, not the dropped one.
-    recordDispatchDecision({ kind: "swarm", configuredMode: "swarm", source: "explicit", promptLength: 1, description: "new" });
+    recordDispatchDecision({
+      kind: "swarm",
+      configuredMode: "swarm",
+      source: "explicit",
+      promptLength: 1,
+      description: "new",
+    });
     expect(emitTelemetry).toHaveBeenCalledTimes(2);
     expect(emitTelemetry).toHaveBeenLastCalledWith(
       "subagent:dispatch_decision",

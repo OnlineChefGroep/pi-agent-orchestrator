@@ -10,7 +10,14 @@ import { getUiStyle } from "../agent-registry.js";
 import { extractText } from "../context.js";
 import type { AgentRecord } from "../types.js";
 import { getLifetimeTotal, getSessionContextPercent } from "../usage.js";
-import { buildInvocationTags, describeActivity, formatDuration, formatSessionTokens, getDisplayName, getPromptModeLabel } from "./agent-format.js";
+import {
+  buildInvocationTags,
+  describeActivity,
+  formatDuration,
+  formatSessionTokens,
+  getDisplayName,
+  getPromptModeLabel,
+} from "./agent-format.js";
 import type { AgentActivity } from "./agent-ui-types.js";
 import { getTimeSpinnerFrame } from "./animation.js";
 import { activeTheme, fastTruncate, getBoxChars, padAndTruncate, type Theme } from "./theme.js";
@@ -188,13 +195,14 @@ export class ConversationViewer implements Component {
     const name = getDisplayName(this.record.type);
     const modeLabel = getPromptModeLabel(this.record.type);
     const modeTag = modeLabel ? ` ${th.fg("dim", `(${modeLabel})`)}` : "";
-    const statusIcon = this.record.status === "running"
-      ? th.fg("accent", "●")
-      : this.record.status === "completed"
-        ? th.fg("success", "✓")
-        : this.record.status === "error"
-          ? th.fg("error", "✗")
-          : th.fg("dim", "○");
+    const statusIcon =
+      this.record.status === "running"
+        ? th.fg("accent", "●")
+        : this.record.status === "completed"
+          ? th.fg("success", "✓")
+          : this.record.status === "error"
+            ? th.fg("error", "✗")
+            : th.fg("dim", "○");
     const duration = formatDuration(this.record.startedAt ?? 0, this.record.completedAt);
 
     const headerParts: string[] = [duration];
@@ -206,9 +214,11 @@ export class ConversationViewer implements Component {
       headerParts.push(formatSessionTokens(tokens, percent, th, this.record.compactionCount));
     }
 
-    lines.push(row(
-      `${statusIcon} ${th.bold(name)}${modeTag}  ${th.fg("muted", this.record.description)} ${th.fg("dim", "·")} ${th.fg("dim", headerParts.join(" · "))}`,
-    ));
+    lines.push(
+      row(
+        `${statusIcon} ${th.bold(name)}${modeTag}  ${th.fg("muted", this.record.description)} ${th.fg("dim", "·")} ${th.fg("dim", headerParts.join(" · "))}`,
+      ),
+    );
     const invocationLine = this.invocationLine();
     if (invocationLine) lines.push(row(invocationLine));
     lines.push(hrMid);
@@ -231,9 +241,10 @@ export class ConversationViewer implements Component {
 
     // Footer
     lines.push(hrMid);
-    const scrollPct = contentLines.length <= viewportHeight
-      ? "100%"
-      : `${Math.round(((visibleStart + viewportHeight) / contentLines.length) * 100)}%`;
+    const scrollPct =
+      contentLines.length <= viewportHeight
+        ? "100%"
+        : `${Math.round(((visibleStart + viewportHeight) / contentLines.length) * 100)}%`;
     const footerLeft = th.fg("dim", `${contentLines.length} lines · ${scrollPct}`);
     const footerRight = th.fg("dim", "↑↓ scroll · PgUp/PgDn or Shift+↑↓ · Esc close");
     const footerGap = Math.max(1, innerW - visibleWidth(footerLeft) - visibleWidth(footerRight));
@@ -323,7 +334,7 @@ export class ConversationViewer implements Component {
     }
 
     // Apply truncation to new lines
-    const truncatedNew = newLines.map(l => fastTruncate(l, width));
+    const truncatedNew = newLines.map((l) => fastTruncate(l, width));
     const updatedLines = [...base, ...truncatedNew];
 
     this.cachedContentLines = updatedLines;
@@ -377,9 +388,7 @@ export class ConversationViewer implements Component {
     lines: string[],
   ): void {
     if (msg.role === "user") {
-      const text = typeof msg.content === "string"
-        ? msg.content
-        : extractText(msg.content);
+      const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
       if (!text.trim()) return;
 
       let header = " \x1b[48;2;0;100;160;38;2;255;255;255;1m 👤 USER \x1b[0m";
@@ -512,7 +521,9 @@ export class ConversationViewer implements Component {
 
         lines.push(`   ${topBorder}`);
         const cmdLineStr = `${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`;
-        lines.push(`   ${leftBorder} ${cmdLineStr}${" ".repeat(Math.max(0, innerW - visibleWidth(`${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`)))} ${rightBorder}`);
+        lines.push(
+          `   ${leftBorder} ${cmdLineStr}${" ".repeat(Math.max(0, innerW - visibleWidth(`${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`)))} ${rightBorder}`,
+        );
 
         if (output.trim()) {
           lines.push(`   ${midBorder}`);
@@ -577,11 +588,9 @@ export class ConversationViewer implements Component {
         lines.push("");
       }
       if (msg.role === "user") {
-        const text = typeof msg.content === "string"
-          ? msg.content
-          : extractText(msg.content);
+        const text = typeof msg.content === "string" ? msg.content : extractText(msg.content);
         if (!text.trim()) continue;
-        
+
         let header = " \x1b[48;2;0;100;160;38;2;255;255;255;1m 👤 USER \x1b[0m";
         let border = " \x1b[38;2;0;160;220m│\x1b[0m";
         if (activeUiStyle === "retro") {
@@ -605,7 +614,7 @@ export class ConversationViewer implements Component {
             toolCalls.push((c as any).name ?? (c as any).toolName ?? "unknown");
           }
         }
-        
+
         let header = " \x1b[48;2;100;50;180;38;2;255;255;255;1m 🤖 HERMES \x1b[0m";
         let border = " \x1b[38;2;150;80;220m│\x1b[0m";
         if (activeUiStyle === "retro") {
@@ -636,7 +645,7 @@ export class ConversationViewer implements Component {
         const truncated = text.length > 800 ? `${text.slice(0, 800)}\n... (truncated)` : text;
         const trimmedTruncated = truncated.trim();
         if (!trimmedTruncated) continue;
-        
+
         const innerW = width - 6;
         if (innerW > 10) {
           const headerText = ` 🔧 Tool Result `;
@@ -659,7 +668,7 @@ export class ConversationViewer implements Component {
             leftBorder = "|";
             rightBorder = "|";
           }
-          
+
           lines.push(`   ${topBorder}`);
           for (const line of wrapTextWithAnsi(trimmedTruncated, innerW)) {
             const paddedLine = line + " ".repeat(Math.max(0, innerW - visibleWidth(line)));
@@ -676,7 +685,7 @@ export class ConversationViewer implements Component {
         const bash = msg;
         const command = bash.command || "";
         const output = bash.output || "";
-        
+
         const innerW = width - 6;
         if (innerW > 10) {
           const headerText = ` 💻 Bash Command `;
@@ -709,11 +718,13 @@ export class ConversationViewer implements Component {
             outPrefix = "";
             outSuffix = "";
           }
-          
+
           lines.push(`   ${topBorder}`);
           const cmdLineStr = `${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`;
-          lines.push(`   ${leftBorder} ${cmdLineStr}${" ".repeat(Math.max(0, innerW - visibleWidth(`${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`)))} ${rightBorder}`);
-          
+          lines.push(
+            `   ${leftBorder} ${cmdLineStr}${" ".repeat(Math.max(0, innerW - visibleWidth(`${cmdPrefix}${command.slice(0, innerW - 2)}${cmdSuffix}`)))} ${rightBorder}`,
+          );
+
           if (output.trim()) {
             lines.push(`   ${midBorder}`);
             const outTrunc = output.length > 800 ? `${output.slice(0, 800)}\n... (truncated)` : output;
@@ -742,7 +753,7 @@ export class ConversationViewer implements Component {
       const spinnerFrame = getTimeSpinnerFrame();
       const act = describeActivity(this.activity.activeTools, this.activity.responseText);
       lines.push("");
-      
+
       let runningLineStr = `  \x1b[38;2;255;165;0m${spinnerFrame}\x1b[0m \x1b[38;2;168;100;255mHermes is working:\x1b[0m \x1b[3m${act}\x1b[0m`;
       if (activeUiStyle === "retro") {
         runningLineStr = `  \x1b[33m${spinnerFrame}\x1b[0m \x1b[35;1mHermes is working:\x1b[0m \x1b[3m${act}\x1b[0m`;
@@ -752,6 +763,6 @@ export class ConversationViewer implements Component {
       lines.push(fastTruncate(runningLineStr, width));
     }
 
-    return lines.map(l => fastTruncate(l, width));
+    return lines.map((l) => fastTruncate(l, width));
   }
 }

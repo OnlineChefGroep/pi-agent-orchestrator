@@ -1,12 +1,6 @@
 import type { AgentRecord } from "../../types.js";
 import { getLifetimeTotal } from "../../usage.js";
-import {
-  describeActivity,
-  formatDuration,
-  formatTokens,
-  formatTurns,
-  getDisplayName,
-} from "../agent-format.js";
+import { describeActivity, formatDuration, formatTokens, formatTurns, getDisplayName } from "../agent-format.js";
 import type { AgentActivity } from "../agent-ui-types.js";
 import { getSpinnerFrame } from "../animation.js";
 import type { DashboardTheme } from "../theme.js";
@@ -39,7 +33,8 @@ export function agentStats(rec: AgentRecord, activity?: AgentActivity): string {
 
 export function activityText(rec: AgentRecord, activity?: AgentActivity): string {
   if (activity && rec.status === "running") return describeActivity(activity.activeTools, activity.responseText);
-  if (rec.result && (rec.status === "completed" || rec.status === "steered")) return rec.result.replace(/\n/g, " ").slice(0, 120);
+  if (rec.result && (rec.status === "completed" || rec.status === "steered"))
+    return rec.result.replace(/\n/g, " ").slice(0, 120);
   if (rec.error) return `Error: ${rec.error.slice(0, 100)}`;
   if (rec.status === "queued") return "waiting for an available slot";
   return rec.status;

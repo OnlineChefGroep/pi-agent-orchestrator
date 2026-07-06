@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  BUILTIN_TOOL_NAMES,
-  filterByPartitions,
-  getConfig,
-  registerAgents,
-} from "../src/agent-types.js";
+import { BUILTIN_TOOL_NAMES, filterByPartitions, getConfig, registerAgents } from "../src/agent-types.js";
 import type { AgentConfig } from "../src/types.js";
 
 function makeAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -176,9 +171,7 @@ describe("getConfig with partitions", () => {
 
     const config = getConfig("worker", undefined, ["frontend", "backend"]);
     expect(config.builtinToolNames).toHaveLength(5);
-    expect(new Set(config.builtinToolNames)).toEqual(
-      new Set(["read", "write", "bash", "grep", "edit"]),
-    );
+    expect(new Set(config.builtinToolNames)).toEqual(new Set(["read", "write", "bash", "grep", "edit"]));
   });
 
   it("unknown partition name → no tools (isolated)", () => {
@@ -253,12 +246,7 @@ describe("getConfig with partitions", () => {
   });
 
   it("empty partitionMembership on config → no tools for any partition", () => {
-    const agents = new Map([
-      [
-        "worker",
-        makeAgentConfig({ name: "worker", partitionMembership: {} }),
-      ],
-    ]);
+    const agents = new Map([["worker", makeAgentConfig({ name: "worker", partitionMembership: {} })]]);
     registerAgents(agents);
 
     const config = getConfig("worker", undefined, ["frontend"]);

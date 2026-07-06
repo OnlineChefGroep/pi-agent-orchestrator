@@ -1,0 +1,48 @@
+name: Docs
+
+# Generates API documentation from TypeScript source using TypeDoc.
+# Runs on pushes to main and publishes to GitHub Pages.
+# Provides automated documentation generation for the codebase.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    name: Generate API Docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Generate TypeDoc API docs
+        run: npm run docs:api
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/api
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4

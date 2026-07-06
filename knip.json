@@ -1,0 +1,32 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/index.ts",
+    "src/public-api.ts"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "scripts/**/*.mjs"
+  ],
+  "ignore": [
+    "src/ui/tui-shim.ts",
+    "src/**/*.d.ts",
+    "dist/**",
+    "node_modules/**"
+  ],
+  "ignoreBinaries": [
+    "tsx",
+    "vitest",
+    "biome",
+    "droid",
+    "graphify",
+    "remotion"
+  ],
+  "ignoreDependencies": [
+    "@earendil-works/pi-ai",
+    "@earendil-works/pi-coding-agent",
+    "@earendil-works/pi-agent-core",
+    "@vitest/coverage-v8"
+  ]
+}

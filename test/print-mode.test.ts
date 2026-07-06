@@ -87,7 +87,7 @@ describe("print mode background notifications", () => {
     vi.useFakeTimers();
 
     const agentTool = tools.get("Agent");
-    
+
     // Execute should complete successfully even though sendMessage will throw
     const result = await agentTool.execute(
       "tool-call-1",
@@ -109,8 +109,6 @@ describe("print mode background notifications", () => {
     await vi.advanceTimersByTimeAsync(200); // notification hold window
 
     // Session shutdown should handle stale context gracefully without throwing
-    await expect(
-      handlers.get("session_shutdown")?.({}, makeHeadlessCtx())
-    ).resolves.toBeUndefined();
+    await expect(handlers.get("session_shutdown")?.({}, makeHeadlessCtx())).resolves.toBeUndefined();
   });
 });

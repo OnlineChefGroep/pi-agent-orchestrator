@@ -1,0 +1,107 @@
+name: Code Quality
+
+# Runs all code quality checks on PRs and pushes to main.
+# Each tool runs as a separate step so failures are clearly attributable.
+#
+# Tools covered:
+#   - Formatter (biome format check)
+#   - Complexity (biome noExcessiveCognitiveComplexity + scripts/check-complexity.mjs)
+#   - Large file detection (scripts/check-large-files.mjs)
+#   - Dead code & unused deps (knip)
+#   - Duplicate code (jscpd)
+#   - Module boundaries (dependency-cruiser)
+#   - Tech debt markers (scripts/check-tech-debt.mjs — TODO/FIXME scanner)
+#   - Secret scanning (gitleaks)
+#   - AGENTS.md validation (checks commands still work)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  code-quality:
+    name: Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # --- Formatter ---
+      - name: Format check
+        run: npm run format:check
+
+      # --- Complexity ---
+      - name: Cyclomatic complexity (heuristic)
+        run: npm run complexity
+        continue-on-error: true
+
+      # --- Large file detection ---
+      - name: Large file detection
+        run: npm run large-files
+
+      # --- Dead code & unused dependencies ---
+      - name: Dead code detection (knip)
+        run: npm run knip
+        continue-on-error: true
+
+      # --- Duplicate code ---
+      - name: Duplicate code detection (jscpd)
+        run: npm run jscpd
+
+      # --- Module boundaries ---
+      - name: Module boundary enforcement (dependency-cruiser)
+        run: npm run depcruise
+
+      # --- Tech debt tracking ---
+      - name: TODO/FIXME scanner
+        run: npm run tech-debt
+        continue-on-error: true
+
+      # --- Secret scanning ---
+      - name: Secret scanning (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+
+      # --- AGENTS.md validation ---
+      - name: Validate AGENTS.md commands
+        run: |
+          echo "Checking AGENTS.md commands are valid..."
+          # Verify documented commands exist in package.json scripts
+          node -e "
+          const pkg = require('./package.json');
+          const agents = require('fs').readFileSync('./AGENTS.md', 'utf-8');
+          const failures = [];
+          const checks = [
+            ['npm run typecheck', pkg.scripts.typecheck],
+            ['npm run lint', pkg.scripts.lint],
+            ['npm test', pkg.scripts.test],
+            ['npm run lint:fix', pkg.scripts['lint:fix']],
+            ['npm run format', pkg.scripts.format],
+          ];
+          for (const [cmd, script] of checks) {
+            if (!script) failures.push('Missing script for: ' + cmd);
+            if (!agents.includes(cmd.replace('npm run ', '').replace('npm ', ''))) {
+              failures.push('Command not documented in AGENTS.md: ' + cmd);
+            }
+          }
+          if (failures.length > 0) {
+            console.error('AGENTS.md validation failed:\\n' + failures.join('\\n'));
+            process.exit(1);
+          }
+          console.log('AGENTS.md validation passed');
+          "
+        continue-on-error: true

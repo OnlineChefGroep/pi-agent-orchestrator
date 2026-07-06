@@ -26,10 +26,14 @@ export function renderDashboardDetailPanel(
   }
 
   const activity = state.agentActivity.get(rec.id);
-  const statusStr = rec.status === "running" ? `${th.accent}● ${rec.status}${th.reset}`
-    : rec.status === "completed" ? `${th.success}✓ ${rec.status}${th.reset}`
-    : rec.status === "error" || rec.status === "aborted" ? `${th.error}✗ ${rec.status}${th.reset}`
-    : `${th.dim}${rec.status}${th.reset}`;
+  const statusStr =
+    rec.status === "running"
+      ? `${th.accent}● ${rec.status}${th.reset}`
+      : rec.status === "completed"
+        ? `${th.success}✓ ${rec.status}${th.reset}`
+        : rec.status === "error" || rec.status === "aborted"
+          ? `${th.error}✗ ${rec.status}${th.reset}`
+          : `${th.dim}${rec.status}${th.reset}`;
   const metaLine1 = `${statusStr}  ${th.dim}${agentStats(rec, activity)}${th.reset}`;
   lines.push(framedRow(metaLine1, innerW, th, box));
   // Turn progress bar in detail panel
@@ -51,9 +55,11 @@ export function renderDashboardDetailPanel(
   if (rec.groupId) details.push(`${th.dim}group: ${rec.groupId}${th.reset}`);
   if (rec.joinMode) details.push(`${th.dim}mode: ${rec.joinMode}${th.reset}`);
   if (rec.validationResults) {
-    details.push(rec.validated === false
-      ? `${th.error}validation: FAILED${th.reset}`
-      : `${th.success}validation: passed${th.reset}`);
+    details.push(
+      rec.validated === false
+        ? `${th.error}validation: FAILED${th.reset}`
+        : `${th.success}validation: passed${th.reset}`,
+    );
   }
   if (rec.outputFile) details.push(`${th.dim}output: ${rec.outputFile}${th.reset}`);
 
@@ -63,7 +69,8 @@ export function renderDashboardDetailPanel(
     const invokeParts: string[] = [];
     if (inv.thinking) invokeParts.push(`${th.accent}🧠 ${inv.thinking}${th.reset}`);
     if (inv.modelName) invokeParts.push(`${th.dim}model: ${inv.modelName}${th.reset}`);
-    if (inv.isolated || inv.isolation) invokeParts.push(`${th.dim}isolated${inv.isolation === "worktree" ? " (worktree)" : ""}${th.reset}`);
+    if (inv.isolated || inv.isolation)
+      invokeParts.push(`${th.dim}isolated${inv.isolation === "worktree" ? " (worktree)" : ""}${th.reset}`);
     if (invokeParts.length > 0) {
       details.push(invokeParts.join(`  ${th.border}│${th.reset}  `));
     }
@@ -92,7 +99,14 @@ export function renderDashboardDetailPanel(
         usageParts.push(`${color}⟳ turns: ${usage.totalTurns}/${maxTurns} (${pct}%)${th.reset}`);
       }
       if (usageParts.length > 0) {
-        lines.push(framedRow(`${th.dim}session:  ${usageParts.join(`  ${th.border}│${th.reset}  `)}${th.reset}`, innerW, th, box));
+        lines.push(
+          framedRow(
+            `${th.dim}session:  ${usageParts.join(`  ${th.border}│${th.reset}  `)}${th.reset}`,
+            innerW,
+            th,
+            box,
+          ),
+        );
       }
     }
   }
@@ -123,8 +137,8 @@ export function renderDashboardFooter(
   if (agentActivity && agentActivity.size > 0) {
     const now = Date.now();
     const WINDOW_MS = 5 * 60_000; // 5-minute heatmap window
-    const SEGMENT_MS = 30_000;    // each segment = 30 seconds
-    const SEGMENT_COUNT = 12;     // show 12 segments (6 minutes total)
+    const SEGMENT_MS = 30_000; // each segment = 30 seconds
+    const SEGMENT_COUNT = 12; // show 12 segments (6 minutes total)
 
     const buckets = new Array(SEGMENT_COUNT).fill(0);
     let activeCount = 0;
@@ -142,10 +156,12 @@ export function renderDashboardFooter(
       const maxBucket = Math.max(1, ...buckets);
       // Unicode block chars for 4-level heat intensity
       const blocks = ["░", "▒", "▓", "█"];
-      const heatBar = buckets.map((count) => {
-        const level = count === 0 ? 0 : count < maxBucket * 0.33 ? 1 : count < maxBucket * 0.66 ? 2 : 3;
-        return `${th.dim}${blocks[level]}${th.reset}`;
-      }).join("");
+      const heatBar = buckets
+        .map((count) => {
+          const level = count === 0 ? 0 : count < maxBucket * 0.33 ? 1 : count < maxBucket * 0.66 ? 2 : 3;
+          return `${th.dim}${blocks[level]}${th.reset}`;
+        })
+        .join("");
 
       const activeLabel = `${th.accent}◉ ${activeCount} active${th.reset}`;
       const heatLabel = `${th.dim}heat:${th.reset} ${heatBar}`;
@@ -165,11 +181,7 @@ export function renderDashboardFooter(
 
 // ── Help Screen ─────────────────────────────────────────────────────────────
 
-export function renderDashboardHelp(
-  innerW: number,
-  th: DashboardTheme,
-  box: BoxChars,
-): string[] {
+export function renderDashboardHelp(innerW: number, th: DashboardTheme, box: BoxChars): string[] {
   const key = (k: string, desc: string) => {
     const pad = " ".repeat(Math.max(1, 22 - k.length));
     return `  ${th.highlight}${k}${th.reset}${th.dim}${pad}${desc}${th.reset}`;
@@ -206,7 +218,7 @@ export function renderDashboardHelp(
     key("/perf reset", "Reset performance counters"),
     key("q / Esc", "Close dashboard"),
   ];
-  return helpLines.map(h => framedRow(h ? h : "", innerW, th, box));
+  return helpLines.map((h) => framedRow(h ? h : "", innerW, th, box));
 }
 
 // ── Render Performance Metrics ────────────────────────────────────────────
@@ -228,14 +240,13 @@ export function renderDashboardPerf(
 
   const elapsedMins = Math.floor(metrics.elapsedMs / 60000);
   const elapsedSecs = Math.floor((metrics.elapsedMs % 60000) / 1000);
-  const elapsedStr = elapsedMins > 0
-    ? `${elapsedMins}m ${elapsedSecs}s`
-    : `${elapsedSecs}s`;
+  const elapsedStr = elapsedMins > 0 ? `${elapsedMins}m ${elapsedSecs}s` : `${elapsedSecs}s`;
 
   const sourceLabel = source === "widget" ? `${th.highlight}⌂ widget${th.reset}` : `${th.accent}⬡ dashboard${th.reset}`;
-  const switchHint = source === "widget"
-    ? `${th.dim}[${th.highlight}/perf${th.reset}${th.dim}] dashboard${th.reset}`
-    : `${th.dim}[${th.highlight}/perf widget${th.reset}${th.dim}] widget metrics${th.reset}`;
+  const switchHint =
+    source === "widget"
+      ? `${th.dim}[${th.highlight}/perf${th.reset}${th.dim}] dashboard${th.reset}`
+      : `${th.dim}[${th.highlight}/perf widget${th.reset}${th.dim}] widget metrics${th.reset}`;
 
   const lines = [
     `  ${th.title}◈ Render Metrics ▸ ${sourceLabel}${th.reset}`,
@@ -268,16 +279,12 @@ export function renderDashboardPerf(
     "",
     `  ${th.dim}[${th.highlight}/perf reset${th.reset}${th.dim}] ${th.reset}${switchHint}  ${th.dim}[${th.highlight}q/esc${th.reset}${th.dim}] close${th.reset}`,
   ];
-  return lines.map(h => framedRow(h ? h : "", innerW, th, box));
+  return lines.map((h) => framedRow(h ? h : "", innerW, th, box));
 }
 
 // ── Empty State ─────────────────────────────────────────────────────────────
 
-export function renderDashboardEmpty(
-  innerW: number,
-  th: DashboardTheme,
-  box: BoxChars,
-): string[] {
+export function renderDashboardEmpty(innerW: number, th: DashboardTheme, box: BoxChars): string[] {
   const icon = " ◈ ";
   const msg = "No agents in this session";
   const hint = "Spawn some with the Agent tool or /agents → Create";

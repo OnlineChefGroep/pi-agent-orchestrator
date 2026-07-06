@@ -7,6 +7,21 @@ on:
     branches: [main]
 
 jobs:
+  security:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: always
+
   ts:
     name: TS (${{ matrix.os }}, ${{ matrix.node }}, peer=${{ matrix.peer-deps }})
     runs-on: ${{ matrix.os }}

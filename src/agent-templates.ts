@@ -160,7 +160,10 @@ export async function checkForUpdate(
   return null;
 }
 
-export async function installTemplate(name: string, cwd: string): Promise<{ ok: boolean; error?: string; wasUpdate?: boolean }> {
+export async function installTemplate(
+  name: string,
+  cwd: string,
+): Promise<{ ok: boolean; error?: string; wasUpdate?: boolean }> {
   const info = getTemplateInfo(name);
   if (!info) return { ok: false, error: `Template "${name}" not found in registry.` };
 
@@ -177,7 +180,10 @@ export async function installTemplate(name: string, cwd: string): Promise<{ ok: 
   const wasUpdate = existing !== undefined;
 
   if (existing && compareVersions(info.version, existing.version) <= 0) {
-    return { ok: false, error: `Template "${name}" is already at version ${existing.version} (available: ${info.version}).` };
+    return {
+      ok: false,
+      error: `Template "${name}" is already at version ${existing.version} (available: ${info.version}).`,
+    };
   }
 
   await copyFile(templatePath, destPath);
@@ -209,9 +215,7 @@ export async function removeTemplate(name: string, cwd: string): Promise<{ ok: b
   return { ok: true };
 }
 
-export async function checkAllUpdates(
-  cwd: string,
-): Promise<{ name: string; installed: string; available: string }[]> {
+export async function checkAllUpdates(cwd: string): Promise<{ name: string; installed: string; available: string }[]> {
   const installed = await readInstalledManifest(cwd);
 
   const updates: { name: string; installed: string; available: string }[] = [];

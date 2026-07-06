@@ -18,7 +18,7 @@ import { runAgent } from "../src/agent-runner.js";
 const mockPi = {} as any;
 const mockCtx = { cwd: "/tmp" } as any;
 
-const mockSession = () => ({ dispose: vi.fn() } as any);
+const mockSession = () => ({ dispose: vi.fn() }) as any;
 
 const resolvedRun = () =>
   vi.mocked(runAgent).mockResolvedValue({
@@ -388,7 +388,9 @@ describe("AgentManager — lifetime usage + compaction count are eagerly initial
 
     expect(captured).toBeDefined();
     expect(manager.getRecord(id)!.lifetimeUsage).toEqual({
-      input: 300, output: 130, cacheWrite: 30,
+      input: 300,
+      output: 130,
+      cacheWrite: 30,
     });
   });
 

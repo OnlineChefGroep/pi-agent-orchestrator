@@ -11,13 +11,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentManager } from "../src/agent-manager.js";
-import {
-  BUILTIN_TOOL_NAMES,
-  getAgentConfig,
-  getConfig,
-  isValidType,
-  registerAgents,
-} from "../src/agent-types.js";
+import { BUILTIN_TOOL_NAMES, getAgentConfig, getConfig, isValidType, registerAgents } from "../src/agent-types.js";
 import type { AgentConfig } from "../src/types.js";
 
 vi.mock("../src/agent-runner.js", () => ({
@@ -207,17 +201,11 @@ describe("Backward compat: old-style Agent invocation", () => {
     // Don't resolve runAgent — just test spawn side
     vi.mocked(runAgent).mockImplementation(() => new Promise(() => {}));
 
-    const id = manager.spawn(
-      {} as any,
-      { cwd: "/tmp" } as any,
-      "general-purpose",
-      "Do something",
-      {
-        description: "old-style invocation",
-        isBackground: true,
-        // No partitions, no validators, no handoff-related options
-      },
-    );
+    const id = manager.spawn({} as any, { cwd: "/tmp" } as any, "general-purpose", "Do something", {
+      description: "old-style invocation",
+      isBackground: true,
+      // No partitions, no validators, no handoff-related options
+    });
 
     const record = manager.getRecord(id);
     expect(record).toBeDefined();
@@ -235,16 +223,10 @@ describe("Backward compat: old-style Agent invocation", () => {
     manager = new AgentManager();
     vi.mocked(runAgent).mockImplementation(() => new Promise(() => {}));
 
-    const id = manager.spawn(
-      {} as any,
-      { cwd: "/tmp" } as any,
-      "Explore",
-      "Search for patterns",
-      {
-        description: "minimal spawn",
-        // isBackground defaults via startAgent logic for foreground
-      },
-    );
+    const id = manager.spawn({} as any, { cwd: "/tmp" } as any, "Explore", "Search for patterns", {
+      description: "minimal spawn",
+      // isBackground defaults via startAgent logic for foreground
+    });
 
     const record = manager.getRecord(id);
     expect(record).toBeDefined();
@@ -284,21 +266,11 @@ describe("Backward compat: old-style Agent invocation", () => {
     manager = new AgentManager();
     vi.mocked(runAgent).mockImplementation(() => new Promise(() => {}));
 
-    const id1 = manager.spawn(
-      {} as any,
-      { cwd: "/tmp" } as any,
-      "general-purpose",
-      "task 1",
-      { description: "task-1" },
-    );
+    const id1 = manager.spawn({} as any, { cwd: "/tmp" } as any, "general-purpose", "task 1", {
+      description: "task-1",
+    });
 
-    const id2 = manager.spawn(
-      {} as any,
-      { cwd: "/tmp" } as any,
-      "Explore",
-      "task 2",
-      { description: "task-2" },
-    );
+    const id2 = manager.spawn({} as any, { cwd: "/tmp" } as any, "Explore", "task 2", { description: "task-2" });
 
     const all = manager.listAgents();
     expect(all.length).toBeGreaterThanOrEqual(2);

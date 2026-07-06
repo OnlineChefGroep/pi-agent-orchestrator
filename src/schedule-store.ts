@@ -15,8 +15,6 @@ import { basename, dirname, join } from "node:path";
 import { lock } from "proper-lockfile";
 import type { ScheduledSubagent, ScheduleStoreData } from "./types.js";
 
-
-
 /** Resolve the storage path for a session-scoped store. */
 export function resolveStorePath(cwd: string, sessionId: string): string {
   return join(cwd, ".pi", "subagent-schedules", `${sessionId}.json`);
@@ -73,13 +71,13 @@ export class ScheduleStore {
       version: 1,
       jobs: [...this.jobs.values()],
     };
-    
+
     const targetDir = dirname(this.filePath);
     const tmpPath = join(
       targetDir,
       `${basename(this.filePath)}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`,
     );
-    
+
     try {
       await fs.writeFile(tmpPath, JSON.stringify(data, null, 2));
       await fs.rename(tmpPath, this.filePath);
@@ -145,7 +143,9 @@ export class ScheduleStore {
     await this.withLock(() => {
       // CVE-005 FIX: Enforce limits strictly inside the store lock to prevent TOCTOU race conditions
       if (maxSchedules !== undefined && this.jobs.size >= maxSchedules) {
-        throw new Error(`Maximum number of schedules reached (${maxSchedules}). Remove existing schedules before adding new ones.`);
+        throw new Error(
+          `Maximum number of schedules reached (${maxSchedules}). Remove existing schedules before adding new ones.`,
+        );
       }
       for (const j of this.jobs.values()) {
         if (j.id !== job.id && j.name === job.name) {
@@ -156,10 +156,7 @@ export class ScheduleStore {
     });
   }
 
-  async update(
-    id: string,
-    patch: Partial<ScheduledSubagent>,
-  ): Promise<ScheduledSubagent | undefined> {
+  async update(id: string, patch: Partial<ScheduledSubagent>): Promise<ScheduledSubagent | undefined> {
     // No-op fast path — an unknown id changes nothing, so don't lock or touch
     // disk (which would otherwise lazily create the backing directory).
     if (!this.jobs.has(id)) return undefined;

@@ -97,17 +97,17 @@ describe("heuristicPickMode", () => {
     // genuine bug.
     const a = analyzePrompt(
       "Please draft a detailed passage about the history of the team, " +
-      "exploring how it matured through several pivots over the years " +
-      "and what each turning point meant for the people involved. " +
-      "Summarize the original goals, the constraints that shaped the " +
-      "early tooling, the move to a new runtime in 2023, the recent " +
-      "reliability drive that brought tail latency under budget, and " +
-      "the schedule for the next quarter. Close with a forecast and " +
-      "the major risks the team is watching as the on-call rotation " +
-      "changes to follow the new SRE rotation that came online last " +
-      "month and how the org chart was reshuffled over the summer to " +
-      "bring reliability closer to the product crews before the Q3 " +
-      "launch window and the holiday traffic spike this December.",
+        "exploring how it matured through several pivots over the years " +
+        "and what each turning point meant for the people involved. " +
+        "Summarize the original goals, the constraints that shaped the " +
+        "early tooling, the move to a new runtime in 2023, the recent " +
+        "reliability drive that brought tail latency under budget, and " +
+        "the schedule for the next quarter. Close with a forecast and " +
+        "the major risks the team is watching as the on-call rotation " +
+        "changes to follow the new SRE rotation that came online last " +
+        "month and how the org chart was reshuffled over the summer to " +
+        "bring reliability closer to the product crews before the Q3 " +
+        "launch window and the holiday traffic spike this December.",
     );
     expect(a.length).toBeGreaterThan(700);
     expect(heuristicPickMode(a)).toBe("single");

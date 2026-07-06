@@ -84,7 +84,6 @@ describe("normalizeMaxTurns", () => {
     expect(normalizeMaxTurns(3.5)).toBe(3);
     expect(normalizeMaxTurns(3.9)).toBe(3);
   });
-
 });
 
 describe("setGraceTurns / getGraceTurns", () => {

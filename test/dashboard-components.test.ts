@@ -22,8 +22,15 @@ const th: DashboardTheme = {
 };
 
 const box: BoxChars = {
-  tl: "╭", tr: "╮", bl: "╰", br: "╯",
-  l: "│", r: "│", h: "─", ml: "├", mr: "┤",
+  tl: "╭",
+  tr: "╮",
+  bl: "╰",
+  br: "╯",
+  l: "│",
+  r: "│",
+  h: "─",
+  ml: "├",
+  mr: "┤",
 };
 
 // ── Helpers to build mock data ──────────────────────────────────────────
@@ -406,9 +413,7 @@ describe("renderDashboardHeader", () => {
   });
 
   it("summary line shows error count when errors exist", () => {
-    const agents = [
-      mockRecord({ status: "error" }),
-    ];
+    const agents = [mockRecord({ status: "error" })];
     const lines = renderDashboardHeader(80, th, box, mockState(agents));
     expect(lines[3]).toContain("1 error");
   });

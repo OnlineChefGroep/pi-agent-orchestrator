@@ -14,12 +14,20 @@ import type { AgentActivity } from "../src/ui/agent-ui-types.js";
 
 // Mock truncateToWidth / visibleWidth from pi-tui
 vi.mock("../src/ui/tui-shim.js", () => ({
-    truncateToWidth: (str: string) => str,
+  truncateToWidth: (str: string) => str,
   visibleWidth: (str: string) => str.length,
-    wrapTextWithAnsi: (text) => text.split(/\n/),
-    matchesKey: (data, keyId) => data === keyId,
-    Text: class { constructor(c) { this.content = c; } render() { return [this.content]; } },
-      getAnsiSequenceLength: (_str: string, _i: number) => 0 }));
+  wrapTextWithAnsi: (text) => text.split(/\n/),
+  matchesKey: (data, keyId) => data === keyId,
+  Text: class {
+    constructor(c) {
+      this.content = c;
+    }
+    render() {
+      return [this.content];
+    }
+  },
+  getAnsiSequenceLength: (_str: string, _i: number) => 0,
+}));
 
 // Mock agent-registry — getUiStyle returns "premium"
 vi.mock("../src/agent-registry.js", () => ({
@@ -58,7 +66,11 @@ function makeAgent(overrides: Partial<AgentRecord> = {}): AgentRecord {
     toolUses: overrides.toolUses ?? Math.floor(Math.random() * 20),
     startedAt,
     spawnedAt: startedAt,
-    lifetimeUsage: { input: Math.floor(Math.random() * 50000), output: Math.floor(Math.random() * 10000), cacheWrite: 0 },
+    lifetimeUsage: {
+      input: Math.floor(Math.random() * 50000),
+      output: Math.floor(Math.random() * 10000),
+      cacheWrite: 0,
+    },
     compactionCount: 0,
     currentLevel: 0,
     totalSpawned: 1,
@@ -122,38 +134,23 @@ function alwaysShowFinished() {
  * - WARN: threshold * 0.8 < measured ≤ threshold
  * - FAIL: measured > threshold
  */
-function benchmarkLog(
-  label: string,
-  measured: number,
-  threshold: number,
-  unit = "ms",
-): void {
+function benchmarkLog(label: string, measured: number, threshold: number, unit = "ms"): void {
   const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
   let status: string;
   if (measured > threshold) {
     status = "FAIL";
-    console.warn(
-      `⚠️  BENCHMARK FAIL: ${label} — ${measured} exceeds threshold ${threshold}`,
-    );
+    console.warn(`⚠️  BENCHMARK FAIL: ${label} — ${measured} exceeds threshold ${threshold}`);
   } else if (pct > 80) {
     status = "WARN";
-    console.warn(
-      `⚠️  BENCHMARK WARN: ${label} — ${measured} approaching threshold ${threshold} (${pct.toFixed(0)}%)`,
-    );
+    console.warn(`⚠️  BENCHMARK WARN: ${label} — ${measured} approaching threshold ${threshold} (${pct.toFixed(0)}%)`);
   } else {
     status = "OK";
   }
-  const measuredStr = unit === "\u00b5s"
-    ? `${measured.toFixed(3)}\u00b5s`
-    : `${measured.toFixed(3)}ms`;
-  const thresholdStr = unit === "\u00b5s"
-    ? `${threshold.toFixed(3)}\u00b5s`
-    : `${threshold.toFixed(3)}ms`;
+  const measuredStr = unit === "\u00b5s" ? `${measured.toFixed(3)}\u00b5s` : `${measured.toFixed(3)}ms`;
+  const thresholdStr = unit === "\u00b5s" ? `${threshold.toFixed(3)}\u00b5s` : `${threshold.toFixed(3)}ms`;
 
   // Structured log line — plain text, machine-parseable
-  process.stdout.write(
-    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
-  );
+  process.stdout.write(`[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`);
 }
 
 // ── Test data sizes ──────────────────────────────────────────────────────────
@@ -273,9 +270,7 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
 
     // 500 queued agents across 10 types (50 of each) \u2014 the K>>3 regime
     for (let i = 0; i < 40; i++) {
-      agents.push(
-        makeAgent({ status: "queued", type: bulkTypes[i % bulkTypes.length] }),
-      );
+      agents.push(makeAgent({ status: "queued", type: bulkTypes[i % bulkTypes.length] }));
     }
     // 15 running agents mixed in for realism (3 types \u00d7 5 each)
     for (let i = 0; i < 2; i++) {
@@ -354,7 +349,10 @@ describe("Benchmark: renderAgentWidget — with activity heatmap data", () => {
 
     for (const a of agents) {
       activity.set(a.id, {
-        activeTools: new Map([["write", "write"], ["read", "read"]]),
+        activeTools: new Map([
+          ["write", "write"],
+          ["read", "read"],
+        ]),
         toolUses: 8,
         responseText: "processing benchmark data with multiple tools active simultaneously",
         turnCount: 5,
@@ -479,7 +477,12 @@ describe("Benchmark: AgentWidget.getVisibleWindow (virtual scrolling)", () => {
   });
 
   it("getVisibleWindow scrollDown is fast when there are many agents", () => {
-    const manager = { agents: buildAgentList(200, { running: 40, queued: 20, finished: 40 }), listAgents() { return this.agents; } };
+    const manager = {
+      agents: buildAgentList(200, { running: 40, queued: 20, finished: 40 }),
+      listAgents() {
+        return this.agents;
+      },
+    };
     const widget = new (AgentWidget as any)(manager, new Map());
 
     // Trigger pagination calculation so scrollPage and maxPages are set
@@ -505,7 +508,9 @@ describe("Benchmark: debouncedUpdate coalescing", () => {
 
   class MockManager {
     agents: AgentRecord[] = [];
-    listAgents() { return this.agents; }
+    listAgents() {
+      return this.agents;
+    }
   }
 
   beforeEach(async () => {
@@ -554,7 +559,9 @@ describe("Benchmark: sustained update throughput", () => {
 
   class MockManager {
     agents: AgentRecord[] = [];
-    listAgents() { return this.agents; }
+    listAgents() {
+      return this.agents;
+    }
   }
 
   beforeEach(async () => {

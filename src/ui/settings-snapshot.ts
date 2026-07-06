@@ -1,5 +1,11 @@
 import type { AgentManager } from "../agent-manager.js";
-import { getAnimationStyle, getDashboardRefreshInterval, getOrchestrationMode, getPromptCompressionLevel, getUiStyle } from "../agent-registry.js";
+import {
+  getAnimationStyle,
+  getDashboardRefreshInterval,
+  getOrchestrationMode,
+  getPromptCompressionLevel,
+  getUiStyle,
+} from "../agent-registry.js";
 import type { SettingsGetters, SubagentsSettings } from "../settings.js";
 
 /**

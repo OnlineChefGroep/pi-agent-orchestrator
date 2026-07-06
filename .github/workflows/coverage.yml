@@ -1,0 +1,124 @@
+name: Coverage
+
+# Runs tests with code coverage on PRs, posts a coverage report as a PR comment,
+# and uploads source maps to Sentry when configured.
+#
+# This workflow provides:
+# 1. Code quality metrics — coverage percentages posted to PR comments
+# 2. Error tracking — Sentry source map upload during CI builds
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (for source maps)
+        run: npm run build
+
+      - name: Run tests with coverage
+        run: npx vitest run --coverage --retry=2
+
+      - name: Generate coverage summary
+        id: summary
+        run: |
+          # Parse coverage-summary.json and extract metrics
+          node -e "
+          const fs = require('fs');
+          const cov = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
+          const t = cov.total;
+          console.log('stmts=' + (t.statements.pct).toFixed(1));
+          console.log('branch=' + (t.branches.pct).toFixed(1));
+          console.log('funcs=' + (t.functions.pct).toFixed(1));
+          console.log('lines=' + (t.lines.pct).toFixed(1));
+          "
+
+      - name: Find existing coverage comment
+        uses: peter-evans/find-comment@v3
+        if: github.event_name == 'pull_request'
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: '<!-- coverage-report -->'
+
+      - name: Post coverage comment
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          body: |
+            <!-- coverage-report -->
+            ## 📊 Code Coverage Report
+
+            | Metric | Coverage | Threshold |
+            |--------|----------|-----------|
+            | Statements | ${{ steps.summary.outputs.stmts }}% | 95% |
+            | Branches | ${{ steps.summary.outputs.branch }}% | 95% |
+            | Functions | ${{ steps.summary.outputs.funcs }}% | 95% |
+            | Lines | ${{ steps.summary.outputs.lines }}% | 95% |
+
+            <details>
+            <summary>Full report</summary>
+
+            The full HTML coverage report is available in the workflow artifacts.
+
+            </details>
+
+            _Updated automatically by the [Coverage workflow](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})_
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage/
+            !coverage/tmp
+          retention-days: 14
+
+      - name: Upload Sentry source maps
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ] || [ -z "$SENTRY_ORG" ] || [ -z "$SENTRY_PROJECT" ]; then
+            echo "Sentry secrets not configured, skipping source map upload"
+            exit 0
+          fi
+
+          if ! npx --yes @sentry/wizard@latest --version 2>/dev/null; then
+            echo "@sentry/wizard not available, skipping"
+            exit 0
+          fi
+
+          # Upload source maps so production stack traces resolve to TS source
+          npx --yes @sentry/cli sourcemaps upload \
+            --org "$SENTRY_ORG" \
+            --project "$SENTRY_PROJECT" \
+            --release "pi-agent-orchestrator@${{ github.sha }}" \
+            dist/

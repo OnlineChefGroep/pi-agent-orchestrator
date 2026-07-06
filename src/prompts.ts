@@ -86,9 +86,10 @@ You are operating as a sub-agent invoked to handle a specific task.
   // For read-only default agents, regenerate systemPrompt at runtime with
   // the active compression level so the setting actually takes effect.
   const roParams = READONLY_PROMPT_PARAMS.get(config.name);
-  const effectiveSystemPrompt = roParams && config.isDefault && level !== "balanced"
-    ? createReadOnlyPrompt({ ...roParams, compressionLevel: level })
-    : config.systemPrompt;
+  const effectiveSystemPrompt =
+    roParams && config.isDefault && level !== "balanced"
+      ? createReadOnlyPrompt({ ...roParams, compressionLevel: level })
+      : config.systemPrompt;
 
   const replaceHeader = `You are a pi coding agent sub-agent.
 You have been invoked to handle a specific task autonomously.

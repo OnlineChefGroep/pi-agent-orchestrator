@@ -100,3 +100,7 @@ npm run typecheck
 ## License
 
 MIT (c) OnlineChefGroep
+
+## Operations
+
+For incident response procedures, deployment health checks, and operational runbooks, see [docs/runbooks.md](docs/runbooks.md).

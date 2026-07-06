@@ -71,9 +71,7 @@ describe("compaction", () => {
 
       // Verify no toolResult from the first 2 turns remains
       const firstTurnToolResults = result.filter(
-        (m) =>
-          m.role === "toolResult" &&
-          (m.content as string).length === 800,
+        (m) => m.role === "toolResult" && (m.content as string).length === 800,
       );
       // Only tool results from turns 3-5 should survive
       expect(firstTurnToolResults.length).toBe(3);
@@ -82,13 +80,9 @@ describe("compaction", () => {
     it("never removes user messages", () => {
       // Build a conversation with 10 turns
       const conversation = buildConversation(10);
-      const originalUserCount = conversation.filter(
-        (m) => m.role === "user",
-      ).length;
+      const originalUserCount = conversation.filter((m) => m.role === "user").length;
       const result = pruneOldToolOutputs(conversation, 2);
-      const resultUserCount = result.filter(
-        (m) => m.role === "user",
-      ).length;
+      const resultUserCount = result.filter((m) => m.role === "user").length;
 
       expect(originalUserCount).toBe(10);
       expect(resultUserCount).toBe(10);
@@ -108,14 +102,10 @@ describe("compaction", () => {
       // Should still have all 5 user messages
       expect(resultUserCount).toBe(5);
       // Should still have all 5 assistant messages
-      const resultAssistantCount = result.filter(
-        (m) => m.role === "assistant",
-      ).length;
+      const resultAssistantCount = result.filter((m) => m.role === "assistant").length;
       expect(resultAssistantCount).toBe(5);
       // Only last 2 turns' tool results should survive (2 turns × 2 tool results each = 4)
-      const toolCount = result.filter(
-        (m) => m.role === "toolResult",
-      ).length;
+      const toolCount = result.filter((m) => m.role === "toolResult").length;
       expect(toolCount).toBe(4);
     });
 
@@ -128,9 +118,7 @@ describe("compaction", () => {
     it("preserves assistant messages even from old turns", () => {
       const conversation = buildConversation(5);
       const result = pruneOldToolOutputs(conversation, 2);
-      const resultAssistantCount = result.filter(
-        (m) => m.role === "assistant",
-      ).length;
+      const resultAssistantCount = result.filter((m) => m.role === "assistant").length;
 
       // All assistant messages should survive
       expect(resultAssistantCount).toBe(5);
@@ -188,13 +176,10 @@ describe("compaction", () => {
       const original: CompactableMessage[] = [
         user("question"),
         assistant("answer"),
-        toolResult(10000),   // ~2500 tokens
-        toolResult(8000),    // ~2000 tokens
+        toolResult(10000), // ~2500 tokens
+        toolResult(8000), // ~2000 tokens
       ];
-      const compacted: CompactableMessage[] = [
-        user("question"),
-        assistant("answer"),
-      ];
+      const compacted: CompactableMessage[] = [user("question"), assistant("answer")];
 
       const result = estimateReduction(original, compacted);
       expect(result.originalTokens).toBeGreaterThan(result.compactedTokens);
@@ -203,10 +188,7 @@ describe("compaction", () => {
     });
 
     it("returns 0 when no messages removed", () => {
-      const identical: CompactableMessage[] = [
-        user("question"),
-        assistant("answer"),
-      ];
+      const identical: CompactableMessage[] = [user("question"), assistant("answer")];
       const result = estimateReduction(identical, identical);
       expect(result.originalTokens).toBe(result.compactedTokens);
       expect(result.reductionPercent).toBe(0);

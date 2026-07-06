@@ -35,11 +35,13 @@ vi.mock("./agent-file-helpers.js", () => ({
 
 const { showCreateWizard, showManualWizard } = await import("../src/ui/agent-wizards.js");
 
-function makeCtx(overrides: Partial<{
-  selectChoices: string[];
-  inputValues: string[];
-  confirmValue: boolean;
-}> = {}) {
+function makeCtx(
+  overrides: Partial<{
+    selectChoices: string[];
+    inputValues: string[];
+    confirmValue: boolean;
+  }> = {},
+) {
   let selectIdx = 0;
   let inputIdx = 0;
 
@@ -110,11 +112,7 @@ describe("showManualWizard", () => {
     await showManualWizard(ctx as any, "/test/dir");
 
     const { writeFileSync } = await import("node:fs");
-    expect(writeFileSync).toHaveBeenCalledWith(
-      "/test/dir/agent1.md",
-      expect.stringContaining("tools: none"),
-      "utf-8",
-    );
+    expect(writeFileSync).toHaveBeenCalledWith("/test/dir/agent1.md", expect.stringContaining("tools: none"), "utf-8");
   });
 
   it("writes file with 'read-only' tools", async () => {

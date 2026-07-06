@@ -197,17 +197,22 @@ describe("showRunningAgents", () => {
 
     expect(ctx.ui.select).toHaveBeenCalledWith(
       "Running agents",
-      expect.arrayContaining([
-        expect.stringContaining("Explore"),
-        expect.stringContaining("Plan"),
-      ]),
+      expect.arrayContaining([expect.stringContaining("Explore"), expect.stringContaining("Plan")]),
     );
   });
 
   it("handles cancelled selection", async () => {
     const ctx = makeCtx();
     const agents = [
-      { id: "a1", type: "Explore", description: "Testing", status: "completed", toolUses: 1, startedAt: 0, completedAt: undefined },
+      {
+        id: "a1",
+        type: "Explore",
+        description: "Testing",
+        status: "completed",
+        toolUses: 1,
+        startedAt: 0,
+        completedAt: undefined,
+      },
     ];
     const manager = { listAgents: vi.fn(() => agents) };
 

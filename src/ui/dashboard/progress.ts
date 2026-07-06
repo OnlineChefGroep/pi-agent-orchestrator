@@ -7,12 +7,7 @@ const BLOCK_LIGHT = "░";
  * Render a Unicode block progress bar.
  * Color-coded: green < 70%, gold 70-85%, red > 85%.
  */
-export function renderProgressBar(
-  value: number,
-  max: number,
-  width: number,
-  th: DashboardTheme,
-): string {
+export function renderProgressBar(value: number, max: number, width: number, th: DashboardTheme): string {
   if (max <= 0 || width <= 0) return "";
   const pct = Math.min(1, Math.max(0, value / max));
   const filled = Math.round(pct * width);

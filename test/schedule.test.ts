@@ -64,13 +64,13 @@ describe("SubagentScheduler — static format parsers", () => {
     expect(SubagentScheduler.parseInterval("1h")).toBe(3_600_000);
     expect(SubagentScheduler.parseInterval("2d")).toBe(172_800_000);
 
-    expect(SubagentScheduler.parseInterval("+5m")).toBeNull();   // relative isn't an interval
+    expect(SubagentScheduler.parseInterval("+5m")).toBeNull(); // relative isn't an interval
     expect(SubagentScheduler.parseInterval("5x")).toBeNull();
     expect(SubagentScheduler.parseInterval("five-minutes")).toBeNull();
   });
 
   it("validateCronExpression rejects non-6-field expressions", () => {
-    expect(SubagentScheduler.validateCronExpression("* * * * *").valid).toBe(false);  // 5 fields
+    expect(SubagentScheduler.validateCronExpression("* * * * *").valid).toBe(false); // 5 fields
     expect(SubagentScheduler.validateCronExpression("0 0 9 * * 1").valid).toBe(true);
     expect(SubagentScheduler.validateCronExpression("0 0 9 * * *").valid).toBe(true);
     expect(SubagentScheduler.validateCronExpression("not-a-cron").valid).toBe(false);
@@ -136,21 +136,48 @@ describe("SubagentScheduler — lifecycle", () => {
   });
 
   it("addJob rejects duplicate names", async () => {
-    await scheduler.addJob({ name: "j1", description: "x", schedule: "1h", subagent_type: "general-purpose", prompt: "p" });
-    await expect(scheduler.addJob({
-      name: "j1", description: "y", schedule: "2h", subagent_type: "general-purpose", prompt: "p2",
-    })).rejects.toThrow(/already exists/);
+    await scheduler.addJob({
+      name: "j1",
+      description: "x",
+      schedule: "1h",
+      subagent_type: "general-purpose",
+      prompt: "p",
+    });
+    await expect(
+      scheduler.addJob({
+        name: "j1",
+        description: "y",
+        schedule: "2h",
+        subagent_type: "general-purpose",
+        prompt: "p2",
+      }),
+    ).rejects.toThrow(/already exists/);
   });
 
   it("removeJob clears the job and emits removed", async () => {
-    const job = await scheduler.addJob({ name: "j1", description: "x", schedule: "1h", subagent_type: "general-purpose", prompt: "p" });
+    const job = await scheduler.addJob({
+      name: "j1",
+      description: "x",
+      schedule: "1h",
+      subagent_type: "general-purpose",
+      prompt: "p",
+    });
     expect(await scheduler.removeJob(job.id)).toBe(true);
     expect(scheduler.list()).toEqual([]);
-    expect(pi.events.emit).toHaveBeenCalledWith("subagents:scheduled", expect.objectContaining({ type: "removed", jobId: job.id }));
+    expect(pi.events.emit).toHaveBeenCalledWith(
+      "subagents:scheduled",
+      expect.objectContaining({ type: "removed", jobId: job.id }),
+    );
   });
 
   it("updateJob({enabled: false}) unschedules but keeps the record", async () => {
-    const job = await scheduler.addJob({ name: "j1", description: "x", schedule: "1h", subagent_type: "general-purpose", prompt: "p" });
+    const job = await scheduler.addJob({
+      name: "j1",
+      description: "x",
+      schedule: "1h",
+      subagent_type: "general-purpose",
+      prompt: "p",
+    });
     await scheduler.updateJob(job.id, { enabled: false });
     expect(scheduler.list()[0].enabled).toBe(false);
     expect(scheduler.getNextRun(job.id)).toBeUndefined();
@@ -162,8 +189,11 @@ describe("SubagentScheduler — lifecycle", () => {
   it("getNextRun returns an approximate future time for a fresh interval (no lastRun yet)", async () => {
     const before = Date.now();
     const job = await scheduler.addJob({
-      name: "fresh-interval", description: "x", schedule: "1h",
-      subagent_type: "general-purpose", prompt: "p",
+      name: "fresh-interval",
+      description: "x",
+      schedule: "1h",
+      subagent_type: "general-purpose",
+      prompt: "p",
     });
     const next = scheduler.getNextRun(job.id);
     expect(next).toBeDefined();
@@ -176,8 +206,11 @@ describe("SubagentScheduler — lifecycle", () => {
   // Once a fire happens and `lastRun` is set, getNextRun should pivot to it.
   it("getNextRun uses lastRun when present for interval jobs", async () => {
     const job = await scheduler.addJob({
-      name: "ran-once", description: "x", schedule: "1h",
-      subagent_type: "general-purpose", prompt: "p",
+      name: "ran-once",
+      description: "x",
+      schedule: "1h",
+      subagent_type: "general-purpose",
+      prompt: "p",
     });
     const lastRun = new Date(Date.now() - 30 * 60_000).toISOString(); // 30m ago
     await scheduler.updateJob(job.id, { lastRun });
@@ -187,9 +220,15 @@ describe("SubagentScheduler — lifecycle", () => {
 
   it("rejects past one-shot timestamps upfront — no record created", async () => {
     const past = new Date(Date.now() - 60_000).toISOString();
-    await expect(scheduler.addJob({
-      name: "past", description: "x", schedule: past, subagent_type: "general-purpose", prompt: "p",
-    })).rejects.toThrow(/in the past/);
+    await expect(
+      scheduler.addJob({
+        name: "past",
+        description: "x",
+        schedule: past,
+        subagent_type: "general-purpose",
+        prompt: "p",
+      }),
+    ).rejects.toThrow(/in the past/);
     // No dead-on-arrival record left behind
     expect(scheduler.list()).toEqual([]);
   });
@@ -202,18 +241,24 @@ describe("SubagentScheduler — lifecycle", () => {
   describe("SubagentScheduler — bounds (CVE-005)", () => {
     it("updateJob enforces input bounds", async () => {
       const job = await scheduler.addJob({
-        name: "test", description: "test", schedule: "+10m",
-        subagent_type: "general-purpose", prompt: "x",
+        name: "test",
+        description: "test",
+        schedule: "+10m",
+        subagent_type: "general-purpose",
+        prompt: "x",
       });
 
-      await expect(scheduler.updateJob(job.id, { prompt: "c".repeat(50001) }))
-        .rejects.toThrow(/Prompt must be a string <= 50000 characters/);
+      await expect(scheduler.updateJob(job.id, { prompt: "c".repeat(50001) })).rejects.toThrow(
+        /Prompt must be a string <= 50000 characters/,
+      );
 
-      await expect(scheduler.updateJob(job.id, { name: "n".repeat(101) }))
-        .rejects.toThrow(/Schedule name must be a string <= 100 characters/);
+      await expect(scheduler.updateJob(job.id, { name: "n".repeat(101) })).rejects.toThrow(
+        /Schedule name must be a string <= 100 characters/,
+      );
 
-      await expect(scheduler.updateJob(job.id, { description: "d".repeat(501) }))
-        .rejects.toThrow(/Description must be a string <= 500 characters/);
+      await expect(scheduler.updateJob(job.id, { description: "d".repeat(501) })).rejects.toThrow(
+        /Description must be a string <= 500 characters/,
+      );
     });
 
     it("enforces MAX_SCHEDULES concurrently (TOCTOU protection)", { timeout: 15000 }, async () => {
@@ -222,14 +267,16 @@ describe("SubagentScheduler — lifecycle", () => {
       // We will add 99 jobs, then concurrently add 10 jobs. Only 1 should succeed.
 
       const promises = [];
-      for(let i = 0; i < 99; i++) {
-        promises.push(scheduler.addJob({
-          name: `filler-${i}`,
-          description: "x",
-          schedule: "+10m",
-          subagent_type: "general-purpose",
-          prompt: "x"
-        }));
+      for (let i = 0; i < 99; i++) {
+        promises.push(
+          scheduler.addJob({
+            name: `filler-${i}`,
+            description: "x",
+            schedule: "+10m",
+            subagent_type: "general-purpose",
+            prompt: "x",
+          }),
+        );
       }
       vi.useRealTimers();
       await Promise.all(promises);
@@ -238,20 +285,25 @@ describe("SubagentScheduler — lifecycle", () => {
       // Now we have 99 jobs. MAX_SCHEDULES is 100.
       // Fire 10 concurrent requests.
       const concurrentPromises = [];
-      for(let i = 0; i < 10; i++) {
-        concurrentPromises.push(scheduler.addJob({
-          name: `concurrent-${i}`,
-          description: "x",
-          schedule: "+10m",
-          subagent_type: "general-purpose",
-          prompt: "x"
-        }).then(() => true).catch(_e => false)); // resolve true if success, false if error
+      for (let i = 0; i < 10; i++) {
+        concurrentPromises.push(
+          scheduler
+            .addJob({
+              name: `concurrent-${i}`,
+              description: "x",
+              schedule: "+10m",
+              subagent_type: "general-purpose",
+              prompt: "x",
+            })
+            .then(() => true)
+            .catch((_e) => false),
+        ); // resolve true if success, false if error
       }
 
       vi.useRealTimers();
       const results = await Promise.all(concurrentPromises);
       vi.useFakeTimers();
-      const successes = results.filter(r => r).length;
+      const successes = results.filter((r) => r).length;
 
       expect(successes).toBe(1); // Only 1 should have succeeded
       expect(scheduler.list().length).toBe(100);
@@ -260,20 +312,25 @@ describe("SubagentScheduler — lifecycle", () => {
     it("enforces unique names concurrently", { timeout: 15000 }, async () => {
       // Fire 10 concurrent requests with the SAME name
       const concurrentPromises = [];
-      for(let i = 0; i < 10; i++) {
-        concurrentPromises.push(scheduler.addJob({
-          name: `unique-name-test`,
-          description: "x",
-          schedule: "+10m",
-          subagent_type: "general-purpose",
-          prompt: "x"
-        }).then(() => true).catch(_e => false));
+      for (let i = 0; i < 10; i++) {
+        concurrentPromises.push(
+          scheduler
+            .addJob({
+              name: `unique-name-test`,
+              description: "x",
+              schedule: "+10m",
+              subagent_type: "general-purpose",
+              prompt: "x",
+            })
+            .then(() => true)
+            .catch((_e) => false),
+        );
       }
 
       vi.useRealTimers();
       const results = await Promise.all(concurrentPromises);
       vi.useFakeTimers();
-      const successes = results.filter(r => r).length;
+      const successes = results.filter((r) => r).length;
 
       expect(successes).toBe(1);
     });
@@ -300,12 +357,17 @@ describe("SubagentScheduler — lifecycle", () => {
     scheduler.stop();
     await scheduler.start(pi, ctx, manager, store);
 
-    const reloaded = scheduler.list().find(j => j.id === "reload-test");
+    const reloaded = scheduler.list().find((j) => j.id === "reload-test");
     expect(reloaded?.enabled).toBe(false);
     expect(reloaded?.lastStatus).toBe("error");
-    expect(pi.events.emit).toHaveBeenCalledWith("subagents:scheduled", expect.objectContaining({
-      type: "error", jobId: "reload-test", error: expect.stringMatching(/in the past/),
-    }));
+    expect(pi.events.emit).toHaveBeenCalledWith(
+      "subagents:scheduled",
+      expect.objectContaining({
+        type: "error",
+        jobId: "reload-test",
+        error: expect.stringMatching(/in the past/),
+      }),
+    );
   });
 });
 
@@ -316,7 +378,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 1500): Promise<void
     if (Date.now() - start > timeoutMs) {
       throw new Error(`waitFor timed out after ${timeoutMs}ms`);
     }
-    await new Promise(r => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, 5));
   }
 }
 
@@ -347,8 +409,11 @@ describe("SubagentScheduler — fire path", () => {
 
   it("interval jobs fire repeatedly via setInterval", async () => {
     const job = await scheduler.addJob({
-      name: "every-10ms", description: "tick", schedule: "10s",
-      subagent_type: "general-purpose", prompt: "tick",
+      name: "every-10ms",
+      description: "tick",
+      schedule: "10s",
+      subagent_type: "general-purpose",
+      prompt: "tick",
     });
     // Override with a 10ms interval for fast testing
     await scheduler.updateJob(job.id, { intervalMs: 10, schedule: "10ms" });
@@ -361,25 +426,31 @@ describe("SubagentScheduler — fire path", () => {
   it("one-shot fires once and auto-disables", async () => {
     const future = new Date(Date.now() + 1000).toISOString();
     const job = await scheduler.addJob({
-      name: "soon", description: "once", schedule: future,
-      subagent_type: "general-purpose", prompt: "once",
+      name: "soon",
+      description: "once",
+      schedule: future,
+      subagent_type: "general-purpose",
+      prompt: "once",
     });
 
     await waitFor(() => manager.spawn.mock.calls.length === 1);
 
     // The auto-disable happens inside the async Cron callback after executeJob
     // completes and its store updates are flushed.
-    await waitFor(() => scheduler.list().find(j => j.id === job.id)?.enabled === false);
+    await waitFor(() => scheduler.list().find((j) => j.id === job.id)?.enabled === false);
 
     // Subsequent time should not fire again (one-shot auto-disabled)
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 200));
     expect(manager.spawn).toHaveBeenCalledTimes(1);
   });
 
   it("fire passes bypassQueue: true to manager.spawn", async () => {
     const job = await scheduler.addJob({
-      name: "every-10ms", description: "x", schedule: "10s",
-      subagent_type: "general-purpose", prompt: "x",
+      name: "every-10ms",
+      description: "x",
+      schedule: "10s",
+      subagent_type: "general-purpose",
+      prompt: "x",
     });
     await scheduler.updateJob(job.id, { intervalMs: 10, schedule: "10ms" });
 
@@ -395,39 +466,60 @@ describe("SubagentScheduler — fire path", () => {
   it("disabled jobs do not fire", async () => {
     const future = new Date(Date.now() + 1000).toISOString();
     const job = await scheduler.addJob({
-      name: "off", description: "x", schedule: future,
-      subagent_type: "general-purpose", prompt: "x",
+      name: "off",
+      description: "x",
+      schedule: future,
+      subagent_type: "general-purpose",
+      prompt: "x",
     });
     await scheduler.updateJob(job.id, { enabled: false });
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 300));
     expect(manager.spawn).toHaveBeenCalledTimes(0);
   });
 
   it("emits fired event with agentId on successful spawn", async () => {
     const future = new Date(Date.now() + 1000).toISOString();
     await scheduler.addJob({
-      name: "fire-once", description: "x", schedule: future,
-      subagent_type: "general-purpose", prompt: "x",
+      name: "fire-once",
+      description: "x",
+      schedule: future,
+      subagent_type: "general-purpose",
+      prompt: "x",
     });
     await waitFor(() => manager.spawn.mock.calls.length >= 1);
-    expect(pi.events.emit).toHaveBeenCalledWith("subagents:scheduled", expect.objectContaining({
-      type: "fired", name: "fire-once", agentId: expect.stringMatching(/^agent-/),
-    }));
+    expect(pi.events.emit).toHaveBeenCalledWith(
+      "subagents:scheduled",
+      expect.objectContaining({
+        type: "fired",
+        name: "fire-once",
+        agentId: expect.stringMatching(/^agent-/),
+      }),
+    );
   });
 
   it("records lastStatus error and emits when manager.spawn throws", async () => {
-    manager.spawn.mockImplementationOnce(() => { throw new Error("no slots"); });
+    manager.spawn.mockImplementationOnce(() => {
+      throw new Error("no slots");
+    });
     const future = new Date(Date.now() + 1000).toISOString();
     const job = await scheduler.addJob({
-      name: "boom", description: "x", schedule: future,
-      subagent_type: "general-purpose", prompt: "x",
+      name: "boom",
+      description: "x",
+      schedule: future,
+      subagent_type: "general-purpose",
+      prompt: "x",
     });
 
     // The spawn-throw path does await store.update inside executeJob's catch
-    await waitFor(() => scheduler.list().find(j => j.id === job.id)?.lastStatus === "error");
-    expect(pi.events.emit).toHaveBeenCalledWith("subagents:scheduled", expect.objectContaining({
-      type: "error", jobId: job.id, error: "no slots",
-    }));
+    await waitFor(() => scheduler.list().find((j) => j.id === job.id)?.lastStatus === "error");
+    expect(pi.events.emit).toHaveBeenCalledWith(
+      "subagents:scheduled",
+      expect.objectContaining({
+        type: "error",
+        jobId: job.id,
+        error: "no slots",
+      }),
+    );
   });
 
   // ── Status reflection from record.status (regression for bug #1) ────
@@ -442,7 +534,9 @@ describe("SubagentScheduler — fire path", () => {
       manager.spawn.mockImplementation(() => {
         const id = `agent-${Math.random().toString(36).slice(2, 10)}`;
         let resolve!: () => void;
-        const promise = new Promise<string>(r => { resolve = () => r(""); });
+        const promise = new Promise<string>((r) => {
+          resolve = () => r("");
+        });
         records.set(id, { status: "running", promise, resolve });
         return id;
       });
@@ -454,8 +548,11 @@ describe("SubagentScheduler — fire path", () => {
       const records = installFaithfulMock();
       const future = new Date(Date.now() + 1000).toISOString();
       const job = await scheduler.addJob({
-        name: "fail-job", description: "x", schedule: future,
-        subagent_type: "general-purpose", prompt: "x",
+        name: "fail-job",
+        description: "x",
+        schedule: future,
+        subagent_type: "general-purpose",
+        prompt: "x",
       });
 
       await waitFor(() => manager.spawn.mock.calls.length === 1);
@@ -466,15 +563,18 @@ describe("SubagentScheduler — fire path", () => {
       r.resolve();
 
       // Wait for finalize to complete
-      await waitFor(() => scheduler.list().find(j => j.id === job.id)?.lastStatus === "error");
+      await waitFor(() => scheduler.list().find((j) => j.id === job.id)?.lastStatus === "error");
     });
 
     it("records lastStatus 'success' when the agent terminates with status='completed'", async () => {
       const records = installFaithfulMock();
       const future = new Date(Date.now() + 1000).toISOString();
       const job = await scheduler.addJob({
-        name: "ok-job", description: "x", schedule: future,
-        subagent_type: "general-purpose", prompt: "x",
+        name: "ok-job",
+        description: "x",
+        schedule: future,
+        subagent_type: "general-purpose",
+        prompt: "x",
       });
 
       await waitFor(() => manager.spawn.mock.calls.length === 1);
@@ -482,14 +582,15 @@ describe("SubagentScheduler — fire path", () => {
       r.status = "completed";
       r.resolve();
 
-      await waitFor(() => scheduler.list().find(j => j.id === job.id)?.lastStatus === "success");
+      await waitFor(() => scheduler.list().find((j) => j.id === job.id)?.lastStatus === "success");
     });
-
 
     it("records lastStatus 'error' when the manager's runAgent promise rejects", async () => {
       const future = new Date(Date.now() + 1000).toISOString();
       let rejectPromise: (reason?: any) => void;
-      const promise = new Promise((_, r) => { rejectPromise = r; });
+      const promise = new Promise((_, r) => {
+        rejectPromise = r;
+      });
 
       // Prevent unhandled promise rejection warnings in the test runner
       promise.catch(() => {});
@@ -501,15 +602,18 @@ describe("SubagentScheduler — fire path", () => {
       });
 
       const job = await scheduler.addJob({
-        name: "reject-job", description: "x", schedule: future,
-        subagent_type: "general-purpose", prompt: "x",
+        name: "reject-job",
+        description: "x",
+        schedule: future,
+        subagent_type: "general-purpose",
+        prompt: "x",
       });
 
       await waitFor(() => manager.spawn.mock.calls.length === 1);
 
       rejectPromise(new Error("runAgent promise rejection"));
 
-      await waitFor(() => scheduler.list().find(j => j.id === job.id)?.lastStatus === "error");
+      await waitFor(() => scheduler.list().find((j) => j.id === job.id)?.lastStatus === "error");
     });
 
     it("treats aborted and stopped as errors (terminal failure states)", async () => {
@@ -517,12 +621,18 @@ describe("SubagentScheduler — fire path", () => {
       const futureA = new Date(Date.now() + 1000).toISOString();
       const futureB = new Date(Date.now() + 200).toISOString();
       const a = await scheduler.addJob({
-        name: "abort-job", description: "x", schedule: futureA,
-        subagent_type: "general-purpose", prompt: "x",
+        name: "abort-job",
+        description: "x",
+        schedule: futureA,
+        subagent_type: "general-purpose",
+        prompt: "x",
       });
       const b = await scheduler.addJob({
-        name: "stop-job", description: "x", schedule: futureB,
-        subagent_type: "general-purpose", prompt: "x",
+        name: "stop-job",
+        description: "x",
+        schedule: futureB,
+        subagent_type: "general-purpose",
+        prompt: "x",
       });
 
       await waitFor(() => manager.spawn.mock.calls.length >= 2);
@@ -534,8 +644,10 @@ describe("SubagentScheduler — fire path", () => {
 
       await waitFor(() => {
         const list = scheduler.list();
-        return list.find(j => j.id === a.id)?.lastStatus === "error"
-            && list.find(j => j.id === b.id)?.lastStatus === "error";
+        return (
+          list.find((j) => j.id === a.id)?.lastStatus === "error" &&
+          list.find((j) => j.id === b.id)?.lastStatus === "error"
+        );
       });
     });
   });
@@ -544,9 +656,15 @@ describe("SubagentScheduler — fire path", () => {
 describe("SubagentScheduler — stopped state", () => {
   it("throws on mutation when not started", async () => {
     const scheduler = new SubagentScheduler();
-    await expect(scheduler.addJob({
-      name: "x", description: "x", schedule: "1h", subagent_type: "general-purpose", prompt: "p",
-    })).rejects.toThrow(/not started/);
+    await expect(
+      scheduler.addJob({
+        name: "x",
+        description: "x",
+        schedule: "1h",
+        subagent_type: "general-purpose",
+        prompt: "p",
+      }),
+    ).rejects.toThrow(/not started/);
   });
 
   it("list() returns empty array when not started", () => {

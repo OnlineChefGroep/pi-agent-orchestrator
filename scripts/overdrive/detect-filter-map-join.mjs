@@ -23,21 +23,13 @@
  *   const findings = detectFilterMapJoin(sourceText, { filePath: 'src/foo.ts' });
  */
 
-const ALLOCATING_METHODS = new Set([
-	"filter",
-	"map",
-	"flatMap",
-	"flat",
-	"slice",
-	"concat",
-	"toSorted",
-]);
+const ALLOCATING_METHODS = new Set(["filter", "map", "flatMap", "flat", "slice", "concat", "toSorted"]);
 
 const CHAIN_PATTERN = new RegExp(
-	`\\.(${Array.from(ALLOCATING_METHODS).join("|")})\\s*\\(` +
-		"[^()]*\\)" + // closing of first method call (no nested parens)
-		`\\s*\\.(${Array.from(ALLOCATING_METHODS).join("|")})\\s*\\(`,
-	"g",
+  `\\.(${Array.from(ALLOCATING_METHODS).join("|")})\\s*\\(` +
+    "[^()]*\\)" + // closing of first method call (no nested parens)
+    `\\s*\\.(${Array.from(ALLOCATING_METHODS).join("|")})\\s*\\(`,
+  "g",
 );
 
 /**
@@ -46,35 +38,35 @@ const CHAIN_PATTERN = new RegExp(
  * @returns {Array<{ rule: string, file: string, line: number, column: number, snippet: string, message: string }>}
  */
 export function detectFilterMapJoin(source, opts = {}) {
-	const filePath = opts.filePath ?? "<input>";
-	const findings = [];
-	const lines = source.split("\n");
+  const filePath = opts.filePath ?? "<input>";
+  const findings = [];
+  const lines = source.split("\n");
 
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i];
-		const lineNum = i + 1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineNum = i + 1;
 
-		// Skip pure comments
-		const trimmed = line.trim();
-		if (trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
-		for (const match of line.matchAll(CHAIN_PATTERN)) {
-			const firstMethod = match[1];
-			const secondMethod = match[2];
-			const column = match.index + 1;
+    // Skip pure comments
+    const trimmed = line.trim();
+    if (trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
+    for (const match of line.matchAll(CHAIN_PATTERN)) {
+      const firstMethod = match[1];
+      const secondMethod = match[2];
+      const column = match.index + 1;
 
-			findings.push({
-				rule: "detect-filter-map-join",
-				file: filePath,
-				line: lineNum,
-				column,
-				snippet: line.trim().slice(0, 200),
-				message:
-					`Chained array methods .${firstMethod}().${secondMethod}() create ` +
-					`intermediate arrays. Replace with a single-pass loop (push into ` +
-					`a pre-allocated parts array). See overdrive pattern P3.`,
-			});
-		}
-	}
+      findings.push({
+        rule: "detect-filter-map-join",
+        file: filePath,
+        line: lineNum,
+        column,
+        snippet: line.trim().slice(0, 200),
+        message:
+          `Chained array methods .${firstMethod}().${secondMethod}() create ` +
+          `intermediate arrays. Replace with a single-pass loop (push into ` +
+          `a pre-allocated parts array). See overdrive pattern P3.`,
+      });
+    }
+  }
 
-	return findings;
+  return findings;
 }

@@ -21,10 +21,7 @@ import {
   getUiStyle,
 } from "./agent-registry.js";
 import { globalCircuitBreaker } from "./agent-runner.js";
-import {
-  computeDispatchHistogram,
-  type DispatchHistogram,
-} from "./dispatch-history.js";
+import { computeDispatchHistogram, type DispatchHistogram } from "./dispatch-history.js";
 import type { SubagentScheduler } from "./schedule.js";
 import type { SettingsGetters } from "./settings.js";
 import type { SwarmCoordinator } from "./swarm-join.js";
@@ -301,7 +298,9 @@ export function formatHealthReport(r: HealthReport): string {
   push("## Circuit Breaker");
   push(`  state          : ${r.circuitBreaker.state.toUpperCase()}`);
   push(`  failures       : ${r.circuitBreaker.failures}`);
-  push(`  lastFailureAt  : ${r.circuitBreaker.lastFailureAt === 0 ? "never" : new Date(r.circuitBreaker.lastFailureAt).toISOString()}`);
+  push(
+    `  lastFailureAt  : ${r.circuitBreaker.lastFailureAt === 0 ? "never" : new Date(r.circuitBreaker.lastFailureAt).toISOString()}`,
+  );
   push("");
 
   push("## Schedule");

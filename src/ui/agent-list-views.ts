@@ -24,7 +24,7 @@ export async function showAllAgentsList(ctx: ExtensionCommandContext, modelRegis
     return "   ";
   };
 
-  const entries = allNames.map(name => {
+  const entries = allNames.map((name) => {
     const cfg = getAgentConfig(name);
     const disabled = cfg?.enabled === false;
     const model = getModelLabel(name, modelRegistry);
@@ -33,24 +33,28 @@ export async function showAllAgentsList(ctx: ExtensionCommandContext, modelRegis
     const desc = disabled ? "(disabled)" : (cfg?.description ?? name);
     return { name, prefix, desc };
   });
-  const maxPrefix = Math.max(...entries.map(e => e.prefix.length));
+  const maxPrefix = Math.max(...entries.map((e) => e.prefix.length));
 
-  const hasCustom = allNames.some(n => { const c = getAgentConfig(n); return c && !c.isDefault && c.enabled !== false; });
-  const hasDisabled = allNames.some(n => getAgentConfig(n)?.enabled === false);
+  const hasCustom = allNames.some((n) => {
+    const c = getAgentConfig(n);
+    return c && !c.isDefault && c.enabled !== false;
+  });
+  const hasDisabled = allNames.some((n) => getAgentConfig(n)?.enabled === false);
   const legendParts: string[] = [];
   if (hasCustom) legendParts.push("• = project  ◦ = global");
   if (hasDisabled) legendParts.push("✕ = disabled");
   const legend = legendParts.length ? `\n${legendParts.join("  ")}` : "";
 
-  const options = entries.map(({ prefix, desc }) =>
-    `${prefix.padEnd(maxPrefix)} — ${desc}`,
-  );
+  const options = entries.map(({ prefix, desc }) => `${prefix.padEnd(maxPrefix)} — ${desc}`);
   if (legend) options.push(legend);
 
   const choice = await ctx.ui.select("Agent types", options);
   if (!choice) return;
 
-  const agentName = choice.split(" · ")[0].replace(/^[•◦✕\s]+/, "").trim();
+  const agentName = choice
+    .split(" · ")[0]
+    .replace(/^[•◦✕\s]+/, "")
+    .trim();
   if (getAgentConfig(agentName)) {
     const { showAgentDetail } = await import("./agent-detail.js");
     await showAgentDetail(ctx, agentName);
@@ -69,7 +73,7 @@ export async function showRunningAgents(
     return;
   }
 
-  const options = agents.map(a => {
+  const options = agents.map((a) => {
     const dn = getDisplayName(a.type);
     const dur = formatDuration(a.startedAt ?? 0, a.completedAt);
     return `${dn} (${a.description}) · ${a.toolUses} tools · ${a.status} · ${dur}`;

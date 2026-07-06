@@ -145,9 +145,42 @@ const agents = [
 ];
 
 const agentActivity = new Map([
-  ["a-explore", activity("call-1", "grep", "tracing the middleware chain", 6, 20, agents[0].lifetimeUsage, session(38_200, 6_400, 12_100, 31))],
-  ["a-plan", activity("call-2", "read", "comparing rotation strategies", 9, 20, agents[1].lifetimeUsage, session(51_900, 9_800, 20_400, 47))],
-  ["a-gp", activity("call-3", "edit", "wiring the rotation guard", 14, 40, agents[2].lifetimeUsage, session(96_500, 18_300, 41_200, 68))],
+  [
+    "a-explore",
+    activity(
+      "call-1",
+      "grep",
+      "tracing the middleware chain",
+      6,
+      20,
+      agents[0].lifetimeUsage,
+      session(38_200, 6_400, 12_100, 31),
+    ),
+  ],
+  [
+    "a-plan",
+    activity(
+      "call-2",
+      "read",
+      "comparing rotation strategies",
+      9,
+      20,
+      agents[1].lifetimeUsage,
+      session(51_900, 9_800, 20_400, 47),
+    ),
+  ],
+  [
+    "a-gp",
+    activity(
+      "call-3",
+      "edit",
+      "wiring the rotation guard",
+      14,
+      40,
+      agents[2].lifetimeUsage,
+      session(96_500, 18_300, 41_200, 68),
+    ),
+  ],
 ]);
 
 const state = {
@@ -190,7 +223,9 @@ const innerW = Math.max(1, WIDTH - 4);
 const body = buildDashboardBodyLines(innerW, th, box, state);
 const lines = [
   ...renderDashboardHeader(WIDTH, th, box, state),
-  ...body.lines.map((l) => (l === "" ? "" : `${th.border}${box.l}${th.reset} ${padToInner(l, innerW)} ${th.border}${box.r}${th.reset}`)),
+  ...body.lines.map((l) =>
+    l === "" ? "" : `${th.border}${box.l}${th.reset} ${padToInner(l, innerW)} ${th.border}${box.r}${th.reset}`,
+  ),
   ...renderDashboardDetailPanel(WIDTH, th, box, state),
   ...renderDashboardFooter(WIDTH, th, box),
 ];
@@ -213,11 +248,16 @@ function applySgr(style, params) {
   const codes = params.split(";").map((n) => (n === "" ? 0 : Number(n)));
   for (let i = 0; i < codes.length; i++) {
     const c = codes[i];
-    if (c === 0) { style.color = PREMIUM.default; style.bold = false; style.dim = false; }
-    else if (c === 1) style.bold = true;
+    if (c === 0) {
+      style.color = PREMIUM.default;
+      style.bold = false;
+      style.dim = false;
+    } else if (c === 1) style.bold = true;
     else if (c === 2) style.dim = true;
-    else if (c === 22) { style.bold = false; style.dim = false; }
-    else if (c === 31) style.color = PREMIUM.error;
+    else if (c === 22) {
+      style.bold = false;
+      style.dim = false;
+    } else if (c === 31) style.color = PREMIUM.error;
     else if (c === 32) style.color = PREMIUM.success;
     else if (c === 33) style.color = PREMIUM.highlight;
     else if (c === 36) style.color = PREMIUM.accent;
@@ -268,11 +308,19 @@ function toSvg(rows) {
   const font = "ui-monospace, 'SF Mono', 'Cascadia Code', 'Menlo', 'Consolas', monospace";
 
   const out = [];
-  out.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="${font}" font-size="${fontSize}px">`);
+  out.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="${font}" font-size="${fontSize}px">`,
+  );
   out.push(`<rect width="${w}" height="${h}" rx="10" fill="#0d0d12"/>`);
-  out.push(`<rect width="${w}" height="30" rx="10" fill="#17171f"/><rect y="20" width="${w}" height="10" fill="#17171f"/>`);
-  out.push(`<circle cx="18" cy="15" r="5" fill="#ff5f57"/><circle cx="36" cy="15" r="5" fill="#febc2e"/><circle cx="54" cy="15" r="5" fill="#28c840"/>`);
-  out.push(`<text x="${w / 2}" y="19" fill="#8a8a96" text-anchor="middle" font-size="12px">/agents — pi-agent-orchestrator</text>`);
+  out.push(
+    `<rect width="${w}" height="30" rx="10" fill="#17171f"/><rect y="20" width="${w}" height="10" fill="#17171f"/>`,
+  );
+  out.push(
+    `<circle cx="18" cy="15" r="5" fill="#ff5f57"/><circle cx="36" cy="15" r="5" fill="#febc2e"/><circle cx="54" cy="15" r="5" fill="#28c840"/>`,
+  );
+  out.push(
+    `<text x="${w / 2}" y="19" fill="#8a8a96" text-anchor="middle" font-size="12px">/agents — pi-agent-orchestrator</text>`,
+  );
 
   rows.forEach((line, i) => {
     const y = (padTop + i * lineH + fontSize).toFixed(1);
@@ -281,7 +329,9 @@ function toSvg(rows) {
       if (!text.trim() && s.color === PREMIUM.default) continue;
       const weight = s.bold ? ' font-weight="700"' : "";
       const opacity = s.dim ? ' opacity="0.55"' : "";
-      out.push(`<text x="${(padX + s.x).toFixed(1)}" y="${y}" fill="${s.color}"${weight}${opacity} xml:space="preserve">${text}</text>`);
+      out.push(
+        `<text x="${(padX + s.x).toFixed(1)}" y="${y}" fill="${s.color}"${weight}${opacity} xml:space="preserve">${text}</text>`,
+      );
     }
   });
   out.push("</svg>");

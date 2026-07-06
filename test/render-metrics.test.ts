@@ -174,7 +174,7 @@ describe("RenderMetrics — render rate", () => {
   it("rendersPerSecond is computed after some elapsed time", async () => {
     const m = new RenderMetrics("r", 100);
     // Wait a tick so startedAt is in the past
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
     m.record(1);
     m.record(2);
     m.record(3);
@@ -188,7 +188,7 @@ describe("RenderMetrics — render rate", () => {
   it("elapsedMs increases over time", async () => {
     const m = new RenderMetrics("r", 100);
     const s1 = m.snapshot();
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
     const s2 = m.snapshot();
     expect(s2.elapsedMs).toBeGreaterThan(s1.elapsedMs);
   });

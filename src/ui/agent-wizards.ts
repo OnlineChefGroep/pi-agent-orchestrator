@@ -19,10 +19,7 @@ export async function showCreateWizard(
 
   const targetDir = location.startsWith("Project") ? projectAgentsDir() : personalAgentsDir();
 
-  const method = await ctx.ui.select("Creation method", [
-    "Generate with Claude (recommended)",
-    "Manual configuration",
-  ]);
+  const method = await ctx.ui.select("Creation method", ["Generate with Claude (recommended)", "Manual configuration"]);
   if (!method) return;
 
   if (method.startsWith("Generate")) {
@@ -121,7 +118,12 @@ export async function showManualWizard(ctx: ExtensionCommandContext, targetDir: 
   if (!description) return;
 
   // 3. Tools
-  const toolChoice = await ctx.ui.select("Tools", ["all", "none", "read-only (read, bash, grep, find, ls)", "custom..."]);
+  const toolChoice = await ctx.ui.select("Tools", [
+    "all",
+    "none",
+    "read-only (read, bash, grep, find, ls)",
+    "custom...",
+  ]);
   if (!toolChoice) return;
 
   let tools: string;
@@ -138,13 +140,7 @@ export async function showManualWizard(ctx: ExtensionCommandContext, targetDir: 
   }
 
   // 4. Model
-  const modelChoice = await ctx.ui.select("Model", [
-    "inherit (parent model)",
-    "haiku",
-    "sonnet",
-    "opus",
-    "custom...",
-  ]);
+  const modelChoice = await ctx.ui.select("Model", ["inherit (parent model)", "haiku", "sonnet", "opus", "custom..."]);
   if (!modelChoice) return;
 
   let modelLine = "";

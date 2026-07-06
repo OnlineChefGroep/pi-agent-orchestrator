@@ -13,27 +13,24 @@ import type { AgentConfig, MemoryScope, PromptCompressionLevel, ThinkingLevel } 
 const UNSAFE_NAME_PATTERN = /[/\\]|\.\.|[\x00-\x1F]/;
 const MAX_NAME_LENGTH = 100;
 
-
 function truncateUnicode(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
   let count = 0;
   for (let i = 0; i < str.length; i++) {
     const code = str.charCodeAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF) i++;
+    if (code >= 0xd800 && code <= 0xdbff) i++;
     count++;
     if (count >= maxLength) return str.slice(0, i + 1);
   }
   return str;
 }
 
-
-
-const MAX_PROMPT_LENGTH = 100000;  // 100KB
+const MAX_PROMPT_LENGTH = 100000; // 100KB
 const MAX_TOOLS_COUNT = 100;
 /**
  * Validate an agent config for security issues.
  * Returns array of error messages (empty if valid).
- * 
+ *
  * Security model: allowlist approach — only embedded defaults and .md files from
  * .pi/agents/ are trusted sources. No regex blacklist for prompt injection
  * (trivially bypassed with Unicode, base64, whitespace variations).
@@ -41,14 +38,14 @@ const MAX_TOOLS_COUNT = 100;
 function validateAgentConfig(name: string, config: Partial<AgentConfig>): string[] {
   const errors: string[] = [];
   // Validate name
-  if (!name || typeof name !== 'string') {
-    errors.push('Agent name is required');
+  if (!name || typeof name !== "string") {
+    errors.push("Agent name is required");
   } else if (name.length > MAX_NAME_LENGTH) {
     errors.push(`Agent name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
-} else if (UNSAFE_NAME_PATTERN.test(name)) errors.push(`Agent name contains unsafe characters: ${name}`);
+  } else if (UNSAFE_NAME_PATTERN.test(name)) errors.push(`Agent name contains unsafe characters: ${name}`);
   // Prevent overriding built-in agents with wildcard tools
   const builtinNames = new Set(getDefaultAgentNames());
-  if (builtinNames.has(name) && config.builtinToolNames?.includes('*')) {
+  if (builtinNames.has(name) && config.builtinToolNames?.includes("*")) {
     errors.push(`Cannot override built-in agent "${name}" with wildcard (*) tools`);
   }
   // Validate system prompt length only (no injection pattern check)
@@ -68,20 +65,20 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
     if (config.builtinToolNames.length > MAX_TOOLS_COUNT) {
       errors.push(`Too many tools specified (max ${MAX_TOOLS_COUNT})`);
     }
-    const hasLongTool = config.builtinToolNames.some(t => t.length > MAX_NAME_LENGTH);
+    const hasLongTool = config.builtinToolNames.some((t) => t.length > MAX_NAME_LENGTH);
     if (hasLongTool) {
       errors.push(`Tool name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
     }
     // CVE-011 FIX: Emit telemetry for unknown tool names (don't block, just log)
-    const knownTools = new Set([...BUILTIN_TOOL_NAMES, '*']);
-    const unknownTools = config.builtinToolNames.filter(t => !knownTools.has(t));
+    const knownTools = new Set([...BUILTIN_TOOL_NAMES, "*"]);
+    const unknownTools = config.builtinToolNames.filter((t) => !knownTools.has(t));
     if (unknownTools.length > 0) {
       // Redact potentially sensitive tool names to prevent logging secrets
       // We limit to 50 characters to prevent DOS, and use a safe substring approach
-      const sanitizedTools = unknownTools.map(t =>
-        typeof t === 'string' ? (t.length > 50 ? `${truncateUnicode(t, 50)}...` : t) : '[INVALID_TYPE]'
+      const sanitizedTools = unknownTools.map((t) =>
+        typeof t === "string" ? (t.length > 50 ? `${truncateUnicode(t, 50)}...` : t) : "[INVALID_TYPE]",
       );
-      const safeName = typeof name === 'string' ? truncateUnicode(name, MAX_NAME_LENGTH) : String(name);
+      const safeName = typeof name === "string" ? truncateUnicode(name, MAX_NAME_LENGTH) : String(name);
       emitTelemetry("agent:unknown-tools", { name: safeName, tools: sanitizedTools });
     }
   }
@@ -89,7 +86,7 @@ function validateAgentConfig(name: string, config: Partial<AgentConfig>): string
     if (config.disallowedTools.length > MAX_TOOLS_COUNT) {
       errors.push(`Too many disallowed tools specified (max ${MAX_TOOLS_COUNT})`);
     }
-    const hasLongDisallowedTool = config.disallowedTools.some(t => t.length > MAX_NAME_LENGTH);
+    const hasLongDisallowedTool = config.disallowedTools.some((t) => t.length > MAX_NAME_LENGTH);
     if (hasLongDisallowedTool) {
       errors.push(`Disallowed tool name exceeds maximum length of ${MAX_NAME_LENGTH} characters`);
     }
@@ -115,8 +112,8 @@ export async function loadCustomAgents(cwd: string): Promise<Map<string, AgentCo
   const globalDir = join(getAgentDir(), "agents");
   const projectDir = join(cwd, ".pi", "agents");
   const agents = new Map<string, AgentConfig>();
-  await loadFromDir(globalDir, agents, "global");   // lower priority
-  await loadFromDir(projectDir, agents, "project");  // higher priority (overwrites)
+  await loadFromDir(globalDir, agents, "global"); // lower priority
+  await loadFromDir(projectDir, agents, "project"); // higher priority (overwrites)
   return agents;
 }
 /** Load agent configs from a directory into the map. */
@@ -125,9 +122,7 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
   let files: string[];
   try {
     const dirents = readdirSync(dir, { withFileTypes: true });
-    files = dirents
-      .filter(f => !f.isDirectory() && !f.isSymbolicLink() && f.name.endsWith(".md"))
-      .map(f => f.name);
+    files = dirents.filter((f) => !f.isDirectory() && !f.isSymbolicLink() && f.name.endsWith(".md")).map((f) => f.name);
   } catch {
     return;
   }
@@ -169,12 +164,12 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
     // CVE-002 FIX: Validate agent config before adding
     const validationErrors = validateAgentConfig(name, config);
     if (validationErrors.length > 0) {
-      const safeName = typeof name === 'string' ? truncateUnicode(name, MAX_NAME_LENGTH) : String(name);
+      const safeName = typeof name === "string" ? truncateUnicode(name, MAX_NAME_LENGTH) : String(name);
       // Redact sensitive payload content from error messages
       // We log the type of error, but redact any appended untrusted data
-      const redactedErrors = validationErrors.map(e => {
+      const redactedErrors = validationErrors.map((e) => {
         // Strip out the user data which is typically appended after a colon
-        const colonIndex = e.indexOf(': ');
+        const colonIndex = e.indexOf(": ");
         if (colonIndex !== -1) {
           return `${e.substring(0, colonIndex)}: [REDACTED]`;
         }
@@ -187,12 +182,12 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
 
     // Emit telemetry for every loaded agent with content hash
     const contentHash = hashContentSync(content);
-    const safeNameLoaded = typeof name === 'string' ? truncateUnicode(name, MAX_NAME_LENGTH) : String(name);
-    emitTelemetry("agent:loaded", { 
+    const safeNameLoaded = typeof name === "string" ? truncateUnicode(name, MAX_NAME_LENGTH) : String(name);
+    emitTelemetry("agent:loaded", {
       name: safeNameLoaded,
-      source, 
-      hash: contentHash, 
-      enabled: config.enabled ?? true 
+      source,
+      hash: contentHash,
+      enabled: config.enabled ?? true,
     });
 
     agents.set(name, config);
@@ -239,7 +234,10 @@ function parseCsvField(val: unknown): string[] | undefined {
   if (val === undefined || val === null) return undefined;
   const s = String(val).trim();
   if (!s || s === "none") return undefined;
-  const items = s.split(",").map(t => t.trim()).filter(Boolean);
+  const items = s
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
   return items.length > 0 ? items : undefined;
 }
 
@@ -261,7 +259,7 @@ function parseCsvListOptional(val: unknown): string[] | undefined {
 }
 
 function parseMemory(val: unknown): MemoryScope | undefined {
-  return (val === "user" || val === "project" || val === "local") ? val : undefined;
+  return val === "user" || val === "project" || val === "local" ? val : undefined;
 }
 
 /**
@@ -276,9 +274,7 @@ function parseMemory(val: unknown): MemoryScope | undefined {
  * valid chains would hide misconfigurations from the user. Better to fail the
  * whole chain and let `validateAgentConfig` flag the agent as needing review.
  */
-function parseValidators(
-  val: unknown,
-): readonly { agentId: string; criteria: readonly string[] }[] | undefined {
+function parseValidators(val: unknown): readonly { agentId: string; criteria: readonly string[] }[] | undefined {
   if (val === undefined || val === null) return undefined;
   if (!Array.isArray(val)) return undefined;
   const result: { agentId: string; criteria: string[] }[] = [];

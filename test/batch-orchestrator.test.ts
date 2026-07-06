@@ -48,7 +48,11 @@ describe("BatchOrchestrator", () => {
   let deps: {
     manager: { getRecord: ReturnType<typeof vi.fn> };
     groupJoin: { registerGroup: ReturnType<typeof vi.fn>; onAgentComplete: ReturnType<typeof vi.fn> };
-    swarmJoin: { createSwarm: ReturnType<typeof vi.fn>; addAgentToSwarm: ReturnType<typeof vi.fn>; onAgentComplete: ReturnType<typeof vi.fn> };
+    swarmJoin: {
+      createSwarm: ReturnType<typeof vi.fn>;
+      addAgentToSwarm: ReturnType<typeof vi.fn>;
+      onAgentComplete: ReturnType<typeof vi.fn>;
+    };
     onAgentHandled: ReturnType<typeof vi.fn>;
     onWidgetUpdate: ReturnType<typeof vi.fn>;
   };
@@ -58,7 +62,11 @@ describe("BatchOrchestrator", () => {
     deps = {
       manager: { getRecord: vi.fn() },
       groupJoin: { registerGroup: vi.fn(), onAgentComplete: vi.fn(() => "pass") },
-      swarmJoin: { createSwarm: vi.fn(() => "swarm-test-1"), addAgentToSwarm: vi.fn(), onAgentComplete: vi.fn(() => "pass") },
+      swarmJoin: {
+        createSwarm: vi.fn(() => "swarm-test-1"),
+        addAgentToSwarm: vi.fn(),
+        onAgentComplete: vi.fn(() => "pass"),
+      },
       onAgentHandled: vi.fn(),
       onWidgetUpdate: vi.fn(),
     };
@@ -212,11 +220,7 @@ describe("BatchOrchestrator", () => {
       await vi.advanceTimersByTimeAsync(60);
 
       expect(deps.swarmJoin.createSwarm).toHaveBeenCalled();
-      expect(deps.swarmJoin.addAgentToSwarm).toHaveBeenCalledWith(
-        expect.any(String),
-        "agent-1",
-        0,
-      );
+      expect(deps.swarmJoin.addAgentToSwarm).toHaveBeenCalledWith(expect.any(String), "agent-1", 0);
     });
 
     it("handles agents with completedAt before finalization", async () => {

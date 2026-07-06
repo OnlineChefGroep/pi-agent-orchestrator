@@ -78,10 +78,7 @@ function getRegistry(): HandlerRegistry {
  * Subscribe to a telemetry event.
  * Returns an unsubscribe function.
  */
-export function onTelemetry<E extends TelemetryEventName>(
-  event: E,
-  handler: TelemetryHandler<E>,
-): () => void {
+export function onTelemetry<E extends TelemetryEventName>(event: E, handler: TelemetryHandler<E>): () => void {
   const registry = getRegistry();
   let handlers = registry.get(event) as Set<TelemetryHandler<E>> | undefined;
   if (!handlers) {
@@ -99,10 +96,7 @@ export function onTelemetry<E extends TelemetryEventName>(
  * Emit a telemetry event.
  * If no listeners are registered, falls back to logger.warn for security events.
  */
-export function emitTelemetry<E extends TelemetryEventName>(
-  event: E,
-  payload: TelemetryEvents[E],
-): void {
+export function emitTelemetry<E extends TelemetryEventName>(event: E, payload: TelemetryEvents[E]): void {
   const registry = getRegistry();
   const handlers = registry.get(event) as Set<TelemetryHandler<E>> | undefined;
 
@@ -112,7 +106,9 @@ export function emitTelemetry<E extends TelemetryEventName>(
         handler(payload);
       } catch (err) {
         // Handler errors are logged but don't break the emitter
-        logger.warn(`Telemetry handler error for ${event}:`, { error: err instanceof Error ? err.message : String(err) });
+        logger.warn(`Telemetry handler error for ${event}:`, {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
   } else {
@@ -132,7 +128,7 @@ export async function hashContent(content: string): Promise<string> {
   const data = encoder.encode(content);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /**

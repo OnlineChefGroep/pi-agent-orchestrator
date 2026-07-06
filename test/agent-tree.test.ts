@@ -41,13 +41,17 @@ describe("agent-tree", () => {
         description: 'Line 1\nLine 2\rLine 3 with "quotes"',
       });
       const result = buildAgentTreeMermaid([record]);
-      expect(result).toContain('agent_dirty["agent-dirty<br/>general-purpose<br/>running<br/>Line 1 Line 2 Line 3 with  quotes"]');
+      expect(result).toContain(
+        'agent_dirty["agent-dirty<br/>general-purpose<br/>running<br/>Line 1 Line 2 Line 3 with  quotes"]',
+      );
     });
 
     it("replaces hyphens with underscores in IDs for Mermaid nodes", () => {
       const record = createMockRecord({ id: "my-cool-agent-id" });
       const result = buildAgentTreeMermaid([record]);
-      expect(result).toContain('my_cool_agent_id["my-cool-agent-id<br/>general-purpose<br/>running<br/>test description"]');
+      expect(result).toContain(
+        'my_cool_agent_id["my-cool-agent-id<br/>general-purpose<br/>running<br/>test description"]',
+      );
     });
 
     it("renders parent-child relationships using parentId", () => {
@@ -90,7 +94,7 @@ describe("agent-tree", () => {
       const child = createMockRecord({
         id: "child",
         parentId: "parent",
-        groupId: "parent",  // same as parentId → no duplicate dashed edge
+        groupId: "parent", // same as parentId → no duplicate dashed edge
         spawnedAt: 2000,
       });
 
@@ -168,8 +172,20 @@ describe("agent-tree", () => {
 
     it("builds a hierarchical tree using parentId relationships", () => {
       const parent = createMockRecord({ id: "root", type: "Explore", description: "Root", status: "running" });
-      const child = createMockRecord({ id: "child", type: "Plan", description: "Child", status: "completed", parentId: "root" });
-      const grandchild = createMockRecord({ id: "gc", type: "Explore", description: "Grandchild", status: "running", parentId: "child" });
+      const child = createMockRecord({
+        id: "child",
+        type: "Plan",
+        description: "Child",
+        status: "completed",
+        parentId: "root",
+      });
+      const grandchild = createMockRecord({
+        id: "gc",
+        type: "Explore",
+        description: "Grandchild",
+        status: "running",
+        parentId: "child",
+      });
 
       const result = buildAgentTreeJson([grandchild, parent, child]); // Out of order
       const parsed = JSON.parse(result);

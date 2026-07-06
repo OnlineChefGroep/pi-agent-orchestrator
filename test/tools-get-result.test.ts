@@ -133,7 +133,9 @@ describe("createGetResultTool", () => {
 
   it("execute handles wait for running agent (sets resultConsumed and awaits promise)", async () => {
     const ctx = makeCtx();
-    const promise = new Promise<void>(resolve => { resolve(); });
+    const promise = new Promise<void>((resolve) => {
+      resolve();
+    });
     const record = {
       id: "agent-1",
       type: "Explore",
@@ -150,7 +152,13 @@ describe("createGetResultTool", () => {
     };
     ctx.manager.getRecord.mockReturnValue(record);
     const tool = createGetResultTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "agent-1", wait: true }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute(
+      "call-1",
+      { agent_id: "agent-1", wait: true },
+      undefined as any,
+      undefined as any,
+      ctx,
+    );
     // After awaiting, the record.resultConsumed should be set
     expect(record.resultConsumed).toBe(true);
     expect(ctx.cancelNudge).toHaveBeenCalled();
@@ -177,7 +185,13 @@ describe("createGetResultTool", () => {
       compactionCount: 0,
     });
     const tool = createGetResultTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "agent-1", verbose: true }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute(
+      "call-1",
+      { agent_id: "agent-1", verbose: true },
+      undefined as any,
+      undefined as any,
+      ctx,
+    );
     expect(result.content[0].text).toMatch(/turn1/);
   });
 });

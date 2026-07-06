@@ -229,10 +229,7 @@ describe("extension entry point", () => {
   it("registers message renderer for subagent-notification", async () => {
     const pi = buildPiMock();
     await extensionInit(pi);
-    expect(pi.registerMessageRenderer).toHaveBeenCalledWith(
-      "subagent-notification",
-      expect.any(Function),
-    );
+    expect(pi.registerMessageRenderer).toHaveBeenCalledWith("subagent-notification", expect.any(Function));
   });
 
   it("exposes manager via Symbol.for with readonly API", async () => {
@@ -272,9 +269,7 @@ describe("extension entry point", () => {
     const pi = buildPiMock();
     await extensionInit(pi);
 
-    const shutdownHandler = (pi.on as any).mock.calls.find(
-      (c: any[]) => c[0] === "session_shutdown",
-    )?.[1];
+    const shutdownHandler = (pi.on as any).mock.calls.find((c: any[]) => c[0] === "session_shutdown")?.[1];
     expect(shutdownHandler).toBeDefined();
 
     await shutdownHandler();

@@ -125,7 +125,7 @@ describe("logger", () => {
       component: "pi-subagents",
       message: "test message",
       extra1: "value1",
-      extra2: 123
+      extra2: 123,
     });
   });
 
@@ -142,7 +142,7 @@ describe("logger", () => {
       ts: "2024-01-01T12:00:00.000Z",
       level: "info",
       component: "pi-subagents",
-      message: "test message"
+      message: "test message",
     });
   });
 });

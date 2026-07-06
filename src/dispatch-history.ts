@@ -74,11 +74,7 @@ let maxEntries = DEFAULT_MAX_ENTRIES;
 
 /** (Re)configure the ring buffer. Mirrors `configureAuditLogger` shape. */
 export function configureDispatchHistory(config: { maxEntries?: number } = {}): void {
-  if (
-    config.maxEntries !== undefined &&
-    Number.isFinite(config.maxEntries) &&
-    config.maxEntries > 0
-  ) {
+  if (config.maxEntries !== undefined && Number.isFinite(config.maxEntries) && config.maxEntries > 0) {
     maxEntries = config.maxEntries;
   }
   // Trim the buffer if the cap was lowered.
@@ -104,9 +100,7 @@ export function configureDispatchHistory(config: { maxEntries?: number } = {}): 
  * the histogram (the `emitTelemetry` helper itself logs + swallows handler
  * errors, see `src/telemetry.ts`).
  */
-export function recordDispatchDecision(
-  decision: Omit<DispatchDecision, "timestamp">,
-): void {
+export function recordDispatchDecision(decision: Omit<DispatchDecision, "timestamp">): void {
   // Shallow-copy so external mutation cannot corrupt the buffered record.
   const stored: DispatchDecision = { ...decision, timestamp: Date.now() };
   entries.push(stored);

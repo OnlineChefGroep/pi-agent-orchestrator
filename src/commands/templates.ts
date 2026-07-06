@@ -29,9 +29,7 @@ function availableChoice(name: string, category: string, displayName: string, de
   return `${AVAILABLE_PREFIX}${name} [${category}] ${displayName} — ${description}`;
 }
 
-export function registerTemplatesCommand(
-  pi: ExtensionAPI,
-) {
+export function registerTemplatesCommand(pi: ExtensionAPI) {
   pi.registerCommand("agents templates", {
     description: "Browse and manage agent templates",
     handler: async (_args, ctx) => {
@@ -73,9 +71,7 @@ export async function showTemplatesMenu(ctx: ExtensionCommandContext): Promise<v
     options.push("Rescan templates");
 
     if (options.length === 1 && options[0] === "Rescan templates") {
-      options.unshift(
-        "No templates found. Install some from the list below:",
-      );
+      options.unshift("No templates found. Install some from the list below:");
     }
 
     const choice = await ctx.ui.select("Agent Templates", options);
@@ -88,10 +84,7 @@ export async function showTemplatesMenu(ctx: ExtensionCommandContext): Promise<v
         if (result.ok) count++;
       }
       await reloadCustomAgents();
-      ctx.ui.notify(
-        `Updated ${count} of ${allUpdates.length} templates.`,
-        "info",
-      );
+      ctx.ui.notify(`Updated ${count} of ${allUpdates.length} templates.`, "info");
     } else if (choice.startsWith(INSTALLED_PREFIX)) {
       const name = choice.slice(INSTALLED_PREFIX.length).split(" ")[0];
       const action = await ctx.ui.select(`Template: ${name}`, [
@@ -103,10 +96,7 @@ export async function showTemplatesMenu(ctx: ExtensionCommandContext): Promise<v
         const result = await installTemplate(name, cwd);
         if (result.ok) {
           await reloadCustomAgents();
-          ctx.ui.notify(
-            `Updated ${name} to latest version.`,
-            "info",
-          );
+          ctx.ui.notify(`Updated ${name} to latest version.`, "info");
         } else {
           ctx.ui.notify(result.error ?? "Update failed.", "warning");
         }
@@ -133,10 +123,7 @@ export async function showTemplatesMenu(ctx: ExtensionCommandContext): Promise<v
       const result = await installTemplate(name, cwd);
       if (result.ok) {
         await reloadCustomAgents();
-        ctx.ui.notify(
-          `Installed ${template.displayName} (v${template.version}).`,
-          "info",
-        );
+        ctx.ui.notify(`Installed ${template.displayName} (v${template.version}).`, "info");
       } else {
         ctx.ui.notify(result.error ?? "Install failed.", "warning");
       }

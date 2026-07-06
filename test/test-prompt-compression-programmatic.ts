@@ -44,16 +44,16 @@ const analysisConfig = DEFAULT_AGENTS.get("Analysis")!;
 
 for (const level of levels) {
   setPromptCompressionLevel(level);
-  
+
   const explorePrompt = buildAgentPrompt(exploreConfig, testCwd, testEnv, undefined, undefined, level);
   const planPrompt = buildAgentPrompt(planConfig, testCwd, testEnv, undefined, undefined, level);
   const analysisPrompt = buildAgentPrompt(analysisConfig, testCwd, testEnv, undefined, undefined, level);
-  
+
   console.log(`\n  Level: ${level}`);
   console.log(`    Explore prompt length: ${explorePrompt.length} chars`);
   console.log(`    Plan prompt length: ${planPrompt.length} chars`);
   console.log(`    Analysis prompt length: ${analysisPrompt.length} chars`);
-  
+
   // Verify content differences
   if (level === "aggressive") {
     // Aggressive should have minimal read-only warning
@@ -113,8 +113,17 @@ READONLY_PROMPT_PARAMS.set("test-readonly-agent", {
 // Test with global = aggressive, but agent = minimal
 setPromptCompressionLevel("aggressive");
 const effectiveLevel1 = getEffectiveCompressionLevel(customReadOnlyAgentConfig); // Should be "minimal" (agent override)
-const globalAggressiveAgentMinimal = buildAgentPrompt(customReadOnlyAgentConfig, testCwd, testEnv, undefined, undefined, effectiveLevel1);
-console.log(`  Global=aggressive, Agent=minimal (effective: ${effectiveLevel1}): ${globalAggressiveAgentMinimal.length} chars`);
+const globalAggressiveAgentMinimal = buildAgentPrompt(
+  customReadOnlyAgentConfig,
+  testCwd,
+  testEnv,
+  undefined,
+  undefined,
+  effectiveLevel1,
+);
+console.log(
+  `  Global=aggressive, Agent=minimal (effective: ${effectiveLevel1}): ${globalAggressiveAgentMinimal.length} chars`,
+);
 if (globalAggressiveAgentMinimal.includes("CRITICAL: READ-ONLY MODE")) {
   console.log("    ✓ Per-agent override works (minimal used despite global aggressive)");
 } else {
@@ -129,8 +138,17 @@ const customReadOnlyAgentConfigAggressive: AgentConfig = {
 };
 setPromptCompressionLevel("minimal");
 const effectiveLevel2 = getEffectiveCompressionLevel(customReadOnlyAgentConfigAggressive); // Should be "aggressive" (agent override)
-const globalMinimalAgentAggressive = buildAgentPrompt(customReadOnlyAgentConfigAggressive, testCwd, testEnv, undefined, undefined, effectiveLevel2);
-console.log(`  Global=minimal, Agent=aggressive (effective: ${effectiveLevel2}): ${globalMinimalAgentAggressive.length} chars`);
+const globalMinimalAgentAggressive = buildAgentPrompt(
+  customReadOnlyAgentConfigAggressive,
+  testCwd,
+  testEnv,
+  undefined,
+  undefined,
+  effectiveLevel2,
+);
+console.log(
+  `  Global=minimal, Agent=aggressive (effective: ${effectiveLevel2}): ${globalMinimalAgentAggressive.length} chars`,
+);
 if (globalMinimalAgentAggressive.includes("READ-ONLY") && !globalMinimalAgentAggressive.includes("CRITICAL")) {
   console.log("    ✓ Per-agent override works (aggressive used despite global minimal)");
 } else {
@@ -145,8 +163,17 @@ const customReadOnlyAgentConfigNoOverride: AgentConfig = {
 };
 setPromptCompressionLevel("aggressive");
 const effectiveLevel3 = getEffectiveCompressionLevel(customReadOnlyAgentConfigNoOverride); // Should be "aggressive" (global)
-const globalAggressiveNoOverride = buildAgentPrompt(customReadOnlyAgentConfigNoOverride, testCwd, testEnv, undefined, undefined, effectiveLevel3);
-console.log(`  Global=aggressive, Agent=no override (effective: ${effectiveLevel3}): ${globalAggressiveNoOverride.length} chars`);
+const globalAggressiveNoOverride = buildAgentPrompt(
+  customReadOnlyAgentConfigNoOverride,
+  testCwd,
+  testEnv,
+  undefined,
+  undefined,
+  effectiveLevel3,
+);
+console.log(
+  `  Global=aggressive, Agent=no override (effective: ${effectiveLevel3}): ${globalAggressiveNoOverride.length} chars`,
+);
 if (globalAggressiveNoOverride.includes("READ-ONLY") && !globalAggressiveNoOverride.includes("CRITICAL")) {
   console.log("    ✓ No override uses global setting (aggressive)");
 } else {
@@ -178,7 +205,9 @@ const testCases = [
 for (const tc of testCases) {
   const result = parseCompressionLevel(tc.input);
   const status = result === tc.expected ? "✓" : "✗ FAIL";
-  console.log(`  parseCompressionLevel("${tc.input}") = "${result ?? "undefined"}" (expected: "${tc.expected ?? "undefined"}") ${status}`);
+  console.log(
+    `  parseCompressionLevel("${tc.input}") = "${result ?? "undefined"}" (expected: "${tc.expected ?? "undefined"}") ${status}`,
+  );
 }
 
 // Test 5: Verify token savings claims
@@ -197,8 +226,8 @@ const balancedLen = balancedPrompt.length;
 const aggressiveLen = aggressivePrompt.length;
 const minimalLen = minimalPrompt.length;
 
-const aggressiveSavings = ((balancedLen - aggressiveLen) / balancedLen * 100).toFixed(1);
-const minimalIncrease = ((minimalLen - balancedLen) / balancedLen * 100).toFixed(1);
+const aggressiveSavings = (((balancedLen - aggressiveLen) / balancedLen) * 100).toFixed(1);
+const minimalIncrease = (((minimalLen - balancedLen) / balancedLen) * 100).toFixed(1);
 
 console.log(`  Balanced (baseline): ${balancedLen} chars`);
 console.log(`  Aggressive: ${aggressiveLen} chars (${aggressiveSavings}% smaller)`);

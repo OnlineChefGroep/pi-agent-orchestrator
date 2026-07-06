@@ -49,7 +49,9 @@ function createEventBus(): EventBus {
  * (waitForAll, hasRunning, getRecord, listAgentIds) plus the internal
  * `listAgents` used by the handle builder.
  */
-function createMockManager(seed: ReadonlyArray<{ id: string; type: string; status: string; description?: string }> = []): SubagentManagerLike {
+function createMockManager(
+  seed: ReadonlyArray<{ id: string; type: string; status: string; description?: string }> = [],
+): SubagentManagerLike {
   const records = new Map(seed.map((r) => [r.id, r]));
   return {
     waitForAll: vi.fn(async () => {}),
@@ -100,9 +102,7 @@ describe("public-api", () => {
 
     it("registerSubagentsApi publishes the manager handle under pi-subagents:manager", () => {
       const api = registerSubagentsApi(events, hooks, manager);
-      expect((globalThis as unknown as Record<symbol, unknown>)[SUBAGENTS_MANAGER_SYMBOL]).toBe(
-        api.manager,
-      );
+      expect((globalThis as unknown as Record<symbol, unknown>)[SUBAGENTS_MANAGER_SYMBOL]).toBe(api.manager);
     });
 
     it("getSubagentsApi returns the published API after registration", () => {
@@ -148,9 +148,7 @@ describe("public-api", () => {
       const api = registerSubagentsApi(events, hooks, manager, { extensionId: "id-check" });
       // The client is created via createSubagentsRpcClient and exposes the
       // expected four-method shape.
-      expect(Object.keys(api.rpc).sort()).toEqual(
-        ["ping", "sessionUsage", "spawn", "stop"].sort(),
-      );
+      expect(Object.keys(api.rpc).sort()).toEqual(["ping", "sessionUsage", "spawn", "stop"].sort());
     });
 
     it("exposes the protocol version on the published API", () => {
@@ -190,15 +188,13 @@ describe("public-api", () => {
   describe("typed event subscription", () => {
     it("handlers receive the discriminated payload for the subscribed event", async () => {
       const api = registerSubagentsApi(events, hooks, manager);
-      const handler = vi.fn(
-        async (payload: TypedHookPayload<"subagent:start">) => {
-          // Type-level contract check — these fields must exist.
-          payload.data.type;
-          payload.data.description;
-          payload.data.parentId;
-          return "allow" as const;
-        },
-      );
+      const handler = vi.fn(async (payload: TypedHookPayload<"subagent:start">) => {
+        // Type-level contract check — these fields must exist.
+        payload.data.type;
+        payload.data.description;
+        payload.data.parentId;
+        return "allow" as const;
+      });
       api.hooks.on("subagent:start", handler);
 
       await hooks.dispatch("subagent:start", "agent-1", {
@@ -214,12 +210,8 @@ describe("public-api", () => {
 
     it("different events get different payload shapes (compile-time guarantee)", async () => {
       const api = registerSubagentsApi(events, hooks, manager);
-      const startHandler = vi.fn(
-        async (_p: TypedHookPayload<"subagent:start">) => "allow" as const,
-      );
-      const endHandler = vi.fn(
-        async (_p: TypedHookPayload<"subagent:end">) => "allow" as const,
-      );
+      const startHandler = vi.fn(async (_p: TypedHookPayload<"subagent:start">) => "allow" as const);
+      const endHandler = vi.fn(async (_p: TypedHookPayload<"subagent:end">) => "allow" as const);
       api.hooks.on("subagent:start", startHandler);
       api.hooks.on("subagent:end", endHandler);
 

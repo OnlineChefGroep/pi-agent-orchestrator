@@ -81,7 +81,7 @@ export function getBoxChars(): BoxChars {
 export function plainTheme(): Theme {
   return {
     fg: (_color, text) => text,
-    bold: text => text,
+    bold: (text) => text,
   };
 }
 

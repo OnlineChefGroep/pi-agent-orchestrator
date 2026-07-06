@@ -25,9 +25,27 @@ describe("HookRegistry", () => {
     it("sorts handlers by priority", () => {
       const registry = new HookRegistry();
       const order: string[] = [];
-      registry.register("subagent:start", async () => { order.push("normal"); }, { priority: "normal" });
-      registry.register("subagent:start", async () => { order.push("critical"); }, { priority: "critical" });
-      registry.register("subagent:start", async () => { order.push("background"); }, { priority: "background" });
+      registry.register(
+        "subagent:start",
+        async () => {
+          order.push("normal");
+        },
+        { priority: "normal" },
+      );
+      registry.register(
+        "subagent:start",
+        async () => {
+          order.push("critical");
+        },
+        { priority: "critical" },
+      );
+      registry.register(
+        "subagent:start",
+        async () => {
+          order.push("background");
+        },
+        { priority: "background" },
+      );
 
       return registry.dispatch("subagent:start", "agent-1").then(() => {
         expect(order).toEqual(["critical", "normal", "background"]);
@@ -37,8 +55,20 @@ describe("HookRegistry", () => {
     it("accepts numeric priority", () => {
       const registry = new HookRegistry();
       const order: string[] = [];
-      registry.register("subagent:start", async () => { order.push("second"); }, { priority: 50 });
-      registry.register("subagent:start", async () => { order.push("first"); }, { priority: 10 });
+      registry.register(
+        "subagent:start",
+        async () => {
+          order.push("second");
+        },
+        { priority: 50 },
+      );
+      registry.register(
+        "subagent:start",
+        async () => {
+          order.push("first");
+        },
+        { priority: 10 },
+      );
 
       return registry.dispatch("subagent:start", "agent-1").then(() => {
         expect(order).toEqual(["first", "second"]);
@@ -164,8 +194,17 @@ describe("HookRegistry", () => {
     it("swallows handler errors and continues", async () => {
       const registry = new HookRegistry();
       let secondCalled = false;
-      registry.register("subagent:start", async () => { throw new Error("boom"); }, { id: "bad" });
-      registry.register("subagent:start", async () => { secondCalled = true; return "allow"; });
+      registry.register(
+        "subagent:start",
+        async () => {
+          throw new Error("boom");
+        },
+        { id: "bad" },
+      );
+      registry.register("subagent:start", async () => {
+        secondCalled = true;
+        return "allow";
+      });
 
       const result = await registry.dispatch("subagent:start", "agent-1");
       expect(result).toBe("allow");
@@ -175,9 +214,16 @@ describe("HookRegistry", () => {
     it("disables handler after circuit breaker threshold", async () => {
       const registry = new HookRegistry();
       let callCount = 0;
-      registry.register("subagent:start", async () => { callCount++; throw new Error("fail"); }, {
-        circuitBreakerThreshold: 2,
-      });
+      registry.register(
+        "subagent:start",
+        async () => {
+          callCount++;
+          throw new Error("fail");
+        },
+        {
+          circuitBreakerThreshold: 2,
+        },
+      );
 
       await registry.dispatch("subagent:start", "agent-1");
       await registry.dispatch("subagent:start", "agent-1");
@@ -202,7 +248,10 @@ describe("HookRegistry", () => {
         middlewareOrder.push("mw2");
         return next();
       });
-      registry.register("subagent:start", async () => { middlewareOrder.push("handler"); return "allow"; });
+      registry.register("subagent:start", async () => {
+        middlewareOrder.push("handler");
+        return "allow";
+      });
 
       await registry.dispatch("subagent:start", "agent-1");
       expect(middlewareOrder).toEqual(["mw1-before", "mw2", "handler", "mw1-after"]);
@@ -254,7 +303,9 @@ describe("HookRegistry", () => {
   describe("resetMetrics", () => {
     it("resets all counters to zero", async () => {
       const registry = new HookRegistry();
-      registry.register("subagent:start", async () => { throw new Error("fail"); });
+      registry.register("subagent:start", async () => {
+        throw new Error("fail");
+      });
       await registry.dispatch("subagent:start", "agent-1");
 
       registry.resetMetrics();
@@ -270,8 +321,14 @@ describe("composeHandlers", () => {
   it("runs all composed handlers in order", async () => {
     const order: string[] = [];
     const composed = composeHandlers(
-      async () => { order.push("first"); return undefined; },
-      async () => { order.push("second"); return "allow"; },
+      async () => {
+        order.push("first");
+        return undefined;
+      },
+      async () => {
+        order.push("second");
+        return "allow";
+      },
     );
 
     await composed({ event: "subagent:start", agentId: "a1" });
@@ -281,8 +338,14 @@ describe("composeHandlers", () => {
   it("short-circuits on block", async () => {
     const order: string[] = [];
     const composed = composeHandlers(
-      async () => { order.push("first"); return "block"; },
-      async () => { order.push("second"); return "allow"; },
+      async () => {
+        order.push("first");
+        return "block";
+      },
+      async () => {
+        order.push("second");
+        return "allow";
+      },
     );
 
     const result = await composed({ event: "subagent:start", agentId: "a1" });

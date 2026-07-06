@@ -50,9 +50,7 @@ vi.mock("../src/hooks.js", () => ({
 vi.mock("../src/custom-agents.js", () => ({
   loadCustomAgents: vi.fn(async () => new Map()),
   resolveBooleanOptional: vi.fn((v: unknown) => (typeof v === "string" ? v === "true" : Boolean(v))),
-  resolveBooleanWithDefault: vi.fn((v: unknown, def: boolean) =>
-    typeof v === "string" ? v === "true" : (v ?? def),
-  ),
+  resolveBooleanWithDefault: vi.fn((v: unknown, def: boolean) => (typeof v === "string" ? v === "true" : (v ?? def))),
   parseFrontmatter: vi.fn(() => ({})),
 }));
 
@@ -66,16 +64,10 @@ vi.mock("../src/output-file.js", () => ({
 // ---- Imports AFTER mocks ----
 
 import { AgentManager } from "../src/agent-manager.js";
-import {
-  setDefaultJoinMode,
-  setOrchestrationMode,
-} from "../src/agent-registry.js";
+import { setDefaultJoinMode, setOrchestrationMode } from "../src/agent-registry.js";
 import { runAgent } from "../src/agent-runner.js";
 import { BatchOrchestrator } from "../src/batch-orchestrator.js";
-import {
-  clearDispatchHistory,
-  computeDispatchHistogram,
-} from "../src/dispatch-history.js";
+import { clearDispatchHistory, computeDispatchHistogram } from "../src/dispatch-history.js";
 import { createAgentTool } from "../src/tools/agent.js";
 import type { ToolContext } from "../src/tools/context.js";
 
@@ -530,11 +522,7 @@ describe("orchestration-dispatch integration — Agent tool end-to-end", () => {
     // and must contain all three agents. This is the real ordering proof.
     expect(swarmJoin.createSwarm).toHaveBeenCalledTimes(1);
     expect(swarmJoin.addAgentToSwarm).toHaveBeenCalledTimes(3);
-    expect(manager.listAgents().map((r) => r.swarmId)).toEqual([
-      "swarm-it-1",
-      "swarm-it-1",
-      "swarm-it-1",
-    ]);
+    expect(manager.listAgents().map((r) => r.swarmId)).toEqual(["swarm-it-1", "swarm-it-1", "swarm-it-1"]);
     // Records are still running because runAgent is parked.
     for (const r of manager.listAgents()) {
       expect(r.status).toBe("running");

@@ -36,10 +36,7 @@ describe("viewAgentConversation", () => {
     const rec = makeRecord({ status: "queued", session: undefined });
     await viewAgentConversation(ctx as any, rec, new Map());
 
-    expect(ctx.ui.notify).toHaveBeenCalledWith(
-      expect.stringContaining("queued"),
-      "info",
-    );
+    expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining("queued"), "info");
   });
 
   it("notifies when agent has no session and is not queued", async () => {
@@ -47,10 +44,7 @@ describe("viewAgentConversation", () => {
     const rec = makeRecord({ status: "completed", session: undefined });
     await viewAgentConversation(ctx as any, rec, new Map());
 
-    expect(ctx.ui.notify).toHaveBeenCalledWith(
-      expect.stringContaining("expired"),
-      "info",
-    );
+    expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining("expired"), "info");
   });
 
   it("opens conversation viewer when session exists", async () => {
@@ -85,8 +79,6 @@ describe("viewAgentConversation", () => {
     const mockSession = { messages: [] };
     const rec = makeRecord({ status: "completed", session: mockSession as any });
 
-    await expect(
-      viewAgentConversation(ctx as any, rec, new Map()),
-    ).resolves.toBeUndefined();
+    await expect(viewAgentConversation(ctx as any, rec, new Map())).resolves.toBeUndefined();
   });
 });

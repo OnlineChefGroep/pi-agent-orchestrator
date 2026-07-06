@@ -105,12 +105,14 @@ describe("buildExecutionTree", () => {
     });
 
     it("includes node properties in JSON output", () => {
-      const records = [makeRecord({
-        id: "a1",
-        type: "Plan",
-        status: "running",
-        description: "Planning",
-      })];
+      const records = [
+        makeRecord({
+          id: "a1",
+          type: "Plan",
+          status: "running",
+          description: "Planning",
+        }),
+      ];
       const result = buildExecutionTree(records, "json");
       const parsed = JSON.parse(result);
       expect(parsed[0].id).toBe("a1");

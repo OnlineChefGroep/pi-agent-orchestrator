@@ -36,8 +36,6 @@
 /** Match one ANSI escape sequence. SGR only (CSI ... m). Conservative — covers what the UI emits. */
 const _ANSI_RE = /\u001b\[[0-9;]*[A-Za-z]/g;
 
-
-
 // ────────────────────────────────────────────────────────────────────────────
 // TUI — minimal interface for the host's TUI runtime object.
 // ────────────────────────────────────────────────────────────────────────────
@@ -335,8 +333,7 @@ export function matchesKey(data: string, keyId: string): boolean {
 
   // Escape key: normalise "escape" ↔ "esc" ↔ raw \u001b byte.
   // The host may send any of these; we accept all three.
-  if ((keyId === "escape" || keyId === "esc") &&
-      (data === "escape" || data === "esc" || data === "\u001b")) {
+  if ((keyId === "escape" || keyId === "esc") && (data === "escape" || data === "esc" || data === "\u001b")) {
     return true;
   }
 

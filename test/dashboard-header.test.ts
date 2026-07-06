@@ -4,27 +4,42 @@ import type { AgentRecord } from "../src/types.js";
 
 // Mock external dependencies
 vi.mock("../src/ui/tui-shim.js", () => ({
-    visibleWidth: vi.fn((s: string) => {
+  visibleWidth: vi.fn((s: string) => {
     // Strip ANSI codes for width calculation
     return s.replace(/\u001b\[\d+(;\d+)*m/g, "").length;
   }),
-    truncateToWidth: (text) => text,
-    wrapTextWithAnsi: (text) => text.split(/\n/),
-    matchesKey: (data, keyId) => data === keyId,
-    Text: class { constructor(c) { this.content = c; } render() { return [this.content]; } },
-      getAnsiSequenceLength: (_str: string, _i: number) => 0 }));
+  truncateToWidth: (text) => text,
+  wrapTextWithAnsi: (text) => text.split(/\n/),
+  matchesKey: (data, keyId) => data === keyId,
+  Text: class {
+    constructor(c) {
+      this.content = c;
+    }
+    render() {
+      return [this.content];
+    }
+  },
+  getAnsiSequenceLength: (_str: string, _i: number) => 0,
+}));
 
 vi.mock("../src/agent-registry.js", () => ({
   getUiStyle: vi.fn(() => "premium"),
 }));
 
 vi.mock("../src/ui/theme.js", () => ({
-  borderLine: vi.fn((w: number, _th: unknown, box: { h: string; ml: string; mr: string; bl: string; br: string; tl: string; tr: string; l: string; r: string }, edge: string) => {
-    if (edge === "top") return `┌${box.h.repeat(Math.max(0, w - 2))}┐`;
-    if (edge === "mid") return `├${box.h.repeat(Math.max(0, w - 2))}┤`;
-    if (edge === "bot") return `└${box.h.repeat(Math.max(0, w - 2))}┘`;
-    return "";
-  }),
+  borderLine: vi.fn(
+    (
+      w: number,
+      _th: unknown,
+      box: { h: string; ml: string; mr: string; bl: string; br: string; tl: string; tr: string; l: string; r: string },
+      edge: string,
+    ) => {
+      if (edge === "top") return `┌${box.h.repeat(Math.max(0, w - 2))}┐`;
+      if (edge === "mid") return `├${box.h.repeat(Math.max(0, w - 2))}┤`;
+      if (edge === "bot") return `└${box.h.repeat(Math.max(0, w - 2))}┘`;
+      return "";
+    },
+  ),
   framedRow: vi.fn((content: string, innerW: number, _th: unknown, box: { l: string; r: string }) => {
     return `${box.l} ${content.padEnd(innerW)} ${box.r}`;
   }),
@@ -178,7 +193,13 @@ describe("renderDashboardHeader", () => {
       getSessionMaxSpawns: () => 10,
       getSessionMaxTurns: () => 25,
     };
-    const result = renderDashboardHeader(80, th, box, state, mockManager as Parameters<typeof renderDashboardHeader>[4]);
+    const result = renderDashboardHeader(
+      80,
+      th,
+      box,
+      state,
+      mockManager as Parameters<typeof renderDashboardHeader>[4],
+    );
     expect(result.some((l) => l.includes("5/10")) || result.some((l) => l.includes("agents"))).toBe(true);
     expect(result.some((l) => l.includes("12/25")) || result.some((l) => l.includes("turns"))).toBe(true);
   });

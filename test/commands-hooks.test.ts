@@ -20,10 +20,13 @@ describe("registerHooksCommand", () => {
 
     registerHooksCommand(pi as any, registry as any);
 
-    expect(pi.registerCommand).toHaveBeenCalledWith("hooks", expect.objectContaining({
-      description: "Manage hooks",
-      handler: expect.any(Function),
-    }));
+    expect(pi.registerCommand).toHaveBeenCalledWith(
+      "hooks",
+      expect.objectContaining({
+        description: "Manage hooks",
+        handler: expect.any(Function),
+      }),
+    );
   });
 
   it("sends 'No hooks registered' when empty", async () => {
@@ -40,9 +43,11 @@ describe("registerHooksCommand", () => {
     const handler = pi.registerCommand.mock.calls[0][1].handler;
     await handler([], {});
 
-    expect(pi.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
-      content: "No hooks registered.",
-    }));
+    expect(pi.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "No hooks registered.",
+      }),
+    );
   });
 
   it("lists registered hooks sorted alphabetically", async () => {
