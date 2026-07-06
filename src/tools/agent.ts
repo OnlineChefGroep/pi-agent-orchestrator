@@ -601,6 +601,7 @@ function buildResolvedConfig(
     isolation,
     agentInvocation,
     customConfig,
+    modelInput: resolvedConfig.modelInput,
   };
 }
 
@@ -684,6 +685,8 @@ interface ExecuteResolvedConfig {
   isolation: IsolationMode | undefined;
   agentInvocation: AgentInvocation;
   customConfig: ReturnType<typeof getAgentConfig>;
+  /** Original model string before resolution (used by schedule path to defer model lookup to fire time). */
+  modelInput: string | undefined;
 }
 
 /**
@@ -746,7 +749,7 @@ async function handleSchedule(
       schedule: params.schedule as string,
       subagent_type: config.subagentType,
       prompt: params.prompt as string,
-      model: params.model as string | undefined,
+      model: config.modelInput,
       thinking: config.thinking,
       max_turns: config.effectiveMaxTurns,
       isolated: config.isolated,

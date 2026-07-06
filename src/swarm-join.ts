@@ -704,8 +704,8 @@ export class SwarmCoordinator {
 
   private computeQuorumRequired(swarm: SwarmInternal): number {
     const total = swarm.agents.size;
-    const min = swarm.config.quorumMin || 1;
-    const pct = swarm.config.quorumPercent || DEFAULT_QUORUM_PERCENT;
+    const min = swarm.config.quorumMin ?? 1;
+    const pct = swarm.config.quorumPercent ?? DEFAULT_QUORUM_PERCENT;
     return Math.max(min, Math.ceil(total * pct));
   }
 
