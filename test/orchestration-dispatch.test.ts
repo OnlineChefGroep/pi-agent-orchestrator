@@ -123,12 +123,15 @@ describe("heuristicPickMode", () => {
     expect(heuristicPickMode(a)).toBe("crew");
   });
 
-  it("returns 'crew' when multiple files are mentioned", () => {
+  it("returns 'crew' when multiple files are mentioned with implementation keyword", () => {
     // Path-pattern requires `./` or absolute prefix to avoid matching noise
     // like coordinate pairs ("x/y"). Use `./` and `/` prefixes here so
     // analyzePrompt's PATH_PATTERN picks them up.
-    const a = analyzePrompt("Update ./src/a.ts and ./src/b.ts to use the new API");
+    // Note: hasMultipleFiles alone does NOT trigger crew — it requires an
+    // implementation signal (implement, build, create, write, add, develop).
+    const a = analyzePrompt("Implement feature in ./src/a.ts and ./src/b.ts");
     expect(a.hasMultipleFiles).toBe(true);
+    expect(a.hasImplementKeyword).toBe(true);
     expect(heuristicPickMode(a)).toBe("crew");
   });
 

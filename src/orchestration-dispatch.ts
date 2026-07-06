@@ -107,7 +107,7 @@ const IMPLEMENT_KEYWORDS = [
   /\bcreate\b/i,
   /\bwrite\b/i,
   /\badd\b/i,
-  /\bupdate\b/i,
+
   /\bdevelo(?:p|ing)\b/i,
 ];
 
@@ -178,38 +178,29 @@ export function analyzePrompt(prompt: string): PromptAnalysis {
  * resolve to single.
  */
 export function heuristicPickMode(a: PromptAnalysis): OrchestrationKind {
-  // Always crew: planning or review tasks
+  // 1. Always crew: planning or review tasks
   if (a.hasPlanKeyword || a.hasReviewKeyword) {
     return "crew";
   }
-  // Crew: refactor + (test or multiple files)
+  // 2. Crew: refactor + (test or multiple files)
   if (a.hasRefactorKeyword && (a.hasTestKeyword || a.hasMultipleFiles)) {
     return "crew";
   }
-  // Crew: implementation across multiple files
+  // 3. Crew: implementation across multiple files
   if (a.hasImplementKeyword && a.hasMultipleFiles) {
     return "crew";
   }
-  // Swarm: parallel/compare keywords
-  if (a.hasParallelKeyword) {
-    return "swarm";
-  }
-  // Crew: long + multi-step implementation (conservative threshold)
+  // 4. Crew: long + multi-step implementation (conservative threshold)
+  //    (~800 chars ≈ 130–180 words of detail) to avoid triggering on
+  //    intentionally short directives like "implement X".
   if (a.hasImplementKeyword && a.length > 800 && a.estimatedSteps >= 3) {
     return "crew";
   }
-  if (a.hasRefactorKeyword && (a.hasTestKeyword || a.hasMultipleFiles)) {
-    return "crew";
-  }
+  // 5. Swarm: parallel/compare keywords (after crew checks to avoid misrouting)
   if (a.hasParallelKeyword) {
     return "swarm";
   }
-  // Implement + long + multi-step → crew. Threshold kept conservative
-  // (~800 chars ≈ 130–180 words of detail) to avoid triggering on
-  // intentionally short directives like "implement X".
-  if (a.hasImplementKeyword && a.length > 800 && a.estimatedSteps >= 3) {
-    return "crew";
-  }
+  // 6. Otherwise: single agent
   return "single";
 }
 
