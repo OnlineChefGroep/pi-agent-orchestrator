@@ -450,13 +450,16 @@ export class ConversationViewer implements Component {
 
   /** Render a tool-result message as a boxed snippet, or plain if the viewport is too narrow. */
   private renderToolResultMessage(
-    msg: any,
+    msg: unknown,
     width: number,
     activeUiStyle: string,
     th: ReturnType<typeof activeTheme>,
     lines: string[],
   ): void {
-    const text = extractText(msg.content);
+    const content =
+      typeof msg === "object" && msg !== null && "content" in msg ? (msg as { content?: unknown }).content : undefined;
+    const text =
+      typeof content === "string" ? content : extractText(Array.isArray(content) ? content : []);
     const truncated = text.length > 800 ? `${text.slice(0, 800)}\n... (truncated)` : text;
     const trimmedTruncated = truncated.trim();
     if (!trimmedTruncated) return;

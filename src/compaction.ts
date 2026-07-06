@@ -28,31 +28,47 @@ export interface CompactableMessage {
   toolName?: string;
 }
 
+/** Narrow unknown values to plain object records. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 /** Estimate the character length contributed by a single content block. */
 function blockLength(block: unknown): number {
-  const b = block as any;
-  if (b?.type === "text" && typeof b.text === "string") {
-    return b.text.length;
+  if (!isRecord(block)) return 50;
+
+  const type = block["type"];
+  if (type === "text") {
+    const text = block["text"];
+    return typeof text === "string" ? text.length : 50;
   }
-  if (b?.type === "tool_result") {
-    return toolResultLength(b);
+  if (type === "tool_result") {
+    return toolResultLength(block);
   }
-  if (b?.type === "tool_use" && b.input != null) {
-    return JSON.stringify(b.input).length;
+  if (type === "tool_use") {
+    const input = block["input"];
+    return input != null ? JSON.stringify(input).length : 50;
   }
   return 50; // fast heuristic for other unknown blocks
 }
 
 /** Estimate the character length of a tool_result block. */
-function toolResultLength(b: any): number {
-  if (typeof b.content === "string") {
-    return b.content.length;
+function toolResultLength(block: unknown): number {
+  if (!isRecord(block)) return 50;
+
+  const content = block["content"];
+  if (typeof content === "string") {
+    return content.length;
   }
-  if (Array.isArray(b.content)) {
+  if (Array.isArray(content)) {
     let len = 0;
-    for (const nested of b.content) {
-      const n = nested as any;
-      len += n?.type === "text" && typeof n.text === "string" ? n.text.length : 50;
+    for (const nested of content) {
+      if (isRecord(nested) && nested["type"] === "text") {
+        const text = nested["text"];
+        len += typeof text === "string" ? text.length : 50;
+      } else {
+        len += 50;
+      }
     }
     return len;
   }

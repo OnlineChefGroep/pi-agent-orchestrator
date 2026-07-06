@@ -48,7 +48,7 @@ type AgentResultLike = Pick<AgentToolResult<unknown>, "content"> & { details?: u
 
 type CommonSpawnOptions = {
   description: string;
-  model: Model<any> | undefined;
+  model: Model<unknown> | undefined;
   maxTurns: number | undefined;
   isolated: boolean;
   inheritContext: boolean;
@@ -247,7 +247,7 @@ export function renderAgentResult(
  */
 export function buildSpawnOptions(input: CommonSpawnOptions): {
   description: string;
-  model?: Model<any>;
+  model?: Model<unknown>;
   maxTurns?: number;
   isolated: boolean;
   inheritContext: boolean;
@@ -300,7 +300,7 @@ interface OrchestratedDispatchArgs {
   fellBack: boolean;
   runInBackground: boolean;
   effectiveMaxTurns: number | undefined;
-  model: Model<any> | undefined;
+  model: Model<unknown> | undefined;
   isolated: boolean;
   inheritContext: boolean;
   thinking: ThinkingLevel | undefined;
@@ -551,7 +551,7 @@ function buildResolvedConfig(
   displayName: string,
   rawType: string,
   fellBack: boolean,
-  model: Model<any> | undefined,
+  model: Model<unknown> | undefined,
 ): ExecuteResolvedConfig {
   const thinking = resolvedConfig.thinking;
   const inheritContext = resolvedConfig.inheritContext;
@@ -677,7 +677,7 @@ interface ExecuteResolvedConfig {
   fellBack: boolean;
   runInBackground: boolean;
   effectiveMaxTurns: number | undefined;
-  model: Model<any> | undefined;
+  model: Model<unknown> | undefined;
   isolated: boolean;
   inheritContext: boolean;
   thinking: ThinkingLevel | undefined;
