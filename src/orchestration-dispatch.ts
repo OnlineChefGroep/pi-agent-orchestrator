@@ -11,10 +11,15 @@
  * Heuristic signals (cheap, keyword-based — not LLM-driven, no extra latency):
  * - planner keyword (e.g. "plan", "design")            → crew
  * - parallel keyword (e.g. "compare", "benchmark")     → swarm
- * - multiple file paths mentioned                      → crew
  * - review keyword (e.g. "review", "audit")            → crew
- * - long prompt (> 1200 chars) with implementation key → crew
+ * - refactor + (test or multiple-files)                → crew
+ * - implement + multiple-files                         → crew
+ * - long prompt (> 800 chars) with implementation key  → crew
  * - otherwise                                          → single
+ *
+ * Note: multiple file paths alone do NOT trigger crew — they require an
+ * accompanying implementation signal. Read-only prompts that mention
+ * multiple files (e.g. "explore ./src/a.ts and ./src/b.ts") resolve to single.
  *
  * The dispatcher is pure (no I/O, no side effects) so it's cheap to unit-test
  * and safe to call inline from the Agent tool's execute path.
@@ -102,6 +107,7 @@ const IMPLEMENT_KEYWORDS = [
   /\bcreate\b/i,
   /\bwrite\b/i,
   /\badd\b/i,
+  /\bupdate\b/i,
   /\bdevelo(?:p|ing)\b/i,
 ];
 
@@ -159,13 +165,37 @@ export function analyzePrompt(prompt: string): PromptAnalysis {
  * Pick a concrete dispatch kind from a prompt analysis.
  *
  * Order of precedence (most specific signal wins):
- * 1. planner / review / multiple-files / refactor+test → crew
- * 2. parallel keyword (and not a planner)            → swarm
- * 3. long + multi-step implementation                → crew
- * 4. otherwise                                       → single
+ * 1. planner / review → crew (always)
+ * 2. refactor + (test or multiple-files) → crew
+ * 3. implement + multiple-files → crew (implementation across files)
+ * 4. long + multi-step implementation → crew
+ * 5. parallel keyword → swarm
+ * 6. otherwise → single
+ *
+ * Note: `hasMultipleFiles` alone does NOT trigger crew — it requires an
+ * accompanying implementation signal. Read-only prompts that mention
+ * multiple files (e.g. "explore ./src/a.ts and ./src/b.ts") correctly
+ * resolve to single.
  */
 export function heuristicPickMode(a: PromptAnalysis): OrchestrationKind {
-  if (a.hasPlanKeyword || a.hasReviewKeyword || a.hasMultipleFiles) {
+  // Always crew: planning or review tasks
+  if (a.hasPlanKeyword || a.hasReviewKeyword) {
+    return "crew";
+  }
+  // Crew: refactor + (test or multiple files)
+  if (a.hasRefactorKeyword && (a.hasTestKeyword || a.hasMultipleFiles)) {
+    return "crew";
+  }
+  // Crew: implementation across multiple files
+  if (a.hasImplementKeyword && a.hasMultipleFiles) {
+    return "crew";
+  }
+  // Swarm: parallel/compare keywords
+  if (a.hasParallelKeyword) {
+    return "swarm";
+  }
+  // Crew: long + multi-step implementation (conservative threshold)
+  if (a.hasImplementKeyword && a.length > 800 && a.estimatedSteps >= 3) {
     return "crew";
   }
   if (a.hasRefactorKeyword && (a.hasTestKeyword || a.hasMultipleFiles)) {
