@@ -28,9 +28,17 @@ export interface CompactableMessage {
   toolName?: string;
 }
 
+/** Structural type for content blocks that compaction inspects. */
+interface ContentBlock {
+  type?: string;
+  text?: string;
+  input?: unknown;
+  content?: string | ContentBlock[];
+}
+
 /** Estimate the character length contributed by a single content block. */
 function blockLength(block: unknown): number {
-  const b = block as any;
+  const b = block as ContentBlock;
   if (b?.type === "text" && typeof b.text === "string") {
     return b.text.length;
   }
@@ -44,15 +52,14 @@ function blockLength(block: unknown): number {
 }
 
 /** Estimate the character length of a tool_result block. */
-function toolResultLength(b: any): number {
+function toolResultLength(b: ContentBlock): number {
   if (typeof b.content === "string") {
     return b.content.length;
   }
   if (Array.isArray(b.content)) {
     let len = 0;
     for (const nested of b.content) {
-      const n = nested as any;
-      len += n?.type === "text" && typeof n.text === "string" ? n.text.length : 50;
+      len += nested?.type === "text" && typeof nested.text === "string" ? nested.text.length : 50;
     }
     return len;
   }

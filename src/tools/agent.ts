@@ -1,4 +1,4 @@
-import type { Model, TextContent } from "@earendil-works/pi-ai";
+import type { Api, Model, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type AgentToolResult, defineTool, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
@@ -520,7 +520,7 @@ function resolveExecuteConfig(
     if (typeof resolvedModel === "string") {
       if (resolvedConfig.modelFromParams) earlyReturn = textResult(resolvedModel);
     } else {
-      model = resolvedModel as any;
+      model = resolvedModel as Model<Api>;
     }
   }
 
@@ -930,7 +930,7 @@ async function handleForegroundSpawn(
     };
     onUpdate?.({
       content: [{ type: "text", text: `${fgState.toolUses} tool uses...` }],
-      details: details as any,
+      details: details as unknown,
     });
   };
 
@@ -1202,7 +1202,9 @@ Guidelines:
         ctx,
         piCtx,
         signal,
-        onUpdate as any,
+        onUpdate as
+          | ((update: { content: Array<{ type: string; text: string }>; details: unknown }) => void)
+          | undefined,
       );
     },
   });

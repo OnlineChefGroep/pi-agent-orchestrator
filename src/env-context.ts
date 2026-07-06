@@ -27,9 +27,9 @@ import type { EnvInfo, WorkspaceContext } from "./types.js";
  * the EnvInfo contract used by `buildAgentPrompt`.
  */
 export function buildEnvFromContext(pi: ExtensionAPI): EnvInfo | undefined {
-  // biome-ignore lint/suspicious/noTsIgnore: intentional bypass
-  // @ts-ignore: Intentionally bypassing type-checking on pi.workspaceContext to avoid CI failure
-  const wc: WorkspaceContext = (pi as any).workspaceContext;
+  // Access workspaceContext via structural typing — the field is not yet
+  // in the upstream type definitions but is present on RFC-compliant hosts.
+  const wc = (pi as { workspaceContext?: WorkspaceContext }).workspaceContext;
   if (!wc) return undefined;
   return {
     isGitRepo: wc.git.isRepo,

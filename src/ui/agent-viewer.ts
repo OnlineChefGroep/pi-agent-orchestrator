@@ -1,6 +1,7 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { AgentRecord } from "../types.js";
 import type { AgentActivity } from "./agent-ui-types.js";
+import type { TUI } from "./tui-shim.js";
 
 export async function viewAgentConversation(
   ctx: ExtensionCommandContext,
@@ -18,7 +19,7 @@ export async function viewAgentConversation(
 
   await ctx.ui.custom<undefined>(
     (tui, theme, _keybindings, done) => {
-      return new ConversationViewer(tui as any, session, record, activity, theme, done);
+      return new ConversationViewer(tui as TUI, session, record, activity, theme, done);
     },
     {
       overlay: true,

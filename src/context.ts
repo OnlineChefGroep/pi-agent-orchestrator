@@ -18,10 +18,15 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
  * @param content - Array of message content blocks (typically from assistant messages)
  * @returns Concatenated text of all text blocks, joined by newlines
  */
+interface TextContentBlock {
+  type: string;
+  text?: string;
+}
+
 export function extractText(content: unknown[]): string {
   if (!content || content.length === 0) return "";
   const parts: string[] = [];
-  for (const c of content as any[]) {
+  for (const c of content as TextContentBlock[]) {
     if (c && c.type === "text") {
       parts.push(c.text ?? "");
     }

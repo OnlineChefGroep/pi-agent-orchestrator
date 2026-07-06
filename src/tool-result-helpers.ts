@@ -9,8 +9,8 @@ import type { AgentActivity, AgentDetails } from "./ui/agent-ui-types.js";
 import { addUsage, getLifetimeTotal, getSessionContextPercent, type LifetimeUsage } from "./usage.js";
 
 /** Tool execute return value for a text response. */
-export function textResult(msg: string, details?: AgentDetails) {
-  return { content: [{ type: "text" as const, text: msg }], details: details as any };
+export function textResult(msg: string, details?: unknown) {
+  return { content: [{ type: "text" as const, text: msg }], details };
 }
 
 /** Format an agent's lifetime token total, or "" when zero. */

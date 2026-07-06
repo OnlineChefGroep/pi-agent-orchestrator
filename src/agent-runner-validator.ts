@@ -123,7 +123,10 @@ export async function runAdversarialValidation(
     return { responseText, validationResults: undefined, validated: undefined };
   }
 
-  const validators = agentConfig!.validators!;
+  const validators = agentConfig?.validators;
+  if (!validators || validators.length === 0) {
+    return { responseText, validationResults: undefined, validated: undefined };
+  }
   const agentDescription = getAgentDescription(agentConfig);
   let currentText = responseText;
   let validationResults: ValidationResult[] | undefined;
