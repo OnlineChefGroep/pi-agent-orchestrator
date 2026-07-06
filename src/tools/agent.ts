@@ -508,7 +508,11 @@ function resolveExecuteConfig(
   const customConfig = getAgentConfig(subagentType);
   const resolvedConfig = resolveAgentInvocationConfig(customConfig, params);
 
-  // Resolve model from agent config first; tool-call params only fill gaps.
+  // Resolve model: tool-call params take priority over agent config defaults.
+  // resolveAgentInvocationConfig already handles the priority chain. If the
+  // resolved model can't be found, only surface the error to the user when
+  // they explicitly requested that model (modelFromParams). Config model
+  // resolution failures silently fall back to the parent model.
   let model = piCtx.model;
   let earlyReturn: AgentToolResult<unknown> | undefined;
   if (resolvedConfig.modelInput) {
