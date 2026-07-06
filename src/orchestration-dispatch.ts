@@ -190,25 +190,13 @@ export function heuristicPickMode(a: PromptAnalysis): OrchestrationKind {
   if (a.hasImplementKeyword && a.hasMultipleFiles) {
     return "crew";
   }
-  // Swarm: parallel/compare keywords
-  if (a.hasParallelKeyword) {
-    return "swarm";
-  }
   // Crew: long + multi-step implementation (conservative threshold)
   if (a.hasImplementKeyword && a.length > 800 && a.estimatedSteps >= 3) {
     return "crew";
   }
-  if (a.hasRefactorKeyword && (a.hasTestKeyword || a.hasMultipleFiles)) {
-    return "crew";
-  }
+  // Swarm: parallel/compare keywords
   if (a.hasParallelKeyword) {
     return "swarm";
-  }
-  // Implement + long + multi-step → crew. Threshold kept conservative
-  // (~800 chars ≈ 130–180 words of detail) to avoid triggering on
-  // intentionally short directives like "implement X".
-  if (a.hasImplementKeyword && a.length > 800 && a.estimatedSteps >= 3) {
-    return "crew";
   }
   return "single";
 }
