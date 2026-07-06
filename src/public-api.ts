@@ -344,6 +344,15 @@ function buildManagerHandle(manager: SubagentManagerLike): SubagentManagerHandle
  * matching the pattern documented for `registerRpcHandlers` in
  * `src/cross-extension-rpc.ts`.
  */
+/**
+ * Typed accessor for Symbol-keyed globalThis properties.
+ * Centralizes the unavoidable cast — Symbol keys are not in the
+ * globalThis type surface by design.
+ */
+function getGlobalSymbolStore(): Record<symbol, unknown> {
+  return globalThis as unknown as Record<symbol, unknown>;
+}
+
 export function registerSubagentsApi(
   events: EventBus,
   hooks: HookRegistry,
@@ -357,7 +366,7 @@ export function registerSubagentsApi(
     hooks: buildTypedSubscription(hooks),
     manager: managerHandle,
   };
-  const store = globalThis as unknown as Record<symbol, unknown>;
+  const store = getGlobalSymbolStore();
   store[SUBAGENTS_API_SYMBOL] = api;
   store[SUBAGENTS_HOOKS_SYMBOL] = hooks;
   store[SUBAGENTS_MANAGER_SYMBOL] = managerHandle;
@@ -366,7 +375,7 @@ export function registerSubagentsApi(
 
 /** Forget the published API, hook registry, and manager handle. Test-only / opt-in cleanup. */
 export function clearSubagentsApi(): void {
-  const store = globalThis as unknown as Record<symbol, unknown>;
+  const store = getGlobalSymbolStore();
   // Assign `undefined` instead of `delete` — Symbol-keyed globalThis
   // properties are not always configurable, and the getters already
   // treat `=== undefined` as "not registered".
@@ -380,19 +389,17 @@ export function clearSubagentsApi(): void {
  * Returns `undefined` if the extension is not loaded.
  */
 export function getSubagentsApi(): SubagentsPublicApi | undefined {
-  return (globalThis as unknown as Record<symbol, unknown>)[SUBAGENTS_API_SYMBOL] as SubagentsPublicApi | undefined;
+  return getGlobalSymbolStore()[SUBAGENTS_API_SYMBOL] as SubagentsPublicApi | undefined;
 }
 
 /** Discover the orchestrator's raw `HookRegistry`. Returns `undefined` if not loaded. */
 export function getSubagentsHooks(): HookRegistry | undefined {
-  return (globalThis as unknown as Record<symbol, unknown>)[SUBAGENTS_HOOKS_SYMBOL] as HookRegistry | undefined;
+  return getGlobalSymbolStore()[SUBAGENTS_HOOKS_SYMBOL] as HookRegistry | undefined;
 }
 
 /** Discover the orchestrator's read-only `SubagentManagerHandle`. Returns `undefined` if not loaded. */
 export function getSubagentsManager(): SubagentManagerHandle | undefined {
-  return (globalThis as unknown as Record<symbol, unknown>)[SUBAGENTS_MANAGER_SYMBOL] as
-    | SubagentManagerHandle
-    | undefined;
+  return getGlobalSymbolStore()[SUBAGENTS_MANAGER_SYMBOL] as SubagentManagerHandle | undefined;
 }
 
 // ---------------------------------------------------------------------------
