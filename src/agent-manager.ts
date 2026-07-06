@@ -403,9 +403,10 @@ export class AgentManager {
     // Wire parent abort signal to stop the subagent when the parent is interrupted
     let detachParentSignal: (() => void) | undefined;
     if (options.signal) {
+      const parentSignal = options.signal;
       const onParentAbort = () => this.abort(id);
-      options.signal.addEventListener("abort", onParentAbort, { once: true });
-      detachParentSignal = () => options.signal!.removeEventListener("abort", onParentAbort);
+      parentSignal.addEventListener("abort", onParentAbort, { once: true });
+      detachParentSignal = () => parentSignal.removeEventListener("abort", onParentAbort);
     }
     const detach = () => {
       detachParentSignal?.();
@@ -428,7 +429,7 @@ export class AgentManager {
           partitions: childPartitions ? [...childPartitions] : undefined,
           correlationId: record.correlationId,
           cwd: worktreeCwd,
-          signal: record.abortController!.signal,
+          signal: record.abortController?.signal,
           hooks: this.hooks,
           spawnedAt: record.spawnedAt,
           onContextBuilt: (timestamp) => {

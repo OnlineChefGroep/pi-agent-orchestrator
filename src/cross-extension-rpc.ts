@@ -471,40 +471,46 @@ export function registerRpcHandlers(deps: RpcDeps): RpcHandle {
   );
 
   const unsubSessionUsage = sessionManager
-    ? handleRpc(
-        events,
-        "subagents:rpc:sessionUsage",
-        auditedRpc<{ requestId: string }>(deps, "sessionUsage", ({ requestId }) => {
-          const auth = resolveAuth(deps, requestId, { requestId });
-          return {
-            auth,
-            result: {
-              usage: sessionManager!.getSessionUsage(),
-              limits: {
-                maxAgents: sessionManager!.getSessionMaxSpawns(),
-                maxTurns: sessionManager!.getSessionMaxTurns(),
+    ? (() => {
+        const sm = sessionManager;
+        return handleRpc(
+          events,
+          "subagents:rpc:sessionUsage",
+          auditedRpc<{ requestId: string }>(deps, "sessionUsage", ({ requestId }) => {
+            const auth = resolveAuth(deps, requestId, { requestId });
+            return {
+              auth,
+              result: {
+                usage: sm.getSessionUsage(),
+                limits: {
+                  maxAgents: sm.getSessionMaxSpawns(),
+                  maxTurns: sm.getSessionMaxTurns(),
+                },
               },
-            },
-          };
-        }),
-      )
+            };
+          }),
+        );
+      })()
     : () => {};
 
   const unsubSwarmHealth = swarmCoordinator
-    ? handleRpc(
-        events,
-        "subagents:rpc:swarmHealth",
-        auditedRpc<{ requestId: string }>(deps, "swarmHealth", ({ requestId }) => {
-          const auth = resolveAuth(deps, requestId, { requestId });
-          return {
-            auth,
-            result: {
-              swarms: swarmCoordinator!.listSwarms(),
-              metrics: swarmCoordinator!.getSwarmMetrics(),
-            },
-          };
-        }),
-      )
+    ? (() => {
+        const sc = swarmCoordinator;
+        return handleRpc(
+          events,
+          "subagents:rpc:swarmHealth",
+          auditedRpc<{ requestId: string }>(deps, "swarmHealth", ({ requestId }) => {
+            const auth = resolveAuth(deps, requestId, { requestId });
+            return {
+              auth,
+              result: {
+                swarms: sc.listSwarms(),
+                metrics: sc.getSwarmMetrics(),
+              },
+            };
+          }),
+        );
+      })()
     : () => {};
 
   return { unsubPing, unsubSpawn, unsubStop, unsubSessionUsage, unsubSwarmHealth };

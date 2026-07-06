@@ -363,13 +363,14 @@ export class AgentWidget {
 
   /** Tear down widget + status bar + timer when there is nothing left to display. */
   private teardownIdleWidget(): void {
+    if (!this.uiCtx) return;
     if (this.widgetRegistered) {
-      this.uiCtx!.setWidget("agents", undefined);
+      this.uiCtx.setWidget("agents", undefined);
       this.widgetRegistered = false;
       this.tui = undefined;
     }
     if (this.lastStatusText !== undefined) {
-      this.uiCtx!.setStatus("subagents", undefined);
+      this.uiCtx.setStatus("subagents", undefined);
       this.lastStatusText = undefined;
     }
     if (this.widgetInterval) {
@@ -381,7 +382,8 @@ export class AgentWidget {
 
   /** Register the widget callback with the UI context (first-time registration). */
   private registerWidget(): void {
-    this.uiCtx!.setWidget(
+    if (!this.uiCtx) return;
+    this.uiCtx.setWidget(
       "agents",
       (tui, theme) => {
         this.tui = tui;
