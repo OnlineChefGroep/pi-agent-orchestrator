@@ -85,12 +85,12 @@ function write(level: LogLevel, message: string, fields?: Record<string, unknown
   const safeFields = scrubFields(fields);
 
   // Feed every log line as a breadcrumb into Sentry (no-op when disabled).
-  // Use the original message so Sentry can see the full context for debugging.
+  // Breadcrumbs must respect the same redaction rules as console logs.
   captureBreadcrumb({
-    message,
+    message: safeMessage,
     level: level as BreadcrumbLevel,
     category: "logger",
-    data: fields,
+    data: safeFields,
   });
 
   const entry = {
