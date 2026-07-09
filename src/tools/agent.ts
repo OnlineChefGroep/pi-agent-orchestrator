@@ -554,7 +554,9 @@ Guidelines:
 
       const resolvedConfig = resolveAgentInvocationConfig(customConfig, params);
 
-      // Resolve model from agent config first; tool-call params only fill gaps.
+      // Resolve model: tool-call params override agent config defaults.
+      // resolveModel returns a string error message on failure — surface that
+      // only when the user explicitly chose the model (modelFromParams).
       let model = piCtx.model;
       if (resolvedConfig.modelInput) {
         const resolvedModel = resolveModel(resolvedConfig.modelInput, piCtx.modelRegistry);

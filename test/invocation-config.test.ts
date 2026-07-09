@@ -19,7 +19,7 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
 }
 
 describe("resolveAgentInvocationConfig", () => {
-  it("prefers agent config over tool-call params for locked fields", () => {
+  it("prefers tool-call params for model but keeps config precedence for locked fields", () => {
     const resolved = resolveAgentInvocationConfig(
       makeConfig({
         model: "provider/config-model",
@@ -41,14 +41,72 @@ describe("resolveAgentInvocationConfig", () => {
       },
     );
 
-    expect(resolved.modelInput).toBe("provider/config-model");
-    expect(resolved.modelFromParams).toBe(false);
+    expect(resolved.modelInput).toBe("provider/param-model");
+    expect(resolved.modelFromParams).toBe(true);
     expect(resolved.thinking).toBe("high");
     expect(resolved.maxTurns).toBe(42);
     expect(resolved.inheritContext).toBe(false);
     expect(resolved.runInBackground).toBe(false);
     expect(resolved.isolated).toBe(false);
     expect(resolved.isolation).toBe("worktree");
+  });
+
+  it("uses config model when params.model is not provided", () => {
+    const resolved = resolveAgentInvocationConfig(
+      makeConfig({
+        model: "provider/config-model",
+      }),
+      {
+        // model omitted
+      },
+    );
+
+    expect(resolved.modelInput).toBe("provider/config-model");
+    expect(resolved.modelFromParams).toBe(false);
+  });
+
+  it("uses config model when params.model is null", () => {
+    const resolved = resolveAgentInvocationConfig(
+      makeConfig({
+        model: "provider/config-model",
+      }),
+      {
+        model: null as unknown as string,
+      },
+    );
+
+    expect(resolved.modelInput).toBe("provider/config-model");
+    expect(resolved.modelFromParams).toBe(false);
+  });
+
+  it("falls back to config model when params.model is empty or whitespace", () => {
+    for (const blank of ["", "   ", "\t"]) {
+      const resolved = resolveAgentInvocationConfig(
+        makeConfig({
+          model: "provider/config-model",
+        }),
+        {
+          model: blank,
+        },
+      );
+
+      expect(resolved.modelInput).toBe("provider/config-model");
+      expect(resolved.modelFromParams).toBe(false);
+    }
+  });
+
+  it("trims whitespace around an explicit tool-call model", () => {
+    const resolved = resolveAgentInvocationConfig(
+      makeConfig({
+        model: "provider/config-model",
+      }),
+      {
+        model: "  provider/param-model  ",
+      },
+    );
+
+    expect(resolved.modelInput).toBe("provider/param-model");
+    expect(resolved.modelFromParams).toBe(true);
   });
 
   it("uses tool-call params when no agent config is available", () => {
@@ -104,6 +162,20 @@ describe("resolveAgentInvocationConfig", () => {
     expect(resolved.inheritContext).toBe(false);
     expect(resolved.runInBackground).toBe(false);
     expect(resolved.isolated).toBe(false);
+  });
+
+  it("lets Explore-style hardcoded defaults be overridden by tool-call model", () => {
+    const resolved = resolveAgentInvocationConfig(
+      makeConfig({
+        model: "anthropic/claude-haiku-4-5",
+      }),
+      {
+        model: "opencode/mimo-v2.5-free",
+      },
+    );
+
+    expect(resolved.modelInput).toBe("opencode/mimo-v2.5-free");
+    expect(resolved.modelFromParams).toBe(true);
   });
 });
 
