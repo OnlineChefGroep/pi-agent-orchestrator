@@ -210,7 +210,7 @@ export function renderTopTable(
     return renderCell(theme.fg(mappedSortKey === sortKey ? "highlight" : "muted", `${marker}${column.label}`), column);
   }).join(` ${theme.fg("border", "│")} `);
   lines.push(header);
-  lines.push(theme.fg("border", "─".repeat(safeWidth)));
+  lines.push(theme.fg("border", "─".repeat(safeWidth - 2)));
 
   if (entries.length === 0) {
     lines.push(theme.fg("muted", "  No agents have entered this session yet."));
