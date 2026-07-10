@@ -1,50 +1,42 @@
-# Cursor + Grok 4.5 Werkwijze
+# Cursor Workflow
 
-Dit project is ontworpen om prettig te werken in Cursor met Grok 4.5 (of vergelijkbare modellen).
+Dit package kan in Cursor of een vergelijkbare coding-agentomgeving worden gebruikt. De repository en actuele tooloutput blijven de bron van waarheid; modelnamen in deze workflow zijn uitwisselbaar.
 
-## Aanbevolen Werkwijze
+## Aanbevolen werkwijze
 
-### 1. Gebruik dit Handoff Package als Context
+### 1. Gebruik het handoffpackage gericht
 
-- Open de bestanden in `pi-agent-orchestrator-v2-handoff/` als context in Cursor.
-- Begin elke sessie met `00-OVERVIEW.md` + het relevante fase-bestand.
+- Open `docs/handoff/v2-refactor/` als context.
+- Begin met `00-OVERVIEW.md` en alleen het relevante fasebestand.
+- Laad niet automatisch het volledige package in iedere prompt.
 
-### 2. Werk per Fase met Kleine PRs
+### 2. Werk per capability
 
-- Maak geen mega-PRs.
-- Houd elke PR gericht op één specifiek onderdeel (bijv. alleen `QuotaManager`, of alleen `RunningCardRenderer`).
-- Review elke PR voordat je doorgaat.
+- Houd implementatie-PR's gericht op één coherent runtime- of UI-onderdeel.
+- Partitioneer parallel schrijfwerk per bestand of module.
+- Gebruik read-only onderzoekslanes voor brede analyse.
+- Leg acceptatiebewijs vast voordat implementatie begint.
 
-### 3. Houd Bestanden Klein en Duidelijk
+### 3. Maak huidige staat en doelarchitectuur expliciet
 
-- Eén verantwoordelijkheid per bestand.
-- Goede JSDoc en comments (helpt Grok enorm).
-- Duidelijke types.
+- Bestaande runtimebestanden staan grotendeels vlak onder `src/`.
+- `src/orchestration/` en `src/model/` zijn v2-doelpaden totdat de migratie daadwerkelijk is uitgevoerd.
+- Laat agents altijd bestaande bestanden verifiëren voordat ze imports of verplaatsingen voorstellen.
 
-### 4. Test Vaak
+### 4. Valideer gericht
 
-- Test de orchestration laag grondig (quotas, handoff, circuit breaker).
-- Test de UI met veel agents (performance).
-- Test de `orchestrator-master` skill in Pi (`/reload` + test prompts).
+- Test orchestration-invarianten rond quotas, handoffs, circuit breakers en swarms.
+- Test TUI-rendering op ANSI-visible width en representatieve terminalbreedtes.
+- Test `skills/orchestrator-master/SKILL.md` op discovery en topologykeuze.
+- Scheid kapotte CI-infrastructuur van aantoonbare codefouten.
 
-### 5. Gebruik de Skill als Kwaliteitsmeter
+### 5. Sluit iedere wave af
 
-- Als Pi de `orchestrator-master` skill goed gebruikt, weet je dat de integratie succesvol is.
-- Dit is een van de belangrijkste succes criteria.
+- Reconcile tegenstrijdige agentbevindingen.
+- Stop duplicate of stale lanes.
+- Werk docs en tests mee bij wanneer gedrag wijzigt.
+- Leg resterende risico's expliciet vast in de PR.
 
-## Best Practices voor dit Project
+## Relevante commands
 
-- Schrijf code die **agent-vriendelijk** is (duidelijke structuur, goede namen, goede documentatie).
-- Maak kleine, incrementele veranderingen.
-- Documenteer beslissingen kort in de PR beschrijving.
-- Gebruik de Linear issues als leidraad.
-
-## Commando's die Vaak Nuttig Zijn
-
-- `/reload` — Herlaad de extensie in Pi (belangrijk tijdens ontwikkeling)
-- Dashboard openen om visueel te testen
-- `/perf` om performance metrics te bekijken
-
----
-
-Werk systematisch, klein en met duidelijke reviews. Dit project leent zich uitstekend voor een agentic workflow.
+Gebruik de commands die de actuele repository en geïnstalleerde Pi-versie daadwerkelijk aanbieden. Verifieer commandnamen via help of de commandregistry; neem geen commando over uit een ontwerpdocument zonder die controle.
