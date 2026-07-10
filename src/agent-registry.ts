@@ -15,7 +15,7 @@ import type { JoinMode, PromptCompressionLevel } from "./types.js";
 
 // ---- Join mode configuration ----
 
-let defaultJoinMode: JoinMode = 'smart';
+let defaultJoinMode: JoinMode = "smart";
 
 /** Get the default join mode for background agents. */
 export function getDefaultJoinMode(): JoinMode {
@@ -29,9 +29,9 @@ export function setDefaultJoinMode(mode: JoinMode): void {
 
 // ---- Orchestration mode configuration ----
 
-export type OrchestrationMode = 'auto' | 'single' | 'swarm' | 'crew';
+export type OrchestrationMode = "auto" | "single" | "swarm" | "crew";
 
-let defaultOrchestrationMode: OrchestrationMode = 'auto';
+let defaultOrchestrationMode: OrchestrationMode = "auto";
 
 /** Get the default orchestration mode for agent execution. */
 export function getOrchestrationMode(): OrchestrationMode {
@@ -45,7 +45,7 @@ export function setOrchestrationMode(mode: OrchestrationMode): void {
 
 // ---- Dashboard refresh interval configuration ----
 
-let dashboardRefreshInterval: number = 750; // milliseconds
+let dashboardRefreshInterval = 750;
 
 /** Get the dashboard refresh interval in milliseconds. */
 export function getDashboardRefreshInterval(): number {
@@ -75,20 +75,16 @@ export function isSchedulingEnabled(): boolean {
 }
 
 /** Enable or disable scheduling. */
-export function setSchedulingEnabled(b: boolean): void {
-  schedulingEnabled = b;
+export function setSchedulingEnabled(enabled: boolean): void {
+  schedulingEnabled = enabled;
 }
 
 // ---- Tracing switch ----
 
 /**
  * Master switch for OpenTelemetry span emission in agent-runner. Defaults to
- * enabled. When `false`: every public function in `telemetry-otel.ts`
- * (`startAgentSpan`, `endAgentSpan`, `startToolSpan`, etc.) short-circuits to
- * a shared no-op span, so no TracerProvider is consulted and the cost of
- * creating/ending spans is one flag check + a function call. Runtime
- * toggles via /agents → Settings take effect immediately for subsequent
- * spans (already-running agent spans keep their real span and end normally).
+ * enabled. When false, every public telemetry helper short-circuits to a shared
+ * no-op span. Runtime toggles affect subsequent spans immediately.
  */
 let tracingEnabled = true;
 
@@ -98,18 +94,33 @@ export function isTracingEnabled(): boolean {
 }
 
 /** Enable or disable OpenTelemetry tracing. */
-export function setTracingEnabled(b: boolean): void {
-  tracingEnabled = b;
+export function setTracingEnabled(enabled: boolean): void {
+  tracingEnabled = enabled;
 }
 
-// ---- Animation & UI/UX Style configuration ----
+// ---- Animation & UI/UX style configuration ----
 
-export type AnimationStyle = "braille" | "dots" | "lines" | "classic" | "none";
+/**
+ * Motion profiles are backwards compatible with the original single-spinner
+ * choices. Pack profiles select deterministic per-agent motion; `reduced`
+ * freezes semantic glyphs while preserving state communication; `none` removes
+ * motion glyphs entirely.
+ */
+export type AnimationStyle =
+  | "orchestrator"
+  | "signals"
+  | "minimal"
+  | "reduced"
+  | "braille"
+  | "dots"
+  | "lines"
+  | "classic"
+  | "none";
+
 export type UiStyle = "premium" | "retro" | "plain";
 
 let activeUiStyle: UiStyle = "premium";
-
-let animationStyle: AnimationStyle = "braille";
+let animationStyle: AnimationStyle = "orchestrator";
 
 // ---- Display settings ----
 
@@ -128,6 +139,7 @@ export function setAnimationStyle(style: AnimationStyle): void {
 export function getUiStyle(): UiStyle {
   return activeUiStyle;
 }
+
 export function setUiStyle(style: UiStyle): void {
   activeUiStyle = style;
 }
@@ -135,22 +147,25 @@ export function setUiStyle(style: UiStyle): void {
 export function isShowActivityStream(): boolean {
   return showActivityStream;
 }
-export function setShowActivityStream(b: boolean): void {
-  showActivityStream = b;
+
+export function setShowActivityStream(enabled: boolean): void {
+  showActivityStream = enabled;
 }
 
 export function isShowTokenUsage(): boolean {
   return showTokenUsage;
 }
-export function setShowTokenUsage(b: boolean): void {
-  showTokenUsage = b;
+
+export function setShowTokenUsage(enabled: boolean): void {
+  showTokenUsage = enabled;
 }
 
 export function isShowTurnProgress(): boolean {
   return showTurnProgress;
 }
-export function setShowTurnProgress(b: boolean): void {
-  showTurnProgress = b;
+
+export function setShowTurnProgress(enabled: boolean): void {
+  showTurnProgress = enabled;
 }
 
 // ---- Prompt compression level ----
@@ -162,48 +177,32 @@ export function getPromptCompressionLevel(): PromptCompressionLevel {
   return promptCompressionLevel;
 }
 
-/** Set the prompt compression level. */
+/** Set the current prompt compression level. */
 export function setPromptCompressionLevel(level: PromptCompressionLevel): void {
   promptCompressionLevel = level;
 }
 
 // ---- Debug-capture switch + path overrides ----
 
-/**
- * Master switch for the offline debug-capture feature. Defaults to `false`.
- * When `true`, the extension writes append-only JSONL captures to local
- * directories for evals and debugging. Capture stays off in production by
- * default — flip the setting in `<cwd>/.pi/subagent.json` to enable.
- */
 let debugCaptureEnabled = false;
 
-/** True when the user has toggled on the debug-capture feature. */
 export function isDebugCaptureEnabled(): boolean {
   return debugCaptureEnabled;
 }
 
-/** Apply persisted `debugCapture` flag. */
-export function setDebugCapture(b: boolean): void {
-  debugCaptureEnabled = b;
+export function setDebugCapture(enabled: boolean): void {
+  debugCaptureEnabled = enabled;
 }
 
-/** User-supplied path overrides. When absent the documented defaults apply. */
 let debugCapturePathOverrides: { project?: string; personal?: string } = {};
 
-/** Apply persisted `debugCapturePaths` overrides. Empty/undefined inputs are
- *  accepted and surface as "no override"; the consumer falls back to
- *  defaults. */
 export function setDebugCapturePaths(paths: { project?: string; personal?: string }): void {
-  // Defensive copy so the consumer cannot mutate the module-level state.
   debugCapturePathOverrides = {
     ...(paths?.project !== undefined ? { project: paths.project } : {}),
     ...(paths?.personal !== undefined ? { personal: paths.personal } : {}),
   };
 }
 
-/** Resolve the effective capture paths — override or default. The defaults
- *  are derived from `process.cwd()` (project) and `getAgentDir()` (personal)
- *  at call time so they reflect the cwd the extension booted from. */
 export function getDebugCapturePaths(): { project: string; personal: string } {
   return {
     project: debugCapturePathOverrides.project ?? join(process.cwd(), ".pi", "subagent-debug"),
@@ -213,7 +212,6 @@ export function getDebugCapturePaths(): { project: string; personal: string } {
 
 // ---- Custom agent reloading ----
 
-/** Reload agents from .pi/agents/*.md and merge with defaults. */
 export async function reloadCustomAgents(): Promise<void> {
   const userAgents = await loadCustomAgents(process.cwd());
   registerAgents(userAgents);
@@ -221,28 +219,24 @@ export async function reloadCustomAgents(): Promise<void> {
 
 // ---- Type list building ----
 
-/** Derive a short model label from a model string. */
 export function getModelLabelFromConfig(model: string): string {
-  // Strip provider prefix (e.g. "anthropic/claude-sonnet-4-6" → "claude-sonnet-4-6")
-  const name = model.includes("/") ? model.split("/").pop()! : model;
-  // Strip trailing date suffix (e.g. "claude-haiku-4-5-20251001" → "claude-haiku-4-5")
+  const name = model.includes("/") ? (model.split("/").pop() ?? model) : model;
   return name.replace(/-\d{8}$/, "");
 }
 
-/** Build the full type list text dynamically from the unified registry. */
 export function buildTypeListText(): string {
   const defaultNames = getDefaultAgentNames();
   const userNames = getUserAgentNames();
 
   const defaultDescs = defaultNames.map((name) => {
-    const cfg = getAgentConfig(name);
-    const modelSuffix = cfg?.model ? ` (${getModelLabelFromConfig(cfg.model)})` : "";
-    return `- ${name}: ${cfg?.description ?? name}${modelSuffix}`;
+    const config = getAgentConfig(name);
+    const modelSuffix = config?.model ? ` (${getModelLabelFromConfig(config.model)})` : "";
+    return `- ${name}: ${config?.description ?? name}${modelSuffix}`;
   });
 
   const customDescs = userNames.map((name) => {
-    const cfg = getAgentConfig(name);
-    return `- ${name}: ${cfg?.description ?? name}`;
+    const config = getAgentConfig(name);
+    return `- ${name}: ${config?.description ?? name}`;
   });
 
   return [
