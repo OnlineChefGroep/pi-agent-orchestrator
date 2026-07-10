@@ -171,3 +171,11 @@ See `docs/architecture.md` for the full module map and data-flow diagram.
 
 Ensure you run `npm run typecheck && npm run lint && npm test` before committing.
 Currently passing: **1693 tests** across **95 test files**, including performance benchmarks for render, snapshot, virtual scrolling, and spawn latency.
+
+## Cursor Cloud specific instructions
+
+- Dependencies are refreshed automatically on startup via the update script (`npm ci`). No manual install needed.
+- This package is a **pi extension library, not a standalone app** — there is no dev server or `npm run dev`. "Running" it means `npm run build` (emits `dist/index.js`) and having a Pi host load that entry (`pi.extensions` in `package.json`). The default export is an async activation function `(pi) => {...}` that registers tools (`Agent`, `get_subagent_result`, `steer_subagent`), commands (`agents`, `hooks`, `agents templates`), a `subagent-notification` renderer, and session/`events` handlers.
+- To smoke-test that the built extension loads without a real host, import `dist/index.js` and call its default export with a mock `pi` exposing `registerTool`, `registerCommand`, `registerMessageRenderer`, `on`, `appendEntry`, `sendMessage`, and `events.{emit,on}`; a successful activation emits `subagents:ready`.
+- Node ≥22 is required; some transitive `@earendil-works/pi-*` deps declare `engines.node >=22.19` and emit `EBADENGINE` warnings on 22.14 — these are non-fatal and all checks/tests pass.
+- Standard build/lint/test/typecheck commands are documented above under `## Quick commands` / `## Verification Suite`.
