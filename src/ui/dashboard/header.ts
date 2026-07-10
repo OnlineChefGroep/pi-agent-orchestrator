@@ -108,7 +108,11 @@ export function renderDashboardHeader(
   const mode = `${liveColor}${liveGlyph} ${live ? "LIVE" : "IDLE"}${th.reset}`;
   const total = `${th.dim}${state.agents.length} agent${state.agents.length === 1 ? "" : "s"}${th.reset}`;
   const profileLabel = `${th.dim}${style} · ${motion}${th.reset}`;
-  const titleRight = `${mode}  ${th.border}│${th.reset}  ${total}  ${th.border}│${th.reset}  ${profileLabel}`;
+  const titleRight = innerW < 70
+    ? mode
+    : innerW < 100
+      ? `${mode}  ${th.border}│${th.reset}  ${total}`
+      : `${mode}  ${th.border}│${th.reset}  ${total}  ${th.border}│${th.reset}  ${profileLabel}`;
   const title = responsiveJoin(brand, titleRight, innerW);
   const summary = dashboardSummaryBar(state, innerW, th, manager);
   const bg = th.bgHeader || "";
