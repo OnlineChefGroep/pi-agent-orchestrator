@@ -1,6 +1,6 @@
 import type { AgentManager } from "../../agent-manager.js";
-import { getUiStyle } from "../../agent-registry.js";
-import { getSpinnerFrameForStyle } from "../animation.js";
+import { getAnimationStyle, getUiStyle } from "../../agent-registry.js";
+import { getAgentSpinnerFrame } from "../animation.js";
 import {
   type BoxChars,
   borderLine,
@@ -72,8 +72,9 @@ function dashboardSummaryBar(
   const counts = countAgents(state);
   const compact = innerW < 94;
   const separator = `  ${th.border}│${th.reset}  `;
+  const activityGlyph = getAgentSpinnerFrame("dashboard-summary", state.frame, "header");
   const activity = counts.running > 0
-    ? `${th.accent}${getSpinnerFrameForStyle("orbit", state.frame)} ${compact ? counts.running : `${counts.running} running`}${th.reset}`
+    ? `${th.accent}${activityGlyph || "●"} ${compact ? counts.running : `${counts.running} running`}${th.reset}`
     : `${th.dim}○ ${compact ? "0" : "no active runs"}${th.reset}`;
   const items = [
     activity,
@@ -98,15 +99,16 @@ export function renderDashboardHeader(
 ): string[] {
   const innerW = Math.max(1, width - 4);
   const style = getUiStyle();
+  const motion = getAnimationStyle();
   const counts = countAgents(state);
   const live = counts.running > 0 || counts.queued > 0;
-  const liveGlyph = live ? getSpinnerFrameForStyle("orbit", state.frame) : "○";
+  const liveGlyph = live ? (getAgentSpinnerFrame("dashboard-header", state.frame, "header") || "●") : "○";
   const liveColor = live ? th.success : th.dim;
   const brand = `${th.title}◈ PI ORCHESTRATOR${th.reset}`;
   const mode = `${liveColor}${liveGlyph} ${live ? "LIVE" : "IDLE"}${th.reset}`;
   const total = `${th.dim}${state.agents.length} agent${state.agents.length === 1 ? "" : "s"}${th.reset}`;
-  const styleLabel = `${th.dim}${style}${th.reset}`;
-  const titleRight = `${mode}  ${th.border}│${th.reset}  ${total}  ${th.border}│${th.reset}  ${styleLabel}`;
+  const profileLabel = `${th.dim}${style} · ${motion}${th.reset}`;
+  const titleRight = `${mode}  ${th.border}│${th.reset}  ${total}  ${th.border}│${th.reset}  ${profileLabel}`;
   const title = responsiveJoin(brand, titleRight, innerW);
   const summary = dashboardSummaryBar(state, innerW, th, manager);
   const bg = th.bgHeader || "";
