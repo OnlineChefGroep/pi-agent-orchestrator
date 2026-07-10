@@ -5,7 +5,7 @@
   "defaultJoinMode": "smart",
   "schedulingEnabled": true,
   "tracingEnabled": true,
-  "animationStyle": "braille",
+  "animationStyle": "orchestrator",
   "uiStyle": "premium",
   "orchestrationMode": "crew",
   "dashboardRefreshInterval": 750,
