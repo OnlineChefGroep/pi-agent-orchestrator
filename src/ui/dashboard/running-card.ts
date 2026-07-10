@@ -18,7 +18,9 @@ export function renderRunningCard(
   const contentW = Math.max(1, cardW - 4);
   const activity = state.agentActivity.get(rec.id);
   const selected = state.agents[state.selectedIndex]?.id === rec.id;
-  const checked = state.selectedIds.has(rec.id) ? `${th.success}✓${th.reset} ` : "";
+  // Preserve one visible column when the agent is not checked so neighbouring
+  // cards do not shift horizontally as selection changes.
+  const checked = state.selectedIds.has(rec.id) ? `${th.success}✓${th.reset} ` : " ";
   const color = statusColor(rec, th);
   const icon = `${color}${statusIcon(rec, state.frame)}${th.reset}`;
   const badge = `${color}[${statusLabel(rec)}]${th.reset}`;
