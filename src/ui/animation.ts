@@ -1,3 +1,4 @@
+import type { AnimationStyle } from "../agent-registry.js";
 import { logger } from "../logger.js";
 
 /** Default cadence for terminal animation frames. */
@@ -57,7 +58,7 @@ export const SPINNER_FRAMES = {
 } as const;
 
 export type SpinnerStyle = keyof typeof SPINNER_FRAMES;
-export type SpinnerRole = "agent" | "header" | "queue" | "handoff" | "swarm" | "tool";
+export type SpinnerRole = "agent" | "header" | "queue" | "handoff" | "swarm" | "tool" | "scheduler";
 
 /** Styles guaranteed to remain compact enough for dashboard rows and cards. */
 export const DASHBOARD_SPINNER_STYLES = [
@@ -76,16 +77,43 @@ export const DASHBOARD_SPINNER_STYLES = [
   "ripple",
 ] as const satisfies readonly SpinnerStyle[];
 
-const ROLE_STYLES: Record<Exclude<SpinnerRole, "agent">, SpinnerStyle> = {
-  header: "orbit",
-  queue: "pipeline",
-  handoff: "weave",
-  swarm: "aperture",
-  tool: "signal",
-};
+export const SPINNER_PACKS = {
+  orchestrator: DASHBOARD_SPINNER_STYLES,
+  signals: ["signal", "scanline", "wave", "glitch", "matrix", "fire", "shuttle", "radar"] as const,
+  minimal: ["dots", "pulse", "squareSpin", "rhombus", "bouncingBall", "moon"] as const,
+} as const satisfies Record<"orchestrator" | "signals" | "minimal", readonly SpinnerStyle[]>;
+
+const ROLE_STYLES = {
+  orchestrator: {
+    header: "orbit",
+    queue: "pipeline",
+    handoff: "weave",
+    swarm: "aperture",
+    tool: "signal",
+    scheduler: "clock",
+  },
+  signals: {
+    header: "signal",
+    queue: "scanline",
+    handoff: "pipeline",
+    swarm: "cascade",
+    tool: "matrix",
+    scheduler: "radar",
+  },
+  minimal: {
+    header: "dots",
+    queue: "pulse",
+    handoff: "pipe",
+    swarm: "squareSpin",
+    tool: "rhombus",
+    scheduler: "clock",
+  },
+} as const satisfies Record<"orchestrator" | "signals" | "minimal", Record<Exclude<SpinnerRole, "agent">, SpinnerStyle>>;
 
 /** Mutable global frames retained for backwards compatibility. */
 export const SPINNER: string[] = [...SPINNER_FRAMES.braille];
+
+let activeAnimationProfile: AnimationStyle = "orchestrator";
 
 function positiveModulo(value: number, divisor: number): number {
   if (divisor <= 0) return 0;
@@ -105,14 +133,56 @@ function copyFrames(style: SpinnerStyle): string[] {
   return [...SPINNER_FRAMES[style]];
 }
 
-export function setSpinnerStyle(style: SpinnerStyle): void {
-  const selected = Object.hasOwn(SPINNER_FRAMES, style) ? style : "braille";
-  SPINNER.splice(0, SPINNER.length, ...copyFrames(selected));
+function isPackProfile(profile: AnimationStyle): profile is keyof typeof SPINNER_PACKS {
+  return profile === "orchestrator" || profile === "signals" || profile === "minimal";
+}
+
+function isDirectStyle(profile: string): profile is Extract<AnimationStyle, SpinnerStyle> {
+  return profile === "braille" || profile === "dots" || profile === "lines" || profile === "classic" || profile === "none";
+}
+
+function packForProfile(profile: AnimationStyle): keyof typeof SPINNER_PACKS {
+  if (isPackProfile(profile)) return profile;
+  return "orchestrator";
+}
+
+function fallbackStyleForProfile(profile: AnimationStyle): SpinnerStyle {
+  if (isDirectStyle(profile)) return profile;
+  if (profile === "signals") return "signal";
+  if (profile === "minimal") return "dots";
+  return "orbit";
+}
+
+/** Apply a persisted motion profile while retaining the legacy function name. */
+export function setSpinnerStyle(style: AnimationStyle | SpinnerStyle): void {
+  const validProfiles: readonly string[] = [
+    "orchestrator",
+    "signals",
+    "minimal",
+    "reduced",
+    "braille",
+    "dots",
+    "lines",
+    "classic",
+    "none",
+  ];
+  activeAnimationProfile = validProfiles.includes(style) ? (style as AnimationStyle) : "braille";
+  const fallback = fallbackStyleForProfile(activeAnimationProfile);
+  SPINNER.splice(0, SPINNER.length, ...copyFrames(fallback));
+}
+
+export function getAnimationProfile(): AnimationStyle {
+  return activeAnimationProfile;
+}
+
+export function isReducedMotion(): boolean {
+  return activeAnimationProfile === "reduced";
 }
 
 export function getSpinnerFrame(frame: number): string {
   if (SPINNER.length === 0) return "";
-  return SPINNER[positiveModulo(frame, SPINNER.length)] ?? "";
+  const index = isReducedMotion() ? 0 : positiveModulo(frame, SPINNER.length);
+  return SPINNER[index] ?? "";
 }
 
 export function getSpinnerFrameForStyle(style: SpinnerStyle, frame: number, phase = 0): string {
@@ -121,16 +191,38 @@ export function getSpinnerFrameForStyle(style: SpinnerStyle, frame: number, phas
 }
 
 export function getSpinnerStyleForAgent(agentId: string, role: SpinnerRole = "agent"): SpinnerStyle {
-  if (role !== "agent") return ROLE_STYLES[role];
-  const index = stableHash(agentId) % DASHBOARD_SPINNER_STYLES.length;
-  return DASHBOARD_SPINNER_STYLES[index] ?? "braille";
+  if (activeAnimationProfile === "none") return "none";
+
+  const packName = packForProfile(activeAnimationProfile);
+  if (role !== "agent") return ROLE_STYLES[packName][role];
+
+  if (isDirectStyle(activeAnimationProfile)) {
+    return activeAnimationProfile;
+  }
+
+  const pack = SPINNER_PACKS[packName];
+  const index = stableHash(agentId) % pack.length;
+  return pack[index] ?? "braille";
 }
 
 /** Stable style per agent plus a stable phase offset to avoid synchronized motion. */
 export function getAgentSpinnerFrame(agentId: string, frame: number, role: SpinnerRole = "agent"): string {
   const style = getSpinnerStyleForAgent(agentId, role);
+  if (style === "none") return "";
   const phase = stableHash(`${role}:${agentId}`) % SPINNER_FRAMES[style].length;
-  return getSpinnerFrameForStyle(style, frame, phase);
+  const effectiveFrame = isReducedMotion() ? 0 : frame;
+  return getSpinnerFrameForStyle(style, effectiveFrame, phase);
+}
+
+/** Time-driven semantic frame for renderers that do not own a frame counter. */
+export function getTimeSpinnerFrameForRole(
+  role: Exclude<SpinnerRole, "agent">,
+  key: string,
+  now = Date.now(),
+  interval = ANIMATION_INTERVAL,
+): string {
+  const safeInterval = Math.max(1, interval);
+  return getAgentSpinnerFrame(key, Math.floor(now / safeInterval), role);
 }
 
 export function getTimeSpinnerFrame(now = Date.now(), interval = ANIMATION_INTERVAL): string {
