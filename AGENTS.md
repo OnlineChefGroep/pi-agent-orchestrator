@@ -12,6 +12,20 @@ Pi extension — runs inside the pi coding agent host, not standalone. Orchestra
 | **Never** | Import `@earendil-works/pi-*` as direct deps; treat YAML booleans as truthy strings; sort agent lists (Map insertion order is intentional) |
 | **Peer extensions** | `@onlinechef/context-mode` → `ctx_*` tools (optional, feature-gated) |
 
+## V2 implementation lane
+
+The files under `docs/handoff/v2-refactor/` are an execution roadmap, not a replacement for the current codebase SSOT. Implement the roadmap incrementally and keep existing behavior covered while modules move toward clearer orchestration, model, and UI boundaries.
+
+For dashboard and animation work:
+
+- Keep dashboard animation glyphs single-cell unless a renderer explicitly reserves a fixed multi-cell width.
+- Use ANSI-aware helpers (`visibleWidth`, `padAndTruncate`, `fastTruncate`) instead of native string padding on colored content.
+- Assign motion deterministically so agent rows do not change style between renders.
+- Prefer semantic motion roles (`header`, `queue`, `handoff`, `swarm`, `tool`) over one global spinner everywhere.
+- Preserve responsive rendering at 60, 80, 100, and 140 terminal columns.
+- Add focused tests for frame wrapping, deterministic assignment, width safety, and responsive column selection.
+- Treat reduced-motion support and user-selectable animation packs as settings-backed follow-up work, not environment-only flags.
+
 ## Spawn rules
 
 **Config SSOT (edit order):** `src/default-agents.ts` → `.pi/agents/<name>.md` override → `src/custom-agents.ts` frontmatter → `/agents → Settings` (`.pi/subagent-settings.json`).

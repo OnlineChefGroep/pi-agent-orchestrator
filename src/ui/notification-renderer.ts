@@ -1,65 +1,60 @@
 /**
- * notification-renderer.ts — Custom message renderer for subagent-completion notifications.
- *
- * Formatted as Claude Code-style task notifications with icon, stats,
- * result preview and output-file links.
+ * notification-renderer.ts — Custom renderer for subagent completion handoffs.
  */
 
 import type { NotificationDetails } from "../types.js";
 import { formatMs, formatTokens, formatTurns } from "./agent-format.js";
+import { getTimeSpinnerFrameForRole } from "./animation.js";
 import { Text } from "./tui-shim.js";
 
-/** Build a single notification line from NotificationDetails. */
-function renderOne(d: NotificationDetails, expanded: boolean, theme: any): string {
-  const isError = d.status === "error" || d.status === "stopped" || d.status === "aborted";
+interface NotificationTheme {
+  fg(color: string, text: string): string;
+  bold(text: string): string;
+}
+
+function renderOne(details: NotificationDetails, expanded: boolean, theme: NotificationTheme): string {
+  const isError = details.status === "error" || details.status === "stopped" || details.status === "aborted";
   const icon = isError ? theme.fg("error", "✗") : theme.fg("success", "✓");
   const statusText = isError
-    ? d.status
-    : d.status === "steered"
+    ? details.status
+    : details.status === "steered"
       ? "completed (steered)"
       : "completed";
-  const validationIcon = d.validated === undefined
+  const validationIcon = details.validated === undefined
     ? ""
-    : (d.validated ? theme.fg("success", " ✅") : theme.fg("error", " ❌"));
+    : details.validated
+      ? theme.fg("success", " ✅")
+      : theme.fg("error", " ❌");
 
-  // Line 1: icon + agent description + validation + status
-  let line = `${icon} ${theme.bold(d.description)}${validationIcon} ${theme.fg("dim", statusText)}`;
+  let line = `${icon} ${theme.bold(details.description)}${validationIcon} ${theme.fg("dim", statusText)}`;
 
-  // Line 2: stats
-  const parts: string[] = [];
-  if (d.turnCount > 0) parts.push(formatTurns(d.turnCount, d.maxTurns));
-  if (d.toolUses > 0) parts.push(`${d.toolUses} tool use${d.toolUses === 1 ? "" : "s"}`);
-  if (d.totalTokens > 0) parts.push(formatTokens(d.totalTokens));
-  if (d.durationMs > 0) parts.push(formatMs(d.durationMs));
-  if (parts.length) {
-    line += `\n  ${parts.map(p => theme.fg("dim", p)).join(` ${theme.fg("dim", "·")} `)}`;
-  }
+  const stats: string[] = [];
+  if (details.turnCount > 0) stats.push(formatTurns(details.turnCount, details.maxTurns));
+  if (details.toolUses > 0) stats.push(`${details.toolUses} tool use${details.toolUses === 1 ? "" : "s"}`);
+  if (details.totalTokens > 0) stats.push(formatTokens(details.totalTokens));
+  if (details.durationMs > 0) stats.push(formatMs(details.durationMs));
+  if (stats.length > 0) line += `\n  ${stats.map((part) => theme.fg("dim", part)).join(` ${theme.fg("dim", "·")} `)}`;
 
-  // Line 3: result preview (collapsed) or full (expanded)
+  const handoffGlyph = getTimeSpinnerFrameForRole("handoff", details.id, Date.now(), 180) || "⎿";
   if (expanded) {
-    const lines = d.resultPreview.split("\n").slice(0, 30);
-    const expandedParts: string[] = [];
-    for (const l of lines) expandedParts.push(`\n${theme.fg("dim", `  ${l}`)}`);
-    line += expandedParts.join("");
+    const resultLines = details.resultPreview.split("\n").slice(0, 30);
+    line += resultLines.map((resultLine, index) =>
+      `\n${theme.fg(index === 0 ? "accent" : "dim", `  ${index === 0 ? `${handoffGlyph} ` : "  "}${resultLine}`)}`,
+    ).join("");
   } else {
-    const preview = d.resultPreview.split("\n")[0]?.slice(0, 80) ?? "";
-    line += `\n  ${theme.fg("dim", `⎿  ${preview}`)}`;
+    const preview = details.resultPreview.split("\n")[0]?.slice(0, 80) ?? "";
+    line += `\n  ${theme.fg("dim", `${handoffGlyph}  ${preview}`)}`;
   }
 
-  // Line 4: output file link (if present)
-  if (d.outputFile) {
-    line += `\n  ${theme.fg("muted", `transcript: ${d.outputFile}`)}`;
-  }
-
+  if (details.outputFile) line += `\n  ${theme.fg("muted", `transcript: ${details.outputFile}`)}`;
   return line;
 }
 
-/** Factory that returns the renderer function for pi.registerMessageRenderer. */
-export function createNotificationRenderer(theme: any) {
+export function createNotificationRenderer(theme: NotificationTheme) {
   return (message: { details?: NotificationDetails }, { expanded }: { expanded: boolean }) => {
-    const d = message.details;
-    if (!d) return undefined;
-    const all = [d, ...(d.others ?? [])];
-    return new Text(all.map(item => renderOne(item, expanded, theme)).join("\n"), 0, 0);
+    const details = message.details;
+    if (!details) return undefined;
+    const all = [details, ...(details.others ?? [])];
+    return new Text(all.map((item) => renderOne(item, expanded, theme)).join("\n"), 0, 0);
   };
 }

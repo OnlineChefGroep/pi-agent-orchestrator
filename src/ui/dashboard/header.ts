@@ -1,8 +1,67 @@
 import type { AgentManager } from "../../agent-manager.js";
-import { getUiStyle } from "../../agent-registry.js";
-import { type BoxChars, borderLine, type DashboardTheme, framedRow, padVisible } from "../theme.js";
+import { getAnimationStyle, getUiStyle } from "../../agent-registry.js";
+import { getAgentSpinnerFrame } from "../animation.js";
+import {
+  type BoxChars,
+  borderLine,
+  type DashboardTheme,
+  fastTruncate,
+  framedRow,
+  padVisible,
+} from "../theme.js";
 import { visibleWidth } from "../tui-shim.js";
 import type { DashboardRenderState } from "./types.js";
+
+type DashboardCounts = {
+  running: number;
+  queued: number;
+  completed: number;
+  errored: number;
+};
+
+function countAgents(state: DashboardRenderState): DashboardCounts {
+  const counts: DashboardCounts = { running: 0, queued: 0, completed: 0, errored: 0 };
+  for (const agent of state.agents) {
+    if (agent.status === "running") counts.running++;
+    else if (agent.status === "queued") counts.queued++;
+    else if (agent.status === "completed" || agent.status === "steered") counts.completed++;
+    else if (agent.status === "error" || agent.status === "aborted") counts.errored++;
+  }
+  return counts;
+}
+
+function compactMeter(value: number, maximum: number, width: number, th: DashboardTheme): string {
+  if (maximum <= 0) return "";
+  const ratio = Math.max(0, Math.min(1, value / maximum));
+  const filled = Math.min(width, Math.round(ratio * width));
+  const color = ratio >= 0.9 ? th.error : ratio >= 0.75 ? th.highlight : th.accent;
+  return `${color}${"■".repeat(filled)}${th.reset}${th.dim}${"·".repeat(width - filled)}${th.reset}`;
+}
+
+function capacitySummary(manager: AgentManager | undefined, th: DashboardTheme, compact: boolean): string {
+  if (!manager) return "";
+  const usage = manager.getSessionUsage();
+  const maxAgents = manager.getSessionMaxSpawns();
+  const maxTurns = manager.getSessionMaxTurns();
+  const pieces: string[] = [];
+
+  if (maxAgents > 0) {
+    const label = compact ? "A" : "agents";
+    pieces.push(`${th.dim}${label}${th.reset} ${compactMeter(usage.spawnedAgents, maxAgents, compact ? 4 : 6, th)} ${usage.spawnedAgents}/${maxAgents}`);
+  }
+  if (maxTurns > 0) {
+    const label = compact ? "T" : "turns";
+    pieces.push(`${th.dim}${label}${th.reset} ${compactMeter(usage.totalTurns, maxTurns, compact ? 4 : 6, th)} ${usage.totalTurns}/${maxTurns}`);
+  }
+  return pieces.join(` ${th.border}│${th.reset} `);
+}
+
+function responsiveJoin(left: string, right: string, width: number): string {
+  if (!right) return padVisible(fastTruncate(left, width), width);
+  const gap = width - visibleWidth(left) - visibleWidth(right);
+  if (gap >= 2) return `${left}${" ".repeat(gap)}${right}`;
+  return padVisible(fastTruncate(left, width), width);
+}
 
 function dashboardSummaryBar(
   state: DashboardRenderState,
@@ -10,56 +69,25 @@ function dashboardSummaryBar(
   th: DashboardTheme,
   manager?: AgentManager,
 ): string {
-  let running = 0;
-  let queued = 0;
-  let completed = 0;
-  let errored = 0;
-  for (let i = 0; i < state.agents.length; i++) {
-    const s = state.agents[i].status;
-    if (s === "running") running++;
-    else if (s === "queued") queued++;
-    else if (s === "completed" || s === "steered") completed++;
-    else if (s === "error" || s === "aborted") errored++;
-  }
-  const selected = state.selectedIds.size > 0
-    ? `  ${th.highlight}◆ ${state.selectedIds.size} selected${th.reset}`
-    : "";
-  const sep = `  ${th.border}│${th.reset}  `;
-  const parts = [
-    `${th.accent}● ${running} running${th.reset}`,
-    `${th.dim}◔ ${queued} queued${th.reset}`,
-    `${th.success}✓ ${completed} done${th.reset}`,
-    ...(errored > 0 ? [`${th.error}✗ ${errored} error${th.reset}`] : []),
+  const counts = countAgents(state);
+  const compact = innerW < 94;
+  const separator = `  ${th.border}│${th.reset}  `;
+  const activityGlyph = getAgentSpinnerFrame("dashboard-summary", state.frame, "header");
+  const activity = counts.running > 0
+    ? `${th.accent}${activityGlyph || "●"} ${compact ? counts.running : `${counts.running} running`}${th.reset}`
+    : `${th.dim}○ ${compact ? "0" : "no active runs"}${th.reset}`;
+  const items = [
+    activity,
+    `${th.highlight}◌ ${compact ? counts.queued : `${counts.queued} queued`}${th.reset}`,
+    `${th.success}✓ ${compact ? counts.completed : `${counts.completed} done`}${th.reset}`,
   ];
 
-  // Session usage meters when manager is available
-  if (manager) {
-    const usage = manager.getSessionUsage();
-    const maxAgents = manager.getSessionMaxSpawns();
-    const maxTurns = manager.getSessionMaxTurns();
+  if (counts.errored > 0) items.push(`${th.error}✕ ${compact ? counts.errored : `${counts.errored} failed`}${th.reset}`);
+  if (state.selectedIds.size > 0) items.push(`${th.highlight}◆ ${state.selectedIds.size}${compact ? "" : " selected"}${th.reset}`);
 
-    if (maxAgents > 0 || maxTurns > 0) {
-      const meterParts: string[] = [];
-
-      if (maxAgents > 0) {
-        const pct = Math.round((usage.spawnedAgents / maxAgents) * 100);
-        const color = pct >= 90 ? th.error : pct >= 75 ? th.dim : th.accent;
-        meterParts.push(`${color}⬡ ${usage.spawnedAgents}/${maxAgents} agents${th.reset}`);
-      }
-
-      if (maxTurns > 0) {
-        const pct = Math.round((usage.totalTurns / maxTurns) * 100);
-        const color = pct >= 90 ? th.error : pct >= 75 ? th.dim : th.dim;
-        meterParts.push(`${color}⟳ ${usage.totalTurns}/${maxTurns} turns${th.reset}`);
-      }
-
-      if (meterParts.length > 0) {
-        return padVisible(` ${parts.join(sep)}${selected}  ${meterParts.join(sep)}`, innerW - 2);
-      }
-    }
-  }
-
-  return padVisible(` ${parts.join(sep)}${selected}`, innerW - 2);
+  const left = items.join(separator);
+  const right = capacitySummary(manager, th, compact);
+  return responsiveJoin(` ${left}`, right, innerW - 2);
 }
 
 export function renderDashboardHeader(
@@ -71,22 +99,33 @@ export function renderDashboardHeader(
 ): string[] {
   const innerW = Math.max(1, width - 4);
   const style = getUiStyle();
-  const titleLeft = `${th.title}◈  AGENT DASHBOARD${th.reset}`;
-  const titleRight = `${th.dim}${style} mode${th.reset}`;
-  const titleGap = Math.max(1, innerW - visibleWidth(titleLeft) - visibleWidth(titleRight));
+  const motion = getAnimationStyle();
+  const counts = countAgents(state);
+  const live = counts.running > 0 || counts.queued > 0;
+  const liveGlyph = live ? (getAgentSpinnerFrame("dashboard-header", state.frame, "header") || "●") : "○";
+  const liveColor = live ? th.success : th.dim;
+  const brand = `${th.title}◈ PI ORCHESTRATOR${th.reset}`;
+  const mode = `${liveColor}${liveGlyph} ${live ? "LIVE" : "IDLE"}${th.reset}`;
+  const total = `${th.dim}${state.agents.length} agent${state.agents.length === 1 ? "" : "s"}${th.reset}`;
+  const profileLabel = `${th.dim}${style} · ${motion}${th.reset}`;
+  const titleRight = innerW < 70
+    ? mode
+    : innerW < 100
+      ? `${mode}  ${th.border}│${th.reset}  ${total}`
+      : `${mode}  ${th.border}│${th.reset}  ${total}  ${th.border}│${th.reset}  ${profileLabel}`;
+  const title = responsiveJoin(brand, titleRight, innerW);
   const summary = dashboardSummaryBar(state, innerW, th, manager);
-  // TrueColor header background (empty string for retro/plain)
   const bg = th.bgHeader || "";
-  const wrapBg = (s: string) => {
-    if (!bg) return s;
-    // Re-apply bg after each internal reset so the background persists across the full line
-    return `${bg}${s.replaceAll(th.reset, `${th.reset}${bg}`)}${th.reset}`;
+  const wrapBackground = (line: string): string => {
+    if (!bg) return line;
+    return `${bg}${line.replaceAll(th.reset, `${th.reset}${bg}`)}${th.reset}`;
   };
+
   return [
-    wrapBg(borderLine(width, th, box, "top")),
-    wrapBg(framedRow(`${titleLeft}${" ".repeat(titleGap)}${titleRight}`, innerW, th, box)),
-    wrapBg(`${th.border}${box.ml}${th.reset}${th.dim}${box.h.repeat(Math.max(0, width - 2))}${th.reset}${th.border}${box.mr}${th.reset}`),
-    wrapBg(framedRow(summary, innerW, th, box)),
-    wrapBg(borderLine(width, th, box, "mid")),
+    wrapBackground(borderLine(width, th, box, "top")),
+    wrapBackground(framedRow(title, innerW, th, box)),
+    wrapBackground(`${th.border}${box.ml}${th.reset}${th.dim}${box.h.repeat(Math.max(0, width - 2))}${th.reset}${th.border}${box.mr}${th.reset}`),
+    wrapBackground(framedRow(summary, innerW, th, box)),
+    wrapBackground(borderLine(width, th, box, "mid")),
   ];
 }
