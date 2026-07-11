@@ -21,7 +21,7 @@ vi.mock("../src/ui/tui-shim.js", () => ({
     Text: class { constructor(c) { this.content = c; } render() { return [this.content]; } },
       getAnsiSequenceLength: (_str: string, _i: number) => 0 }));
 
-// Mock agent-registry — getUiStyle returns "premium"; the display-flag getters
+// Mock agent-registry: getUiStyle returns "premium"; the display-flag getters
 // consumed by agent-widget-renderer default to true (matching the real module).
 vi.mock("../src/agent-registry.js", () => ({
   getUiStyle: () => "premium",
