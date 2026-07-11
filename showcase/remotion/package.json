@@ -6,7 +6,7 @@
   "scripts": {
     "studio": "remotion studio src/index.ts",
     "render": "remotion render src/index.ts PiAgentTerminal ../../docs/images/dashboard_preview.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --overwrite",
-    "poster": "remotion still src/index.ts PiAgentTerminalPoster ../../docs/images/dashboard_preview.png --frame=210 --overwrite"
+    "poster": "remotion still src/index.ts PiAgentTerminalPoster ../../docs/images/dashboard_preview.png --overwrite"
   },
   "dependencies": {
     "@remotion/cli": "4.0.487",
