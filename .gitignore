@@ -84,9 +84,5 @@ bun.lockb
 # Pages site build output
 _site/
 
-# Hosted site files (GitHub Pages, not part of the npm package)
-agent-permissions.json
-sitemap.md
-sitemap.xml
-robots.txt
+# Removed Qodana config (was a Python linter, wrong for this TS project); keep it from being re-added
 qodana.yaml
