@@ -1,20 +1,27 @@
 # Security
 
-Thanks for helping keep this project safe. The good news: this is a local
-pi extension, it runs in your own Pi coding-agent host, it doesn't talk to
-servers, and it doesn't handle credentials, personal data, or anything
-remotely dangerous. So this page is short on purpose.
+Thanks for helping keep this project safe. This is a local Pi extension: it
+runs inside your own Pi coding-agent host and makes no outbound network calls
+of its own, so the attack surface is small. Small is not zero, though. The
+extension reads environment variables and files in your workspace, injects that
+content into agent prompts, and can run commands on your machine through the
+sub-agents it spawns. This page covers how to report anything that looks wrong.
 
-## Reporting an issue
+## Reporting a vulnerability
 
-If you find a security problem, **open a GitHub issue** on
-[OnlineChefGroep/pi-agent-orchestrator](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues).
-Yes, really — an issue is fine. We're not running a CVE factory here, this
-is a small open-source tool, and public issues are the fastest way to get
-something fixed in the open.
+If you think you've found a security issue, please report it privately first,
+so a fix can land before the details are public:
 
-If the issue is sensitive enough that you don't want it public, email
-**chefadmin@chefgroep.online** and we'll discuss it from there.
+1. **Preferred:** use GitHub's private vulnerability reporting. Open the
+   [Security advisories page](https://github.com/OnlineChefGroep/pi-agent-orchestrator/security/advisories/new)
+   and click "Report a vulnerability". It's a private channel only the
+   maintainers can see.
+2. **Or email** **chefadmin@chefgroep.online** if you'd rather not use GitHub.
+
+Please don't open a public GitHub issue for a suspected vulnerability: a public
+report can expose an exploitable problem before there's a fix. Public issues
+are welcome for clearly non-sensitive bugs, or once we've triaged a report and
+agreed it's safe to discuss in the open.
 
 ## What we'd like to know
 
@@ -33,10 +40,14 @@ If the issue is sensitive enough that you don't want it public, email
 ## Scope
 
 In scope: the source under "src/", the published npm package
-"@onlinechefgroep/pi-agent-orchestrator", and the example agent templates
-under "examples/agents/".
+"@onlinechefgroep/pi-agent-orchestrator", and the example agent templates under
+"examples/agents/". If this extension is the source of the problem, it stays in
+scope even when the impact lands on the Pi host, a peer extension, or your
+machine (for example: the extension running an unintended command, leaking a
+secret it read, or mishandling prompt content it injected).
 
-Out of scope (maintained by their owners, please report to them directly):
+Out of scope (report to their owners when the issue originates in them, not in
+this extension):
 
 - The Pi host platform ("@earendil-works/pi-coding-agent",
   "@earendil-works/pi-ai", "@earendil-works/pi-agent-core").
@@ -45,9 +56,12 @@ Out of scope (maintained by their owners, please report to them directly):
 
 ## A note on this project
 
-This extension is local-only. It does not make outbound network calls of
-its own, it does not log secrets, and it does not store user data on any
-server. The biggest realistic risk is "it runs commands on your machine
-via a sub-agent you didn't fully understand the prompt of" — and that's a
-prompt review problem, not a security one. Read the prompt your
-sub-agents are given, and pin your tools.
+This extension is local-only: it makes no outbound network calls of its own and
+stores no user data on any server. But "local" is not the same as "safe".
+Because it reads your environment and workspace, injects that into prompts, and
+executes commands through sub-agents, the realistic risks are worth taking
+seriously: unintended or destructive commands, privilege escalation, exposure
+of secrets or local data, prompt injection through untrusted file content, and
+unsafe tool use. We treat those as security issues, not just prompt-review
+nitpicks, so please report them. Reading the prompts your sub-agents run and
+pinning their tools genuinely reduces the risk.
