@@ -1,0 +1,71 @@
+# Pi Agent Orchestrator — Full Context
+
+> Source-grounded context for agents working with @onlinechefgroep/pi-agent-orchestrator.
+
+## Product
+
+Pi Agent Orchestrator is an ES-module Pi extension. It runs inside the Pi coding-agent host and does not operate as a standalone agent server. The package adds autonomous sub-agent orchestration, permission inheritance, structured handoffs, recurring schedules, swarm coordination, prompt compression, and a responsive terminal dashboard.
+
+Package: `@onlinechefgroep/pi-agent-orchestrator`
+License: MIT
+Runtime: Node.js 22 or newer
+Entry point: `dist/index.js` through `package.json` → `pi.extensions`
+
+## Installation
+
+```bash
+pi install npm:@onlinechefgroep/pi-agent-orchestrator
+```
+
+Install locally for one project:
+
+```bash
+pi install npm:@onlinechefgroep/pi-agent-orchestrator -l
+```
+
+Open the dashboard from a Pi session with `/agents`.
+
+## Built-in agent types
+
+- Explore: read-only repository investigation and parallel evidence gathering.
+- Plan: read-only architecture and implementation planning.
+- Analysis: read-only analysis with optional context-mode tools.
+- general-purpose: bounded implementation with full tools.
+- Custom agents: Markdown definitions under `.pi/agents/*.md`.
+
+## Orchestration behavior
+
+Permissions are derived from the base agent toolset, parent restrictions, partition filters, and a disallow floor. Work should remain single-agent when it is tightly coupled. Independent research lanes may run in parallel. Writing lanes require explicit file or responsibility partitions. Agents transfer work using structured handoffs containing status, evidence, decisions, and remaining tasks.
+
+## Dashboard
+
+The TUI provides agent-list, resource-top, schedule, performance, help, and settings views. It uses ANSI-aware width helpers, deterministic semantic motion roles, responsive layouts, and reduced-motion support. Important controls include `j`/`k` for navigation, `t` for top view, `z` for schedules, `?` for help, and `/perf` for performance metrics.
+
+## Development and verification
+
+```bash
+npm install
+npm run build
+npm run typecheck
+npm run lint
+npm test
+```
+
+Biome is the only linter. The project uses ES modules and explicit `.js` extensions in TypeScript imports. Test files live under `test/` and use Vitest.
+
+## Important repository invariants
+
+- Do not add Pi host-platform packages as ordinary runtime dependencies.
+- Parse YAML frontmatter booleans explicitly; string `"false"` is truthy in JavaScript.
+- Preserve Map and Set insertion order where the TUI depends on deterministic agent ordering.
+- Use ANSI-aware truncation and visible-width helpers for terminal content.
+- Update settings interfaces, defaults, validation, snapshots, documentation, and menu surfaces together.
+
+## Documentation index
+
+- Overview: https://onlinechefgroep.github.io/pi-agent-orchestrator/README.md
+- Architecture: https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/architecture.md
+- API reference: https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/api-reference.md
+- Custom agents: https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/custom-agents.md
+- Agent guide: https://onlinechefgroep.github.io/pi-agent-orchestrator/AGENTS.md
+- Terminal showcase: https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4
