@@ -1,0 +1,13 @@
+{
+  "version": "0.1",
+  "description": "The Pi Agent Orchestrator documentation site is public and read-only. It does not expose mutation endpoints.",
+  "defaults": {
+    "allow": ["read", "index", "cite"],
+    "deny": ["write", "delete", "execute"]
+  },
+  "resources": {
+    "/": {"allow": ["read", "index", "cite"]},
+    "/docs/**": {"allow": ["read", "index", "cite"]},
+    "/assets/**": {"allow": ["read"]}
+  }
+}
