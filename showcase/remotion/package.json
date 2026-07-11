@@ -1,0 +1,23 @@
+{
+  "name": "pi-agent-orchestrator-showcase",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts PiAgentTerminal ../../docs/images/dashboard_preview.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --overwrite",
+    "poster": "remotion still src/index.ts PiAgentTerminalPoster ../../docs/images/dashboard_preview.png --frame=210 --overwrite"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.487",
+    "ansi-to-html": "0.7.2",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "remotion": "4.0.487"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "6.0.3"
+  }
+}
