@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pi Agent Orchestrator — Multi-agent orchestration for Pi</title>
+    <meta
+      name="description"
+      content="A Pi extension for autonomous sub-agents, structured handoffs, swarms, schedules, prompt compression, and a responsive terminal dashboard."
+    />
+    <link rel="canonical" href="https://onlinechefgroep.github.io/pi-agent-orchestrator/" />
+    <link
+      rel="alternate"
+      type="text/markdown"
+      href="https://onlinechefgroep.github.io/pi-agent-orchestrator/index.md"
+      title="Markdown version"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Pi Agent Orchestrator" />
+    <meta
+      property="og:description"
+      content="Multi-agent orchestration, handoffs, scheduling, swarms, and a production-grade TUI for Pi coding agents."
+    />
+    <meta property="og:url" content="https://onlinechefgroep.github.io/pi-agent-orchestrator/" />
+    <meta property="og:image" content="https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#0b0d10" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Pi Agent Orchestrator",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Linux, macOS, Windows",
+        "description": "A Pi extension for autonomous sub-agent orchestration, handoffs, schedules, swarms, and terminal observability.",
+        "softwareVersion": "0.17.1",
+        "license": "https://opensource.org/licenses/MIT",
+        "codeRepository": "https://github.com/OnlineChefGroep/pi-agent-orchestrator",
+        "author": {
+          "@type": "Organization",
+          "name": "OnlineChefGroep"
+        }
+      }
+    </script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0d10;
+        --panel: #12151a;
+        --panel-2: #171a20;
+        --text: #f2f3f5;
+        --muted: #a2a8b2;
+        --line: rgba(255, 255, 255, 0.12);
+        --accent: #b7d2df;
+        --max: 1180px;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 50% -10%, rgba(100, 119, 133, 0.24), transparent 35rem),
+          var(--bg);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.6;
+      }
+      a { color: inherit; }
+      .shell { width: min(calc(100% - 40px), var(--max)); margin: 0 auto; }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 76px;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand { font-weight: 720; letter-spacing: -0.02em; text-decoration: none; }
+      nav { display: flex; gap: 24px; color: var(--muted); font-size: 14px; }
+      nav a { text-decoration: none; }
+      main { padding: 88px 0 96px; }
+      .eyebrow {
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      h1 {
+        max-width: 920px;
+        margin: 18px 0 24px;
+        font-size: clamp(48px, 7vw, 88px);
+        line-height: 0.98;
+        letter-spacing: -0.055em;
+      }
+      .lead { max-width: 760px; margin: 0; color: var(--muted); font-size: clamp(18px, 2.3vw, 24px); }
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        min-height: 46px;
+        padding: 0 18px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel-2);
+        text-decoration: none;
+        font-weight: 650;
+      }
+      .button.primary { background: var(--text); color: #0b0d10; }
+      .terminal {
+        margin-top: 64px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: #080a0d;
+        box-shadow: 0 42px 110px rgba(0, 0, 0, 0.52);
+      }
+      .terminal-bar {
+        display: flex;
+        align-items: center;
+        height: 50px;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(#1a1d23, #121419);
+        color: var(--muted);
+        font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .dots { display: flex; gap: 8px; margin-right: 18px; }
+      .dot { width: 11px; height: 11px; border-radius: 999px; background: #70747d; }
+      video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #080a0d; }
+      section { margin-top: 104px; }
+      h2 { margin: 0 0 18px; font-size: clamp(32px, 4vw, 50px); letter-spacing: -0.04em; }
+      .section-lead { max-width: 760px; color: var(--muted); font-size: 18px; }
+      .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 32px; }
+      .card { padding: 24px; border: 1px solid var(--line); border-radius: 14px; background: rgba(18, 21, 26, 0.82); }
+      .card h3 { margin: 0 0 8px; font-size: 19px; }
+      .card p { margin: 0; color: var(--muted); }
+      pre {
+        overflow-x: auto;
+        margin: 28px 0 0;
+        padding: 22px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #080a0d;
+        color: #dfe4e8;
+        font: 15px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .docs { display: grid; gap: 1px; margin-top: 28px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--line); }
+      .docs a { display: flex; justify-content: space-between; gap: 20px; padding: 18px 20px; background: var(--panel); text-decoration: none; }
+      .docs span { color: var(--muted); }
+      footer { padding: 34px 0 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+      @media (max-width: 820px) {
+        nav { display: none; }
+        main { padding-top: 58px; }
+        .grid { grid-template-columns: 1fr; }
+        section { margin-top: 76px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="shell">
+      <a class="brand" href="./">Pi Agent Orchestrator</a>
+      <nav aria-label="Primary navigation">
+        <a href="#showcase">Showcase</a>
+        <a href="#capabilities">Capabilities</a>
+        <a href="#install">Install</a>
+        <a href="#documentation">Documentation</a>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <article>
+        <p class="eyebrow">Pi extension · autonomous agent infrastructure</p>
+        <h1>Run a coordinated agent fleet from one terminal.</h1>
+        <p class="lead">
+          Spawn specialized agents, partition work, schedule recurring jobs, coordinate swarms,
+          compress prompts, and inspect the full fleet through a responsive TUI.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="#install">Install package</a>
+          <a class="button" href="README.md">Read the full README</a>
+          <a class="button" href="index.md">Markdown mirror</a>
+        </div>
+
+        <section id="showcase" aria-labelledby="showcase-heading">
+          <h2 id="showcase-heading">The actual terminal, not a mockup.</h2>
+          <p class="section-lead">
+            The capture is generated from the project’s compiled dashboard, top-view, and widget
+            renderers. Remotion supplies the framing and final encode; the terminal frames come from
+            the real implementation.
+          </p>
+          <div class="terminal">
+            <div class="terminal-bar"><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>pi — /agents</div>
+            <video controls preload="metadata" poster="assets/dashboard_preview.png">
+              <source src="assets/dashboard_preview.mp4" type="video/mp4" />
+              Your browser does not support embedded MP4 video. Open the
+              <a href="assets/dashboard_preview.mp4">direct video file</a>.
+            </video>
+          </div>
+        </section>
+
+        <section id="capabilities" aria-labelledby="capabilities-heading">
+          <h2 id="capabilities-heading">Orchestration primitives that compose.</h2>
+          <p class="section-lead">
+            The extension stays inside the Pi host and adds the control-plane functions needed for
+            bounded, observable multi-agent execution.
+          </p>
+          <div class="grid">
+            <div class="card"><h3>Sub-agents</h3><p>Explore, Plan, Analysis, general-purpose, and custom agent definitions with inherited permissions.</p></div>
+            <div class="card"><h3>Structured handoffs</h3><p>Machine-readable transfers with status, evidence, decisions, and remaining work.</p></div>
+            <div class="card"><h3>Swarm coordination</h3><p>Dynamic join and leave behavior with live fleet status and bounded concurrency.</p></div>
+            <div class="card"><h3>Scheduling</h3><p>Persistent recurring jobs and a dedicated daemon schedule view.</p></div>
+            <div class="card"><h3>Prompt compression</h3><p>Minimal, balanced, and aggressive policies with global and per-agent controls.</p></div>
+            <div class="card"><h3>TUI observability</h3><p>Responsive list, resource top, schedule, performance, help, and settings views.</p></div>
+          </div>
+        </section>
+
+        <section id="install" aria-labelledby="install-heading">
+          <h2 id="install-heading">Install into an existing Pi environment.</h2>
+          <p class="section-lead">Requires a working Pi host with <code>@earendil-works/pi-coding-agent</code>.</p>
+          <pre class="language-bash"><code>pi install npm:@onlinechefgroep/pi-agent-orchestrator
+
+# Open the dashboard inside Pi
+/agents</code></pre>
+        </section>
+
+        <section id="documentation" aria-labelledby="documentation-heading">
+          <h2 id="documentation-heading">Source-grounded documentation.</h2>
+          <p class="section-lead">Human and agent-readable entry points are published from the same repository revision.</p>
+          <div class="docs">
+            <a href="README.md"><strong>README</strong><span>Installation, quick start, features</span></a>
+            <a href="docs/architecture.md"><strong>Architecture</strong><span>Modules and data flow</span></a>
+            <a href="docs/api-reference.md"><strong>API reference</strong><span>Tools and settings</span></a>
+            <a href="AGENTS.md"><strong>AGENTS.md</strong><span>Repository invariants for coding agents</span></a>
+            <a href="llms.txt"><strong>llms.txt</strong><span>Compact LLM discovery index</span></a>
+            <a href="llms-full.txt"><strong>llms-full.txt</strong><span>Expanded model context</span></a>
+          </div>
+        </section>
+      </article>
+    </main>
+
+    <footer>
+      <div class="shell">MIT licensed · OnlineChefGroep · Built for the Pi coding-agent host.</div>
+    </footer>
+  </body>
+</html>
