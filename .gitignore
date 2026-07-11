@@ -83,3 +83,10 @@ bun.lockb
 
 # Pages site build output
 _site/
+
+# Hosted site files (GitHub Pages, not part of the npm package)
+agent-permissions.json
+sitemap.md
+sitemap.xml
+robots.txt
+qodana.yaml
