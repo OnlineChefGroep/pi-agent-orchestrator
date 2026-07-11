@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentRecord } from "../src/types.js";
-import { renderTopTable, sortEntries, type AgentTopEntry } from "../src/ui/agent-top-renderer.js";
+import { type AgentTopEntry, renderTopTable, sortEntries } from "../src/ui/agent-top-renderer.js";
 import { renderDashboardHeader } from "../src/ui/dashboard/header.js";
 import type { DashboardRenderState } from "../src/ui/dashboard/types.js";
 import type { BoxChars, DashboardTheme } from "../src/ui/theme.js";
