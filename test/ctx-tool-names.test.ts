@@ -27,8 +27,16 @@ describe("CTX_TOOL_NAMES", () => {
     }
   });
 
-  it("is declared as a readonly tuple (single source of truth)", () => {
-    const ref = CTX_TOOL_NAMES;
-    expect(ref).toBe(CTX_TOOL_NAMES);
+  it("matches the exact canonical ctx_* list in order (single source of truth)", () => {
+    // Locks the SSOT: catches accidental additions, removals, or reordering
+    // of the sandbox tool list, which the presence-only `toContain` checks miss.
+    expect([...CTX_TOOL_NAMES]).toEqual([
+      "ctx_execute",
+      "ctx_execute_file",
+      "ctx_search",
+      "ctx_index",
+      "ctx_batch_execute",
+      "ctx_stats",
+    ]);
   });
 });

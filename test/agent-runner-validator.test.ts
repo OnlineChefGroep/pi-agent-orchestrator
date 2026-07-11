@@ -1,3 +1,4 @@
+import type { AgentSession, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import type {
   ResumeAgentFn,
@@ -29,8 +30,11 @@ function passDeps(overrides: Partial<ValidationDeps> = {}): ValidationDeps {
   };
 }
 
-const session = {} as any;
-const ctx = {} as any;
+// These are passed straight through to the injected runAgent/resumeAgent fakes
+// and never dereferenced, so an empty object typed against the real platform
+// shapes is honest (no `as any` — see AGENTS.md rule #8).
+const session = {} as unknown as AgentSession;
+const ctx = {} as unknown as ExtensionContext;
 
 const FENCE = "```";
 
@@ -169,12 +173,36 @@ describe("runAdversarialValidation", () => {
     expect(dispatched).toContain("validation:end");
   });
 
-  it("runs all configured validators in parallel", async () => {
-    let count = 0;
+  it("runs all configured validators concurrently (fan-out, not sequential)", async () => {
+    const validatorCount = 3;
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let started = 0;
+    let openGate!: () => void;
+    // Resolves once every validator has entered runAgent.
+    const allStarted = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+
     const runAgent = (vi.fn(async () => {
-      count++;
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      if (++started === validatorCount) openGate();
+      // Block until every validator has started. Concurrent fan-out opens the
+      // gate immediately; a sequential loop never would, so bound the wait to
+      // keep a regression fast (it fails on maxInFlight, not by hanging).
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        allStarted,
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, 1000);
+        }),
+      ]);
+      if (timer) clearTimeout(timer);
+      inFlight--;
       return { responseText: passJson() };
     }) as unknown) as RunAgentFn;
+
     await runAdversarialValidation(
       session,
       ctx,
@@ -187,6 +215,11 @@ describe("runAdversarialValidation", () => {
       "agent-1",
       passDeps({ runAgent }),
     );
-    expect(count).toBe(3);
+
+    expect(runAgent).toHaveBeenCalledTimes(validatorCount);
+    // All three validators were in flight simultaneously — proof of the
+    // Promise.all fan-out rather than a sequential await loop (which would
+    // cap maxInFlight at 1).
+    expect(maxInFlight).toBe(validatorCount);
   });
 });
