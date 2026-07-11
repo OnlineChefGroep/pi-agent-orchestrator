@@ -30,26 +30,36 @@ vi.mock("../src/ui/theme.js", () => ({
   }),
 }));
 
-vi.mock("../src/ui/dashboard/helpers.js", () => ({
-  activityText: vi.fn((_rec: AgentRecord, act?: { message?: string }) => act?.message ?? "idle"),
-  agentStats: vi.fn((_rec: AgentRecord, act?: { turnCount?: number; tokenCount?: number }) => {
-    const t = act?.turnCount ?? 0;
-    const tokens = act?.tokenCount ? `${act.tokenCount} tok` : "";
-    return `t${t} ${tokens}`.trim();
-  }),
-  statusColor: vi.fn((rec: AgentRecord, _th: { accent: string; error: string; success: string; dim: string }) => {
-    if (rec.status === "error") return _th.error;
-    if (rec.status === "completed") return _th.success;
-    return _th.accent;
-  }),
-  statusIcon: vi.fn((rec: AgentRecord, _frame: number) => {
-    if (rec.status === "running") return "●";
-    if (rec.status === "completed") return "✓";
-    if (rec.status === "error") return "✗";
-    if (rec.status === "queued") return "◔";
-    return "·";
-  }),
-}));
+vi.mock("../src/ui/dashboard/helpers.js", () => {
+  const statusLabel = (rec: AgentRecord): string => {
+    if (rec.status === "running") return "RUN";
+    if (rec.status === "queued") return "QUEUE";
+    if (rec.status === "completed" || rec.status === "steered") return "DONE";
+    if (rec.status === "stopped") return "STOPPED";
+    return "FAILED";
+  };
+  return {
+    activityText: vi.fn((_rec: AgentRecord, act?: { message?: string }) => act?.message ?? "idle"),
+    agentStats: vi.fn((_rec: AgentRecord, act?: { turnCount?: number; tokenCount?: number }) => {
+      const t = act?.turnCount ?? 0;
+      const tokens = act?.tokenCount ? `${act.tokenCount} tok` : "";
+      return `t${t} ${tokens}`.trim();
+    }),
+    statusColor: vi.fn((rec: AgentRecord, _th: { accent: string; error: string; success: string; dim: string }) => {
+      if (rec.status === "error") return _th.error;
+      if (rec.status === "completed" || rec.status === "steered") return _th.success;
+      return _th.accent;
+    }),
+    statusIcon: vi.fn((rec: AgentRecord, _frame: number) => {
+      if (rec.status === "running") return "●";
+      if (rec.status === "completed" || rec.status === "steered") return "✓";
+      if (rec.status === "error" || rec.status === "aborted") return "✕";
+      if (rec.status === "queued") return "┅";
+      return "·";
+    }),
+    statusLabel: vi.fn(statusLabel),
+  };
+});
 
 vi.mock("../src/ui/dashboard/progress.js", () => ({
   renderTurnProgress: vi.fn((turn: number, max: number, _barWidth: number, _th: unknown) => {
@@ -149,7 +159,7 @@ describe("renderRunningCard", () => {
     const rec = makeRecord({ description: "" });
     const state = makeState({ agents: [rec] });
     const result = renderRunningCard(rec, 80, th, box, state);
-    expect(result.some((l) => l.includes("(no description)"))).toBe(true);
+    expect(result.some((l) => l.includes("No task description provided"))).toBe(true);
   });
 
   it("shows fallback text when description is undefined", () => {
@@ -157,7 +167,7 @@ describe("renderRunningCard", () => {
     delete (rec as Record<string, unknown>).description;
     const state = makeState({ agents: [rec] });
     const result = renderRunningCard(rec, 80, th, box, state);
-    expect(result.some((l) => l.includes("(no description)"))).toBe(true);
+    expect(result.some((l) => l.includes("No task description provided"))).toBe(true);
   });
 
   it("shows progress bar when running with maxTurns", () => {

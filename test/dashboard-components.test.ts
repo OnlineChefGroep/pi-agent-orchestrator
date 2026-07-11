@@ -169,18 +169,18 @@ describe("renderTurnProgress", () => {
 // ═══════════════════════════════════════════════════════════════════════
 
 const { statusIcon, statusColor, agentStats, activityText } = await import("../src/ui/dashboard/helpers.js");
-const { getSpinnerFrame } = await import("../src/ui/animation.js");
+const { getAgentSpinnerFrame } = await import("../src/ui/animation.js");
 
 describe("statusIcon", () => {
   it("returns spinner frame for running agents", () => {
     const rec = mockRecord({ status: "running" });
-    expect(statusIcon(rec, 0)).toBe(getSpinnerFrame(0));
-    expect(statusIcon(rec, 5)).toBe(getSpinnerFrame(5));
+    expect(statusIcon(rec, 0)).toBe(getAgentSpinnerFrame(rec.id, 0));
+    expect(statusIcon(rec, 5)).toBe(getAgentSpinnerFrame(rec.id, 5));
   });
 
-  it("returns ◔ for queued agents", () => {
+  it("returns ┅ for queued agents", () => {
     const rec = mockRecord({ status: "queued" });
-    expect(statusIcon(rec, 0)).toBe("◔");
+    expect(statusIcon(rec, 0)).toBe("┅");
   });
 
   it("returns ✓ for completed agents", () => {
@@ -198,14 +198,14 @@ describe("statusIcon", () => {
     expect(statusIcon(rec, 0)).toBe("■");
   });
 
-  it("returns ✗ for error agents", () => {
+  it("returns ✕ for error agents", () => {
     const rec = mockRecord({ status: "error" });
-    expect(statusIcon(rec, 0)).toBe("✗");
+    expect(statusIcon(rec, 0)).toBe("✕");
   });
 
-  it("returns ✗ for aborted agents", () => {
+  it("returns ✕ for aborted agents", () => {
     const rec = mockRecord({ status: "aborted" });
-    expect(statusIcon(rec, 0)).toBe("✗");
+    expect(statusIcon(rec, 0)).toBe("✕");
   });
 });
 
@@ -230,8 +230,8 @@ describe("statusColor", () => {
     expect(statusColor(mockRecord({ status: "aborted" }), th)).toBe(th.error);
   });
 
-  it("returns dim for queued", () => {
-    expect(statusColor(mockRecord({ status: "queued" }), th)).toBe(th.dim);
+  it("returns highlight for queued", () => {
+    expect(statusColor(mockRecord({ status: "queued" }), th)).toBe(th.highlight);
   });
 
   it("returns dim for stopped", () => {
@@ -335,7 +335,7 @@ describe("activityText", () => {
   it("returns waiting message for queued agent", () => {
     const rec = mockRecord({ status: "queued" });
     const text = activityText(rec);
-    expect(text).toBe("waiting for an available slot");
+    expect(text).toBe("waiting for an available execution slot");
   });
 
   it("returns status string as fallback", () => {
@@ -388,12 +388,23 @@ describe("renderDashboardHeader", () => {
     expect(lines[4]).toContain("┤");
   });
 
-  it("title line contains AGENT DASHBOARD", () => {
+  it("title line contains PI ORCHESTRATOR brand", () => {
     const lines = renderDashboardHeader(80, th, box, mockState());
-    expect(lines[1]).toContain("AGENT DASHBOARD");
+    expect(lines[1]).toContain("PI ORCHESTRATOR");
   });
 
-  it("summary line shows agent counts", () => {
+  it("title line shows LIVE state when agents are active", () => {
+    const agents = [mockRecord({ status: "running" })];
+    const lines = renderDashboardHeader(80, th, box, mockState(agents));
+    expect(lines.join("\n")).toContain("LIVE");
+  });
+
+  it("title line shows IDLE state for an empty fleet", () => {
+    const lines = renderDashboardHeader(80, th, box, mockState([]));
+    expect(lines.join("\n")).toContain("IDLE");
+  });
+
+  it("summary line shows compact agent counts", () => {
     const agents = [
       mockRecord({ status: "running" }),
       mockRecord({ status: "running" }),
@@ -401,29 +412,29 @@ describe("renderDashboardHeader", () => {
     ];
     const lines = renderDashboardHeader(80, th, box, mockState(agents));
     const summary = lines[3];
-    expect(summary).toContain("2 running");
-    expect(summary).toContain("1 done");
+    expect(summary).toContain("2");
+    expect(summary).toContain("1");
   });
 
-  it("summary line shows error count when errors exist", () => {
+  it("summary line shows failed count when errors exist", () => {
     const agents = [
       mockRecord({ status: "error" }),
     ];
     const lines = renderDashboardHeader(80, th, box, mockState(agents));
-    expect(lines[3]).toContain("1 error");
+    expect(lines[3]).toContain("✕");
   });
 
-  it("summary line hides error count when no errors", () => {
+  it("summary line hides failed count when no errors", () => {
     const agents = [mockRecord({ status: "running" })];
     const lines = renderDashboardHeader(80, th, box, mockState(agents));
-    expect(lines[3]).not.toContain("error");
+    expect(lines[3]).not.toContain("✕");
   });
 
   it("summary line shows selected count when items are selected", () => {
     const agents = [mockRecord({ status: "running" })];
     const selectedIds = new Set(["test-1"]);
     const lines = renderDashboardHeader(80, th, box, mockState(agents, selectedIds));
-    expect(lines[3]).toContain("1 selected");
+    expect(lines[3]).toContain("◆");
   });
 
   it("all lines fit within the given width", () => {
@@ -439,7 +450,7 @@ describe("renderDashboardHeader", () => {
   it("handles empty agent list gracefully", () => {
     const lines = renderDashboardHeader(80, th, box, mockState([]));
     expect(lines.length).toBe(5);
-    expect(lines[3]).toContain("0 running");
+    expect(lines.join("\n")).toContain("0 agents");
   });
 
   it("applies TrueColor background to all header lines when bgHeader is set", () => {

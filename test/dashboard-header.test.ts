@@ -16,6 +16,7 @@ vi.mock("../src/ui/tui-shim.js", () => ({
 
 vi.mock("../src/agent-registry.js", () => ({
   getUiStyle: vi.fn(() => "premium"),
+  getAnimationStyle: vi.fn(() => "orchestrator"),
 }));
 
 vi.mock("../src/ui/theme.js", () => ({
@@ -102,72 +103,73 @@ describe("renderDashboardHeader", () => {
     expect(result.length).toBeGreaterThanOrEqual(4);
   });
 
-  it("includes the dashboard title", () => {
+  it("includes the dashboard brand", () => {
     const state = makeState([makeRecord("a1", { status: "running" })]);
     const result = renderDashboardHeader(80, th, box, state);
-    expect(result.some((l) => l.includes("AGENT DASHBOARD"))).toBe(true);
+    expect(result.some((l) => l.includes("PI ORCHESTRATOR"))).toBe(true);
   });
 
-  it("includes the UI style mode", () => {
+  it("includes the UI style / motion profile", () => {
     const state = makeState([makeRecord("a1", { status: "running" })]);
-    const result = renderDashboardHeader(80, th, box, state);
-    expect(result.some((l) => l.includes("premium mode"))).toBe(true);
+    const result = renderDashboardHeader(120, th, box, state);
+    expect(result.some((l) => l.includes("premium"))).toBe(true);
+    expect(result.some((l) => l.includes("orchestrator"))).toBe(true);
   });
 
-  it("shows running count in summary bar", () => {
+  it("shows LIVE state when agents are active", () => {
     const agents = [makeRecord("a1", { status: "running" }), makeRecord("a2", { status: "running" })];
     const state = makeState(agents);
     const result = renderDashboardHeader(80, th, box, state);
-    expect(result.some((l) => l.includes("2 running"))).toBe(true);
+    expect(result.some((l) => l.includes("LIVE"))).toBe(true);
   });
 
-  it("shows queued count in summary bar", () => {
+  it("shows queued glyph in summary bar", () => {
     const agents = [makeRecord("a1", { status: "queued" })];
     const state = makeState(agents);
     const result = renderDashboardHeader(80, th, box, state);
-    expect(result.some((l) => l.includes("1 queued"))).toBe(true);
+    expect(result.some((l) => l.includes("◌"))).toBe(true);
   });
 
-  it("shows completed count in summary bar", () => {
+  it("shows completed glyph in summary bar", () => {
     const agents = [makeRecord("a1", { status: "completed" })];
     const state = makeState(agents);
     const result = renderDashboardHeader(80, th, box, state);
-    expect(result.some((l) => l.includes("1 done"))).toBe(true);
+    expect(result.some((l) => l.includes("✓"))).toBe(true);
   });
 
   it("shows steered agents as done", () => {
     const agents = [makeRecord("a1", { status: "steered" })];
     const state = makeState(agents);
     const result = renderDashboardHeader(80, th, box, state);
-    expect(result.some((l) => l.includes("1 done"))).toBe(true);
+    expect(result.some((l) => l.includes("✓"))).toBe(true);
   });
 
-  it("shows error count when errors exist", () => {
+  it("shows failed glyph when errors exist", () => {
     const agents = [makeRecord("a1", { status: "error" })];
     const state = makeState(agents);
     const result = renderDashboardHeader(80, th, box, state);
-    expect(result.some((l) => l.includes("1 error"))).toBe(true);
+    expect(result.some((l) => l.includes("✕"))).toBe(true);
   });
 
-  it("hides error count when no errors", () => {
+  it("hides failed glyph when no errors", () => {
     const agents = [makeRecord("a1", { status: "completed" })];
     const state = makeState(agents);
     const result = renderDashboardHeader(80, th, box, state);
-    expect(result.some((l) => l.includes("error"))).toBe(false);
+    expect(result.some((l) => l.includes("✕"))).toBe(false);
   });
 
-  it("shows selected count when agents are selected", () => {
+  it("shows selected glyph when agents are selected", () => {
     const agents = [makeRecord("a1", { status: "running" }), makeRecord("a2", { status: "running" })];
     const state = makeState(agents, { selectedIds: new Set(["a1"]) });
     const result = renderDashboardHeader(80, th, box, state);
-    expect(result.some((l) => l.includes("1 selected"))).toBe(true);
+    expect(result.some((l) => l.includes("◆"))).toBe(true);
   });
 
-  it("hides selected count when nothing is selected", () => {
+  it("hides selected glyph when nothing is selected", () => {
     const agents = [makeRecord("a1", { status: "running" })];
     const state = makeState(agents, { selectedIds: new Set() });
     const result = renderDashboardHeader(80, th, box, state);
-    expect(result.some((l) => l.includes("selected"))).toBe(false);
+    expect(result.some((l) => l.includes("◆"))).toBe(false);
   });
 
   it("shows session usage meters when manager is provided", () => {
@@ -179,15 +181,15 @@ describe("renderDashboardHeader", () => {
       getSessionMaxTurns: () => 25,
     };
     const result = renderDashboardHeader(80, th, box, state, mockManager as Parameters<typeof renderDashboardHeader>[4]);
-    expect(result.some((l) => l.includes("5/10")) || result.some((l) => l.includes("agents"))).toBe(true);
-    expect(result.some((l) => l.includes("12/25")) || result.some((l) => l.includes("turns"))).toBe(true);
+    expect(result.some((l) => l.includes("5/10"))).toBe(true);
+    expect(result.some((l) => l.includes("12/25"))).toBe(true);
   });
 
   it("does not show session meters when manager absent", () => {
     const agents = [makeRecord("a1", { status: "running" })];
     const state = makeState(agents);
     const result = renderDashboardHeader(80, th, box, state);
-    expect(result.some((l) => l.includes("agents") && l.includes("turns"))).toBe(false);
+    expect(result.some((l) => l.includes("5/10"))).toBe(false);
   });
 
   it("renders top border as first line", () => {

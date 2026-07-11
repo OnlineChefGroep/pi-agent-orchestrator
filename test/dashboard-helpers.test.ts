@@ -12,7 +12,7 @@ const theme = {
   reset: "",
   title: "",
   border: "",
-  highlight: "",
+  highlight: "HIGHLIGHT",
   warning: "WARNING",
 } as any;
 
@@ -34,7 +34,7 @@ describe("statusIcon", () => {
   });
 
   it("returns queued icon", () => {
-    expect(statusIcon({ ...baseRecord, status: "queued" }, 0)).toBe("◔");
+    expect(statusIcon({ ...baseRecord, status: "queued" }, 0)).toBe("┅");
   });
 
   it("returns check for completed", () => {
@@ -50,11 +50,11 @@ describe("statusIcon", () => {
   });
 
   it("returns cross for error", () => {
-    expect(statusIcon({ ...baseRecord, status: "error" }, 0)).toBe("✗");
+    expect(statusIcon({ ...baseRecord, status: "error" }, 0)).toBe("✕");
   });
 
   it("returns cross for unknown status", () => {
-    expect(statusIcon({ ...baseRecord, status: "unknown" as any }, 0)).toBe("✗");
+    expect(statusIcon({ ...baseRecord, status: "unknown" as any }, 0)).toBe("◦");
   });
 });
 
@@ -71,8 +71,12 @@ describe("statusColor", () => {
     expect(statusColor({ ...baseRecord, status: "aborted" }, theme)).toBe("ERROR");
   });
 
-  it("uses dim for default", () => {
-    expect(statusColor({ ...baseRecord, status: "queued" }, theme)).toBe("DIM");
+  it("uses highlight for queued", () => {
+    expect(statusColor({ ...baseRecord, status: "queued" }, theme)).toBe("HIGHLIGHT");
+  });
+
+  it("uses dim for unknown/default", () => {
+    expect(statusColor({ ...baseRecord, status: "unknown" as any }, theme)).toBe("DIM");
   });
 });
 
