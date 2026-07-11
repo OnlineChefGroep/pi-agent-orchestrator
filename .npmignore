@@ -15,3 +15,13 @@ HANDOFF.md
 INFRASTRUCTURE.md
 CLAUDE.md
 commit_message.txt
+
+# OpenCode V2 dev-only config (not shipped with npm)
+.opencode/
+
+# Hosted site files (GitHub Pages, not part of the npm package)
+agent-permissions.json
+sitemap.md
+sitemap.xml
+robots.txt
+qodana.yaml
