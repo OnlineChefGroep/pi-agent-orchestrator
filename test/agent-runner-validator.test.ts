@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AgentSession, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type {
   ResumeAgentFn,
   RunAgentFn,
@@ -10,14 +11,19 @@ import type { AgentConfig } from "../src/types.js";
 function makeConfig(
   validators: { agentId: string; criteria: readonly string[] }[],
 ): AgentConfig {
-  return {
+  const config = {
     name: "main",
     displayName: "Main Agent",
     description: "does the work",
     systemPrompt: "be helpful",
+    promptMode: "replace",
     builtinToolNames: ["bash"],
+    extensions: false,
+    skills: false,
     validators,
-  } as unknown as AgentConfig;
+  } satisfies AgentConfig;
+
+  return config;
 }
 
 function passDeps(overrides: Partial<ValidationDeps> = {}): ValidationDeps {
@@ -29,8 +35,8 @@ function passDeps(overrides: Partial<ValidationDeps> = {}): ValidationDeps {
   };
 }
 
-const session = {} as any;
-const ctx = {} as any;
+const session = {} as unknown as AgentSession;
+const ctx = {} as unknown as ExtensionContext;
 
 const FENCE = "```";
 
