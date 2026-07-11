@@ -81,7 +81,7 @@ dashboard.
 
 | Type | Mode | Use when |
 |------|------|----------|
-| Explore | read-only | Parallel codebase audit, grep/find sweeps |
+| Explore | read-only | Parallel codebase audit, read/grep sweeps |
 | Plan | read-only | Architecture pass before multi-file edits |
 | Analysis | read-only + ctx_* | Data/compute via sandbox (requires @onlinechef/context-mode) |
 | general-purpose | full tools | Bounded implementation after Plan/Explore land |
