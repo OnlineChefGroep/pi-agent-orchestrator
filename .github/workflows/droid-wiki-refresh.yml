@@ -1,8 +1,25 @@
-name: Wiki (RepoWiki → Pages)
+name: Showcase and Agent-Ready Pages
 
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "showcase/**"
+      - "site/**"
+      - "docs/**"
+      - "README.md"
+      - "AGENTS.md"
+      - "llms.txt"
+      - "llms-full.txt"
+      - "sitemap.md"
+      - "sitemap.xml"
+      - "robots.txt"
+      - "agent-permissions.json"
+      - ".github/workflows/droid-wiki-refresh.yml"
+      - "package.json"
+      - "package-lock.json"
   workflow_dispatch:
 
 permissions:
@@ -12,44 +29,48 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
-  generate-wiki:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
 
-      - name: Install RepoWiki
-        run: pip install repowiki
+      - name: Install project dependencies
+        run: npm ci
 
-      - name: Generate wiki
+      - name: Render real TUI showcase
+        run: npm run showcase:remotion
+
+      - name: Assemble static site
         run: |
-          repowiki scan . \
-            --format html \
-            --output wiki-out/index.html \
-            --model "${REPOWIKI_MODEL:-openai/gpt-4o-mini}"
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          rm -rf _site
+          mkdir -p _site/assets _site/docs _site/.well-known
+          cp site/index.html _site/index.html
+          cp site/index.md _site/index.md
+          cp README.md AGENTS.md CHANGELOG.md _site/
+          cp llms.txt llms-full.txt sitemap.md sitemap.xml robots.txt agent-permissions.json _site/
+          cp -r docs/* _site/docs/
+          cp docs/images/dashboard_preview.mp4 _site/assets/dashboard_preview.mp4
+          cp docs/images/dashboard_preview.png _site/assets/dashboard_preview.png
+          cp agent-permissions.json _site/.well-known/agent-permissions.json
+          touch _site/.nojekyll
 
-      - name: Add existing docs
-        run: |
-          mkdir -p wiki-out/docs
-          cp -r docs/* wiki-out/docs/ 2>/dev/null || true
-          cp README.md wiki_out/README.md 2>/dev/null || true
-          cp CHANGELOG.md wiki_out/CHANGELOG.md 2>/dev/null || true
-
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: wiki-out
+          path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment
