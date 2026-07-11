@@ -1,0 +1,22 @@
+# Pi Agent Orchestrator
+
+> Multi-agent orchestration extension for the Pi coding-agent host, including sub-agents, structured handoffs, swarms, scheduling, prompt compression, and a responsive TUI.
+
+## Primary documentation
+
+- [Overview and installation](https://onlinechefgroep.github.io/pi-agent-orchestrator/README.md)
+- [Architecture](https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/architecture.md)
+- [API reference](https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/api-reference.md)
+- [Custom agents](https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/custom-agents.md)
+- [Coding-agent repository guide](https://onlinechefgroep.github.io/pi-agent-orchestrator/AGENTS.md)
+
+## Machine-readable context
+
+- [Expanded context](https://onlinechefgroep.github.io/pi-agent-orchestrator/llms-full.txt)
+- [Markdown site mirror](https://onlinechefgroep.github.io/pi-agent-orchestrator/index.md)
+- [Human-readable sitemap](https://onlinechefgroep.github.io/pi-agent-orchestrator/sitemap.md)
+- [XML sitemap](https://onlinechefgroep.github.io/pi-agent-orchestrator/sitemap.xml)
+
+## Media
+
+- [Real terminal showcase](https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4)
