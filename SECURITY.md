@@ -1,36 +1,53 @@
-# Security Policy
+# Security
 
-## Supported Versions
+Thanks for helping keep this project safe. The good news: this is a local
+pi extension, it runs in your own Pi coding-agent host, it doesn't talk to
+servers, and it doesn't handle credentials, personal data, or anything
+remotely dangerous. So this page is short on purpose.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.16.x  | :white_check_mark: |
-| < 0.16  | :x:                |
+## Reporting an issue
 
-This project is a **pi extension** — it runs inside the Pi coding agent host, not as a standalone service. Security reports should scope concerns to the extension's behavior within that host context.
+If you find a security problem, **open a GitHub issue** on
+[OnlineChefGroep/pi-agent-orchestrator](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues).
+Yes, really — an issue is fine. We're not running a CVE factory here, this
+is a small open-source tool, and public issues are the fastest way to get
+something fixed in the open.
 
-## Reporting a Vulnerability
+If the issue is sensitive enough that you don't want it public, email
+**chefadmin@chefgroep.online** and we'll discuss it from there.
 
-We take security seriously. To report a vulnerability:
+## What we'd like to know
 
-1. **Do not open a public issue.** Instead, email security concerns to **security@chefgroep.nl** or use [GitHub's private security advisories](https://github.com/OnlineChefGroep/pi-agent-orchestrator/security/advisories/new).
-2. We aim to acknowledge reports within **5 business days** and provide an initial assessment.
-3. We will keep you informed of progress and coordinate disclosure timing.
+- What you did (the steps or a tiny repro)
+- What you saw
+- What you expected
+- The version (run "npm view @onlinechefgroep/pi-agent-orchestrator version" or check the commit hash)
 
-**What to include in your report:**
-- Description of the vulnerability
-- Steps to reproduce or a proof of concept
-- Affected version(s)
-- Any potential mitigations you've identified
+## What we'll do
 
-## Security Audits
-
-Past security audits and CVE fixes are documented in:
-- [Security Audit Report](docs/SECURITY_AUDIT_REPORT.md)
-- [Security Audit Verification (2026-05-23)](docs/SECURITY_AUDIT_VERIFICATION_2026-05-23.md)
-
-Known CVEs (CVE-002 through CVE-005) have been addressed in the current release. These fixes include input validation, size limits, and control character sanitization — do not weaken these guards when contributing.
+- Reply within a few days (we're a small team, be patient).
+- Confirm or close the report.
+- If it's real, ship a fix and credit you in the release notes (unless
+  you prefer to stay anonymous).
 
 ## Scope
 
-This policy covers the `@onlinechefgroep/pi-agent-orchestrator` package, its source code, and its published artifacts. The pi host platform (`@earendil-works/pi-*` packages) is maintained separately.
+In scope: the source under "src/", the published npm package
+"@onlinechefgroep/pi-agent-orchestrator", and the example agent templates
+under "examples/agents/".
+
+Out of scope (maintained by their owners, please report to them directly):
+
+- The Pi host platform ("@earendil-works/pi-coding-agent",
+  "@earendil-works/pi-ai", "@earendil-works/pi-agent-core").
+- The optional "@onlinechef/context-mode" peer extension.
+- Your local Pi host, your model provider, and your machine.
+
+## A note on this project
+
+This extension is local-only. It does not make outbound network calls of
+its own, it does not log secrets, and it does not store user data on any
+server. The biggest realistic risk is "it runs commands on your machine
+via a sub-agent you didn't fully understand the prompt of" — and that's a
+prompt review problem, not a security one. Read the prompt your
+sub-agents are given, and pin your tools.
