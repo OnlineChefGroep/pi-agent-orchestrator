@@ -1,0 +1,10 @@
+[codespell]
+# Super-Linter invokes `codespell --config .github/linters/.codespellrc`, so this
+# file fully replaces the shipped default. The first five skips mirror that default
+# (package-lock.json, go.mod, go.sum, *.log, .git). CHANGELOG.md is added because its
+# historical v0.9.x entries are written in Dutch and codespell only understands English.
+# Example false positives: te, alle, tabel.  # codespell:ignore te,alle,tabel
+# Skipping the whole file beats growing ignore-words-list with Dutch words that could
+# mask genuine typos elsewhere in the tree.
+check-hidden =
+skip = */package-lock.json,*/go.mod,*/go.sum,*.log,.git,*/CHANGELOG.md,CHANGELOG.md
