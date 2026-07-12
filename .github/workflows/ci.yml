@@ -115,9 +115,10 @@ jobs:
       - name: Install lowest supported peer dependencies
         run: |
           npm ci
-          npm install --no-save --legacy-peer-deps \
+          npm install --no-save --package-lock=false --include=dev \
             @earendil-works/pi-ai@0.78.0 \
             @earendil-works/pi-coding-agent@0.78.0
+          npm ls @earendil-works/pi-ai @earendil-works/pi-coding-agent
 
       - name: Typecheck
         run: npm run typecheck
