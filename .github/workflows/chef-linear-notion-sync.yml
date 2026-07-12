@@ -1,23 +1,44 @@
-# On PR events: sync this repo → Linear CHEF child issues (+ Notion when configured).
-# Copy to product repos via scripts/deploy_chef_pr_workflows.sh
-
-name: CHEF Linear + Notion Sync
+name: GitHub to Linear Sync
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-  workflow_dispatch:
+  issues:
+    types: [opened, edited, labeled, unlabeled, reopened, closed, assigned, unassigned]
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+      - converted_to_draft
+      - closed
+      - labeled
+      - unlabeled
+
+permissions:
+  contents: read
 
 concurrency:
-  group: chef-linear-notion-${{ github.event.pull_request.number || 'manual' }}
+  group: linear-sync-${{ github.event.issue.number || github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   sync:
-    uses: OnlineChefGroep/OrgBeheer/.github/workflows/chef-dev-sync-reusable.yml@main
-    secrets:
-      LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-      NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-    with:
-      repo: ${{ github.event.repository.name }}
+    name: Sync GitHub item to Linear
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # pull_request_target is intentional: it exposes the repository secret for
+      # forked contributions. Only trusted code from the default branch is checked
+      # out, and no pull-request code or scripts are executed.
+      - name: Checkout trusted default branch
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Sync issue or pull request
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          LINEAR_PARENT_ISSUE: CHE-100
+        run: node scripts/linear-github-sync.mjs
