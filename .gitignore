@@ -80,3 +80,6 @@ bun.lockb
 
 # Omo run continuations (session data)
 .omo/
+
+# Pages site build output
+_site/
