@@ -1,0 +1,164 @@
+name: Contributor Triage
+
+on:
+  issues:
+    types: [opened, labeled, reopened]
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: contributor-triage-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pull-request:
+    name: Classify pull request
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPOSITORY: ${{ github.repository }}
+      NUMBER: ${{ github.event.pull_request.number }}
+      AUTHOR: ${{ github.event.pull_request.user.login }}
+      AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+    steps:
+      - name: Apply path, size, and contributor labels
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ensure_label() {
+            gh label create "$1" \
+              --repo "$REPOSITORY" \
+              --color "$2" \
+              --description "$3" \
+              --force >/dev/null
+          }
+
+          add_label() {
+            gh issue edit "$NUMBER" --repo "$REPOSITORY" --add-label "$1" >/dev/null
+          }
+
+          ensure_label "area: documentation" "0075ca" "Documentation-only or documentation-heavy changes"
+          ensure_label "area: tests" "1d76db" "Test coverage and test infrastructure"
+          ensure_label "area: ci" "5319e7" "Continuous integration and GitHub automation"
+          ensure_label "area: core" "d93f0b" "Core orchestrator source code"
+          ensure_label "area: examples" "bfdadc" "Examples and templates"
+          ensure_label "area: tooling" "c5def5" "Developer scripts and repository tooling"
+
+          files=$(gh api --paginate "repos/$REPOSITORY/pulls/$NUMBER/files?per_page=100" --jq '.[].filename')
+          while IFS= read -r file; do
+            case "$file" in
+              *.md|docs/*) add_label "area: documentation" ;;
+            esac
+            case "$file" in
+              test/*) add_label "area: tests" ;;
+              .github/*) add_label "area: ci" ;;
+              src/*) add_label "area: core" ;;
+              examples/*|.agents/templates/*) add_label "area: examples" ;;
+              scripts/*) add_label "area: tooling" ;;
+            esac
+          done <<< "$files"
+
+          ensure_label "size/xs" "c2e0c6" "Up to 10 changed lines"
+          ensure_label "size/s" "7fdbff" "11 to 50 changed lines"
+          ensure_label "size/m" "fbca04" "51 to 200 changed lines"
+          ensure_label "size/l" "f9d0c4" "201 to 500 changed lines"
+          ensure_label "size/xl" "d73a4a" "More than 500 changed lines"
+
+          current_labels=$(gh api "repos/$REPOSITORY/issues/$NUMBER" --jq '.labels[].name')
+          for label in size/xs size/s size/m size/l size/xl; do
+            if grep -Fxq "$label" <<< "$current_labels"; then
+              gh issue edit "$NUMBER" --repo "$REPOSITORY" --remove-label "$label" >/dev/null
+            fi
+          done
+
+          churn=$(gh api "repos/$REPOSITORY/pulls/$NUMBER" --jq '.additions + .deletions')
+          if (( churn <= 10 )); then
+            add_label "size/xs"
+          elif (( churn <= 50 )); then
+            add_label "size/s"
+          elif (( churn <= 200 )); then
+            add_label "size/m"
+          elif (( churn <= 500 )); then
+            add_label "size/l"
+          else
+            add_label "size/xl"
+          fi
+
+          if [[ "$AUTHOR" != *"[bot]" ]] && \
+             [[ "$AUTHOR_ASSOCIATION" == "FIRST_TIMER" || "$AUTHOR_ASSOCIATION" == "FIRST_TIME_CONTRIBUTOR" ]]; then
+            ensure_label "first-time contributor" "7057ff" "First contribution to this repository"
+            add_label "first-time contributor"
+
+            if ! gh api --paginate "repos/$REPOSITORY/issues/$NUMBER/comments?per_page=100" \
+              --jq '.[].body' | grep -Fq '<!-- first-time-contributor-welcome -->'; then
+              cat > /tmp/welcome.md <<'EOF'
+          <!-- first-time-contributor-welcome -->
+          Thanks for the contribution. CI, review feedback, and merge requirements are documented in `CONTRIBUTING.md` and `AGENTS.md`.
+
+          A maintainer will focus review on correctness and repository invariants. Automated review comments are advisory until verified against the current head.
+          EOF
+              gh issue comment "$NUMBER" --repo "$REPOSITORY" --body-file /tmp/welcome.md
+            fi
+          fi
+
+  issue:
+    name: Prepare contributor issue
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPOSITORY: ${{ github.repository }}
+      NUMBER: ${{ github.event.issue.number }}
+      AUTHOR: ${{ github.event.issue.user.login }}
+      AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
+    steps:
+      - name: Apply contributor discovery labels
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ensure_label() {
+            gh label create "$1" \
+              --repo "$REPOSITORY" \
+              --color "$2" \
+              --description "$3" \
+              --force >/dev/null
+          }
+
+          add_label() {
+            gh issue edit "$NUMBER" --repo "$REPOSITORY" --add-label "$1" >/dev/null
+          }
+
+          labels=$(gh api "repos/$REPOSITORY/issues/$NUMBER" --jq '.labels[].name')
+          if grep -Fxq "good first issue" <<< "$labels"; then
+            ensure_label "help wanted" "008672" "Maintainers welcome external contributions"
+            ensure_label "status: ready for contributor" "0e8a16" "Scoped and ready to be claimed"
+            add_label "help wanted"
+            add_label "status: ready for contributor"
+
+            if ! gh api --paginate "repos/$REPOSITORY/issues/$NUMBER/comments?per_page=100" \
+              --jq '.[].body' | grep -Fq '<!-- contributor-task-ready -->'; then
+              cat > /tmp/contributor-task.md <<'EOF'
+          <!-- contributor-task-ready -->
+          This task is intentionally scoped for a first contribution.
+
+          Before starting, comment that you are working on it. Keep the pull request focused on the acceptance criteria and run `npm run typecheck && npm run lint && npm test` before submission.
+          EOF
+              gh issue comment "$NUMBER" --repo "$REPOSITORY" --body-file /tmp/contributor-task.md
+            fi
+          fi
+
+          if [[ "$AUTHOR" != *"[bot]" ]] && \
+             [[ "$AUTHOR_ASSOCIATION" == "FIRST_TIMER" || "$AUTHOR_ASSOCIATION" == "FIRST_TIME_CONTRIBUTOR" ]]; then
+            ensure_label "first-time contributor" "7057ff" "First contribution to this repository"
+            add_label "first-time contributor"
+          fi
