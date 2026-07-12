@@ -26,8 +26,24 @@ cp "$ROOT/agent-permissions.json" "$OUT/.well-known/agent-permissions.json"
 cp "$ROOT/llms-full.txt" "$OUT/wiki/index.md"
 cp "$ROOT/llms.txt" "$OUT/wiki/llms.txt"
 
-# Preserve the full open-source documentation and agent-ready knowledge base.
-cp -R "$ROOT/docs/." "$OUT/docs/"
+# Public docs only — exclude internal handoff/refactor and RFC drafts.
+PUBLIC_DOCS=(
+	architecture.md
+	api-reference.md
+	custom-agents.md
+	troubleshooting.md
+	index.md
+	repository.md
+	motion-profiles.md
+	HOWTO-perf.md
+	PERFORMANCE.md
+	overdrive-patterns.md
+)
+for doc in "${PUBLIC_DOCS[@]}"; do
+	cp "$ROOT/docs/$doc" "$OUT/docs/$doc"
+done
+mkdir -p "$OUT/docs/images"
+cp -R "$ROOT/docs/images/." "$OUT/docs/images/"
 
 # Showcase assets referenced by index.html / index.md.
 cp "$ROOT/docs/images/dashboard_preview.mp4" "$OUT/assets/dashboard_preview.mp4"
