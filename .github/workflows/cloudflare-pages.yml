@@ -1,0 +1,35 @@
+name: Deploy Cloudflare Pages
+
+# Runs independently from normal CI: once daily or on explicit manual dispatch.
+# Required GitHub Environment secrets: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-pages-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: cloudflare-pages
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Assemble static site
+        run: bash scripts/build-site.sh _site
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@1029e90033977ccf46c2a9b3ddc55e42ad5da467 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy _site --project-name=pi-agent-orchestrator --branch=main
