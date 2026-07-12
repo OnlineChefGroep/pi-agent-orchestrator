@@ -1,4 +1,13 @@
-name: Showcase and Agent-Ready Pages
+name: Docs & Agent-Ready Pages (Open Source)
+
+# Publishes the open-source documentation + agent-ready knowledge base to GitHub Pages.
+# Fully OSS — no proprietary droid dependency.
+#
+# The "DeepWiki" (agent-ready wiki) for this repo is generated open-source from the
+# public GitHub repository (see https://docs.devin.ai/work-with-devin/deepwiki-mcp and
+# https://deepwiki.com/OnlineChefGroep/pi-agent-orchestrator). This workflow only
+# publishes the human-facing docs site plus the llms.txt / llms-full.txt context that
+# DeepWiki and other agents consume, so nothing depends on droid.
 
 on:
   push:
@@ -17,7 +26,7 @@ on:
       - "sitemap.xml"
       - "robots.txt"
       - "agent-permissions.json"
-      - ".github/workflows/droid-wiki-refresh.yml"
+      - ".github/workflows/docs-site.yml"
       - "package.json"
       - "package-lock.json"
   workflow_dispatch:
@@ -38,10 +47,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -56,7 +65,7 @@ jobs:
       - name: Assemble static site
         run: |
           rm -rf _site
-          mkdir -p _site/assets _site/docs _site/.well-known
+          mkdir -p _site/assets _site/docs _site/.well-known _site/wiki
           cp site/index.html _site/index.html
           cp site/index.md _site/index.md
           cp README.md AGENTS.md CHANGELOG.md _site/
@@ -65,6 +74,9 @@ jobs:
           cp docs/images/dashboard_preview.mp4 _site/assets/dashboard_preview.mp4
           cp docs/images/dashboard_preview.png _site/assets/dashboard_preview.png
           cp agent-permissions.json _site/.well-known/agent-permissions.json
+          # Agent-ready knowledge base (DeepWiki consumes the same llms.txt / llms-full.txt)
+          cp llms-full.txt _site/wiki/index.md
+          cp llms.txt _site/wiki/llms.txt
           touch _site/.nojekyll
 
       - name: Upload Pages artifact
