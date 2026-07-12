@@ -25,6 +25,11 @@ updates:
         update-types:
           - minor
           - patch
+      major-upgrades:
+        patterns:
+          - "*"
+        update-types:
+          - major
 
   - package-ecosystem: github-actions
     directory: /
@@ -36,6 +41,7 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - dependencies
+      - github_actions
     commit-message:
       prefix: chore(ci)
     groups:
