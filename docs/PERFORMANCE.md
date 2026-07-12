@@ -534,6 +534,8 @@ Naast de dashboard metrics heeft de `AgentWidget` ook zijn eigen `RenderMetrics`
 
 ### 10.8 Benchmark Tests
 
+Alle benchmark tests gebruiken de gedeelde helper `test/helpers/benchmark-log.ts`. Interne waarden zijn altijd milliseconden (`performance.now()`); sub-ms werk wordt als `µs` weergegeven (×1000). CI draait `node scripts/check-benchmark-thresholds.mjs` als **blocking** required gate met `--retry=0`.
+
 Er zijn **14 render performance benchmarks** in `test/widget-render-perf.test.ts`:
 
 | Groep | Tests | Wat wordt gemeten |

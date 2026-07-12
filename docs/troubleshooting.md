@@ -98,6 +98,38 @@ npm install --legacy-peer-deps
 
 ## // UI / TELEMETRY VIEWS
 
+### Footer status bar missing after Pi reload
+
+**SYMPTOM:** No `N running agents` text in the Pi footer (top bar) after extension reload or `/resume`, even when subagents are active.
+
+**CAUSE:** UI context was previously bound only on `tool_execution_start`. After reload the widget had no `ctx.ui` reference until the next tool ran.
+
+**RECOVERY:** Fixed in `src/index.ts` — `bindWidgetUiCtx()` runs on `session_start` and `tool_execution_start`. Reload Pi or run `/agents` once to confirm. If still absent, verify agents are actually `running` or `queued` (completed agents clear the status bar after linger turns).
+
+### JSON telemetry lines in chat input or scrollback
+
+**SYMPTOM:** Raw `{"type":"agent:loaded",...}` lines appear in the Pi input bar or conversation history.
+
+**CAUSE:** Extension logging or unsubscribed telemetry events writing to stdout/stderr in TTY mode.
+
+**RECOVERY:** Use a build with silent TTY logging (`src/logger.ts`) and silent telemetry drop (`src/telemetry.ts`). Optional debug: `export PI_SUBAGENTS_LOG_LEVEL=debug` (writes to stderr only, not the chat buffer).
+
+### Unexpected multi-agent fan-out (16+ agents from one Agent call)
+
+**SYMPTOM:** One `Agent` tool invocation spawns a crew or swarm without explicit configuration.
+
+**CAUSE:** `orchestrationMode` was previously default `"auto"` / `"crew"`. Default is now `"single"` — one Agent call spawns one agent unless you opt into `auto`, `swarm`, or `crew` in `.pi/subagents.json` or `/agents → Settings`.
+
+**RECOVERY:** Set `orchestrationMode` to `"single"` in `.pi/subagents.json`, or use `"auto"` only when heuristic dispatch is intended.
+
+### Model/thinking params ignored
+
+**SYMPTOM:** Spawned agent uses profile default model despite explicit `model` or `thinking` in the Agent tool call (or vice versa).
+
+**CAUSE:** `resolveAgentInvocationConfig` precedence — explicit tool `params` override agent profile; omitted params fall back to profile.
+
+**RECOVERY:** Pass `model` / `thinking` in the Agent tool call to override. Omit them to use the agent profile from `.pi/agents/*.md`.
+
 ### Widget block fails render
 
 **SYMPTOM:** Telemetry overlay absent.

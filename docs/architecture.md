@@ -145,7 +145,7 @@ Dynamic cluster topology control:
 - Parallel processing state machine.
 - Registry persistence bound to agent lifecycle memory.
 
-### `src/ui/agent-widget.ts` — Above-Editor Widget
+### `src/ui/agent-widget.ts` — Above-Editor Widget + Footer Status Bar
 
 The persistent widget above the editor shows running/queued/finished agents with:
 - Virtual scrolling with pagination
@@ -153,6 +153,17 @@ The persistent widget above the editor shows running/queued/finished agents with
 - Compact batch rendering (3+ queued agents of same type)
 - Activity heatmap indicator
 - Adaptive refresh (200ms active / 1000ms idle)
+
+**Footer status bar:** `AgentWidget.update()` calls `ctx.ui.setStatus("subagents", text)` with a live summary such as `2 running, 1 queued agents`. The status key is always `"subagents"` so it coexists with other extensions' footer slots.
+
+**UI context binding:** On `session_start` and every `tool_execution_start`, `src/index.ts` calls `bindWidgetUiCtx()` — `setUICtx`, `ensureTimer`, and `update`. This ensures the footer status bar and editor widget work immediately after a Pi reload without waiting for the next tool call.
+
+**Cleanup:** `dispose()` and `setUICtx()` on context switch clear both the widget (`setWidget("agents", undefined)`) and footer status (`setStatus("subagents", undefined)`).
+
+### `src/logger.ts` + `src/telemetry.ts` — Interactive Terminal Safety
+
+- **`logger`**: Silent in TTY sessions unless `PI_SUBAGENTS_LOG_LEVEL` is set. Non-interactive processes (CI, pipes) default to `warn`.
+- **`emitTelemetry`**: Events without registered handlers are dropped silently — no fail-open `console.warn` that would corrupt Pi's chat input or scrollback.
 
 ---
 
@@ -228,7 +239,8 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/audit-logger.ts` | Structured RPC audit logging with in-memory ring buffer and telemetry emission |
 | `src/estimate.ts` | Token estimation for agent prompts (char/4 heuristic) |
 | `src/globals.ts` | Typed `Symbol.for()` contracts for cross-extension `globalThis` access (hooks, manager, widget metrics, telemetry) |
-| `src/logger.ts` | Structured logging with configurable levels via `PI_SUBAGENTS_LOG_LEVEL` env var |
+| `src/logger.ts` | Structured logging — silent in TTY by default; `PI_SUBAGENTS_LOG_LEVEL` enables stderr output in interactive sessions |
+| `src/invocation-config.ts` | Resolves per-spawn model/thinking/strategy fields — explicit tool `params` override agent profile defaults |
 | `src/readonly-helpers.ts` | Consolidated read-only tool constants (`READ_ONLY_TOOLS`, `READONLY_MEMORY_TOOL_NAMES`) |
 | `src/template-registry.ts` | Agent template indexing, filtering, and search over loaded custom agents |
 | `src/tool-result-helpers.ts` | Shared tool result formatting and notification helpers used by `/agents` commands |
@@ -249,7 +261,7 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/ui/settings-snapshot.ts` | Settings snapshot builder for UI rendering and persistence |
 | `src/ui/agent-dashboard.ts` | Primary interactive telemetry view with list and top modes |
 | `src/ui/agent-top-renderer.ts` | Columns rendering, sorting, and pagination logic for resource top view |
-| `src/ui/agent-widget.ts` | Running subagents widget overlay above the editor |
+| `src/ui/agent-widget.ts` | Running subagents widget above the editor + footer status bar (`setStatus("subagents", ...)`) |
 | `src/ui/conversation-viewer.ts` | Stream block trace |
 | `src/ui/schedule-menu.ts` | Temporal task list view |
 | `src/ui/animation.ts` | Execution feedback visual primitives |

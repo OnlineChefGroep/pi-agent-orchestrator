@@ -156,6 +156,7 @@ vi.mock("../src/ui/agent-widget.js", () => ({
     this.update = vi.fn();
     this.markFinished = vi.fn();
     this.setUICtx = vi.fn();
+    this.ensureTimer = vi.fn();
     this.onTurnStart = vi.fn();
     this.getRenderMetrics = vi.fn(() => ({}));
     this.dispose = vi.fn();
@@ -293,7 +294,30 @@ describe("extension entry point", () => {
     const pi = buildPiMock();
     await extensionInit(pi);
     const calls = (pi.on as any).mock.calls.filter((c: any[]) => c[0] === "session_start");
-    expect(calls.length).toBe(1);
+    expect(calls.length).toBe(2);
+  });
+
+  it("binds widget UI context on session_start", async () => {
+    const pi = buildPiMock();
+    await extensionInit(pi);
+    const widget = vi.mocked(AgentWidget).mock.results.at(-1)?.value as {
+      setUICtx: ReturnType<typeof vi.fn>;
+      ensureTimer: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+    const uiCtx = { setWidget: vi.fn(), setStatus: vi.fn() };
+    const ctx = { ui: uiCtx };
+
+    const widgetSessionStart = (pi.on as any).mock.calls
+      .filter((c: any[]) => c[0] === "session_start")
+      .at(-1)?.[1];
+    expect(widgetSessionStart).toBeDefined();
+
+    await widgetSessionStart({}, ctx);
+
+    expect(widget.setUICtx).toHaveBeenCalledWith(uiCtx);
+    expect(widget.ensureTimer).toHaveBeenCalledOnce();
+    expect(widget.update).toHaveBeenCalled();
   });
 
   it("registers session_before_switch handler", async () => {
