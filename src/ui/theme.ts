@@ -106,36 +106,11 @@ export function padVisible(content: string, width: number): string {
 
 /** Skip expensive truncateToWidth when the string already fits. */
 export function fastTruncate(str: string, maxWidth: number): string {
-  let visLen = 0;
-  let i = 0;
-  while (i < str.length) {
-    const ansiLen = getAnsiSequenceLength(str, i);
-    if (ansiLen > 0) {
-      i += ansiLen;
-      continue;
-    }
-    visLen++;
-    if (visLen > maxWidth) return truncateToWidth(str, maxWidth);
-    i++;
-  }
-  return str;
+  return truncateToWidth(str, maxWidth, "…", false);
 }
 
 export function padAndTruncate(str: string, targetWidth: number): string {
-  let visLen = 0;
-  let i = 0;
-  while (i < str.length) {
-    const ansiLen = getAnsiSequenceLength(str, i);
-    if (ansiLen > 0) {
-      i += ansiLen;
-      continue;
-    }
-    visLen++;
-    if (visLen > targetWidth) return truncateToWidth(str, targetWidth);
-    i++;
-  }
-  if (visLen === targetWidth) return str;
-  return str + " ".repeat(targetWidth - visLen);
+  return truncateToWidth(str, targetWidth, "…", true);
 }
 
 export function framedRow(content: string, innerW: number, th: DashboardTheme, box: BoxChars): string {

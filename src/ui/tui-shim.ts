@@ -198,21 +198,26 @@ const DEFAULT_ELLIPSIS = "…";
  */
 function takeVisible(text: string, maxWidth: number): string {
   if (maxWidth <= 0 || text.length === 0) return "";
-  let out = "";
   let visLen = 0;
   let i = 0;
   while (i < text.length && visLen < maxWidth) {
     const ansiLen = getAnsiSequenceLength(text, i);
     if (ansiLen > 0) {
-      out += text.slice(i, i + ansiLen);
       i += ansiLen;
       continue;
     }
-    out += text[i];
     visLen++;
     i++;
   }
-  return out;
+  while (i < text.length) {
+    const ansiLen = getAnsiSequenceLength(text, i);
+    if (ansiLen > 0) {
+      i += ansiLen;
+    } else {
+      break;
+    }
+  }
+  return text.slice(0, i);
 }
 
 export function truncateToWidth(
@@ -222,24 +227,43 @@ export function truncateToWidth(
   pad: boolean = false,
 ): string {
   if (maxWidth <= 0) return "";
-  if (visibleWidth(text) <= maxWidth) {
-    return pad ? text + " ".repeat(maxWidth - visibleWidth(text)) : text;
+
+  let visLen = 0;
+  let i = 0;
+  const ellipsisBudget = pad ? maxWidth : Math.max(0, maxWidth - visibleWidth(ellipsis));
+  let cutIndex = -1;
+
+  while (i < text.length) {
+    const ansiLen = getAnsiSequenceLength(text, i);
+    if (ansiLen > 0) {
+      i += ansiLen;
+      continue;
+    }
+    if (visLen === ellipsisBudget && cutIndex === -1) {
+      // Advance past trailing ANSI sequences directly after the cut index
+      // to preserve formatting that would have been kept by the string-building approach.
+      let finalIndex = i;
+      while (finalIndex < text.length) {
+        const trailingAnsiLen = getAnsiSequenceLength(text, finalIndex);
+        if (trailingAnsiLen > 0) finalIndex += trailingAnsiLen;
+        else break;
+      }
+      cutIndex = finalIndex;
+    }
+    visLen++;
+    if (visLen > maxWidth) {
+      let out = text.slice(0, cutIndex !== -1 ? cutIndex : i);
+      if (!pad) out += ellipsis;
+      out += "\u001b[0m";
+      return out;
+    }
+    i++;
   }
 
-  // Slice character-by-character while tallying visible width, skipping
-  // ANSI escape sequences (they have visible width 0). Ellipsis-width is
-  // reserved up-front unless we're padding with spaces.
-  const budget = pad ? maxWidth : Math.max(0, maxWidth - visibleWidth(ellipsis));
-  const prefix = takeVisible(text, budget);
-  let out = prefix;
-
-  // Append ellipsis (unless padding) and ALWAYS close any ANSI state we left
-  // open — otherwise the next terminal line inherits the truncated color and
-  // the wrapped output looks wrong.
-  if (!pad) out += ellipsis;
-  out += "\u001b[0m";
-
-  return out;
+  if (pad && visLen < maxWidth) {
+    return text + " ".repeat(maxWidth - visLen);
+  }
+  return text;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
