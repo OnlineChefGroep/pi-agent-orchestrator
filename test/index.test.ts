@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_DASHBOARD_KEYBINDINGS } from "../src/ui/dashboard-keybindings.js";
+import { DEFAULT_FOOTER_STATUS_CONFIG } from "../src/ui/footer-status-config.js";
 
 // Mock logger
 vi.mock("../src/logger.js", () => ({
@@ -31,6 +33,10 @@ vi.mock("../src/agent-registry.js", () => ({
   setUiStyle: vi.fn(),
   setDebugCapture: vi.fn(),
   setDebugCapturePaths: vi.fn(),
+  getFooterStatusConfig: () => DEFAULT_FOOTER_STATUS_CONFIG,
+  getDashboardKeybindings: () => DEFAULT_DASHBOARD_KEYBINDINGS,
+  setDashboardKeybindings: vi.fn(),
+  setFooterStatusConfig: vi.fn(),
 }));
 
 // Mock batch-orchestrator

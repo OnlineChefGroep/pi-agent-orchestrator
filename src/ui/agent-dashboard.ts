@@ -13,7 +13,7 @@
 
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { AgentManager } from "../agent-manager.js";
-import { getDashboardRefreshInterval, getUiStyle } from "../agent-registry.js";
+import { getDashboardKeybindings, getDashboardRefreshInterval, getUiStyle } from "../agent-registry.js";
 import type { SubagentScheduler } from "../schedule.js";
 import type { AgentRecord } from "../types.js";
 import {
@@ -30,6 +30,11 @@ import { getAgentTopEntries, renderTopTable, type SortKey, sortEntries } from ".
 import { renderTreeFooter, renderTreeView } from "./agent-tree-renderer.js";
 import type { AgentActivity } from "./agent-ui-types.js";
 import { renderSchedulesSection } from "./dashboard/schedules-section.js";
+import {
+  type DashboardAction,
+  isDashboardNavigationKey,
+  matchDashboardKey,
+} from "./dashboard-keybindings.js";
 import { getWidgetMetrics } from "./global-registry.js";
 import { RenderMetrics, type RenderMetricsSnapshot } from "./render-metrics.js";
 import { buildSnapshotHash } from "./snapshot-hash.js";
@@ -43,7 +48,6 @@ import {
 } from "./theme.js";
 import {
   type Component,
-  matchesKey,
   type TUI,
 } from "./tui-shim.js";
 
@@ -424,17 +428,19 @@ export class AgentDashboard implements Component {
     const rec = this.agents[this.selectedIndex];
     const viewportHeight = this.getViewportHeight();
     const maxScroll = Math.max(0, this.bodyLineCount - viewportHeight);
+    const keys = getDashboardKeybindings();
+    const key = (action: DashboardAction): boolean => matchDashboardKey(data, action, keys);
 
     // ── Command mode ───────────────────────────────────────────────
     if (this.inCommandMode) {
-      if (matchesKey(data, "escape")) {
+      if (key("commandCancel")) {
         this.inCommandMode = false;
         this.commandBuffer = "";
         this.dirty = true;
         this.requestRender();
         return;
       }
-      if (matchesKey(data, "enter") || matchesKey(data, "return")) {
+      if (key("commandSubmit")) {
         this.executeCommand(this.commandBuffer);
         this.inCommandMode = false;
         this.commandBuffer = "";
@@ -442,7 +448,7 @@ export class AgentDashboard implements Component {
         this.requestRender();
         return;
       }
-      if (matchesKey(data, "backspace")) {
+      if (key("commandBackspace")) {
         this.commandBuffer = this.commandBuffer.slice(0, -1);
         this.dirty = true;
         this.requestRender();
@@ -469,40 +475,21 @@ export class AgentDashboard implements Component {
 
     // ── Toggle perf view if it's showing (q/esc close perf, not dashboard) ──
     if (this.showPerf) {
-      if (matchesKey(data, "q") || matchesKey(data, "escape")) {
+      if (key("closePerf")) {
         this.showPerf = false;
         this.dirty = true;
         this.requestRender();
         return;
       }
       // Allow / to enter command mode even when perf is showing
-      if (data === "/" && !this.inCommandMode) {
+      if (key("commandMode") && !this.inCommandMode) {
         this.inCommandMode = true;
         this.commandBuffer = "/";
         this.dirty = true;
         this.requestRender();
         return;
       }
-      // While the perf overlay covers the agent list, only allow safe navigation
-      // and view-only keys to pass through. Destructive/action keys (enter, space,
-      // shift+k, s/p/r/t/w, etc.) are swallowed to prevent aborting agents or
-      // mutating state behind a panel the user can no longer see.
-      const isPerfSafeKey =
-        matchesKey(data, "up") ||
-        matchesKey(data, "down") ||
-        matchesKey(data, "k") ||
-        matchesKey(data, "j") ||
-        matchesKey(data, "pageUp") ||
-        matchesKey(data, "pageDown") ||
-        matchesKey(data, "shift+up") ||
-        matchesKey(data, "shift+down") ||
-        matchesKey(data, "left") ||
-        matchesKey(data, "right") ||
-        matchesKey(data, "shift+left") ||
-        matchesKey(data, "shift+right") ||
-        matchesKey(data, "home") ||
-        matchesKey(data, "end");
-      if (!isPerfSafeKey) {
+      if (!isDashboardNavigationKey(data, keys)) {
         this.dirty = true;
         this.requestRender();
         return;
@@ -511,7 +498,7 @@ export class AgentDashboard implements Component {
     }
 
     // ── Enter command mode from normal mode ──
-    if (matchesKey(data, "/") && !this.inCommandMode) {
+    if (key("commandMode") && !this.inCommandMode) {
       this.inCommandMode = true;
       this.commandBuffer = "/";
       this.dirty = true;
@@ -519,7 +506,7 @@ export class AgentDashboard implements Component {
       return;
     }
 
-    if (matchesKey(data, "escape")) {
+    if (key("escapeKey")) {
       if (this.showHelp || this.showTree || this.showSchedules) {
         this.showHelp = false;
         this.showTree = false;
@@ -533,7 +520,7 @@ export class AgentDashboard implements Component {
       return;
     }
 
-    if (matchesKey(data, "q")) {
+    if (key("quitKey")) {
       if (this.showHelp || this.showTree || this.showSchedules) {
         this.showHelp = false;
         this.showTree = false;
@@ -559,37 +546,37 @@ export class AgentDashboard implements Component {
     const isSubViewActive = this.showHelp || this.showTree || this.showSchedules;
     if (isSubViewActive) {
       const vh = this.getViewportHeight();
-      if (matchesKey(data, "up") || matchesKey(data, "k")) {
+      if (key("moveUp")) {
         this.subViewScrollOffset = Math.max(0, this.subViewScrollOffset - 1);
         this.dirty = true;
         this.requestRender();
         return;
       }
-      if (matchesKey(data, "down") || matchesKey(data, "j")) {
+      if (key("moveDown")) {
         this.subViewScrollOffset += 1;
         this.dirty = true;
         this.requestRender();
         return;
       }
-      if (matchesKey(data, "pageUp") || matchesKey(data, "shift+up")) {
+      if (key("pageUp")) {
         this.subViewScrollOffset = Math.max(0, this.subViewScrollOffset - vh);
         this.dirty = true;
         this.requestRender();
         return;
       }
-      if (matchesKey(data, "pageDown") || matchesKey(data, "shift+down")) {
+      if (key("pageDown")) {
         this.subViewScrollOffset += vh;
         this.dirty = true;
         this.requestRender();
         return;
       }
-      if (matchesKey(data, "home") || matchesKey(data, "g")) {
+      if (key("home")) {
         this.subViewScrollOffset = 0;
         this.dirty = true;
         this.requestRender();
         return;
       }
-      if (matchesKey(data, "end") || matchesKey(data, "shift+g")) {
+      if (key("end")) {
         this.subViewScrollOffset = 9999;
         this.dirty = true;
         this.requestRender();
@@ -598,27 +585,27 @@ export class AgentDashboard implements Component {
     }
 
     // Navigation — vim + arrows
-    if (matchesKey(data, "up") || matchesKey(data, "k")) {
+    if (key("moveUp")) {
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
       this.dirty = true;
-    } else if (matchesKey(data, "down") || matchesKey(data, "j")) {
+    } else if (key("moveDown")) {
       if (this.agents.length === 0) return;
       this.selectedIndex = Math.min(this.agents.length - 1, this.selectedIndex + 1);
       this.dirty = true;
-    } else if (matchesKey(data, "pageUp") || matchesKey(data, "shift+up")) {
+    } else if (key("pageUp")) {
       this.selectedIndex = Math.max(0, this.selectedIndex - this.getViewportHeight());
       this.scrollOffset = Math.max(0, this.scrollOffset - this.getViewportHeight());
       this.dirty = true;
-    } else if (matchesKey(data, "pageDown") || matchesKey(data, "shift+down")) {
+    } else if (key("pageDown")) {
       if (this.agents.length === 0) return;
       this.selectedIndex = Math.min(this.agents.length - 1, this.selectedIndex + viewportHeight);
       this.scrollOffset = Math.min(maxScroll, this.scrollOffset + viewportHeight);
       this.dirty = true;
-    } else if (matchesKey(data, "home") || matchesKey(data, "g")) {
+    } else if (key("home")) {
       this.selectedIndex = 0;
       this.scrollOffset = 0;
       this.dirty = true;
-    } else if (matchesKey(data, "end") || matchesKey(data, "shift+g")) {
+    } else if (key("end")) {
       if (this.agents.length === 0) return;
       this.selectedIndex = this.agents.length - 1;
       this.scrollOffset = maxScroll;
@@ -626,11 +613,8 @@ export class AgentDashboard implements Component {
     }
 
     // ── Top view mode sort/page keys ──────────────────────────────
-    // Intercept sort keys before global actions to avoid conflicts.
-    // t/r are also global actions (toggle top view / refresh), so they're
-    // handled inline below with topViewMode checks.
     if (this.topViewMode) {
-      if (matchesKey(data, "d")) {
+      if (key("sortDuration")) {
         if (this.topSortKey === "duration") this.topSortAsc = !this.topSortAsc;
         else { this.topSortKey = "duration"; this.topSortAsc = false; }
         this.topPage = 0;
@@ -639,7 +623,7 @@ export class AgentDashboard implements Component {
         this.requestRender();
         return;
       }
-      if (matchesKey(data, "u")) {
+      if (key("sortTools")) {
         if (this.topSortKey === "toolUses") this.topSortAsc = !this.topSortAsc;
         else { this.topSortKey = "toolUses"; this.topSortAsc = false; }
         this.topPage = 0;
@@ -648,7 +632,7 @@ export class AgentDashboard implements Component {
         this.requestRender();
         return;
       }
-      if (matchesKey(data, "l")) {
+      if (key("sortLastSeen")) {
         if (this.topSortKey === "lastSeen") this.topSortAsc = !this.topSortAsc;
         else { this.topSortKey = "lastSeen"; this.topSortAsc = false; }
         this.topPage = 0;
@@ -657,7 +641,7 @@ export class AgentDashboard implements Component {
         this.requestRender();
         return;
       }
-      if (matchesKey(data, "n")) {
+      if (key("sortName")) {
         if (this.topSortKey === "name") this.topSortAsc = !this.topSortAsc;
         else { this.topSortKey = "name"; this.topSortAsc = false; }
         this.topPage = 0;
@@ -666,14 +650,14 @@ export class AgentDashboard implements Component {
         this.requestRender();
         return;
       }
-      if (matchesKey(data, "left") || matchesKey(data, "shift+left")) {
+      if (key("pageLeft")) {
         this.topPage = Math.max(0, this.topPage - 1);
         this.dirty = true;
         this.spinnerFrame++;
         this.requestRender();
         return;
       }
-      if (matchesKey(data, "right") || matchesKey(data, "shift+right")) {
+      if (key("pageRight")) {
         const entries = sortEntries(getAgentTopEntries(this.agents, this.options.agentActivity), this.topSortKey, this.topSortAsc);
         const totalPages = Math.max(1, Math.ceil(entries.length / this.getViewportHeight()));
         this.topPage = Math.min(totalPages - 1, this.topPage + 1);
@@ -687,14 +671,14 @@ export class AgentDashboard implements Component {
     }
 
     // Actions
-    if (matchesKey(data, "enter")) {
+    if (key("openConversation")) {
       if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       if (rec && this.options.onViewConversation) {
         this.close();
         void this.options.onViewConversation(rec);
         return;
       }
-    } else if (matchesKey(data, "space")) {
+    } else if (key("toggleSelect")) {
       if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       if (rec) {
         if (this.selectedIds.has(rec.id)) {
@@ -705,7 +689,7 @@ export class AgentDashboard implements Component {
         this.dirty = true;
         this.requestRender();
       }
-    } else if (matchesKey(data, "shift+k") || matchesKey(data, "K")) {
+    } else if (key("kill")) {
       if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       const idsToKill = this.selectedIds.size > 0
         ? Array.from(this.selectedIds)
@@ -723,7 +707,7 @@ export class AgentDashboard implements Component {
         this.refreshAgents();
         this.requestRender();
       }
-    } else if (matchesKey(data, "s") || matchesKey(data, "shift+s")) {
+    } else if (key("steer")) {
       if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       if (rec) {
         if (this.options.onSteer) {
@@ -733,7 +717,7 @@ export class AgentDashboard implements Component {
         }
         this.showStatus("Steer is not available in this context.");
       }
-    } else if (matchesKey(data, "p") || matchesKey(data, "shift+p")) {
+    } else if (key("permissions")) {
       if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       if (rec) {
         if (this.options.onShowPermissions) {
@@ -743,7 +727,7 @@ export class AgentDashboard implements Component {
         }
         this.showStatus("Permissions view is not available in this context.");
       }
-    } else if (matchesKey(data, "r") || matchesKey(data, "shift+r")) {
+    } else if (key("refresh")) {
       if (this.topViewMode) {
         // In top view: sort by turns
         if (this.topSortKey === "turns") this.topSortAsc = !this.topSortAsc;
@@ -754,12 +738,12 @@ export class AgentDashboard implements Component {
       }
       this.dirty = true;
       this.requestRender();
-    } else if (matchesKey(data, "?")) {
+    } else if (key("help")) {
       this.showHelp = !this.showHelp;
       if (this.showHelp) this.subViewScrollOffset = 0;
       this.dirty = true;
       this.requestRender();
-    } else if (matchesKey(data, "t")) {
+    } else if (key("topView")) {
       if (this.topViewMode) {
         // In top view: sort by tokens (pressing t again toggles direction)
         if (this.topSortKey === "tokens") this.topSortAsc = !this.topSortAsc;
@@ -771,19 +755,19 @@ export class AgentDashboard implements Component {
       }
       this.dirty = true;
       this.requestRender();
-    } else if (matchesKey(data, "z") || matchesKey(data, "shift+z")) {
+    } else if (key("schedules")) {
       if (this.options.scheduler?.isActive()) {
         this.showSchedules = !this.showSchedules;
         if (this.showSchedules) { this.topViewMode = false; this.showHelp = false; this.showPerf = false; this.showTree = false; this.subViewScrollOffset = 0; }
         this.dirty = true;
         this.requestRender();
       }
-    } else if (matchesKey(data, "y")) {
+    } else if (key("tree")) {
       this.showTree = !this.showTree;
       if (this.showTree) { this.topViewMode = false; this.showSchedules = false; this.showHelp = false; this.showPerf = false; this.subViewScrollOffset = 0; }
       this.dirty = true;
       this.requestRender();
-    } else if (matchesKey(data, "w") || matchesKey(data, "shift+w")) {
+    } else if (key("swarm")) {
       if (isSubViewActive) { this.dirty = true; this.requestRender(); return; }
       const targets = this.selectedIds.size > 0
         ? (() => {

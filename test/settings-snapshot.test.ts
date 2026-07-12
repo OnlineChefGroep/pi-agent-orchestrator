@@ -11,6 +11,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_DASHBOARD_KEYBINDINGS } from "../src/ui/dashboard-keybindings.js";
+import { DEFAULT_FOOTER_STATUS_CONFIG } from "../src/ui/footer-status-config.js";
 
 // Mock the agent-registry module BEFORE importing buildSettingsSnapshot so the
 // module sees the mocked getters at evaluation time.
@@ -20,6 +22,8 @@ vi.mock("../src/agent-registry.js", () => ({
   getOrchestrationMode: vi.fn(),
   getPromptCompressionLevel: vi.fn(),
   getUiStyle: vi.fn(),
+  getFooterStatusConfig: () => DEFAULT_FOOTER_STATUS_CONFIG,
+  getDashboardKeybindings: () => DEFAULT_DASHBOARD_KEYBINDINGS,
 }));
 
 import type { AgentManager } from "../src/agent-manager.js";

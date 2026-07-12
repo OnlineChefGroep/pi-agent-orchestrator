@@ -15,7 +15,7 @@
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { AgentManager } from "./agent-manager.js";
-import { reloadCustomAgents } from "./agent-registry.js";
+import { getDashboardKeybindings, reloadCustomAgents } from "./agent-registry.js";
 import { buildAgentTreeJson, buildAgentTreeMermaid, buildAgentTreeText } from "./agent-tree.js";
 import { getAllTypes } from "./agent-types.js";
 import { showTemplatesMenu } from "./commands/templates.js";
@@ -30,11 +30,12 @@ import { getAgentTopEntries, renderTopTable, type SortKey, sortEntries } from ".
 import type { AgentActivity } from "./ui/agent-ui-types.js";
 import { viewAgentConversation } from "./ui/agent-viewer.js";
 import { showCreateWizard } from "./ui/agent-wizards.js";
+import { type DashboardAction, matchDashboardKey } from "./ui/dashboard-keybindings.js";
 import { showHealth } from "./ui/health-view.js";
 import { showSchedulesMenu } from "./ui/schedule-menu.js";
 import { showSettings } from "./ui/settings-menu.js";
 import { getThemeColors } from "./ui/theme.js";
-import { type Component, matchesKey } from "./ui/tui-shim.js";
+import { type Component } from "./ui/tui-shim.js";
 
 /** Dependencies injected into the agents menu so callers don't pass 11 positional args. */
 export interface AgentsMenuDeps {
@@ -166,33 +167,36 @@ class AgentsTopComponent implements Component {
   }
 
   handleInput(data: string): void {
-    if (matchesKey(data, "q") || matchesKey(data, "escape")) {
+    const keys = getDashboardKeybindings();
+    const key = (action: DashboardAction): boolean => matchDashboardKey(data, action, keys);
+
+    if (key("quitKey") || key("escapeKey")) {
       this.close();
       return;
     }
-    if (matchesKey(data, "left") || matchesKey(data, "shift+left")) {
+    if (key("pageLeft")) {
       this.page = Math.max(0, this.page - 1);
-    } else if (matchesKey(data, "right") || matchesKey(data, "shift+right")) {
+    } else if (key("pageRight")) {
       const entries = getAgentTopEntries(this.manager.listAgents(), this.activity);
       const totalPages = Math.max(1, Math.ceil(entries.length / this.pageSize));
       this.page = Math.min(totalPages - 1, this.page + 1);
-    } else if (matchesKey(data, "t")) {
+    } else if (key("sortTokens")) {
       if (this.sortKey === "tokens") this.sortAsc = !this.sortAsc;
       else { this.sortKey = "tokens"; this.sortAsc = false; }
       this.page = 0;
-    } else if (matchesKey(data, "r")) {
+    } else if (key("sortTurns")) {
       if (this.sortKey === "turns") this.sortAsc = !this.sortAsc;
       else { this.sortKey = "turns"; this.sortAsc = false; }
       this.page = 0;
-    } else if (matchesKey(data, "d")) {
+    } else if (key("sortDuration")) {
       if (this.sortKey === "duration") this.sortAsc = !this.sortAsc;
       else { this.sortKey = "duration"; this.sortAsc = false; }
       this.page = 0;
-    } else if (matchesKey(data, "u")) {
+    } else if (key("sortTools")) {
       if (this.sortKey === "toolUses") this.sortAsc = !this.sortAsc;
       else { this.sortKey = "toolUses"; this.sortAsc = false; }
       this.page = 0;
-    } else if (matchesKey(data, "n")) {
+    } else if (key("sortName")) {
       if (this.sortKey === "name") this.sortAsc = !this.sortAsc;
       else { this.sortKey = "name"; this.sortAsc = false; }
       this.page = 0;

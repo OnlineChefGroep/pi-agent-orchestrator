@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_DASHBOARD_KEYBINDINGS } from "../src/ui/dashboard-keybindings.js";
+import { DEFAULT_FOOTER_STATUS_CONFIG } from "../src/ui/footer-status-config.js";
 
 // Mock node:fs
 vi.mock("node:fs", () => ({
@@ -20,6 +22,8 @@ vi.mock("../src/logger.js", () => ({
 // Mock agent-registry
 vi.mock("../src/agent-registry.js", () => ({
   reloadCustomAgents: vi.fn(async () => {}),
+  getFooterStatusConfig: () => DEFAULT_FOOTER_STATUS_CONFIG,
+  getDashboardKeybindings: () => DEFAULT_DASHBOARD_KEYBINDINGS,
 }));
 
 // Mock agent-types

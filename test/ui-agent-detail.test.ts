@@ -4,6 +4,8 @@ import { reloadCustomAgents } from "../src/agent-registry.js";
 import { getAgentConfig } from "../src/agent-types.js";
 import { showAgentDetail } from "../src/ui/agent-detail.js";
 import { findAgentFile } from "../src/ui/agent-file-helpers.js";
+import { DEFAULT_DASHBOARD_KEYBINDINGS } from "../src/ui/dashboard-keybindings.js";
+import { DEFAULT_FOOTER_STATUS_CONFIG } from "../src/ui/footer-status-config.js";
 
 vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(async () => "original content"),
@@ -13,6 +15,8 @@ vi.mock("node:fs/promises", () => ({
 
 vi.mock("../src/agent-registry.js", () => ({
   reloadCustomAgents: vi.fn(),
+  getFooterStatusConfig: () => DEFAULT_FOOTER_STATUS_CONFIG,
+  getDashboardKeybindings: () => DEFAULT_DASHBOARD_KEYBINDINGS,
 }));
 
 vi.mock("../src/agent-types.js", () => ({

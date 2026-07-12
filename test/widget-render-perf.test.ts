@@ -9,6 +9,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentRecord } from "../src/types.js";
 import type { AgentActivity } from "../src/ui/agent-ui-types.js";
+import { DEFAULT_DASHBOARD_KEYBINDINGS } from "../src/ui/dashboard-keybindings.js";
+import { DEFAULT_FOOTER_STATUS_CONFIG } from "../src/ui/footer-status-config.js";
 import { benchmarkLog } from "./helpers/benchmark-log.js";
 
 // ── Mocks ───────────────────────────────────────────────────────────────────
@@ -29,6 +31,8 @@ vi.mock("../src/agent-registry.js", () => ({
   isShowActivityStream: () => true,
   isShowTokenUsage: () => true,
   isShowTurnProgress: () => true,
+  getFooterStatusConfig: () => DEFAULT_FOOTER_STATUS_CONFIG,
+  getDashboardKeybindings: () => DEFAULT_DASHBOARD_KEYBINDINGS,
 }));
 
 // Mock agent-types — getConfig used by getDisplayName

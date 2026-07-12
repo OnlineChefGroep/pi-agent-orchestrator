@@ -13,9 +13,11 @@
  */
 
 import type { AgentManager } from "../agent-manager.js";
+import { getFooterStatusConfig } from "../agent-registry.js";
 import type { AgentRecord } from "../types.js";
 import type { AgentActivity, UICtx } from "./agent-ui-types.js";
 import { ERROR_STATUSES, renderAgentWidget } from "./agent-widget-renderer.js";
+import { formatFooterStatusText } from "./footer-status-config.js";
 import { RenderMetrics } from "./render-metrics.js";
 import type { Theme } from "./theme.js";
 import type { TUI } from "./tui-shim.js";
@@ -110,7 +112,8 @@ export class AgentWidget {
     if (ctx !== this.uiCtx) {
       if (this.uiCtx) {
         this.uiCtx.setWidget("agents", undefined);
-        this.uiCtx.setStatus("subagents", undefined);
+        const slot = getFooterStatusConfig().slot;
+        this.uiCtx.setStatus(slot, undefined);
       }
       // UICtx changed — the widget registered on the old context is gone.
       // Force re-registration on next update().
@@ -396,7 +399,8 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
         this.tui = undefined;
       }
       if (this.lastStatusText !== undefined) {
-        this.uiCtx.setStatus("subagents", undefined);
+        const slot = getFooterStatusConfig().slot;
+        this.uiCtx.setStatus(slot, undefined);
         this.lastStatusText = undefined;
       }
       if (this.widgetInterval) { clearTimeout(this.widgetInterval); this.widgetInterval = undefined; }
@@ -405,16 +409,10 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
     }
 
     // Status bar — only call setStatus when the text actually changes
-    let newStatusText: string | undefined;
-    if (hasActive) {
-      const statusParts: string[] = [];
-      if (runningCount > 0) statusParts.push(`${runningCount} running`);
-      if (queuedCount > 0) statusParts.push(`${queuedCount} queued`);
-      const total = runningCount + queuedCount;
-      newStatusText = `${statusParts.join(", ")} agent${total === 1 ? "" : "s"}`;
-    }
+    const footerConfig = getFooterStatusConfig();
+    const newStatusText = formatFooterStatusText(footerConfig, runningCount, queuedCount);
     if (newStatusText !== this.lastStatusText) {
-      this.uiCtx.setStatus("subagents", newStatusText);
+      this.uiCtx.setStatus(footerConfig.slot, newStatusText);
       this.lastStatusText = newStatusText;
     }
 
@@ -469,7 +467,8 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
     }
     if (this.uiCtx) {
       this.uiCtx.setWidget("agents", undefined);
-      this.uiCtx.setStatus("subagents", undefined);
+      const slot = getFooterStatusConfig().slot;
+      this.uiCtx.setStatus(slot, undefined);
     }
     this.widgetRegistered = false;
     this.tui = undefined;
