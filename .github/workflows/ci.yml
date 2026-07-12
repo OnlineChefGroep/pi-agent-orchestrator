@@ -126,6 +126,19 @@ jobs:
       - name: Test
         run: npm test
 
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
   benchmarks:
     name: Render benchmarks
     needs: quality
@@ -159,6 +172,7 @@ jobs:
       - quality
       - compatibility
       - lowest-peer-dependencies
+      - dependency-review
     runs-on: ubuntu-latest
     steps:
       - name: Verify required jobs
@@ -166,7 +180,9 @@ jobs:
           QUALITY_RESULT: ${{ needs.quality.result }}
           COMPATIBILITY_RESULT: ${{ needs.compatibility.result }}
           LOWEST_PEER_RESULT: ${{ needs.lowest-peer-dependencies.result }}
+          DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
         run: |
           test "$QUALITY_RESULT" = "success"
           test "$COMPATIBILITY_RESULT" = "success"
           test "$LOWEST_PEER_RESULT" = "success"
+          test "$DEPENDENCY_REVIEW_RESULT" = "success" -o "$DEPENDENCY_REVIEW_RESULT" = "skipped"
