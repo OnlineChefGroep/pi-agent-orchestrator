@@ -519,7 +519,21 @@ export class AgentDashboard implements Component {
       return;
     }
 
-    if (matchesKey(data, "escape") || matchesKey(data, "q")) {
+    if (matchesKey(data, "escape")) {
+      if (this.showHelp || this.showTree || this.showSchedules) {
+        this.showHelp = false;
+        this.showTree = false;
+        this.showSchedules = false;
+        this.subViewScrollOffset = 0;
+        this.dirty = true;
+        this.requestRender();
+        return;
+      }
+      this.close();
+      return;
+    }
+
+    if (matchesKey(data, "q")) {
       if (this.showHelp || this.showTree || this.showSchedules) {
         this.showHelp = false;
         this.showTree = false;

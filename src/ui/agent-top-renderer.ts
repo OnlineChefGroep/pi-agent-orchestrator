@@ -214,6 +214,7 @@ export function renderTopTable(
 
   if (entries.length === 0) {
     lines.push(theme.fg("muted", "  No agents have entered this session yet."));
+    lines.push(theme.fg("dim", "  Esc or q: return to chat"));
     return lines;
   }
 

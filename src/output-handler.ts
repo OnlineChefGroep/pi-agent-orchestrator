@@ -201,11 +201,14 @@ class AgentsTopComponent implements Component {
 
   render(width: number): string[] {
     const th = getThemeColors();
-    // Simple passthrough theme — real theme injected by the TUI framework
     const entries = sortEntries(getAgentTopEntries(this.manager.listAgents(), this.activity), this.sortKey, this.sortAsc);
     const rows = this.tui.terminal.rows;
-    this.pageSize = Math.max(5, rows - 5);
-    return renderTopTable(entries, this.sortKey, this.sortAsc, this.page, this.pageSize, th, width);
+    this.pageSize = Math.max(5, rows - 6);
+    const lines = renderTopTable(entries, this.sortKey, this.sortAsc, this.page, this.pageSize, th, width, "Esc/q: return to chat");
+    while (lines.length < rows) {
+      lines.push("");
+    }
+    return lines;
   }
 
   invalidate(): void {
