@@ -23,12 +23,14 @@ export interface WorktreeInfo {
 }
 
 export interface WorktreeCleanupResult {
-  /** Whether changes were found in the worktree. */
+  /** Whether changes were found, or conservatively assumed after an inspection failure. */
   hasChanges: boolean;
   /** Branch name if changes were committed. */
   branch?: string;
-  /** Worktree path if it was kept. */
+  /** Worktree path when cleanup could not safely remove it. */
   path?: string;
+  /** Bounded diagnostic when manual recovery is required. */
+  error?: string;
 }
 
 /**
@@ -61,7 +63,6 @@ export async function createWorktree(cwd: string, agentId: string): Promise<Work
   }
 }
 
-
 /**
  * Safely truncates a string to a maximum length without splitting surrogate pairs
  * or using O(N) array spread operations.
@@ -84,10 +85,17 @@ function safeTruncate(str: string, maxLen: number): string {
   return str.slice(0, validLen);
 }
 
+function formatCleanupError(error: unknown): string {
+  const value = error instanceof Error ? error.message : String(error);
+  return safeTruncate(value.replace(/[\r\n\x00-\x1F]+/g, " ").trim(), 500) || "Unknown worktree cleanup error";
+}
+
 /**
  * Clean up a worktree after agent completion.
  * - If no changes: remove worktree entirely.
  * - If changes exist: create a branch, commit changes, return branch info.
+ * - If inspection, staging, commit, branch creation, or removal fails: preserve
+ *   the worktree and return its path for manual recovery.
  */
 export function cleanupWorktree(
   cwd: string,
@@ -98,53 +106,63 @@ export function cleanupWorktree(
     return { hasChanges: false };
   }
 
+  let status: string;
   try {
-    // Check for uncommitted changes in the worktree
-    const status = execFileSync("git", ["status", "--porcelain"], {
+    status = execFileSync("git", ["status", "--porcelain"], {
       cwd: worktree.path,
       stdio: "pipe",
       timeout: 10000,
     }).toString().trim();
+  } catch (error) {
+    // We could not prove the worktree is clean. Preserve it conservatively.
+    return {
+      hasChanges: true,
+      path: worktree.path,
+      error: `Unable to inspect worktree; preserved for recovery: ${formatCleanupError(error)}`,
+    };
+  }
 
-    if (!status) {
-      // No changes — remove worktree
-      removeWorktree(cwd, worktree.path);
-      return { hasChanges: false };
-    }
+  if (!status) {
+    const removed = removeWorktree(cwd, worktree.path);
+    return removed
+      ? { hasChanges: false }
+      : {
+          hasChanges: false,
+          path: worktree.path,
+          error: "Clean worktree could not be removed; path preserved for manual cleanup",
+        };
+  }
 
-    // Changes exist — stage, commit, and create a branch
+  try {
+    // Changes exist — stage, commit, and create a branch.
     execFileSync("git", ["add", "-A"], { cwd: worktree.path, stdio: "pipe", timeout: 10000 });
-    
-    // CVE-001 FIX: Sanitize commit message to prevent git hook injection
-    // Remove newlines, carriage returns, control characters, and shell metacharacters
+
+    // CVE-001 FIX: Sanitize commit message to prevent control-character and
+    // terminal/shell metacharacter injection in logs and downstream tooling.
     const rawDesc = typeof agentDescription === "string" ? agentDescription : String(agentDescription);
     const safeDescStr = rawDesc
-      .replace(/[\r\n\x00-\x1F]/g, ' ')  // Remove newlines and control chars
-      .replace(/["`$\\]/g, '')            // Remove shell metacharacters
-      .replace(/\s+/g, ' ')               // Normalize whitespace
+      .replace(/[\r\n\x00-\x1F]/g, " ")
+      .replace(/["`$\\]/g, "")
+      .replace(/\s+/g, " ")
       .trim();
 
     const safeDesc = safeTruncate(safeDescStr, 200);
-    
     const commitMsg = `pi-agent: ${safeDesc}`;
-    
+
     execFileSync("git", ["commit", "-m", commitMsg], {
       cwd: worktree.path,
       stdio: "pipe",
       timeout: 10000,
     });
 
-    // Create a branch pointing to the worktree's HEAD.
-    // If the branch already exists, append a suffix to avoid overwriting previous work.
-
-    // Sanitize branch name to prevent command injection and ensure valid git branch format
+    // Create a branch pointing to the worktree's HEAD. If it already exists,
+    // append a suffix instead of overwriting previous agent work.
     const safeBranchName = worktree.branch
       .replace(/[\r\n\x00-\x1F]/g, "")
       .replace(/[~^:?*[\\\];"'`$\s]/g, "-")
       .replace(/^-+|-+$/g, "");
 
     let branchName = safeBranchName || "pi-agent-update";
-
     try {
       execFileSync("git", ["branch", "--", branchName], {
         cwd: worktree.path,
@@ -152,7 +170,6 @@ export function cleanupWorktree(
         timeout: 5000,
       });
     } catch {
-      // Branch already exists — use a unique suffix
       branchName = `${branchName}-${Date.now()}`;
       execFileSync("git", ["branch", "--", branchName], {
         cwd: worktree.path,
@@ -160,28 +177,30 @@ export function cleanupWorktree(
         timeout: 5000,
       });
     }
-    // Update branch name in worktree info for the caller
     worktree.branch = branchName;
 
-    // Remove the worktree (branch persists in main repo)
-    removeWorktree(cwd, worktree.path);
-
+    const removed = removeWorktree(cwd, worktree.path);
+    return removed
+      ? { hasChanges: true, branch: branchName }
+      : {
+          hasChanges: true,
+          branch: branchName,
+          path: worktree.path,
+          error: "Changes were committed, but the worktree could not be removed",
+        };
+  } catch (error) {
+    // Never remove a dirty worktree after a staging/commit/branch failure. It is
+    // the only remaining copy of the agent's changes and must stay recoverable.
     return {
       hasChanges: true,
-      branch: worktree.branch,
       path: worktree.path,
+      error: `Unable to commit worktree changes; preserved for recovery: ${formatCleanupError(error)}`,
     };
-  } catch {
-    // Best effort cleanup on error
-    try { removeWorktree(cwd, worktree.path); } catch { /* ignore */ }
-    return { hasChanges: false };
   }
 }
 
-/**
- * Force-remove a worktree.
- */
-function removeWorktree(cwd: string, worktreePath: string): void {
+/** Force-remove a worktree. Returns whether its directory is gone. */
+function removeWorktree(cwd: string, worktreePath: string): boolean {
   try {
     execFileSync("git", ["worktree", "remove", "--force", worktreePath], {
       cwd,
@@ -189,11 +208,13 @@ function removeWorktree(cwd: string, worktreePath: string): void {
       timeout: 10000,
     });
   } catch {
-    // If git worktree remove fails, try pruning
     try {
       execFileSync("git", ["worktree", "prune"], { cwd, stdio: "pipe", timeout: 5000 });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
+  return !existsSync(worktreePath);
 }
 
 /**
