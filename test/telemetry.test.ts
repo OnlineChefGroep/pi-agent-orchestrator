@@ -97,6 +97,17 @@ describe("telemetry", () => {
       );
     });
 
+    it("should keep routine agent load events at debug level", () => {
+      const payload = { name: "test-agent", source: "global" as const, hash: "123", enabled: true };
+      emitTelemetry("agent:loaded", payload);
+
+      expect(logger.debug).toHaveBeenCalledWith(
+        "[telemetry] lifecycle event: agent:loaded",
+        { payload }
+      );
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
     it("should not log to logger.warn for non-security events when no handlers are registered", () => {
       const payload = { type: "task", depth: 1 };
       emitTelemetry("agent:spawned", payload);
