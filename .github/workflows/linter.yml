@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      # Super-Linter publishes the check result while only reading repository data.
+      # Super-Linter publishes check contexts while only reading repository data.
       contents: read
       statuses: write
     steps:
@@ -32,13 +32,17 @@ jobs:
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Biome and repository-specific checks own these surfaces.
-          VALIDATE_MARKDOWN: false
-          VALIDATE_MARKDOWN_PRETTIER: false
-          VALIDATE_NATURAL_LANGUAGE: false
-          VALIDATE_CHECKOV: false
-          VALIDATE_GITHUB_ACTIONS: false
-          VALIDATE_JSCPD: false
-          VALIDATE_TYPESCRIPT_PRETTIER: false
-          VALIDATE_TYPESCRIPT_STANDARD: false
-          VALIDATE_YAML_PRETTIER: false
+          ENABLE_GITHUB_PULL_REQUEST_SUMMARY_COMMENT: false
+          ENABLE_GITHUB_ACTIONS_STEP_SUMMARY: true
+          SAVE_SUPER_LINTER_SUMMARY: true
+          # Biome owns TypeScript/JavaScript linting. Super-Linter supplies
+          # complementary workflow, secret, dependency, and repository checks.
+          VALIDATE_GITHUB_ACTIONS_ZIZMOR: true
+          VALIDATE_GITLEAKS: true
+          VALIDATE_GIT_MERGE_CONFLICT_MARKERS: true
+          VALIDATE_JSON: true
+          VALIDATE_JSON_PRETTIER: true
+          VALIDATE_PRE_COMMIT: true
+          VALIDATE_SPELL_CODESPELL: true
+          VALIDATE_TRIVY: true
+          VALIDATE_YAML: true
