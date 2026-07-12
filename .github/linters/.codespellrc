@@ -1,9 +1,11 @@
 [codespell]
-# Super-Linter runs `codespell --config .github/linters/.codespellrc`, so this file
-# fully replaces the shipped default. The first five skips mirror that default
-# (package-lock.json, go.mod, go.sum, *.log, .git). CHANGELOG.md is added because its
-# historical v0.9.x release notes are written in Dutch, which codespell (English-only)
-# reports as misspellings. Skipping the whole file is cleaner than maintaining an
-# ignore-words-list of Dutch terms that might mask genuine typos elsewhere.
+# Super-Linter runs `codespell --config .github/linters/.codespellrc` and passes each
+# file as an absolute path (e.g. /github/workspace/CHANGELOG.md). codespell matches skip
+# globs against the whole path, so a leading `*` (which spans `/`) reliably skips a file
+# at any depth, including the repository root; a bare name or a `*/` prefix would miss
+# some of those forms. These entries cover the same files as Super-Linter's shipped
+# default (package-lock.json, go.mod, go.sum, *.log, .git) and add CHANGELOG.md, whose
+# historical v0.9.x release notes are Dutch and read as misspellings to codespell's
+# English-only dictionary.
 check-hidden =
-skip = */package-lock.json,*/go.mod,*/go.sum,*.log,.git,*/CHANGELOG.md,CHANGELOG.md
+skip = *package-lock.json,*go.mod,*go.sum,*.log,.git,*CHANGELOG.md
