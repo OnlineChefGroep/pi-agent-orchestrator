@@ -1,23 +1,43 @@
 #!/usr/bin/env bash
 # Assemble the Cloudflare Pages publish directory for the project site.
 #
-# The site lives under site/ and links (via relative paths) to docs and assets
-# that live elsewhere in the repo. This script stages exactly the files the
-# published site references into a self-contained directory for deployment.
+# The marketing SPA is built from site/web/ (Vite). Public docs, discovery
+# metadata, and showcase assets are copied alongside the SPA output so agents
+# and humans can fetch markdown and JSON directly from the deployed origin.
 #
 # Usage: scripts/build-site.sh [output_dir]   (default: ./_site)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${1:-$ROOT/_site}"
+WEB="$ROOT/site/web"
 
 echo "→ Assembling site into: $OUT"
 rm -rf "$OUT"
+mkdir -p "$OUT"
+
+# Vite SPA root (primary entry). Fall back to legacy static HTML until site/web lands.
+if [[ -f "$WEB/package.json" ]]; then
+	echo "→ Building Vite app in site/web/"
+	(
+		cd "$WEB"
+		npm ci
+		npm run build
+	)
+	if [[ ! -d "$WEB/dist" ]]; then
+		echo "error: site/web/dist not found after build" >&2
+		exit 1
+	fi
+	cp -R "$WEB/dist/." "$OUT/"
+else
+	echo "→ site/web not present yet; staging deprecated site/index.html as fallback"
+	cp "$ROOT/site/index.html" "$OUT/index.html"
+fi
+
 mkdir -p "$OUT/assets" "$OUT/docs" "$OUT/.well-known" "$OUT/wiki"
 
-# Top-level pages + markdown mirror.
-cp "$ROOT/site/index.html" "$OUT/index.html"
-cp "$ROOT/site/index.md"   "$OUT/index.md"
+# Markdown mirror of the landing page (direct fetch, not the SPA shell).
+cp "$ROOT/site/index.md" "$OUT/index.md"
 
 # Root docs, discovery metadata, and agent permissions.
 cp "$ROOT/README.md" "$ROOT/AGENTS.md" "$ROOT/CHANGELOG.md" "$OUT/"
@@ -45,9 +65,18 @@ done
 mkdir -p "$OUT/docs/images"
 cp -R "$ROOT/docs/images/." "$OUT/docs/images/"
 
-# Showcase assets referenced by index.html / index.md.
+# Showcase assets referenced by index.md and README.
 cp "$ROOT/docs/images/dashboard_preview.mp4" "$OUT/assets/dashboard_preview.mp4"
 cp "$ROOT/docs/images/dashboard_preview.gif" "$OUT/assets/dashboard_preview.gif"
+
+# SPA client-route fallback. Cloudflare Pages serves matching static files first.
+if [[ -f "$WEB/package.json" ]]; then
+	cat > "$OUT/_redirects" <<'EOF'
+# SPA fallback — existing static assets (docs, *.md, assets, etc.) are served first
+/*    /index.html   200
+EOF
+fi
+
 touch "$OUT/.nojekyll"
 
 echo "✓ Site staged. Contents:"

@@ -4,24 +4,24 @@
 
 ## Start here
 
-- [Product overview](https://onlinechefgroep.github.io/pi-agent-orchestrator/)
-- [Markdown mirror](https://onlinechefgroep.github.io/pi-agent-orchestrator/index.md)
-- [README](https://onlinechefgroep.github.io/pi-agent-orchestrator/README.md)
+- [Product overview](https://orchestrator.chefgroep.online/)
+- [Markdown mirror](https://orchestrator.chefgroep.online/index.md)
+- [README](https://orchestrator.chefgroep.online/README.md)
 
 ## Technical documentation
 
-- [Architecture](https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/architecture.md)
-- [API reference](https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/api-reference.md)
-- [Custom agents](https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/custom-agents.md)
-- [Coding-agent guide](https://onlinechefgroep.github.io/pi-agent-orchestrator/AGENTS.md)
+- [Architecture](https://orchestrator.chefgroep.online/docs/architecture.md)
+- [API reference](https://orchestrator.chefgroep.online/docs/api-reference.md)
+- [Custom agents](https://orchestrator.chefgroep.online/docs/custom-agents.md)
+- [Coding-agent guide](https://orchestrator.chefgroep.online/AGENTS.md)
 
 ## Agent discovery
 
-- [llms.txt](https://onlinechefgroep.github.io/pi-agent-orchestrator/llms.txt)
-- [llms-full.txt](https://onlinechefgroep.github.io/pi-agent-orchestrator/llms-full.txt)
-- [Agent permissions](https://onlinechefgroep.github.io/pi-agent-orchestrator/agent-permissions.json)
+- [llms.txt](https://orchestrator.chefgroep.online/llms.txt)
+- [llms-full.txt](https://orchestrator.chefgroep.online/llms-full.txt)
+- [Agent permissions](https://orchestrator.chefgroep.online/agent-permissions.json)
 
 ## Showcase
 
-- [Terminal video](https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4)
-- [Terminal poster](https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.png)
+- [Terminal video](https://orchestrator.chefgroep.online/assets/dashboard_preview.mp4)
+- [Terminal poster](https://orchestrator.chefgroep.online/assets/dashboard_preview.png)
