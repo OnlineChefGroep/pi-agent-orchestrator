@@ -5,66 +5,193 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
 
 jobs:
-  ts:
-    name: TS (${{ matrix.os }}, ${{ matrix.node }}, peer=${{ matrix.peer-deps }})
+  quality:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Verify npm package contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --dry-run --json > npm-pack.json
+          node <<'NODE'
+          const fs = require("node:fs");
+          const report = JSON.parse(fs.readFileSync("npm-pack.json", "utf8"));
+          const files = new Set(report[0].files.map((entry) => entry.path));
+          const required = ["dist/index.js", "dist/index.d.ts", "README.md", "LICENSE"];
+          const missing = required.filter((path) => !files.has(path));
+          if (missing.length > 0) {
+            throw new Error(`npm package is missing: ${missing.join(", ")}`);
+          }
+          NODE
+
+  compatibility:
+    name: Compatibility (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        node: [22, 24]
-        peer-deps: [lowest, latest]
-        exclude:
-          # Reduce CI minutes: only test lowest peer deps on ubuntu + node 22
-          - peer-deps: lowest
-            os: windows-latest
-          - peer-deps: lowest
+        include:
+          - os: ubuntu-latest
+            node: 24
+          - os: windows-latest
+            node: 22
+          - os: windows-latest
+            node: 24
+          - os: macos-latest
+            node: 22
+          - os: macos-latest
             node: 24
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ matrix.node }}
           cache: npm
 
-      - name: Install dependencies (latest)
-        if: matrix.peer-deps == 'latest'
+      - name: Install dependencies
         run: npm ci
 
-      - name: Install dependencies (lowest peer deps)
-        if: matrix.peer-deps == 'lowest'
+      - name: Test
+        run: npm test
+
+  lowest-peer-dependencies:
+    name: Lowest supported peer dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install lowest supported peer dependencies
         run: |
           npm ci
-          npm install --no-save --legacy-peer-deps \
-            @earendil-works/pi-ai@0.78.0 \
-            @earendil-works/pi-coding-agent@0.78.0
-          # @earendil-works/pi-tui is no longer a direct dependency; it resolves
-          # transitively from pi-coding-agent@0.78.0 and is what we should
-          # actually test against (not an independent external pin).
+          npm install --no-save --package-lock=false --include=dev \
+            @earendil-works/pi-ai@0.80.6 \
+            @earendil-works/pi-coding-agent@0.80.6
+          npm ls @earendil-works/pi-ai @earendil-works/pi-coding-agent
 
-      - name: TypeScript typecheck
-        if: matrix.peer-deps == 'latest'
-        run: npx tsc --noEmit
+      - name: Typecheck
+        run: npm run typecheck
 
-      - name: Lint
-        # Biome's native binary loader has a resolution issue on Node 24
-        # (Cannot find module '@biomejs/cli-linux-x64/biome'). Lint only on
-        # Node 22 to avoid the issue; lint results are Node-version-independent.
-        if: matrix.peer-deps == 'latest' && matrix.node == 22
-        run: npm run lint
+      - name: Test
+        run: npm test
 
-      - name: Run tests
-        run: npx vitest run --retry=2
-        # Lowest peer deps may have breaking runtime changes; don't fail the build.
-        continue-on-error: ${{ matrix.peer-deps == 'lowest' }}
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
-      - name: Render benchmark threshold check
-        if: always() && matrix.peer-deps == 'latest'
-        continue-on-error: true
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+  benchmarks:
+    name: Render benchmarks
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run benchmarks and evaluate thresholds
         run: node scripts/check-benchmark-thresholds.mjs
-        # Always runs (even if previous steps failed) so benchmark results are
-        # visible regardless of other test failures. Uses continue-on-error so
-        # warnings/soft-failures don't block the build.
+
+  required-gate:
+    name: Required CI gate
+    if: always()
+    needs:
+      - quality
+      - compatibility
+      - lowest-peer-dependencies
+      - dependency-review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          COMPATIBILITY_RESULT: ${{ needs.compatibility.result }}
+          LOWEST_PEER_RESULT: ${{ needs.lowest-peer-dependencies.result }}
+          DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
+        run: |
+          test "$QUALITY_RESULT" = "success"
+          test "$COMPATIBILITY_RESULT" = "success"
+          test "$LOWEST_PEER_RESULT" = "success"
+          test "$DEPENDENCY_REVIEW_RESULT" = "success" -o "$DEPENDENCY_REVIEW_RESULT" = "skipped"
