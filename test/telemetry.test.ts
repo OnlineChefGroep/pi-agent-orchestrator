@@ -86,15 +86,19 @@ describe("telemetry", () => {
     });
   });
 
-  describe("fail-open logging", () => {
-    it("should log to logger.warn for security events when no handlers are registered", () => {
+  describe("events without subscribers", () => {
+    it("should not write security telemetry to the interactive terminal", () => {
       const payload = { name: "test-agent", errors: ["validation failed"] };
       emitTelemetry("agent:validation-failed", payload);
 
-      expect(logger.warn).toHaveBeenCalledWith(
-        "[telemetry] security event: agent:validation-failed",
-        { payload }
-      );
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it("should not write agent:loaded telemetry to the interactive terminal", () => {
+      const payload = { name: "test-agent", source: "global" as const, hash: "123", enabled: true };
+      emitTelemetry("agent:loaded", payload);
+
+      expect(logger.warn).not.toHaveBeenCalled();
     });
 
     it("should not log to logger.warn for non-security events when no handlers are registered", () => {

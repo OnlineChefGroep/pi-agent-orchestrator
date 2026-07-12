@@ -504,6 +504,7 @@ export default async function (pi: ExtensionAPI) {
     currentCtx = undefined;
     clearSubagentsApi();
     clearWidgetMetrics();
+    widget.dispose();
     scheduler.stop();
     manager.abortAll();
     for (const timer of pendingNudges.values()) clearTimeout(timer);

@@ -158,6 +158,7 @@ vi.mock("../src/ui/agent-widget.js", () => ({
     this.setUICtx = vi.fn();
     this.onTurnStart = vi.fn();
     this.getRenderMetrics = vi.fn(() => ({}));
+    this.dispose = vi.fn();
   }),
 }));
 
@@ -167,6 +168,7 @@ vi.mock("../src/ui/notification-renderer.js", () => ({
 }));
 
 const extensionInit = (await import("../src/index.js")).default;
+const { AgentWidget } = await import("../src/ui/agent-widget.js");
 
 function buildPiMock() {
   return {
@@ -271,6 +273,9 @@ describe("extension entry point", () => {
   it("cleanup on session_shutdown removes global registries", async () => {
     const pi = buildPiMock();
     await extensionInit(pi);
+    const widget = vi.mocked(AgentWidget).mock.results.at(-1)?.value as {
+      dispose: ReturnType<typeof vi.fn>;
+    };
 
     const shutdownHandler = (pi.on as any).mock.calls.find(
       (c: any[]) => c[0] === "session_shutdown",
@@ -281,6 +286,7 @@ describe("extension entry point", () => {
 
     expect((globalThis as any)[Symbol.for("pi-subagents:manager")]).toBeUndefined();
     expect((globalThis as any)[Symbol.for("pi-subagents:hooks")]).toBeUndefined();
+    expect(widget.dispose).toHaveBeenCalledOnce();
   });
 
   it("registers session_start handler", async () => {

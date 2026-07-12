@@ -445,6 +445,7 @@ Available agent types:
 ${typeListText}
 
 Guidelines:
+- By default, one Agent tool call creates exactly one agent. Multi-agent fan-out is opt-in via /agents → Settings → Coordination.
 - For parallel work, use run_in_background: true on each agent. Foreground calls run sequentially — only one executes at a time.
 - Use Explore for codebase searches and code understanding.
 - Use Plan for architecture and implementation planning.
@@ -476,7 +477,7 @@ Guidelines:
       ),
       thinking: Type.Optional(
         Type.String({
-          description: "Thinking level: off, minimal, low, medium, high, xhigh. Overrides agent default.",
+          description: "Thinking level: off, minimal, low, medium, high, xhigh, max. Overrides agent default.",
         }),
       ),
       max_turns: Type.Optional(
@@ -554,7 +555,7 @@ Guidelines:
 
       const resolvedConfig = resolveAgentInvocationConfig(customConfig, params);
 
-      // Resolve model from agent config first; tool-call params only fill gaps.
+      // Explicit tool-call model/thinking values override agent-profile defaults.
       let model = piCtx.model;
       if (resolvedConfig.modelInput) {
         const resolvedModel = resolveModel(resolvedConfig.modelInput, piCtx.modelRegistry);

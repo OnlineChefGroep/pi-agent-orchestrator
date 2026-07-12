@@ -7,7 +7,8 @@ import { getTelemetryRegistry, setTelemetryRegistry } from "./ui/global-registry
  * telemetry.ts — Structured event emitter for security and validation events.
  *
  * Provides a lightweight pub/sub system for agent lifecycle events.
- * Fail-open: if no listeners are registered, falls back to logger.warn.
+ * Events without subscribers are intentionally dropped: writing to stdout or
+ * stderr corrupts Pi's interactive terminal rendering.
  */
 
 /** Telemetry event types and their payloads */
@@ -54,13 +55,6 @@ export type TelemetryEventName = keyof TelemetryEvents;
 /** Handler function type */
 export type TelemetryHandler<E extends TelemetryEventName> = (payload: TelemetryEvents[E]) => void;
 
-/** Security-relevant events that always log when no listeners are registered. */
-const SECURITY_EVENTS: ReadonlySet<TelemetryEventName> = new Set<TelemetryEventName>([
-  "agent:loaded",
-  "agent:validation-failed",
-  "agent:unknown-tools",
-]);
-
 /** Global registry of telemetry handlers (Symbol-based to avoid collisions) */
 
 type HandlerRegistry = Map<TelemetryEventName, Set<unknown>>;
@@ -96,8 +90,7 @@ export function onTelemetry<E extends TelemetryEventName>(
 }
 
 /**
- * Emit a telemetry event.
- * If no listeners are registered, falls back to logger.warn for security events.
+ * Emit a telemetry event to registered subscribers.
  */
 export function emitTelemetry<E extends TelemetryEventName>(
   event: E,
@@ -114,11 +107,6 @@ export function emitTelemetry<E extends TelemetryEventName>(
         // Handler errors are logged but don't break the emitter
         logger.warn(`Telemetry handler error for ${event}:`, { error: err instanceof Error ? err.message : String(err) });
       }
-    }
-  } else {
-    // Fail-open: log to logger.warn for security-relevant events
-    if (SECURITY_EVENTS.has(event as TelemetryEventName)) {
-      logger.warn(`[telemetry] security event: ${event}`, { payload });
     }
   }
 }

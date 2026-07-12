@@ -174,6 +174,24 @@ describe("AgentWidget — debouncedUpdate (spawn batching)", () => {
     vi.useRealTimers();
   });
 
+  it("dispose clears widget, status, and pending timers", () => {
+    manager.setAgents([mockRecord({ status: "running" })]);
+    widget.setUICtx(uiCtx as any);
+    widget.debouncedUpdate();
+
+    const setWidgetCalls = vi.mocked(uiCtx.setWidget).mock.calls.length;
+    const setStatusCalls = vi.mocked(uiCtx.setStatus).mock.calls.length;
+
+    widget.dispose();
+
+    expect(uiCtx.setWidget).toHaveBeenLastCalledWith("agents", undefined);
+    expect(uiCtx.setStatus).toHaveBeenLastCalledWith("subagents", undefined);
+
+    vi.advanceTimersByTime(5000);
+    expect(uiCtx.setWidget.mock.calls.length).toBe(setWidgetCalls + 1);
+    expect(uiCtx.setStatus.mock.calls.length).toBe(setStatusCalls + 1);
+  });
+
   it("debouncedUpdate without UI context is a no-op", () => {
     // No uiCtx set → debouncedUpdate should do nothing
     widget.debouncedUpdate();
@@ -290,6 +308,18 @@ describe("AgentWidget — debouncedUpdate (spawn batching)", () => {
       "subagents",
       "1 running, 1 queued agents",
     );
+  });
+
+  it("clears widget and status from the previous UI context", () => {
+    const previousCtx = createMockUiCtx();
+    manager.setAgents([mockRecord({ status: "running" })]);
+    widget.setUICtx(previousCtx as any);
+    widget.update();
+
+    widget.setUICtx(uiCtx as any);
+
+    expect(previousCtx.setWidget).toHaveBeenLastCalledWith("agents", undefined);
+    expect(previousCtx.setStatus).toHaveBeenLastCalledWith("subagents", undefined);
   });
 });
 

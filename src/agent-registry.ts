@@ -31,7 +31,9 @@ export function setDefaultJoinMode(mode: JoinMode): void {
 
 export type OrchestrationMode = "auto" | "single" | "swarm" | "crew";
 
-let defaultOrchestrationMode: OrchestrationMode = "auto";
+// One Agent tool call should create one agent unless the user explicitly
+// opts into automatic or multi-agent dispatch in project settings.
+let defaultOrchestrationMode: OrchestrationMode = "single";
 
 /** Get the default orchestration mode for agent execution. */
 export function getOrchestrationMode(): OrchestrationMode {

@@ -243,10 +243,10 @@ const JOIN_MODE_OPTIONS: ReadonlyArray<{ mode: JoinMode; desc: string }> = [
 ];
 
 const ORCH_MODE_OPTIONS: ReadonlyArray<{ mode: OrchestrationMode; desc: string }> = [
-  { mode: "auto", desc: "smart selection based on task complexity (default)" },
-  { mode: "single", desc: "one agent at a time" },
-  { mode: "swarm", desc: "dynamic collaborative groups" },
-  { mode: "crew", desc: "structured team coordination (planner/executor/reviewer)" },
+  { mode: "single", desc: "one tool call creates one agent (safe default)" },
+  { mode: "auto", desc: "heuristic fan-out; some prompts create 3 agents" },
+  { mode: "swarm", desc: "every tool call creates a collaborative multi-agent group" },
+  { mode: "crew", desc: "every tool call creates planner/executor/reviewer agents" },
 ];
 
 export async function showCoordinationMenu(

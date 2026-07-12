@@ -6,7 +6,7 @@
  * hooks, budget/depth enforcement, permission inheritance, and partitioned state.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AgentManager } from "../src/agent-manager.js";
+import { AgentManager, activeAgentStorage } from "../src/agent-manager.js";
 import { CTX_TOOL_NAMES, filterByPartitions, getAgentConfig, getConfig, registerAgents } from "../src/agent-types.js";
 import { parseHandoff, renderHandoffForParent } from "../src/handoff.js";
 import { HookRegistry } from "../src/hooks.js";
@@ -40,6 +40,10 @@ const resolvedRun = (responseText = "done") =>
     steered: false,
   });
 
+function runAs<T>(agentId: string, fn: () => T): T {
+  return activeAgentStorage.run(agentId, fn);
+}
+
 // ── 1. Budget Enforcement ───────────────────────────────────────────────────
 
 describe("E2E: budget enforcement", () => {
@@ -68,24 +72,23 @@ describe("E2E: budget enforcement", () => {
       compactionCount: 0,
     };
     (manager as any).agents.set(parentId, parentRecord);
-    (manager as any).activeAgentIdStack.push(parentId);
 
     // First child: allowed
-    const id1 = manager.spawn(mockPi, mockCtx, "Explore", "child 1", {
+    const id1 = runAs(parentId, () => manager.spawn(mockPi, mockCtx, "Explore", "child 1", {
       description: "child 1",
       isBackground: true,
-    });
+    }));
     const rec1 = manager.getRecord(id1)!;
     await rec1.promise;
     expect(parentRecord.totalSpawned).toBe(1);
 
     // Second child: blocked
-    expect(() =>
+    expect(() => runAs(parentId, () =>
       manager.spawn(mockPi, mockCtx, "Explore", "child 2", {
         description: "child 2",
         isBackground: true,
       }),
-    ).toThrow("Task budget exhausted (1/1)");
+    )).toThrow("Task budget exhausted (1/1)");
 
     expect(parentRecord.totalSpawned).toBe(1);
   });
@@ -118,26 +121,25 @@ describe("E2E: depth limit", () => {
       compactionCount: 0,
     };
     (manager as any).agents.set(rootId, rootRecord);
-    (manager as any).activeAgentIdStack.push(rootId);
 
     // Child (depth 1): allowed
     resolvedRun();
-    const childId = manager.spawn(mockPi, mockCtx, "Explore", "depth 1", {
+    const childId = runAs(rootId, () => manager.spawn(mockPi, mockCtx, "Explore", "depth 1", {
       description: "child",
       isBackground: true,
-    });
+    }));
     const childRecord = manager.getRecord(childId)!;
     await childRecord.promise;
     expect(childRecord.currentLevel).toBe(1);
+    expect(childRecord.parentId).toBe(rootId);
 
     // Grandchild (depth 2): blocked
-    (manager as any).activeAgentIdStack.push(childId);
-    expect(() =>
+    expect(() => runAs(childId, () =>
       manager.spawn(mockPi, mockCtx, "Explore", "depth 2", {
         description: "grandchild",
         isBackground: true,
       }),
-    ).toThrow("Max agent depth reached (2/1)");
+    )).toThrow("Max agent depth reached (2/1)");
   });
 });
 
@@ -173,15 +175,14 @@ describe("E2E: validator isolation", () => {
       compactionCount: 0,
     };
     (manager as any).agents.set(parentId, parentRecord);
-    (manager as any).activeAgentIdStack.push(parentId);
 
     // AgentManager.spawn should block because taskBudget=0
-    expect(() =>
+    expect(() => runAs(parentId, () =>
       manager.spawn(mockPi, mockCtx, "Explore", "should fail", {
         description: "blocked",
         isBackground: true,
       }),
-    ).toThrow("Task budget exhausted");
+    )).toThrow("Task budget exhausted");
 
     // The parent's totalSpawned remains 0 (no spawns completed)
     expect(parentRecord.totalSpawned).toBe(0);

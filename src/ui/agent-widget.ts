@@ -108,6 +108,10 @@ export class AgentWidget {
   /** Set the UI context (grabbed from first tool execution). */
   setUICtx(ctx: UICtx) {
     if (ctx !== this.uiCtx) {
+      if (this.uiCtx) {
+        this.uiCtx.setWidget("agents", undefined);
+        this.uiCtx.setStatus("subagents", undefined);
+      }
       // UICtx changed — the widget registered on the old context is gone.
       // Force re-registration on next update().
       this.uiCtx = ctx;
@@ -455,6 +459,10 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
 
   dispose() {
     this.closed = true;
+    if (this.updateTimer) {
+      clearTimeout(this.updateTimer);
+      this.updateTimer = undefined;
+    }
     if (this.widgetInterval) {
       clearTimeout(this.widgetInterval);
       this.widgetInterval = undefined;

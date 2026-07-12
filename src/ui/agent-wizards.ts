@@ -65,7 +65,7 @@ The file format is a markdown file with YAML frontmatter and a system prompt bod
 description: <one-line description shown in UI>
 tools: <comma-separated built-in tools: read, bash, edit, write, grep, find, ls. Use "none" for no tools. Omit for all tools>
 model: <optional model as "provider/modelId", e.g. "anthropic/claude-haiku-4-5-20251001". Omit to inherit parent model>
-thinking: <optional thinking level: off, minimal, low, medium, high, xhigh. Omit to inherit>
+thinking: <optional thinking level: off, minimal, low, medium, high, xhigh, max. Omit to inherit>
 max_turns: <optional max agentic turns. 0 or omit for unlimited (default)>
 prompt_mode: <"replace" (body IS the full system prompt) or "append" (body is appended to default prompt). Default: replace>
 extensions: <true (inherit all MCP/extension tools), false (none), or comma-separated names. Default: true>
@@ -165,6 +165,7 @@ export async function showManualWizard(ctx: ExtensionCommandContext, targetDir: 
     "medium",
     "high",
     "xhigh",
+    "max",
   ]);
   if (!thinkingChoice) return;
 

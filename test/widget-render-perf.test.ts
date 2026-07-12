@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentRecord } from "../src/types.js";
 import type { AgentActivity } from "../src/ui/agent-ui-types.js";
+import { benchmarkLog } from "./helpers/benchmark-log.js";
 
 // ── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -113,51 +114,6 @@ const testTui = {
 
 function alwaysShowFinished() {
   return true;
-}
-
-// ── Benchmark logging ──────────────────────────────────────────────────────
-
-/**
- * Log a structured benchmark result line for CI threshold checking.
- * Writes to stdout so scripts/check-benchmark-thresholds.mjs can parse it.
- *
- * Format: [BENCHMARK] <name> <measured> <threshold> <unit> <OK|WARN|FAIL>
- * - OK: measured ≤ threshold
- * - WARN: threshold * 0.8 < measured ≤ threshold
- * - FAIL: measured > threshold
- */
-function benchmarkLog(
-  label: string,
-  measured: number,
-  threshold: number,
-  unit = "ms",
-): void {
-  const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
-  let status: string;
-  if (measured > threshold) {
-    status = "FAIL";
-    console.warn(
-      `⚠️  BENCHMARK FAIL: ${label} — ${measured} exceeds threshold ${threshold}`,
-    );
-  } else if (pct > 80) {
-    status = "WARN";
-    console.warn(
-      `⚠️  BENCHMARK WARN: ${label} — ${measured} approaching threshold ${threshold} (${pct.toFixed(0)}%)`,
-    );
-  } else {
-    status = "OK";
-  }
-  const measuredStr = unit === "\u00b5s"
-    ? `${measured.toFixed(3)}\u00b5s`
-    : `${measured.toFixed(3)}ms`;
-  const thresholdStr = unit === "\u00b5s"
-    ? `${threshold.toFixed(3)}\u00b5s`
-    : `${threshold.toFixed(3)}ms`;
-
-  // Structured log line — plain text, machine-parseable
-  process.stdout.write(
-    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
-  );
 }
 
 // ── Test data sizes ──────────────────────────────────────────────────────────

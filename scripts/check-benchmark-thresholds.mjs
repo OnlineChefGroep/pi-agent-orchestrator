@@ -42,8 +42,10 @@ async function main () {
   const testFiles = [
     'test/widget-render-perf.test.ts',
     'test/dashboard-render-perf.test.ts',
+    'test/dashboard.benchmark.test.ts',
     'test/spawn-latency-bench.test.ts',
-    'test/spawn-latency-e2e-bench.test.ts'
+    'test/spawn-latency-e2e-bench.test.ts',
+    'test/handoff-v2.test.ts'
   ]
     .map((f) => resolve(ROOT, f))
     .filter((f) => existsSync(f))
@@ -55,9 +57,10 @@ async function main () {
 
   const paths = testFiles.map((f) => `"${f}"`).join(' ')
   let rawOutput
+  let vitestExitCode = 0
   try {
     rawOutput = execSync(
-      `npx vitest run ${paths} --reporter=verbose 2>&1`,
+      `npx vitest run ${paths} --reporter=verbose --retry=0 2>&1`,
       {
         cwd: ROOT,
         encoding: 'utf-8',
@@ -66,6 +69,7 @@ async function main () {
       }
     )
   } catch (err) {
+    vitestExitCode = err.status ?? 1
     rawOutput = err.stderr
       ? `${err.stdout || ''}\n${err.stderr}`
       : err.stdout || String(err)
@@ -75,14 +79,13 @@ async function main () {
   const benchLines = rawOutput.match(/\[BENCHMARK\].*/g) || []
 
   if (benchLines.length === 0) {
-    console.warn(
-      `${YELLOW}Warning:${RESET} No [BENCHMARK] lines found in output.\n` +
+    console.error(
+      `${RED}ERROR:${RESET} No [BENCHMARK] lines found in output.\n` +
         'Make sure the test file has benchmarkLog() calls.\n'
     )
-    // Still show raw output for debugging
     console.log(rawOutput.slice(0, 2000))
     console.log('...')
-    process.exit(0)
+    process.exit(1)
   }
 
   const results = []
@@ -169,6 +172,13 @@ async function main () {
     }
     console.error()
     process.exit(1)
+  }
+
+  if (vitestExitCode !== 0) {
+    console.error(
+      `${RED}ERROR:${RESET} vitest exited with code ${vitestExitCode} despite passing benchmark thresholds`
+    )
+    process.exit(vitestExitCode)
   }
 
   console.log(`${GREEN}✓ All render benchmarks within thresholds${RESET}\n`)
