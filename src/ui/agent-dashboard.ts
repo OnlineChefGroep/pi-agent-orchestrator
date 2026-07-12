@@ -48,7 +48,7 @@ import {
 } from "./tui-shim.js";
 
 const MIN_VIEWPORT = 8;
-export const DASHBOARD_HEIGHT_PCT = 92;
+export const DASHBOARD_HEIGHT_PCT = 100;
 
 /** Fast refresh when agents are running (5 fps). */
 const ACTIVE_REFRESH_MS = 200;
@@ -1045,9 +1045,9 @@ export async function showAgentDashboard(
     {
       overlay: true,
       overlayOptions: {
-        anchor: "center",
-        width: "98%",
-        maxHeight: `${DASHBOARD_HEIGHT_PCT}%`,
+        anchor: "top-left",
+        width: "100%",
+        maxHeight: "100%",
       },
     },
   );

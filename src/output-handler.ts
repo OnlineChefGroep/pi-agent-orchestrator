@@ -231,7 +231,14 @@ async function showAgentsTop(
 ): Promise<void> {
   await ctx.ui.custom<undefined>((tui, _theme, _kb, done) => {
     return new AgentsTopComponent(tui, manager, activity, done);
-  }, { overlay: true, overlayOptions: { anchor: "center", width: "95%", maxHeight: "80%" } });
+  }, {
+    overlay: true,
+    overlayOptions: {
+      anchor: "top-left",
+      width: "100%",
+      maxHeight: "100%",
+    },
+  });
 }
 
 /**

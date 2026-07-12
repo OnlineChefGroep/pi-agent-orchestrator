@@ -170,7 +170,7 @@ function renderSummary(entries: AgentTopEntry[], theme: TopTheme): string {
   return [
     theme.fg("accent", `${running} active`),
     theme.fg("warning", `${queued} queued`),
-    theme.fg("muted", `${formatTokens(totalTokens)} tokens`),
+    theme.fg("muted", formatTokens(totalTokens)),
     theme.fg("muted", `${totalTurns} turns`),
     theme.fg("muted", `${totalTools} tools`),
   ].join(` ${theme.fg("border", "│")} `);

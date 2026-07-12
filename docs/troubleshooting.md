@@ -98,6 +98,14 @@ npm install --legacy-peer-deps
 
 ## // UI / TELEMETRY VIEWS
 
+### Dashboard / AGENT TOP view squashed with Pi header text
+
+**SYMPTOM:** Opening `/agents` top view or pressing `t` shows `AGENT TOP` mixed with Pi startup lines (`Upd`, `New`, `Changelog`) — columns and borders overlap.
+
+**CAUSE:** The dashboard overlay was centered at 80–92% height, so Pi's header/footer rendered underneath and TUI compositing merged both layers.
+
+**RECOVERY:** Use a build with fullscreen overlay (`anchor: top-left`, `width/maxHeight: 100%`). Rebuild (`npm run build`), `pi install` the local path, then `/reload`.
+
 ### Footer status bar missing after Pi reload
 
 **SYMPTOM:** No `N running agents` text in the Pi footer (top bar) after extension reload or `/resume`, even when subagents are active.
