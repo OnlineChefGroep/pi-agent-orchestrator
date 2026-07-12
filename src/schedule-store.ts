@@ -73,9 +73,23 @@ export class ScheduleStore {
   private async ensureDir(): Promise<void> {
     const dir = dirname(this.filePath);
     await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+
+    const stat = await fs.lstat(dir);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      throw new Error("Schedule store directory must be a directory");
+    }
+
     if (process.platform !== "win32") {
       await fs.chmod(dir, 0o700);
     }
+  }
+
+  private async assertBackingFileSafe(): Promise<Awaited<ReturnType<typeof fs.lstat>>> {
+    const stat = await fs.lstat(this.filePath);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new Error("Schedule store must be a regular file");
+    }
+    return stat;
   }
 
   /** Ensure a private regular backing file exists without overwriting a concurrent writer. */
@@ -89,6 +103,9 @@ export class ScheduleStore {
     } catch (error) {
       if (!isErrno(error, "EEXIST")) throw error;
     }
+
+    await this.assertBackingFileSafe();
+
     if (process.platform !== "win32") {
       await fs.chmod(this.filePath, 0o600);
     }
@@ -100,10 +117,7 @@ export class ScheduleStore {
     // later mutation can write back as apparently valid state.
     this.jobs.clear();
     try {
-      const stat = await fs.lstat(this.filePath);
-      if (stat.isSymbolicLink() || !stat.isFile()) {
-        throw new Error("Schedule store must be a regular file");
-      }
+      const stat = await this.assertBackingFileSafe();
       if (stat.size > MAX_STORE_BYTES) throw new Error("Schedule store payload too large");
 
       const content = await fs.readFile(this.filePath, "utf-8");
@@ -238,10 +252,11 @@ export class ScheduleStore {
   /** Delete the backing file only after a lock-protected disk reload confirms it is empty. */
   async deleteFileIfEmpty(): Promise<void> {
     if (!existsSync(this.filePath)) return;
-    await removeLegacyFileLock(this.lockPath);
 
     let release: (() => Promise<void>) | undefined;
     try {
+      await this.assertBackingFileSafe();
+      await removeLegacyFileLock(this.lockPath);
       release = await lock(this.filePath, LOCK_OPTIONS);
       await this.load();
       if (this.jobs.size === 0) await fs.unlink(this.filePath);
