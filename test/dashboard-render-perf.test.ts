@@ -39,6 +39,11 @@ vi.mock("../src/ui/tui-shim.js", () => ({
 vi.mock("../src/agent-registry.js", () => ({
   getUiStyle: () => "premium",
   getDashboardRefreshInterval: () => 750,
+  // v2 dashboard header + widget render path also read these (real defaults).
+  getAnimationStyle: () => "orchestrator",
+  isShowActivityStream: () => true,
+  isShowTokenUsage: () => true,
+  isShowTurnProgress: () => true,
 }));
 
 vi.mock("../src/agent-types.js", () => ({
