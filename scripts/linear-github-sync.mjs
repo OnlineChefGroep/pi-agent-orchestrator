@@ -2,41 +2,44 @@ import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 const LINEAR_ENDPOINT = "https://api.linear.app/graphql";
-const DEFAULT_PARENT_ISSUE = "CHE-100";
+const DEFAULT_PARENT_ISSUE = "CHEF-31";
+const LINEAR_REQUEST_TIMEOUT_MS = 15_000;
+const MAX_CHILD_PAGES = 100;
 
-const PARENT_QUERY = `
-  query ParentIssue($id: String!) {
-    issue(id: $id) {
-      id
-      project { id }
-      team {
-        id
-        states { nodes { id name type } }
-      }
-      children {
-        nodes { id identifier description }
-      }
-    }
-  }
-`;
+const PARENT_QUERY = [
+  "query ParentIssue($id: String!, $cursor: String) {",
+  "  issue(id: $id) {",
+  "    id",
+  "    project { id }",
+  "    team {",
+  "      id",
+  "      states { nodes { id name type } }",
+  "    }",
+  "    children(first: 100, after: $cursor) {",
+  "      nodes { id identifier description }",
+  "      pageInfo { hasNextPage endCursor }",
+  "    }",
+  "  }",
+  "}",
+].join("\n");
 
-const CREATE_ISSUE = `
-  mutation CreateIssue($input: IssueCreateInput!) {
-    issueCreate(input: $input) {
-      success
-      issue { id identifier url }
-    }
-  }
-`;
+const CREATE_ISSUE = [
+  "mutation CreateIssue($input: IssueCreateInput!) {",
+  "  issueCreate(input: $input) {",
+  "    success",
+  "    issue { id identifier url }",
+  "  }",
+  "}",
+].join("\n");
 
-const UPDATE_ISSUE = `
-  mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
-    issueUpdate(id: $id, input: $input) {
-      success
-      issue { id identifier url }
-    }
-  }
-`;
+const UPDATE_ISSUE = [
+  "mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {",
+  "  issueUpdate(id: $id, input: $input) {",
+  "    success",
+  "    issue { id identifier url }",
+  "  }",
+  "}",
+].join("\n");
 
 export function githubMarker(repository, kind, number) {
   return `<!-- github-${kind}:${repository}#${number} -->`;
@@ -115,7 +118,7 @@ export function selectLinearState(states, stateKey) {
   const preferredTypes = {
     backlog: ["backlog", "unstarted"],
     "in-progress": ["started"],
-    "in-review": ["started"],
+    "in-review": [],
     done: ["completed"],
     canceled: ["canceled", "cancelled"],
   };
@@ -126,11 +129,14 @@ export function selectLinearState(states, stateKey) {
   }
 
   for (const type of preferredTypes[stateKey] ?? []) {
-    const match = states.find((state) => state.type.toLowerCase() === type);
-    if (match) return match;
+    const matches = states.filter((state) => state.type.toLowerCase() === type);
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1) {
+      throw new Error(`Ambiguous Linear workflow state for ${stateKey}: ${type}`);
+    }
   }
 
-  throw new Error(`No Linear workflow state found for ${stateKey}`);
+  throw new Error(`No unambiguous Linear workflow state found for ${stateKey}`);
 }
 
 export function buildLinearDescription(entity, repository) {
@@ -152,22 +158,77 @@ ${body}`;
 }
 
 async function linearRequest(token, query, variables, fetchImpl = fetch) {
-  const response = await fetchImpl(LINEAR_ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: token,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query, variables }),
-  });
+  let response;
+  try {
+    response = await fetchImpl(LINEAR_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(LINEAR_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error?.name === "AbortError" || error?.name === "TimeoutError") {
+      throw new Error(`Linear API request timed out after ${LINEAR_REQUEST_TIMEOUT_MS}ms`, {
+        cause: error,
+      });
+    }
+    throw error;
+  }
 
-  const payload = await response.json();
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    throw new Error(`Linear API returned invalid JSON (${response.status})`, { cause: error });
+  }
+
   if (!response.ok || payload.errors) {
     throw new Error(
       `Linear API request failed (${response.status}): ${JSON.stringify(payload.errors ?? payload)}`,
     );
   }
   return payload.data;
+}
+
+async function loadParentAndExisting({ token, parentIssue, marker, fetchImpl }) {
+  let cursor = null;
+  let parent = null;
+
+  for (let page = 0; page < MAX_CHILD_PAGES; page++) {
+    const parentData = await linearRequest(
+      token,
+      PARENT_QUERY,
+      { id: parentIssue, cursor },
+      fetchImpl,
+    );
+    const currentParent = parentData.issue;
+    if (!currentParent) throw new Error(`Linear parent issue not found: ${parentIssue}`);
+    parent ??= currentParent;
+
+    const existing = currentParent.children.nodes.find((child) =>
+      child.description?.includes(marker),
+    );
+    if (existing) return { parent, existing };
+
+    const pageInfo = currentParent.children.pageInfo;
+    if (!pageInfo.hasNextPage) return { parent, existing: null };
+    if (!pageInfo.endCursor) {
+      throw new Error(`Linear child pagination returned no cursor for ${parentIssue}`);
+    }
+    cursor = pageInfo.endCursor;
+  }
+
+  throw new Error(`Linear child pagination exceeded ${MAX_CHILD_PAGES} pages for ${parentIssue}`);
+}
+
+function requireMutationIssue(payload, mutationName, marker, parentIssue) {
+  if (payload?.success === true && payload.issue) return payload.issue;
+  throw new Error(
+    `Linear ${mutationName} failed for ${marker} under ${parentIssue}: missing successful issue payload`,
+  );
 }
 
 export async function syncGithubEvent({
@@ -178,20 +239,15 @@ export async function syncGithubEvent({
   fetchImpl = fetch,
 }) {
   const entity = normalizeGithubEntity(event, repository);
-  const parentData = await linearRequest(
+  const { parent, existing } = await loadParentAndExisting({
     token,
-    PARENT_QUERY,
-    { id: parentIssue },
+    parentIssue,
+    marker: entity.marker,
     fetchImpl,
-  );
-  const parent = parentData.issue;
-  if (!parent) throw new Error(`Linear parent issue not found: ${parentIssue}`);
+  });
 
   const state = selectLinearState(parent.team.states.nodes, entity.stateKey);
   const description = buildLinearDescription(entity, repository);
-  const existing = parent.children.nodes.find((child) =>
-    child.description?.includes(entity.marker),
-  );
 
   if (existing) {
     const data = await linearRequest(
@@ -207,7 +263,10 @@ export async function syncGithubEvent({
       },
       fetchImpl,
     );
-    return { action: "updated", issue: data.issueUpdate.issue };
+    return {
+      action: "updated",
+      issue: requireMutationIssue(data.issueUpdate, "update", entity.marker, parentIssue),
+    };
   }
 
   const input = {
@@ -221,7 +280,10 @@ export async function syncGithubEvent({
   if (parent.project?.id) input.projectId = parent.project.id;
 
   const data = await linearRequest(token, CREATE_ISSUE, { input }, fetchImpl);
-  return { action: "created", issue: data.issueCreate.issue };
+  return {
+    action: "created",
+    issue: requireMutationIssue(data.issueCreate, "create", entity.marker, parentIssue),
+  };
 }
 
 async function main() {
