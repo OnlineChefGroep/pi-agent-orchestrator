@@ -5,6 +5,8 @@
 # /pi-agent-orchestrator/ base path without a build step or path rewriting.
 # scripts/build-site.sh stages a self-contained directory of only the files
 # the published page references (landing page + linked docs + showcase assets).
+#
+# This is the sole workflow that deploys to GitHub Pages.
 name: Deploy Pages
 
 on:
@@ -14,20 +16,25 @@ on:
       - 'site/**'
       - 'docs/images/dashboard_preview.gif'
       - 'docs/images/dashboard_preview.mp4'
+      - 'docs/images/dashboard_preview.svg'
+      - 'docs/images/orchestrator_architecture.png'
       - 'docs/architecture.md'
       - 'docs/api-reference.md'
+      - 'docs/custom-agents.md'
       - 'README.md'
       - 'AGENTS.md'
       - 'llms.txt'
       - 'llms-full.txt'
+      - 'sitemap.md'
+      - 'sitemap.xml'
+      - 'robots.txt'
+      - 'agent-permissions.json'
       - 'scripts/build-site.sh'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+# Deny by default; each job grants only what it needs.
+permissions: {}
 
 # Allow only one concurrent Pages deployment; do not cancel an in-flight run.
 concurrency:
@@ -37,24 +44,33 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - name: Assemble publish directory
         run: bash scripts/build-site.sh _site
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: _site
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
