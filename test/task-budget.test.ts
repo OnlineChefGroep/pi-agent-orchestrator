@@ -2,7 +2,7 @@
  * task-budget.test.ts — Tests for task budget and depth limiting.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentManager } from "../src/agent-manager.js";
+import { AgentManager, activeAgentStorage } from "../src/agent-manager.js";
 import type { AgentRecord } from "../src/types.js";
 
 vi.mock("../src/agent-runner.js", () => ({
@@ -29,6 +29,10 @@ const resolvedRun = () =>
     aborted: false,
     steered: false,
   });
+
+function runAs<T>(agentId: string, fn: () => T): T {
+  return activeAgentStorage.run(agentId, fn);
+}
 
 describe("Task Budget", () => {
   let manager: AgentManager;
@@ -59,14 +63,11 @@ describe("Task Budget", () => {
     };
     (manager as any).agents.set(parentId, parentRecord);
 
-    // Push parent onto active stack so spawn() finds it
-    (manager as any).activeAgentIdStack.push(parentId);
-
     // First spawn: should succeed
-    const id1 = manager.spawn(mockPi, mockCtx, "Explore", "child 1", {
+    const id1 = runAs(parentId, () => manager.spawn(mockPi, mockCtx, "Explore", "child 1", {
       description: "child 1",
       isBackground: true,
-    });
+    }));
     const record1 = manager.getRecord(id1)!;
     await record1.promise; // flush microtask so pop happens
 
@@ -74,12 +75,12 @@ describe("Task Budget", () => {
     expect(record1.currentLevel).toBe(1);
 
     // Second spawn: should throw — budget exhausted
-    expect(() =>
+    expect(() => runAs(parentId, () =>
       manager.spawn(mockPi, mockCtx, "Explore", "child 2", {
         description: "child 2",
         isBackground: true,
       }),
-    ).toThrow("Task budget exhausted (1/1)");
+    )).toThrow("Task budget exhausted (1/1)");
 
     // totalSpawned should not have been incremented for the failed spawn
     expect(parentRecord.totalSpawned).toBe(1);
@@ -104,42 +105,34 @@ describe("Task Budget", () => {
       compactionCount: 0,
     };
     (manager as any).agents.set(rootId, rootRecord);
-    (manager as any).activeAgentIdStack.push(rootId);
-
     // Spawn child (level 1) — should succeed
     resolvedRun();
-    const childId = manager.spawn(mockPi, mockCtx, "Explore", "level 1", {
+    const childId = runAs(rootId, () => manager.spawn(mockPi, mockCtx, "Explore", "level 1", {
       description: "child",
       isBackground: true,
-    });
+    }));
     const childRecord = manager.getRecord(childId)!;
     await childRecord.promise;
 
     expect(childRecord.currentLevel).toBe(1);
 
-    // Now push child onto active stack to simulate it spawning
-    (manager as any).activeAgentIdStack.push(childId);
-
     // Spawn grandchild (level 2) — should succeed
-    const gchildId = manager.spawn(mockPi, mockCtx, "Explore", "level 2", {
+    const gchildId = runAs(childId, () => manager.spawn(mockPi, mockCtx, "Explore", "level 2", {
       description: "grandchild",
       isBackground: true,
-    });
+    }));
     const gchildRecord = manager.getRecord(gchildId)!;
     await gchildRecord.promise;
 
     expect(gchildRecord.currentLevel).toBe(2);
 
-    // Push grandchild onto active stack
-    (manager as any).activeAgentIdStack.push(gchildId);
-
     // Try to spawn great-grandchild (level 3) — should throw
-    expect(() =>
+    expect(() => runAs(gchildId, () =>
       manager.spawn(mockPi, mockCtx, "Explore", "level 3", {
         description: "great-grandchild",
         isBackground: true,
       }),
-    ).toThrow("Max agent depth reached (3/2)");
+    )).toThrow("Max agent depth reached (3/2)");
   });
 
   it("default levelLimit=5 allows 5 deep, blocks 6 deep", async () => {
@@ -161,31 +154,28 @@ describe("Task Budget", () => {
       compactionCount: 0,
     };
     (manager as any).agents.set(rootId, rootRecord);
-    (manager as any).activeAgentIdStack.push(rootId);
-
     // Spawn 5 levels deep (levels 1 through 5)
+    let parentId = rootId;
     for (let depth = 1; depth <= 5; depth++) {
       resolvedRun();
-      const childId = manager.spawn(mockPi, mockCtx, "Explore", `level ${depth}`, {
+      const childId = runAs(parentId, () => manager.spawn(mockPi, mockCtx, "Explore", `level ${depth}`, {
         description: `level-${depth}`,
         isBackground: true,
-      });
+      }));
       const childRecord = manager.getRecord(childId)!;
       await childRecord.promise;
 
       expect(childRecord.currentLevel).toBe(depth);
-
-      // Set up this child as the parent for the next iteration
-      (manager as any).activeAgentIdStack.push(childId);
+      parentId = childId;
     }
 
     // Now try level 6 — should throw (default limit 5)
-    expect(() =>
+    expect(() => runAs(parentId, () =>
       manager.spawn(mockPi, mockCtx, "Explore", "level 6", {
         description: "level-6",
         isBackground: true,
       }),
-    ).toThrow("Max agent depth reached (6/5)");
+    )).toThrow("Max agent depth reached (6/5)");
   });
 
   it("taskBudget=0 blocks all child spawns", async () => {
@@ -207,14 +197,12 @@ describe("Task Budget", () => {
       compactionCount: 0,
     };
     (manager as any).agents.set(parentId, parentRecord);
-    (manager as any).activeAgentIdStack.push(parentId);
-
-    expect(() =>
+    expect(() => runAs(parentId, () =>
       manager.spawn(mockPi, mockCtx, "Explore", "should fail", {
         description: "should fail",
         isBackground: true,
       }),
-    ).toThrow("Task budget exhausted (0/0)");
+    )).toThrow("Task budget exhausted (0/0)");
   });
 
   it("totalSpawned is not incremented for non-spawn operations", () => {
@@ -249,37 +237,64 @@ describe("Task Budget", () => {
     expect(parentRecord.totalSpawned).toBe(0);
   });
 
-  it("getActiveAgentId returns top of stack", () => {
+  it("spawn during runAgent inherits parent from AsyncLocalStorage", async () => {
+    manager = new AgentManager();
+    let nestedChildId: string | undefined;
+
+    vi.mocked(runAgent).mockImplementation(async () => {
+      nestedChildId = manager.spawn(mockPi, mockCtx, "Explore", "nested", {
+        description: "nested",
+        isBackground: true,
+      });
+      return {
+        responseText: "done",
+        session: mockSession(),
+        aborted: false,
+        steered: false,
+      };
+    });
+
+    const parentId = manager.spawn(mockPi, mockCtx, "general-purpose", "parent task", {
+      description: "parent",
+      isBackground: false,
+    });
+
+    await manager.getRecord(parentId)!.promise;
+
+    expect(nestedChildId).toBeDefined();
+    const child = manager.getRecord(nestedChildId!)!;
+    expect(child.parentId).toBe(parentId);
+    expect(child.currentLevel).toBe(1);
+  });
+
+  it("getActiveAgentId is scoped to the current async agent", () => {
     manager = new AgentManager();
 
-    // Empty stack returns undefined
     expect(manager.getActiveAgentId()).toBeUndefined();
-
-    // Push an ID
-    (manager as any).activeAgentIdStack.push("agent-abc");
-    expect(manager.getActiveAgentId()).toBe("agent-abc");
-
-    // Push another
-    (manager as any).activeAgentIdStack.push("agent-def");
-    expect(manager.getActiveAgentId()).toBe("agent-def");
-
-    // Pop
-    (manager as any).activeAgentIdStack.pop();
-    expect(manager.getActiveAgentId()).toBe("agent-abc");
-
-    // Pop last
-    (manager as any).activeAgentIdStack.pop();
+    runAs("agent-abc", () => {
+      expect(manager.getActiveAgentId()).toBe("agent-abc");
+      runAs("agent-def", () => {
+        expect(manager.getActiveAgentId()).toBe("agent-def");
+      });
+      expect(manager.getActiveAgentId()).toBe("agent-abc");
+    });
     expect(manager.getActiveAgentId()).toBeUndefined();
   });
 
-  it("dispose clears the active agent stack", () => {
+  it("tracks concurrent async agents independently", async () => {
     manager = new AgentManager();
 
-    (manager as any).activeAgentIdStack.push("agent-1");
-    (manager as any).activeAgentIdStack.push("agent-2");
+    const seen = await Promise.all([
+      activeAgentStorage.run("agent-1", async () => {
+        await Promise.resolve();
+        return manager.getActiveAgentId();
+      }),
+      activeAgentStorage.run("agent-2", async () => {
+        await Promise.resolve();
+        return manager.getActiveAgentId();
+      }),
+    ]);
 
-    manager.dispose();
-
-    expect((manager as any).activeAgentIdStack).toEqual([]);
+    expect(seen).toEqual(["agent-1", "agent-2"]);
   });
 });

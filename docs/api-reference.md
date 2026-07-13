@@ -188,7 +188,7 @@ interface SubagentsSettings {
   showActivityStream?: boolean;        // Show real-time activity stream in widget (default: true)
   showTokenUsage?: boolean;            // Show token usage and context fill percentage (default: true)
   showTurnProgress?: boolean;          // Show turn progress (current/max) for running agents (default: true)
-  orchestrationMode?: "auto" | "single" | "swarm" | "crew";  // Execution topology (default: "auto")
+  orchestrationMode?: "auto" | "single" | "swarm" | "crew";  // Execution topology (default: "single"; multi-agent modes are opt-in)
   dashboardRefreshInterval?: number;   // Dashboard refresh interval in ms (default: 750, min: 100, max: 60000)
   sessionMaxSpawns?: number;           // Guardrail: max agents spawned per session
   sessionMaxTurns?: number;            // Guardrail: max cumulative turns per session
@@ -508,6 +508,49 @@ Older agents that emit loose artifacts (e.g. `{type: "design", path, title, valu
 | anything else | dropped with `logger.warn` |
 
 **EXPORTS:** `HandoffFileArtifact`, `HandoffBranchArtifact`, `HandoffUrlArtifact`, `HandoffNoteArtifact`, `HandoffArtifactV2` (the discriminated union), `HandoffArtifact` (kept as a loose structural alias for source-level backwards compat), `HANDOFF_ARTIFACT_TYPES`, `HandoffArtifactType`, `parseHandoff`, `renderHandoffForParent`, `buildHandoffPrompt`.
+
+---
+
+## // INTERACTIVE UI
+
+### Footer status bar (`setStatus`)
+
+**FILE:** `src/ui/agent-widget.ts`, wired from `src/index.ts`
+
+The orchestrator occupies Pi's footer status slot `"subagents"`:
+
+```ts
+ctx.ui.setStatus("subagents", "2 running, 1 queued agents");
+ctx.ui.setStatus("subagents", undefined); // clear when idle
+```
+
+Binding happens on `session_start` and `tool_execution_start` via `bindWidgetUiCtx()`.
+
+### Editor widget (`setWidget`)
+
+**FILE:** `src/ui/agent-widget.ts`
+
+```ts
+ctx.ui.setWidget("agents", (tui, theme) => ({
+  render: () => [] as string[],
+  invalidate: () => {},
+}), { placement: "aboveEditor" });
+```
+
+### Logging in interactive sessions
+
+**FILE:** `src/logger.ts`
+
+| Environment | Default level | Override |
+|---|---|---|
+| TTY (interactive Pi) | silent | `PI_SUBAGENTS_LOG_LEVEL=debug\|info\|warn\|error` |
+| Non-TTY (CI, pipes) | `warn` | same env var |
+
+### Telemetry emission
+
+**FILE:** `src/telemetry.ts`
+
+`emitTelemetry(event)` forwards to registered handlers only. Unsubscribed events are dropped silently in TTY mode so stdout is never polluted.
 
 ---
 

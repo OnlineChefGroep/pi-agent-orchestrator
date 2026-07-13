@@ -108,8 +108,6 @@ export class AgentManager {
   private queue: { id: string; args: SpawnArgs }[] = [];
   /** Number of currently running background agents. */
   private runningBackground = 0;
-  /** Stack of currently executing agent IDs (for budget/depth tracking). */
-  private activeAgentIdStack: string[] = [];
 
   /** Cleanup TTL: completed agents older than this are pruned periodically. */
   private cleanupTtlMs: number;
@@ -207,9 +205,9 @@ export class AgentManager {
     this.onBudgetWarning = handler;
   }
 
-  /** Get the ID of the currently executing agent (top of active stack). */
+  /** Get the ID of the agent executing in this async context. */
   getActiveAgentId(): string | undefined {
-    return this.activeAgentIdStack[this.activeAgentIdStack.length - 1];
+    return activeAgentStorage.getStore();
   }
 
   /**
@@ -285,6 +283,7 @@ export class AgentManager {
       activePartition: childInvocation.partitions?.[0],
       currentLevel: childLevel,
       totalSpawned: 0,
+      parentId,
       contextInputs: { inheritContext: options.inheritContext ?? false },
       correlationId,
     };
@@ -346,19 +345,14 @@ export class AgentManager {
     if (options.isBackground) this.runningBackground++;
     this.onStart?.(record);
 
-    // Compute parent's effective config for directional permission inheritance.
-    // Must be done BEFORE pushing this child onto the active stack — the parent
-    // is whatever agent currently sits at the top of the stack.
-    const parentId = this.getActiveAgentId();
-    const parentRecord = parentId ? this.agents.get(parentId) : undefined;
+    // The parent is captured when spawn() is called. Queued agents may start
+    // after their caller has finished, so consulting ambient state here would
+    // lose or misattribute the relationship.
+    const parentRecord = record.parentId ? this.agents.get(record.parentId) : undefined;
     const parentConfig = parentRecord ? getConfig(parentRecord.type) : undefined;
 
     // Resolve partitions from child record for partitioned state
     const childPartitions = record.invocation?.partitions;
-
-    // Push this agent onto the active stack for budget/depth tracking.
-    // Pop when the run completes (or errors), regardless of outcome.
-    this.activeAgentIdStack.push(id);
 
     // Wire parent abort signal to stop the subagent when the parent is interrupted
     let detachParentSignal: (() => void) | undefined;
@@ -476,7 +470,7 @@ export class AgentManager {
 
   /**
    * Shared cleanup for agent completion (success or error).
-   * Handles stack pop, status/error assignment, output flush, worktree cleanup,
+   * Handles status/error assignment, output flush, worktree cleanup,
    * and background queue drain. Called from both .then() and .catch() after
    * result-specific logic.
    */
@@ -489,9 +483,6 @@ export class AgentManager {
     status?: "completed" | "aborted" | "steered" | "error",
     error?: string,
   ): void {
-    // Pop this agent from the active stack now that it's done
-    this.activeAgentIdStack.pop();
-
     // Don't overwrite status if externally stopped via abort()
     if (record.status !== "stopped" && status) {
       record.status = status;
@@ -766,7 +757,6 @@ export class AgentManager {
     clearInterval(this.cleanupInterval);
     // Clear queue
     this.queue = [];
-    this.activeAgentIdStack = [];
     for (const record of this.agents.values()) {
       record.session?.dispose();
     }

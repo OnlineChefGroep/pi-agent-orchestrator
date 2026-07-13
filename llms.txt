@@ -4,19 +4,19 @@
 
 ## Primary documentation
 
-- [Overview and installation](https://onlinechefgroep.github.io/pi-agent-orchestrator/README.md)
-- [Architecture](https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/architecture.md)
-- [API reference](https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/api-reference.md)
-- [Custom agents](https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/custom-agents.md)
-- [Coding-agent repository guide](https://onlinechefgroep.github.io/pi-agent-orchestrator/AGENTS.md)
+- [Overview and installation](https://orchestrator.chefgroep.online/README.md)
+- [Architecture](https://orchestrator.chefgroep.online/docs/architecture.md)
+- [API reference](https://orchestrator.chefgroep.online/docs/api-reference.md)
+- [Custom agents](https://orchestrator.chefgroep.online/docs/custom-agents.md)
+- [Coding-agent repository guide](https://orchestrator.chefgroep.online/AGENTS.md)
 
 ## Machine-readable context
 
-- [Expanded context](https://onlinechefgroep.github.io/pi-agent-orchestrator/llms-full.txt)
-- [Markdown site mirror](https://onlinechefgroep.github.io/pi-agent-orchestrator/index.md)
-- [Human-readable sitemap](https://onlinechefgroep.github.io/pi-agent-orchestrator/sitemap.md)
-- [XML sitemap](https://onlinechefgroep.github.io/pi-agent-orchestrator/sitemap.xml)
+- [Expanded context](https://orchestrator.chefgroep.online/llms-full.txt)
+- [Markdown site mirror](https://orchestrator.chefgroep.online/index.md)
+- [Human-readable sitemap](https://orchestrator.chefgroep.online/sitemap.md)
+- [XML sitemap](https://orchestrator.chefgroep.online/sitemap.xml)
 
 ## Media
 
-- [Real terminal showcase](https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4)
+- [Real terminal showcase](https://orchestrator.chefgroep.online/assets/dashboard_preview.mp4)

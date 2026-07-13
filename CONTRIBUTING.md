@@ -107,8 +107,9 @@ tests on Windows related to temp directory races. These are
 
 - Conventional Commits drive changelog groups.
 - The maintainer (currently the only member of `@OnlineChefGroep/owners`)
-  bumps `version` in `package.json` and updates `CHANGELOG.md`.
-- `publish-npm.yml` publishes to npm on a `v*` tag. Don't publish manually.
+  updates `CHANGELOG.md` (CI sets `package.json` version from the tag).
+- Tag `vX.Y.Z` and push it; `release.yml` builds, gates, publishes to npm,
+  and creates the GitHub Release. Don't publish manually.
 
 ## Need help?
 

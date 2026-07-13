@@ -4,6 +4,10 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { AnimationStyle, OrchestrationMode } from "./agent-registry.js";
 import { logger } from "./logger.js";
 import type { JoinMode, PromptCompressionLevel } from "./types.js";
+import type { DashboardKeybindingsOverride } from "./ui/dashboard-keybindings.js";
+import { sanitizeDashboardKeybindings } from "./ui/dashboard-keybindings.js";
+import type { FooterStatusConfig } from "./ui/footer-status-config.js";
+import { sanitizeFooterStatusConfig } from "./ui/footer-status-config.js";
 
 /** Optional override roots for local offline debug captures. */
 export interface DebugCapturePathOverrides {
@@ -36,6 +40,10 @@ export interface SubagentsSettings {
   promptCompressionLevel?: PromptCompressionLevel;
   debugCapture?: boolean;
   debugCapturePaths?: DebugCapturePathOverrides;
+  /** Per-action key lists for the interactive dashboard and top view. */
+  dashboardKeybindings?: DashboardKeybindingsOverride;
+  /** Pi footer status slot configuration (the `subagents` bar). */
+  footerStatus?: Partial<FooterStatusConfig>;
 }
 
 export interface SettingsAppliers {
@@ -58,6 +66,8 @@ export interface SettingsAppliers {
   setPromptCompressionLevel: (level: PromptCompressionLevel) => void;
   setDebugCapture: (enabled: boolean) => void;
   setDebugCapturePaths: (paths: DebugCapturePathOverrides) => void;
+  setDashboardKeybindings: (bindings?: DashboardKeybindingsOverride) => void;
+  setFooterStatusConfig: (config?: Partial<FooterStatusConfig>) => void;
 }
 
 export interface SettingsGetters {
@@ -186,6 +196,12 @@ function sanitize(raw: unknown): SubagentsSettings {
     if (paths.project !== undefined || paths.personal !== undefined) settings.debugCapturePaths = paths;
   }
 
+  const dashboardKeybindings = sanitizeDashboardKeybindings(source.dashboardKeybindings);
+  if (dashboardKeybindings) settings.dashboardKeybindings = dashboardKeybindings;
+
+  const footerStatus = sanitizeFooterStatusConfig(source.footerStatus);
+  if (footerStatus) settings.footerStatus = footerStatus;
+
   return settings;
 }
 
@@ -253,6 +269,10 @@ export function applySettings(settings: SubagentsSettings, appliers: SettingsApp
   if (settings.promptCompressionLevel) appliers.setPromptCompressionLevel(settings.promptCompressionLevel);
   if (typeof settings.debugCapture === "boolean") appliers.setDebugCapture(settings.debugCapture);
   if (settings.debugCapturePaths !== undefined) appliers.setDebugCapturePaths(settings.debugCapturePaths);
+  if (settings.dashboardKeybindings !== undefined) {
+    appliers.setDashboardKeybindings(settings.dashboardKeybindings);
+  }
+  if (settings.footerStatus !== undefined) appliers.setFooterStatusConfig(settings.footerStatus);
 }
 
 export function persistToastFor(

@@ -18,45 +18,12 @@ import type { AgentRecord } from "../src/types.js";
 import { buildDashboardBodyLines } from "../src/ui/dashboard/body.js";
 import type { DashboardRenderState } from "../src/ui/dashboard/types.js";
 import type { BoxChars, DashboardTheme } from "../src/ui/theme.js";
+import { benchmarkLog } from "./helpers/benchmark-log.js";
 
 const th: DashboardTheme = {
   border: "", title: "", dim: "", muted: "", highlight: "", accent: "", success: "", error: "", reset: "", bgCard: "", bgSelected: "", bgHeader: ""
 };
 const box: BoxChars = { tl: "", tr: "", bl: "", br: "", l: "", r: "", h: "", ml: "", mr: "" };
-
-/**
- * Emit a structured `[BENCHMARK] <name> <measured>/<threshold> <pct>% <status>`
- * line for `scripts/check-benchmark-thresholds.mjs`. Mirrors the helper in
- * `test/dashboard-render-perf.test.ts` so the CI threshold checker sees a
- * uniform protocol across every benchmark file.
- */
-function benchmarkLog(
-  label: string,
-  measured: number,
-  threshold: number,
-  unit = "ms",
-): void {
-  const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
-  let status: string;
-  if (measured > threshold) {
-    status = "FAIL";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`,
-    );
-  } else if (pct > 80) {
-    status = "WARN";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK WARN: ${label} \u2014 ${measured} approaching threshold ${threshold} (${pct.toFixed(0)}%)`,
-    );
-  } else {
-    status = "OK";
-  }
-  const measuredStr = `${measured.toFixed(3)}${unit}`;
-  const thresholdStr = `${threshold.toFixed(3)}${unit}`;
-  process.stdout.write(
-    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
-  );
-}
 
 describe("Benchmark: Dashboard body rendering", () => {
   it("50000-agent body rendering under 10ms per build (100 iterations)", () => {

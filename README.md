@@ -55,6 +55,7 @@ Use `pi install`, or configure your Pi host explicitly to load the built
 After installation, start a Pi session and type `/agents` to open the
 dashboard.
 
+- The Pi **footer status bar** can show live subagent counts (e.g. `2 running agents`) via the `subagents` status slot — the widget binds on session start and updates the slot when agents are active.
 - Press `t` for the resource top view, `?` for help, `z` for daemon schedules,
   and `/perf` for performance metrics.
 - Navigate the agent list with `j`/`k` or the arrow keys.
@@ -88,12 +89,10 @@ See [Custom Agents](docs/custom-agents.md) for the frontmatter schema.
 
 ## Features
 
-- **Interactive TUI Dashboard** — six views with vim hotkeys.
-- **Sub-agent System** — specialized agents with permission inheritance and
-  partition filtering.
-- **Prompt Compression** — static system-prompt guidance profiles with global
-  defaults and per-agent overrides; this does not compact conversation history.
-  See [scope and impact](docs/prompt-compression.md).
+- **Interactive TUI Dashboard** — six views: agent list, resource top, daemon schedules, performance metrics, help overlay, and settings.
+- **Live footer status** — running/queued agent counts in Pi's status bar (`subagents` slot), bound on session start and updated while agents are active.
+- **Sub-agent System** — spawn specialized agents with permission inheritance and partition filtering. Default orchestration mode is `single` (multi-agent modes are opt-in).
+- **Prompt Compression** — static system-prompt guidance profiles with global defaults and per-agent overrides; this does not compact conversation history. See [scope and impact](docs/prompt-compression.md).
 - **Cron Scheduling** — persistent recurring jobs with a daemon schedule view.
 - **Handoff Protocol** — structured handoffs for chain-of-agents workflows.
 - **Custom Agents** — Markdown frontmatter definitions in `.pi/agents/*.md`.

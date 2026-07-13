@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-
 import type { AgentRecord } from "../src/types.js";
+import { DEFAULT_DASHBOARD_KEYBINDINGS } from "../src/ui/dashboard-keybindings.js";
+import { DEFAULT_FOOTER_STATUS_CONFIG } from "../src/ui/footer-status-config.js";
 
 // Mock external dependencies
 vi.mock("../src/ui/tui-shim.js", () => ({
@@ -17,6 +18,8 @@ vi.mock("../src/ui/tui-shim.js", () => ({
 vi.mock("../src/agent-registry.js", () => ({
   getUiStyle: vi.fn(() => "premium"),
   getAnimationStyle: vi.fn(() => "orchestrator"),
+  getFooterStatusConfig: () => DEFAULT_FOOTER_STATUS_CONFIG,
+  getDashboardKeybindings: () => DEFAULT_DASHBOARD_KEYBINDINGS,
 }));
 
 vi.mock("../src/ui/theme.js", () => ({

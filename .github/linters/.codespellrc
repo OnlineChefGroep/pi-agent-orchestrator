@@ -7,5 +7,9 @@
 # default (package-lock.json, go.mod, go.sum, *.log, .git) and add CHANGELOG.md, whose
 # historical v0.9.x release notes are Dutch and read as misspellings to codespell's
 # English-only dictionary.
+#
+# ignore-words-list still needed for Dutch performance docs + Vitest APIs in scanned
+# sources where whole-file skip is inappropriate.
 check-hidden =
 skip = *package-lock.json,*go.mod,*go.sum,*.log,.git,*CHANGELOG.md
+ignore-words-list = acceptabel,actieve,afterAll,als,alle,architectuur,beforeAll,beter,checkt,doen,extreem,implementors,methode,Methode,openen,tabel,te,Wil

@@ -1307,16 +1307,16 @@ This lets tests verify the entire orchestration pipeline without making actual L
 
 ### 23.5 Benchmark suite
 
-61 performance benchmarks across `test/*.benchmark.test.ts` guard against regression:
+71+ performance benchmarks across dedicated test files guard against regression:
 
-- `test/compaction.benchmark.ts` — Compaction throughput
-- `test/dashboard.benchmark.test.ts` — Dashboard body render latency
-- `test/widget-render-perf.test.ts` — Widget virtual scrolling performance
+- `test/widget-render-perf.test.ts` — Widget virtual scrolling + debounce
+- `test/dashboard-render-perf.test.ts` — Dashboard render throughput
+- `test/dashboard.benchmark.test.ts` — Dashboard body render at 50k agents
 - `test/spawn-latency-bench.test.ts` — Spawn pipeline latency
 - `test/spawn-latency-e2e-bench.test.ts` — End-to-end spawn + run latency
-- `test/dashboard-render-perf.test.ts` — Dashboard render throughput
+- `test/handoff-v2.test.ts` — Handoff parse time
 
-All benchmarks use `expect(elapsed).toBeLessThan(threshold)` assertions — no `console.log` pass-through.
+All benchmarks emit structured `[BENCHMARK]` lines via `test/helpers/benchmark-log.ts` and gate with `expect(perBuild).toBeLessThan(threshold)` (or the file-local measured alias). CI runs `scripts/check-benchmark-thresholds.mjs` as a **required** gate (`--retry=0`).
 
 ---
 
@@ -1354,7 +1354,7 @@ interface SubagentsSettings {
   defaultJoinMode?: JoinMode;        // Agent join topology (smart)
   schedulingEnabled?: boolean;       // Master switch for cron (true)
   tracingEnabled?: boolean;          // Master switch for OTel spans (true)
-  orchestrationMode?: OrchestrationMode; // single/swarm/crew/auto
+  orchestrationMode?: OrchestrationMode; // default: "single" (auto/swarm/crew are opt-in)
   promptCompressionLevel?: "minimal" | "balanced" | "aggressive"; // balanced
   maxAgentsPerSession?: number;      // Session spawn limit
   maxTotalTurnsPerSession?: number;  // Session turn limit
