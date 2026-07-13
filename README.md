@@ -61,7 +61,7 @@ After installation, start a Pi session and type `/agents` to open the dashboard.
 
 - **Interactive TUI Dashboard** — six views: agent list, resource top, daemon schedules, performance metrics, help overlay, and settings.
 - **Sub-agent System** — spawn specialized agents with permission inheritance and partition filtering.
-- **Prompt Compression** — minimal, balanced, and aggressive policies with global defaults and per-agent overrides.
+- **Prompt Compression** — static system-prompt guidance profiles with global defaults and per-agent overrides; this does not compact conversation history. See [scope and impact](docs/prompt-compression.md).
 - **Cron Scheduling** — persistent recurring jobs with a daemon schedule view.
 - **Handoff Protocol** — JSON-based handoffs for chain-of-agents workflows.
 - **Custom Agents** — Markdown frontmatter definitions in `.pi/agents/*.md`.
@@ -104,6 +104,7 @@ The pipeline is self-contained under `showcase/remotion/`. It runs `scripts/show
 
 ## Agent-readable documentation
 
+- [`docs/prompt-compression.md`](docs/prompt-compression.md) — exact scope, limitations, and measurement guidance for prompt compression.
 - [`llms.txt`](llms.txt) — compact discovery index.
 - [`llms-full.txt`](llms-full.txt) — expanded project context.
 - [`sitemap.md`](sitemap.md) — human- and agent-readable site map.
