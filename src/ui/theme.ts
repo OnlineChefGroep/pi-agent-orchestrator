@@ -110,9 +110,7 @@ export function fastTruncate(str: string, maxWidth: number): string {
 }
 
 export function padAndTruncate(str: string, targetWidth: number): string {
-  // Truncate with ellipsis first, then pad — pad=true suppresses ellipsis.
-  const out = truncateToWidth(str, targetWidth, "…", false);
-  return padVisible(out, targetWidth);
+  return truncateToWidth(str, targetWidth, "…", true);
 }
 
 export function framedRow(content: string, innerW: number, th: DashboardTheme, box: BoxChars): string {

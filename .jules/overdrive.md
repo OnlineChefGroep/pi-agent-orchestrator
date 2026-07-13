@@ -1,5 +1,4 @@
-# 2026-07-12 - UI String Truncation Bottleneck Optimization
-
+## 2026-07-12 - UI String Truncation Bottleneck Optimization
 **Systemic Bottleneck:** String truncation for UI formatting (`truncateToWidth`, `takeVisible`, `fastTruncate`, `padAndTruncate`) was allocating memory inside O(N) loops. The loops would continually append characters `out += text[i]`, resulting in quadratic string allocation overhead during hot-rendering loops for tables and agent dashboard widgets.
 **Refactor Strategy:** Implemented a zero-allocation single-pass loop that establishes the boundary string indexes first (by counting visible characters and intelligently skipping ANSI sequences). Extracted the final substring slice using `text.slice(0, cutIndex)` rather than populating large intermediate categorized strings or concatenating character by character.
 **Key Metric Shift:** CPU overhead for the widget rendering sequence drops dramatically, decreasing hot path overhead by preventing garbage collection spikes. String concatenations per agent render cycle effectively reduced from O(N) to O(1) allocation cost.

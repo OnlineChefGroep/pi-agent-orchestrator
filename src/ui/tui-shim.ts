@@ -192,10 +192,9 @@ const DEFAULT_ELLIPSIS = "…";
 /**
  * Extract the longest prefix of `text` whose visible width is exactly
  * `maxWidth` (or shorter if `text` doesn't fill that width), preserving
- * ANSI escapes that appear before the glyph boundary. No ellipsis, no ANSI
- * reset appended — `takeVisible` is meant to be paired with `truncateToWidth`
- * for slicing arithmetic (consume-the-prefix loops), not for display.
- * Trailing SGR after the width boundary is left for the next chunk.
+ * ANSI escapes verbatim. No ellipsis, no ANSI reset appended —
+ * `takeVisible` is meant to be paired with `truncateToWidth` for slicing
+ * arithmetic (consume-the-prefix loops), not for display.
  */
 function takeVisible(text: string, maxWidth: number): string {
   if (maxWidth <= 0 || text.length === 0) return "";
@@ -210,8 +209,14 @@ function takeVisible(text: string, maxWidth: number): string {
     visLen++;
     i++;
   }
-  // Stop at the glyph boundary. Do not consume SGR sequences that belong to
-  // the next wrapped chunk — wrapTextWithAnsi slices with this prefix length.
+  while (i < text.length) {
+    const ansiLen = getAnsiSequenceLength(text, i);
+    if (ansiLen > 0) {
+      i += ansiLen;
+    } else {
+      break;
+    }
+  }
   return text.slice(0, i);
 }
 
@@ -225,9 +230,7 @@ export function truncateToWidth(
 
   let visLen = 0;
   let i = 0;
-  // Clamp custom ellipses so output never exceeds maxWidth visible cells.
-  const fittedEllipsis = pad ? "" : takeVisible(ellipsis, maxWidth);
-  const ellipsisBudget = maxWidth - visibleWidth(fittedEllipsis);
+  const ellipsisBudget = pad ? maxWidth : Math.max(0, maxWidth - visibleWidth(ellipsis));
   let cutIndex = -1;
 
   while (i < text.length) {
@@ -250,7 +253,7 @@ export function truncateToWidth(
     visLen++;
     if (visLen > maxWidth) {
       let out = text.slice(0, cutIndex !== -1 ? cutIndex : i);
-      if (!pad) out += fittedEllipsis;
+      if (!pad) out += ellipsis;
       out += "\u001b[0m";
       return out;
     }
