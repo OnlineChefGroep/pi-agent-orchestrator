@@ -22,12 +22,21 @@
 
 - Repository is now public; secret scanning, push protection, and
   non-provider pattern scanning enabled.
-- `SECURITY.md` rewritten for a casual, public-issue-first workflow.
+- `SECURITY.md` rewritten for private-first reporting (GitHub advisories /
+  `security@chefgroep.nl`), with local sub-agent command execution treated as
+  an in-scope security boundary.
 - Branch protection on `main`: 1 owner-team approver, dismiss-stale,
   last-push-approval, linear history, no force-push, no admin bypass.
 
 ### CI / Hardening
 
+- Deleted misconfigured `qodana.yaml` (pinned `qodana-python-community` on a
+  TypeScript repo). Qodana workflows were already replaced by the TypeScript
+  required CI gate (#257); this removes the leftover wrong analyzer config.
+- `package.json` `files` allowlist now publishes AGENTS.md, CONTRIBUTING.md,
+  SECURITY.md, and CODE_OF_CONDUCT.md.
+- Super-Linter codespell skip globs updated so root-level files (including
+  Dutch CHANGELOG history) are skipped under absolute-path invocation.
 - `package-lock.json` regenerated for v0.17.1.
 - Showcase media (`docs/images/*.gif`, `*.mp4`, `*.svg`) regenerated.
 

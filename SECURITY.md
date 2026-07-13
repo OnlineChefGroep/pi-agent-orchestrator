@@ -16,7 +16,7 @@ so a fix can land before the details are public:
    [Security advisories page](https://github.com/OnlineChefGroep/pi-agent-orchestrator/security/advisories/new)
    and click "Report a vulnerability". It's a private channel only the
    maintainers can see.
-2. **Or email** **chefadmin@chefgroep.online** if you'd rather not use GitHub.
+2. **Or email** **security@chefgroep.nl** if you'd rather not use GitHub.
 
 Please don't open a public GitHub issue for a suspected vulnerability: a public
 report can expose an exploitable problem before there's a fix. Public issues
