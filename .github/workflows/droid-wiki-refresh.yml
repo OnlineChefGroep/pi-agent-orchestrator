@@ -1,3 +1,5 @@
+# Regenerates showcase media and verifies the static site assembles.
+# GitHub Pages deploy is owned solely by .github/workflows/pages.yml.
 name: Showcase and Agent-Ready Pages
 
 on:
@@ -22,26 +24,25 @@ on:
       - "package-lock.json"
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+permissions: {}
 
 concurrency:
-  group: pages
+  group: droid-wiki-refresh-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  build-showcase:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "22"
           cache: npm
@@ -53,25 +54,12 @@ jobs:
       - name: Render real TUI showcase
         run: npm run showcase:remotion
 
-      - name: Assemble static site
-        run: |
-          rm -rf _site
-          mkdir -p _site/assets _site/docs _site/.well-known
-          cp site/index.html _site/index.html
-          cp site/index.md _site/index.md
-          cp README.md AGENTS.md CHANGELOG.md _site/
-          cp llms.txt llms-full.txt sitemap.md sitemap.xml robots.txt agent-permissions.json _site/
-          cp -r docs/* _site/docs/
-          cp docs/images/dashboard_preview.mp4 _site/assets/dashboard_preview.mp4
-          cp docs/images/dashboard_preview.png _site/assets/dashboard_preview.png
-          cp agent-permissions.json _site/.well-known/agent-permissions.json
-          touch _site/.nojekyll
+      - name: Assemble static site (verify; deploy is pages.yml)
+        run: bash scripts/build-site.sh _site
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload assembled site artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          name: site-preview
           path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          retention-days: 7
