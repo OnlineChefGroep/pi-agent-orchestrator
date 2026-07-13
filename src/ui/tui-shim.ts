@@ -174,7 +174,8 @@ export function visibleWidth(str: string): number {
       continue;
     }
     const code = str.charCodeAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF) {
+    const next = i + 1 < str.length ? str.charCodeAt(i + 1) : 0;
+    if (code >= 0xD800 && code <= 0xDBFF && next >= 0xDC00 && next <= 0xDFFF) {
       i += 2;
     } else {
       i++;
@@ -212,7 +213,8 @@ function takeVisible(text: string, maxWidth: number): string {
       continue;
     }
     const code = text.charCodeAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF) {
+    const next = i + 1 < text.length ? text.charCodeAt(i + 1) : 0;
+    if (code >= 0xD800 && code <= 0xDBFF && next >= 0xDC00 && next <= 0xDFFF) {
       i += 2;
     } else {
       i++;
