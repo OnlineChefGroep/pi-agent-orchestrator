@@ -39,6 +39,14 @@ vi.mock("../src/ui/tui-shim.js", () => ({
 vi.mock("../src/agent-registry.js", () => ({
   getUiStyle: () => "premium",
   getDashboardRefreshInterval: () => 750,
+  getAnimationStyle: () => "orchestrator",
+  getOrchestrationMode: () => "auto",
+  getPromptCompressionLevel: () => "balanced",
+  getModelLabelFromConfig: (model: string) => model,
+  reloadCustomAgents: async () => {},
+  isShowActivityStream: () => true,
+  isShowTokenUsage: () => true,
+  isShowTurnProgress: () => true,
 }));
 
 vi.mock("../src/agent-types.js", () => ({
