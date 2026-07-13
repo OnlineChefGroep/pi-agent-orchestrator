@@ -24,16 +24,20 @@ import { buildSettingsSnapshot } from "./settings-snapshot.js";
 
 type Ctx = ExtensionCommandContext;
 
-const MOTION_PROFILE_OPTIONS: ReadonlyArray<{ profile: AnimationStyle; description: string }> = [
-  { profile: "orchestrator", description: "semantic per-agent motion pack (default)" },
-  { profile: "signals", description: "telemetry, scanline and data-flow motion" },
-  { profile: "minimal", description: "restrained low-noise geometric motion" },
-  { profile: "reduced", description: "static semantic glyphs; no frame animation" },
-  { profile: "braille", description: "single consistent braille spinner" },
-  { profile: "dots", description: "single consistent dots spinner" },
-  { profile: "lines", description: "single consistent ASCII spinner" },
-  { profile: "classic", description: "static asterisk" },
-  { profile: "none", description: "disable motion glyphs" },
+const MOTION_PROFILE_OPTIONS: ReadonlyArray<{
+  profile: AnimationStyle;
+  preview: string;
+  description: string;
+}> = [
+  { profile: "orchestrator", preview: "⊙ ▖ ⌜ ◆ △", description: "semantic identities for explore, plan, build, review and validation (default)" },
+  { profile: "signals", preview: "▁ ▍ ⣤ ▚", description: "telemetry, scanline and data-flow motion" },
+  { profile: "minimal", preview: "⠁ • ◇ ◑", description: "restrained low-noise geometric motion" },
+  { profile: "reduced", preview: "⊙ ┈ ⠏", description: "static semantic glyphs; no frame animation" },
+  { profile: "braille", preview: "⠋", description: "single consistent braille spinner" },
+  { profile: "dots", preview: "⠁", description: "single consistent dots spinner" },
+  { profile: "lines", preview: "-", description: "single consistent ASCII spinner" },
+  { profile: "classic", preview: "*", description: "static asterisk" },
+  { profile: "none", preview: "·", description: "disable motion glyphs" },
 ];
 
 export async function showSettings(
@@ -165,8 +169,8 @@ export async function showSettings(
     const current = getAnimationStyle();
     const value = await ctx.ui.select(
       "Motion profile",
-      MOTION_PROFILE_OPTIONS.map(({ profile, description }) =>
-        `${profile} — ${description}${profile === current ? " ◀ current" : ""}`,
+      MOTION_PROFILE_OPTIONS.map(({ profile, preview, description }) =>
+        `${profile}  ${preview} — ${description}${profile === current ? " ◀ current" : ""}`,
       ),
     );
     if (!value) return;

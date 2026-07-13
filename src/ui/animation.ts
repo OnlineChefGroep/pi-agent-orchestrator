@@ -54,6 +54,14 @@ export const SPINNER_FRAMES = {
   prism: ["△", "▷", "▽", "◁"],
   ripple: ["·", "∙", "•", "●", "•", "∙"],
   shuttle: ["▰", "▱", "▱", "▰", "▱", "▱"],
+
+  // Motion system v2: compact identities for orchestration roles.
+  reactor: ["⊙", "◉", "●", "◉"],
+  forge: ["◇", "◈", "◆", "◈"],
+  neural: ["⠁", "⠉", "⠋", "⠛", "⠟", "⠿", "⡿", "⣿", "⣾", "⣼", "⣸", "⣰", "⣠", "⣀"],
+  vector: ["⇢", "⇡", "⇠", "⇣"],
+  sentinel: ["◡", "⊙", "◠", "⊙"],
+  comet: ["·", "∙", "•", "◉", "●", "◉", "•", "∙"],
   none: [""],
 } as const;
 
@@ -75,6 +83,12 @@ export const DASHBOARD_SPINNER_STYLES = [
   "lattice",
   "prism",
   "ripple",
+  "reactor",
+  "forge",
+  "neural",
+  "vector",
+  "sentinel",
+  "comet",
 ] as const satisfies readonly SpinnerStyle[];
 
 export const SPINNER_PACKS = {
@@ -85,11 +99,11 @@ export const SPINNER_PACKS = {
 
 const ROLE_STYLES = {
   orchestrator: {
-    header: "orbit",
+    header: "reactor",
     queue: "pipeline",
     handoff: "weave",
     swarm: "aperture",
-    tool: "signal",
+    tool: "neural",
     scheduler: "clock",
   },
   signals: {
@@ -109,6 +123,28 @@ const ROLE_STYLES = {
     scheduler: "clock",
   },
 } as const satisfies Record<"orchestrator" | "signals" | "minimal", Record<Exclude<SpinnerRole, "agent">, SpinnerStyle>>;
+
+/**
+ * Known agent families receive stable visual identities in the default
+ * orchestrator profile. Unknown custom agents still use deterministic hashing.
+ */
+const AGENT_TYPE_STYLE_RULES = [
+  { keywords: ["explore", "research", "search", "scan"], style: "radar" },
+  { keywords: ["plan", "architect", "design"], style: "lattice" },
+  { keywords: ["analysis", "analyst", "audit", "diagnose"], style: "signal" },
+  { keywords: ["code", "coder", "implement", "build", "engineer"], style: "forge" },
+  { keywords: ["review", "critic", "inspect"], style: "aperture" },
+  { keywords: ["valid", "test", "qa", "verify", "check"], style: "prism" },
+  { keywords: ["security", "sentinel", "threat"], style: "sentinel" },
+  { keywords: ["orchestr", "lead", "manager", "coordinator"], style: "reactor" },
+  { keywords: ["compress", "summar", "handoff"], style: "weave" },
+] as const satisfies readonly { keywords: readonly string[]; style: SpinnerStyle }[];
+
+export function getSpinnerStyleForAgentType(agentType: string): SpinnerStyle | undefined {
+  const normalized = agentType.trim().toLowerCase();
+  if (!normalized) return undefined;
+  return AGENT_TYPE_STYLE_RULES.find((rule) => rule.keywords.some((keyword) => normalized.includes(keyword)))?.style;
+}
 
 /** Mutable global frames retained for backwards compatibility. */
 export const SPINNER: string[] = [...SPINNER_FRAMES.braille];
@@ -190,7 +226,11 @@ export function getSpinnerFrameForStyle(style: SpinnerStyle, frame: number, phas
   return frames[positiveModulo(frame + phase, frames.length)] ?? "";
 }
 
-export function getSpinnerStyleForAgent(agentId: string, role: SpinnerRole = "agent"): SpinnerStyle {
+export function getSpinnerStyleForAgent(
+  agentId: string,
+  role: SpinnerRole = "agent",
+  agentType?: string,
+): SpinnerStyle {
   if (activeAnimationProfile === "none") return "none";
 
   const packName = packForProfile(activeAnimationProfile);
@@ -200,14 +240,24 @@ export function getSpinnerStyleForAgent(agentId: string, role: SpinnerRole = "ag
     return activeAnimationProfile;
   }
 
+  if (packName === "orchestrator" && agentType) {
+    const semanticStyle = getSpinnerStyleForAgentType(agentType);
+    if (semanticStyle) return semanticStyle;
+  }
+
   const pack = SPINNER_PACKS[packName];
   const index = stableHash(agentId) % pack.length;
   return pack[index] ?? "braille";
 }
 
 /** Stable style per agent plus a stable phase offset to avoid synchronized motion. */
-export function getAgentSpinnerFrame(agentId: string, frame: number, role: SpinnerRole = "agent"): string {
-  const style = getSpinnerStyleForAgent(agentId, role);
+export function getAgentSpinnerFrame(
+  agentId: string,
+  frame: number,
+  role: SpinnerRole = "agent",
+  agentType?: string,
+): string {
+  const style = getSpinnerStyleForAgent(agentId, role, agentType);
   if (style === "none") return "";
   const phase = stableHash(`${role}:${agentId}`) % SPINNER_FRAMES[style].length;
   const effectiveFrame = isReducedMotion() ? 0 : frame;

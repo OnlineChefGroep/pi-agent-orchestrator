@@ -20,7 +20,7 @@ describe("dashboard spinner profiles", () => {
   });
 
   it("uses semantic spinner roles", () => {
-    expect(getSpinnerStyleForAgent("any", "header")).toBe("orbit");
+    expect(getSpinnerStyleForAgent("any", "header")).toBe("reactor");
     expect(getSpinnerStyleForAgent("any", "queue")).toBe("pipeline");
     expect(getSpinnerStyleForAgent("any", "swarm")).toBe("aperture");
   });

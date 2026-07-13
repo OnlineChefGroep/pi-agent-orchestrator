@@ -3,6 +3,7 @@ import {
   getAgentSpinnerFrame,
   getAnimationProfile,
   getSpinnerStyleForAgent,
+  getSpinnerStyleForAgentType,
   getTimeSpinnerFrameForRole,
   isReducedMotion,
   SPINNER_PACKS,
@@ -17,6 +18,14 @@ describe("motion profiles", () => {
     const style = getSpinnerStyleForAgent("alpha");
     expect(SPINNER_PACKS.orchestrator).toContain(style);
     expect(getSpinnerStyleForAgent("alpha")).toBe(style);
+  });
+
+  it("assigns stable identities to known agent families", () => {
+    setSpinnerStyle("orchestrator");
+    expect(getSpinnerStyleForAgentType("Explore")).toBe("radar");
+    expect(getSpinnerStyleForAgentType("codex-implementor")).toBe("forge");
+    expect(getSpinnerStyleForAgentType("security-reviewer")).toBe("aperture");
+    expect(getSpinnerStyleForAgent("agent-a", "agent", "validator")).toBe("prism");
   });
 
   it("switches the semantic role language with the selected pack", () => {

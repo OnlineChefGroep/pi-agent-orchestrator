@@ -229,7 +229,7 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     const thinkingLabel = agent.invocation?.thinking
       ? ` ${theme.fg("dim", `🧠${agent.invocation.thinking}`)}`
       : "";
-    const agentGlyph = getAgentSpinnerFrame(agent.id, options.frame, "agent");
+    const agentGlyph = getAgentSpinnerFrame(agent.id, options.frame, "agent", agent.type);
     const toolGlyph = getAgentSpinnerFrame(agent.id, options.frame, "tool");
     const activityText = activity ? describeActivity(activity.activeTools, activity.responseText) : "thinking…";
 
