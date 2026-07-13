@@ -16,15 +16,21 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g. 0.18.0). Must be > latest published on npm."
+        description: >-
+          Version to release (e.g. 0.18.0). Must be > latest on npm.
         required: true
 
-permissions:
-  contents: write # create the GitHub Release
+# Serialize publishes per version/tag. Never cancel mid-publish.
+concurrency:
+  group: release-${{ github.event.inputs.version || github.ref_name }}
+
+permissions: {}
 
 jobs:
-  release:
+  validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -36,7 +42,6 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: "22.x"
-          registry-url: "https://registry.npmjs.org"
           # zizmor cache-poisoning: never cache in a release/publish workflow
           package-manager-cache: false
 
@@ -55,32 +60,102 @@ jobs:
       - name: Test
         run: npm test
 
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create tag + GitHub Release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "22.x"
+          registry-url: "https://registry.npmjs.org"
+          # zizmor cache-poisoning: never cache in a release/publish workflow
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Resolve version
         id: version
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
+          set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             VERSION="${INPUT_VERSION}"
           else
             VERSION="${GITHUB_REF_NAME#v}"
           fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Releasing @onlinechefgroep/pi-agent-orchestrator@$VERSION"
+          case "${VERSION}" in
+            ''|*[!0-9.]*)
+              echo "Invalid version: ${VERSION}" >&2
+              exit 1
+              ;;
+          esac
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "Releasing @onlinechefgroep/pi-agent-orchestrator@${VERSION}"
+
+      - name: Enforce monotonic version / detect idempotent retry
+        id: publish_gate
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          PUBLISHED="$(npm view @onlinechefgroep/pi-agent-orchestrator version)"
+          RESULT="$(node -e '
+            const [want, published] = process.argv.slice(1);
+            const parse = (v) => v.split(".").map((n) => Number(n));
+            const [w, p] = [parse(want), parse(published)];
+            for (let i = 0; i < Math.max(w.length, p.length); i++) {
+              const x = w[i] ?? 0;
+              const y = p[i] ?? 0;
+              if (x > y) { process.stdout.write("publish"); process.exit(0); }
+              if (x < y) {
+                console.error(`Refusing release ${want}: must be > published ${published}`);
+                process.exit(1);
+              }
+            }
+            // Exact match: npm already has this version (retry after partial success).
+            process.stdout.write("skip");
+          ' "${RELEASE_VERSION}" "${PUBLISHED}")"
+          echo "mode=${RESULT}" >> "${GITHUB_OUTPUT}"
+          echo "Publish gate: ${RESULT} (want ${RELEASE_VERSION}, published ${PUBLISHED})"
 
       - name: Set package version
+        if: steps.publish_gate.outputs.mode == 'publish'
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: npm version "$RELEASE_VERSION" --no-git-tag-version --allow-same-version
 
       - name: Publish to npmjs.org
-        run: npm publish --access public
+        if: steps.publish_gate.outputs.mode == 'publish'
+        # Org currently uses NPM_TOKEN; migrate to OIDC trusted publishing later.
+        run: npm publish --access public # zizmor: ignore[use-trusted-publishing]
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: v${{ steps.version.outputs.version }}
-          generate_release_notes: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Use resolved version so workflow_dispatch does not tag the branch name.
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "GitHub Release ${RELEASE_TAG} already exists; skipping create"
+          else
+            gh release create "${RELEASE_TAG}" \
+              --target "${GITHUB_SHA}" \
+              --title "v${RELEASE_VERSION}" \
+              --generate-notes
+          fi

@@ -20,12 +20,12 @@ packages are the host platform and are **peer deps only** — never direct depen
 
 ```bash
 npm run typecheck     # tsc --noEmit
-npm run lint          # Biome check (lint + format, double quotes)
+npm run lint          # Biome lint checks
 npm test              # vitest run --retry=2
 npm run bench:all     # perf benchmarks
 npm run build         # tsc → dist/ (also runs in prepublishOnly)
 # Full gate:
-npm run typecheck && npm run lint && npm test
+npm run typecheck && npm run lint && npm run build && npm test
 ```
 
 Lint auto-fix: `node_modules/.bin/biome check --write --unsafe src/ test/`.

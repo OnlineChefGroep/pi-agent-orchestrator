@@ -12,7 +12,7 @@ Defined in `.github/workflows/release.yml`.
 
 Pushing a `v*` tag (or `workflow_dispatch` with a version input) runs:
 `npm ci` → build → typecheck → lint → test → **`npm publish --access public`** (npmjs.org)
-→ **create GitHub Release** with auto-generated notes (`softprops/action-gh-release@v2`).
+→ **`gh release create`** with auto-generated notes (tag = `v` + resolved version).
 
 The package version is set from the tag inside CI (`npm version <tag> --no-git-tag-version`),
 so you do **not** need to pre-bump `package.json` — but you **should** update `CHANGELOG.md`.
