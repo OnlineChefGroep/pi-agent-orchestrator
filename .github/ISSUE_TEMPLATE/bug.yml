@@ -1,7 +1,8 @@
 name: Bug report
 description: Report something that is broken in pi-agent-orchestrator.
-title: "[bug] " labels:
-[bug]
+title: "[bug] "
+labels:
+  - bug
 body:
   - type: textarea
     id: what
