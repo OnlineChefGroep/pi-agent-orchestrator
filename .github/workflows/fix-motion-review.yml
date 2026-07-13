@@ -26,12 +26,18 @@ jobs:
           cache: npm
       - run: python .github/scripts/fix-motion-review.py
       - run: npm ci
-      - name: Format changed files
-        run: npx biome format --write src/ui/animation.ts src/ui/agent-top-renderer.ts test/motion-profiles.test.ts
-      - name: Validate formatting and types
+      - name: Format and lint changed files
+        shell: bash
         run: |
-          npx biome check src/ui/animation.ts src/ui/agent-top-renderer.ts test/motion-profiles.test.ts
-          npm run typecheck
+          set +e
+          npx biome check --write src/ui/animation.ts src/ui/agent-top-renderer.ts test/motion-profiles.test.ts > /tmp/biome.log 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            tail -n 120 /tmp/biome.log
+            exit "$status"
+          fi
+      - name: Validate types
+        run: npm run typecheck
       - name: Run targeted motion tests
         run: npx vitest run test/motion-profiles.test.ts test/animation-profiles.test.ts test/dashboard-v2-rendering.test.ts test/widget-motion-parity.test.ts
       - name: Run full test suite
