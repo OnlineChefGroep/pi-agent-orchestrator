@@ -21,17 +21,34 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Run full suite with compact failure output
+      - name: Run full suite with structured failure output
         shell: bash
         run: |
           set +e
-          npm test -- --reporter=dot > /tmp/full-suite.log 2>&1
+          npx vitest run --reporter=json --outputFile=/tmp/vitest.json > /tmp/vitest-runner.log 2>&1
           status=$?
-          if [ "$status" -ne 0 ]; then
-            echo '--- failing assertions and summaries ---'
-            grep -E -A 12 -B 3 'FAIL|Failed Tests|AssertionError|Error:|Test Files|Tests ' /tmp/full-suite.log | tail -n 240 || true
-            echo '--- final output ---'
-            tail -n 180 /tmp/full-suite.log
-            exit "$status"
+          if [ -f /tmp/vitest.json ]; then
+            node <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('/tmp/vitest.json', 'utf8'));
+          console.log(JSON.stringify({
+            numTotalTestSuites: report.numTotalTestSuites,
+            numFailedTestSuites: report.numFailedTestSuites,
+            numTotalTests: report.numTotalTests,
+            numFailedTests: report.numFailedTests,
+          }, null, 2));
+          for (const file of report.testResults ?? []) {
+            const failed = (file.assertionResults ?? []).filter((test) => test.status === 'failed');
+            if (file.status !== 'failed' && failed.length === 0) continue;
+            console.log(`\nFILE: ${file.name}`);
+            for (const test of failed) {
+              console.log(`TEST: ${[...(test.ancestorTitles ?? []), test.title].filter(Boolean).join(' > ')}`);
+              for (const message of test.failureMessages ?? []) console.log(message.slice(0, 3500));
+            }
+            if (failed.length === 0 && file.message) console.log(String(file.message).slice(0, 3500));
+          }
+          NODE
+          else
+            tail -n 160 /tmp/vitest-runner.log
           fi
-          tail -n 40 /tmp/full-suite.log
+          exit "$status"
