@@ -214,7 +214,9 @@ describe("deterministic motion assignment", () => {
     const roles = ["agent", "header", "queue", "handoff", "swarm", "tool", "scheduler"] as const;
     for (const role of roles) {
       const glyph = getAgentSpinnerFrame("agent-A", 3, role);
-      expect(visibleWidth(glyph)).toBeLessThanOrEqual(1);
+      // Exactly one cell: an empty frame (width 0) amid non-empty frames would
+      // itself shift layout, so the single-cell contract requires === 1.
+      expect(visibleWidth(glyph)).toBe(1);
     }
   });
 });
