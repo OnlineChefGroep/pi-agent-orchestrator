@@ -105,7 +105,7 @@ function statusText(entry: AgentTopEntry, theme: TopTheme): string {
     return theme.fg("accent", withGlyph(getAgentSpinnerFrame(entry.id, frame, "agent", entry.type), "RUN"));
   }
   if (entry.status === "queued") {
-    return theme.fg("warning", withGlyph(getAgentSpinnerFrame(entry.id, frame, "queue"), "QUEUE"));
+    return theme.fg("warning", withGlyph(getAgentSpinnerFrame(entry.id, frame, "queue", entry.type), "QUEUE"));
   }
   if (entry.status === "completed") return theme.fg("success", "✓ DONE");
   if (entry.status === "steered") return theme.fg("warning", "↳ STEER");

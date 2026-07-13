@@ -129,15 +129,65 @@ const ROLE_STYLES = {
  * orchestrator profile. Unknown custom agents still use deterministic hashing.
  */
 const AGENT_TYPE_STYLE_RULES = [
-  { keywords: ["security", "sentinel", "threat"], style: "sentinel" },
-  { keywords: ["valid", "test", "qa", "verify", "check"], style: "prism" },
-  { keywords: ["review", "critic", "inspect"], style: "aperture" },
-  { keywords: ["code", "coder", "implement", "build", "engineer"], style: "forge" },
-  { keywords: ["analysis", "analyst", "audit", "diagnose"], style: "signal" },
-  { keywords: ["plan", "architect", "design"], style: "lattice" },
-  { keywords: ["explore", "research", "search", "scan"], style: "radar" },
-  { keywords: ["compress", "summary", "summarize", "summarizer", "handoff"], style: "weave" },
-  { keywords: ["orchestr", "lead", "manager", "coordinator"], style: "reactor" },
+  { keywords: ["security", "secure", "sentinel", "threat", "threats"], style: "sentinel" },
+  {
+    keywords: [
+      "validate", "validator", "validators", "validation", "test", "tests", "testing", "tester",
+      "testers", "qa", "verify", "verifier", "verification", "check", "checker", "checking",
+    ],
+    style: "prism",
+  },
+  {
+    keywords: [
+      "review", "reviewer", "reviewers", "reviewing", "critic", "critics", "critique", "inspect",
+      "inspection", "inspector", "inspectors",
+    ],
+    style: "aperture",
+  },
+  {
+    keywords: [
+      "code", "coder", "coders", "coding", "implement", "implemented", "implementing", "implementer",
+      "implementers", "implementor", "implementors", "implementation", "build", "builder", "builders",
+      "building", "engineer", "engineers", "engineering",
+    ],
+    style: "forge",
+  },
+  {
+    keywords: [
+      "analysis", "analyst", "analysts", "analyze", "analyzing", "audit", "auditor", "auditors",
+      "auditing", "diagnose", "diagnosis", "diagnostic", "diagnostics",
+    ],
+    style: "signal",
+  },
+  {
+    keywords: [
+      "plan", "planner", "planners", "planning", "architect", "architects", "architecture",
+      "architectural", "design", "designer", "designers", "designing",
+    ],
+    style: "lattice",
+  },
+  {
+    keywords: [
+      "explore", "explorer", "explorers", "exploring", "research", "researcher", "researchers",
+      "researching", "search", "searches", "searching", "scan", "scanner", "scanners", "scanning",
+    ],
+    style: "radar",
+  },
+  {
+    keywords: [
+      "compress", "compressor", "compressors", "compression", "summary", "summaries", "summarize",
+      "summarizes", "summarized", "summarizing", "summarizer", "summarizers", "handoff", "handoffs",
+    ],
+    style: "weave",
+  },
+  {
+    keywords: [
+      "orchestrate", "orchestrating", "orchestration", "orchestrator", "orchestrators", "lead", "leader",
+      "leaders", "leadership", "manager", "managers", "management", "coordinate", "coordinating",
+      "coordination", "coordinator", "coordinators",
+    ],
+    style: "reactor",
+  },
 ] as const satisfies readonly { keywords: readonly string[]; style: SpinnerStyle }[];
 
 function tokenizeAgentType(agentType: string): string[] {
@@ -152,7 +202,7 @@ export function getSpinnerStyleForAgentType(agentType: string): SpinnerStyle | u
   const tokens = tokenizeAgentType(agentType);
   if (tokens.length === 0) return undefined;
   return AGENT_TYPE_STYLE_RULES.find((rule) =>
-    rule.keywords.some((keyword) => tokens.some((token) => token === keyword || token.startsWith(keyword)))
+    rule.keywords.some((keyword) => tokens.includes(keyword))
   )?.style;
 }
 

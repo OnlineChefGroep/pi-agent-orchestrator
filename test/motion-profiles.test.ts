@@ -25,7 +25,11 @@ describe("motion profiles", () => {
     expect(getSpinnerStyleForAgentType("Explore")).toBe("radar");
     expect(getSpinnerStyleForAgentType("codex-implementor")).toBe("forge");
     expect(getSpinnerStyleForAgentType("security-reviewer")).toBe("sentinel");
+    expect(getSpinnerStyleForAgentType("codebase-explorer")).toBe("radar");
     expect(getSpinnerStyleForAgentType("explanation-writer")).toBeUndefined();
+    expect(getSpinnerStyleForAgentType("scandal")).toBeUndefined();
+    expect(getSpinnerStyleForAgentType("qatar")).toBeUndefined();
+    expect(getSpinnerStyleForAgentType("testament")).toBeUndefined();
     expect(getSpinnerStyleForAgent("agent-a", "agent", "validator")).toBe("prism");
 
     setSpinnerStyle("signals");
