@@ -16,20 +16,20 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setAnimationStyle, setUiStyle } from "../src/agent-registry.js";
 import type { AgentRecord } from "../src/types.js";
-import { renderDashboardHeader } from "../src/ui/dashboard/header.js";
-import { renderRunningCard } from "../src/ui/dashboard/running-card.js";
 import { type AgentTopEntry, renderTopTable, type SortKey } from "../src/ui/agent-top-renderer.js";
-import type { BoxChars, DashboardTheme } from "../src/ui/theme.js";
-import type { DashboardRenderState } from "../src/ui/dashboard/types.js";
-import { visibleWidth, wrapTextWithAnsi } from "../src/ui/tui-shim.js";
 import {
   getAgentSpinnerFrame,
   getSpinnerStyleForAgent,
-  setSpinnerStyle,
   SPINNER_FRAMES,
+  setSpinnerStyle,
 } from "../src/ui/animation.js";
-import { setAnimationStyle, setUiStyle } from "../src/agent-registry.js";
+import { renderDashboardHeader } from "../src/ui/dashboard/header.js";
+import { renderRunningCard } from "../src/ui/dashboard/running-card.js";
+import type { DashboardRenderState } from "../src/ui/dashboard/types.js";
+import type { BoxChars, DashboardTheme } from "../src/ui/theme.js";
+import { visibleWidth, wrapTextWithAnsi } from "../src/ui/tui-shim.js";
 
 const WIDTHS = [60, 80, 100, 140] as const;
 const FIXED_NOW = 1_700_000_000_000;
