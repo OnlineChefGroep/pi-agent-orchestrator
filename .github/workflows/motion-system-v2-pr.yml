@@ -1,0 +1,51 @@
+name: Motion system v2 PR bootstrap
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/scripts/apply-motion-v2.py
+      - .github/workflows/motion-system-v2-bootstrap.yml
+      - .github/workflows/motion-system-v2-pr.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    if: github.head_ref == 'feat/motion-system-v2'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/motion-system-v2
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply patch
+        run: python .github/scripts/apply-motion-v2.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate motion scope
+        run: |
+          npm run typecheck
+          npx biome check src/ui/animation.ts src/ui/agent-widget.ts src/ui/agent-widget-renderer.ts src/ui/agent-top-renderer.ts src/ui/dashboard/helpers.ts src/ui/settings-menu.ts test/motion-profiles.test.ts test/animation-profiles.test.ts test/widget-motion-parity.test.ts
+          npx vitest run test/motion-profiles.test.ts test/animation-profiles.test.ts test/widget-motion-parity.test.ts
+
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/scripts/apply-motion-v2.py
+          git rm .github/workflows/motion-system-v2-bootstrap.yml
+          git rm .github/workflows/motion-system-v2-pr.yml
+          git add src test docs/motion-profiles.md
+          git commit -m "feat(ui): ship semantic motion system v2"
+          git push origin HEAD:feat/motion-system-v2
