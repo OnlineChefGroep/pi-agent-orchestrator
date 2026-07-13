@@ -103,7 +103,8 @@ describe("registry URL verification", () => {
     expect(content).toMatch(/registry-url:\s*"https:\/\/registry\.npmjs\.org"/);
     expect(content).toMatch(/name:\s*Publish to npmjs\.org/);
     expect(content).toMatch(/NODE_AUTH_TOKEN:\s*\$\{\{\s*secrets\.NPM_TOKEN\s*\}\}/);
-    expect(content).toMatch(/tag_name:\s*v\$\{\{\s*steps\.version\.outputs\.version\s*\}\}/);
+    expect(content).toMatch(/gh release create/);
+    expect(content).toMatch(/v\$\{RELEASE_VERSION\}|v\$\{\{ steps\.version\.outputs\.version \}\}/);
   });
 
   it("legacy publish workflows are removed in favor of release.yml", () => {
