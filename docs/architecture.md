@@ -240,7 +240,6 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
 | `src/estimate.ts` | Token estimation for agent prompts (char/4 heuristic) |
 | `src/globals.ts` | Typed `Symbol.for()` contracts for cross-extension `globalThis` access (hooks, manager, widget metrics, telemetry) |
 | `src/logger.ts` | Structured logging — silent in TTY by default; `PI_SUBAGENTS_LOG_LEVEL` enables stderr output in interactive sessions |
-| `src/invocation-config.ts` | Resolves per-spawn model/thinking/strategy fields — explicit tool `params` override agent profile defaults |
 | `src/readonly-helpers.ts` | Consolidated read-only tool constants (`READ_ONLY_TOOLS`, `READONLY_MEMORY_TOOL_NAMES`) |
 | `src/template-registry.ts` | Agent template indexing, filtering, and search over loaded custom agents |
 | `src/tool-result-helpers.ts` | Shared tool result formatting and notification helpers used by `/agents` commands |

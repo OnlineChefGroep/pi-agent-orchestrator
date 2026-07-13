@@ -8,6 +8,7 @@
     "dev": "vite",
     "prebuild": "node scripts/stage-public.mjs",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "lint": "oxlint",
     "preview": "vite preview"

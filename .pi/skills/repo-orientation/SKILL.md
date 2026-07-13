@@ -20,7 +20,7 @@ packages are the host platform and are **peer deps only** — never direct depen
 
 ```bash
 npm run typecheck     # tsc --noEmit
-npm run lint          # Biome check (lint + format, double quotes)
+npm run lint          # Biome check (lint; formatter disabled)
 npm test              # vitest run --retry=2
 npm run bench:all     # perf benchmarks
 npm run build         # tsc → dist/ (also runs in prepublishOnly)
@@ -28,7 +28,7 @@ npm run build         # tsc → dist/ (also runs in prepublishOnly)
 npm run typecheck && npm run lint && npm test
 ```
 
-Lint auto-fix: `node_modules/.bin/biome check --write --unsafe src/ test/`.
+Lint auto-fix: `node_modules/.bin/biome check --write --unsafe src/ test/ scripts/`.
 **Never run Prettier or ESLint** — removed from the project.
 
 ## Architecture (key `src/` modules)

@@ -19,9 +19,8 @@ so you do **not** need to pre-bump `package.json` — but you **should** update 
 
 ## Version policy
 
-- The published npm `latest` is currently **0.17.1**.
-- The next release MUST be **> 0.17.1** to avoid an npm conflict: use `v0.17.2` (patch),
-  `v0.18.0` (minor), etc. Never reuse or go backwards.
+- The next release MUST exceed the currently published npm `latest`.
+- Never reuse or go backwards on the `latest` dist-tag.
 - Check the latest published version before tagging:
   `npm view @onlinechefgroep/pi-agent-orchestrator version`
 

@@ -16,7 +16,7 @@ echo "→ Assembling site into: $OUT"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-# Vite SPA root (primary entry). Fall back to legacy static HTML until site/web lands.
+# Vite SPA root (primary entry). Fall back to legacy static HTML if site/web is absent.
 if [[ -f "$WEB/package.json" ]]; then
 	echo "→ Building Vite app in site/web/"
 	(
@@ -58,6 +58,7 @@ PUBLIC_DOCS=(
 	HOWTO-perf.md
 	PERFORMANCE.md
 	overdrive-patterns.md
+	agentic-loop-spec.md
 )
 for doc in "${PUBLIC_DOCS[@]}"; do
 	cp "$ROOT/docs/$doc" "$OUT/docs/$doc"
@@ -69,11 +70,16 @@ cp -R "$ROOT/docs/images/." "$OUT/docs/images/"
 cp "$ROOT/docs/images/dashboard_preview.mp4" "$OUT/assets/dashboard_preview.mp4"
 cp "$ROOT/docs/images/dashboard_preview.gif" "$OUT/assets/dashboard_preview.gif"
 
-# SPA client-route fallback. Cloudflare Pages serves matching static files first.
-if [[ -f "$WEB/package.json" ]]; then
+# SPA client-route fallback for exact React routes only.
+# Cloudflare Pages always applies _redirects (even when an asset exists), so never
+# use a /* catch-all — that would shadow /docs/*.md, robots.txt, and assets.
+# Prefer the Vite-copied public/_redirects when present; otherwise write the same
+# allowlist.
+if [[ -f "$WEB/package.json" && ! -f "$OUT/_redirects" ]]; then
 	cat > "$OUT/_redirects" <<'EOF'
-# SPA fallback — existing static assets (docs, *.md, assets, etc.) are served first
-/*    /index.html   200
+/install /index.html 200
+/capabilities /index.html 200
+/docs /index.html 200
 EOF
 fi
 

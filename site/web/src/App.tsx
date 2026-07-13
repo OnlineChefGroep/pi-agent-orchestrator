@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { SiteLayout } from "@/components/layout/site-layout";
 import { CapabilitiesPage } from "@/pages/capabilities-page";
@@ -15,6 +15,7 @@ export function App() {
           <Route path="install" element={<InstallPage />} />
           <Route path="docs" element={<DocsPage />} />
           <Route path="capabilities" element={<CapabilitiesPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

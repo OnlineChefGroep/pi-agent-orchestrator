@@ -15,14 +15,14 @@ const navItems = [
 export function SiteHeader() {
   return (
     <header className="border-b border-border/80">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-5 py-4">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <Link to="/" className="flex items-center gap-3 no-underline">
           <span className="text-base font-semibold tracking-tight text-foreground">{PRODUCT_NAME}</span>
           <Badge variant="secondary" className="hidden sm:inline-flex">
             Pi extension
           </Badge>
         </Link>
-        <nav aria-label="Primary navigation" className="hidden items-center gap-1 md:flex">
+        <nav aria-label="Primary navigation" className="flex flex-wrap items-center gap-1">
           {navItems.map((item) => (
             <NavLink
               key={item.to}

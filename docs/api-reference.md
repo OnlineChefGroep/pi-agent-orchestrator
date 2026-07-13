@@ -527,8 +527,8 @@ Binding happens on `session_start` and `tool_execution_start` via `bindWidgetUiC
 
 ```ts
 ctx.ui.setWidget("agents", (tui, theme) => ({
-  render: () => string[],
-  invalidate: () => void,
+  render: () => [] as string[],
+  invalidate: () => {},
 }), { placement: "aboveEditor" });
 ```
 

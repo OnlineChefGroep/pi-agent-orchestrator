@@ -16,6 +16,7 @@ export function TerminalShowcase() {
           controls
           preload="metadata"
           poster="/assets/dashboard_preview.gif"
+          aria-label="Pi Agent Orchestrator terminal dashboard walkthrough"
           className="block aspect-video w-full bg-[#080a0d]"
         >
           <source src="/assets/dashboard_preview.mp4" type="video/mp4" />

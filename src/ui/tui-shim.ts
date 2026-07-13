@@ -73,7 +73,7 @@ export interface TUI {
  * renderers should drop their cache here).
  *
  * Mirrors the host's `Component` exactly, no more — TypeScript's structural
- * typing needs every REQUIRED member present on implementors in order for
+ * typing needs every REQUIRED member present on implementers in order for
  * `new Text(...)` / our agent-dashboard classes to be assignable to the
  * host's `Component` type at the boundary (e.g. `defineTool({ renderCall })`,
  * `registerMessageRenderer`). If you add an optional member here, you must

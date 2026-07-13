@@ -1316,7 +1316,7 @@ This lets tests verify the entire orchestration pipeline without making actual L
 - `test/spawn-latency-e2e-bench.test.ts` — End-to-end spawn + run latency
 - `test/handoff-v2.test.ts` — Handoff parse time
 
-All benchmarks emit structured `[BENCHMARK]` lines via `test/helpers/benchmark-log.ts` and gate with `expect(measured).toBeLessThan(threshold)`. CI runs `scripts/check-benchmark-thresholds.mjs` as a **required** gate (`--retry=0`).
+All benchmarks emit structured `[BENCHMARK]` lines via `test/helpers/benchmark-log.ts` and gate with `expect(perBuild).toBeLessThan(threshold)` (or the file-local measured alias). CI runs `scripts/check-benchmark-thresholds.mjs` as a **required** gate (`--retry=0`).
 
 ---
 
