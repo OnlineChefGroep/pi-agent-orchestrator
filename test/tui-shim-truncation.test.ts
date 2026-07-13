@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { padAndTruncate } from "../src/ui/theme.js";
+import { fastTruncate, padAndTruncate } from "../src/ui/theme.js";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../src/ui/tui-shim.js";
 
 describe("truncateToWidth", () => {
@@ -12,6 +12,23 @@ describe("truncateToWidth", () => {
   it("keeps default ellipsis within maxWidth", () => {
     const out = truncateToWidth("abcdefgh", 4);
     expect(visibleWidth(out)).toBe(4);
+    expect(out).toContain("…");
+  });
+});
+
+describe("fastTruncate", () => {
+  it("delegates to truncateToWidth with ellipsis for overlong text", () => {
+    const out = fastTruncate("abcdefghij", 5);
+    expect(visibleWidth(out)).toBe(5);
+    expect(out).toContain("…");
+  });
+
+  it("preserves ANSI while truncating to width", () => {
+    const red = "\u001b[31m";
+    const reset = "\u001b[0m";
+    const out = fastTruncate(`${red}abcdefghij${reset}`, 4);
+    expect(visibleWidth(out)).toBe(4);
+    expect(out).toContain(red);
     expect(out).toContain("…");
   });
 });
