@@ -166,17 +166,17 @@ describe("showManualWizard", () => {
     );
   });
 
-  it("adds thinking line when max chosen", async () => {
+  it("adds thinking line when xhigh chosen", async () => {
     const ctx = makeCtx({
       inputValues: ["agent1", "Agent", "", undefined, ""],
-      selectChoices: ["all", "inherit (parent model)", "max"],
+      selectChoices: ["all", "inherit (parent model)", "xhigh"],
     });
     await showManualWizard(ctx as any, "/test/dir");
 
     const { writeFileSync } = await import("node:fs");
     expect(writeFileSync).toHaveBeenCalledWith(
       "/test/dir/agent1.md",
-      expect.stringContaining("thinking: max"),
+      expect.stringContaining("thinking: xhigh"),
       "utf-8",
     );
   });

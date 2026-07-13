@@ -61,7 +61,7 @@ After installation, start a Pi session and type `/agents` to open the dashboard.
 ## Features
 
 - **Interactive TUI Dashboard** — six views: agent list, resource top, daemon schedules, performance metrics, help overlay, and settings.
-- **Live footer status** — running/queued agent counts in Pi's status bar (`subagents` slot), bound on session start.
+- **Live footer status** — running/queued agent counts in Pi's status bar (`subagents` slot), bound on session start and updated while agents are active.
 - **Sub-agent System** — spawn specialized agents with permission inheritance and partition filtering. Default orchestration mode is `single` (multi-agent modes are opt-in).
 - **Prompt Compression** — static system-prompt guidance profiles with global defaults and per-agent overrides; this does not compact conversation history. See [scope and impact](docs/prompt-compression.md).
 - **Cron Scheduling** — persistent recurring jobs with a daemon schedule view.
