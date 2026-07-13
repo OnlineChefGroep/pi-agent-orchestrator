@@ -16,6 +16,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentRecord } from "../src/types.js";
 import type { AgentActivity } from "../src/ui/agent-ui-types.js";
+import { DEFAULT_DASHBOARD_KEYBINDINGS } from "../src/ui/dashboard-keybindings.js";
+import { DEFAULT_FOOTER_STATUS_CONFIG } from "../src/ui/footer-status-config.js";
+import { benchmarkLog } from "./helpers/benchmark-log.js";
 
 // ── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -44,6 +47,8 @@ vi.mock("../src/agent-registry.js", () => ({
   isShowActivityStream: () => true,
   isShowTokenUsage: () => true,
   isShowTurnProgress: () => true,
+  getFooterStatusConfig: () => DEFAULT_FOOTER_STATUS_CONFIG,
+  getDashboardKeybindings: () => DEFAULT_DASHBOARD_KEYBINDINGS,
 }));
 
 vi.mock("../src/agent-types.js", () => ({
@@ -66,36 +71,6 @@ vi.mock("../src/usage.js", () => ({
   getLifetimeTotal: (usage?: { input: number }) => usage?.input ?? 0,
   getSessionContextPercent: () => null,
 }));
-
-// ── Benchmark logging ──────────────────────────────────────────────────────
-
-function benchmarkLog(
-  label: string,
-  measured: number,
-  threshold: number,
-  unit = "ms",
-): void {
-  const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
-  let status: string;
-  if (measured > threshold) {
-    status = "FAIL";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`,
-    );
-  } else if (pct > 80) {
-    status = "WARN";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK WARN: ${label} \u2014 ${measured} approaching threshold ${threshold} (${pct.toFixed(0)}%)`,
-    );
-  } else {
-    status = "OK";
-  }
-  const measuredStr = `${measured.toFixed(3)}${unit}`;
-  const thresholdStr = `${threshold.toFixed(3)}${unit}`;
-  process.stdout.write(
-    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
-  );
-}
 
 // ── Agent helpers ───────────────────────────────────────────────────────────
 
@@ -233,7 +208,7 @@ describe("Benchmark: AgentDashboard.render() — normal view", () => {
 
   beforeEach(async () => {
     agentIdCounter = 0;
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "setInterval", "Date"] });
     const mod = await import("../src/ui/agent-dashboard.js");
     AgentDashboardClass = mod.AgentDashboard;
   });
@@ -381,7 +356,7 @@ describe("Benchmark: AgentDashboard.render() — with activity data", () => {
 
   beforeEach(async () => {
     agentIdCounter = 0;
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "setInterval", "Date"] });
     const mod = await import("../src/ui/agent-dashboard.js");
     AgentDashboardClass = mod.AgentDashboard;
   });
@@ -455,7 +430,7 @@ describe("Benchmark: AgentDashboard.render() — help screen", () => {
 
   beforeEach(async () => {
     agentIdCounter = 0;
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "setInterval", "Date"] });
     const mod = await import("../src/ui/agent-dashboard.js");
     AgentDashboardClass = mod.AgentDashboard;
   });
@@ -510,7 +485,7 @@ describe("Benchmark: AgentDashboard.render() — perf panel", () => {
 
   beforeEach(async () => {
     agentIdCounter = 0;
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "setInterval", "Date"] });
     const mod = await import("../src/ui/agent-dashboard.js");
     AgentDashboardClass = mod.AgentDashboard;
   });

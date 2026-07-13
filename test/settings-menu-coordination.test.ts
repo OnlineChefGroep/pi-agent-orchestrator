@@ -165,12 +165,12 @@ describe("showCoordinationMenu", () => {
     const [firstPrompt, firstOptions] = ctx.ui.select.mock.calls[0];
     expect(firstPrompt).toBe("Coordination (join + orchestration mode)");
     expect(firstOptions).toContain(`JOIN: smart — auto-group 2+ agents in same turn (default) ◀ current`);
-    expect(firstOptions).toContain(`ORCH: auto — smart selection based on task complexity (default) ◀ current`);
+    expect(firstOptions).toContain(`ORCH: auto — heuristic fan-out; some prompts create 3 agents ◀ current`);
     // Non-current entries must NOT carry the marker.
     expect(firstOptions).toContain(`JOIN: async — always notify individually`);
     expect(firstOptions).not.toContain(`JOIN: async — always notify individually ◀ current`);
-    expect(firstOptions).toContain(`ORCH: swarm — dynamic collaborative groups`);
-    expect(firstOptions).not.toContain(`ORCH: swarm — dynamic collaborative groups ◀ current`);
+    expect(firstOptions).toContain(`ORCH: swarm — every tool call creates a collaborative multi-agent group`);
+    expect(firstOptions).not.toContain(`ORCH: swarm — every tool call creates a collaborative multi-agent group ◀ current`);
     // No setter runs when the user cancels immediately.
     expect(setters.setDefaultJoinMode).not.toHaveBeenCalled();
   });
@@ -200,7 +200,7 @@ describe("showCoordinationMenu", () => {
   });
 
   it("calls setOrchestrationMode once and persists when the user picks a different ORCH mode", async () => {
-    const ctx = fakeCtx(["ORCH: crew — structured team coordination (planner/executor/reviewer)", undefined]);
+    const ctx = fakeCtx(["ORCH: crew — every tool call creates planner/executor/reviewer agents", undefined]);
     const pi = fakePi();
     const { getters, setters } = fakeAccessors();
 
@@ -233,7 +233,7 @@ describe("showCoordinationMenu", () => {
 
   it("emits an info notification and skips the setter when the user picks the current ORCH mode", async () => {
     setOrchestrationMode("auto");
-    const ctx = fakeCtx(["ORCH: auto — smart selection based on task complexity (default) ◀ current", undefined]);
+    const ctx = fakeCtx(["ORCH: auto — heuristic fan-out; some prompts create 3 agents ◀ current", undefined]);
     const pi = fakePi();
     const { getters, setters } = fakeAccessors();
 
@@ -252,7 +252,7 @@ describe("showCoordinationMenu", () => {
     // 3. user cancels
     const ctx = fakeCtx([
       "JOIN: group — always group background agents",
-      "ORCH: crew — structured team coordination (planner/executor/reviewer)",
+      "ORCH: crew — every tool call creates planner/executor/reviewer agents",
       undefined,
     ]);
     const pi = fakePi();
@@ -264,14 +264,14 @@ describe("showCoordinationMenu", () => {
     // The first picker render reflects initial state (smart+auto carry ◀ current).
     const firstOptions = ctx.ui.select.mock.calls[0][1] as string[];
     expect(firstOptions).toContain(`JOIN: smart — auto-group 2+ agents in same turn (default) ◀ current`);
-    expect(firstOptions).toContain(`ORCH: auto — smart selection based on task complexity (default) ◀ current`);
+    expect(firstOptions).toContain(`ORCH: auto — heuristic fan-out; some prompts create 3 agents ◀ current`);
 
     // The second picker render reflects post-join state: group is now current.
     const secondOptions = ctx.ui.select.mock.calls[1][1] as string[];
     expect(secondOptions).toContain(`JOIN: group — always group background agents ◀ current`);
     expect(secondOptions).not.toContain(`JOIN: smart — auto-group 2+ agents in same turn (default) ◀ current`);
     // ORCH still untouched on second render (auto is still ◀ current).
-    expect(secondOptions).toContain(`ORCH: auto — smart selection based on task complexity (default) ◀ current`);
+    expect(secondOptions).toContain(`ORCH: auto — heuristic fan-out; some prompts create 3 agents ◀ current`);
 
     expect(getDefaultJoinMode()).toBe("group");
     expect(getOrchestrationMode()).toBe("crew");

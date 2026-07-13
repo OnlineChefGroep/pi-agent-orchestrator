@@ -8,6 +8,7 @@ import {
   parseHandoff,
   renderHandoffForParent,
 } from "../src/handoff.js";
+import { benchmarkLog } from "./helpers/benchmark-log.js";
 
 describe("Handoff v2 \u2014 typed artifacts", () => {
   describe("parseHandoff \u2014 v2 file artifact", () => {
@@ -372,38 +373,6 @@ describe("Handoff v2 \u2014 typed artifacts", () => {
 });
 
 // ── Benchmark: parseHandoff — parse time ──────────────────────────────
-
-function benchmarkLog(
-  label: string,
-  measured: number,
-  threshold: number,
-  unit = "ms",
-): void {
-  const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
-  let status: string;
-  if (measured > threshold) {
-    status = "FAIL";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`,
-    );
-  } else if (pct > 80) {
-    status = "WARN";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK WARN: ${label} \u2014 ${measured} approaching threshold ${threshold} (${pct.toFixed(0)}%)`,
-    );
-  } else {
-    status = "OK";
-  }
-  const measuredStr = unit === "\u00b5s"
-    ? `${(measured * 1000).toFixed(1)}\u00b5s`
-    : `${measured.toFixed(3)}ms`;
-  const thresholdStr = unit === "\u00b5s"
-    ? `${(threshold * 1000).toFixed(1)}\u00b5s`
-    : `${threshold.toFixed(3)}ms`;
-  process.stdout.write(
-    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
-  );
-}
 
 function buildHandoffText(opts: {
   findingsCount: number;

@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_DASHBOARD_KEYBINDINGS } from "../src/ui/dashboard-keybindings.js";
+import { DEFAULT_FOOTER_STATUS_CONFIG } from "../src/ui/footer-status-config.js";
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
   defineTool: vi.fn(),
@@ -12,6 +14,8 @@ vi.mock("../src/agent-registry.js", () => ({
   setDefaultJoinMode: vi.fn(),
   setSchedulingEnabled: vi.fn(),
   setTracingEnabled: vi.fn(),
+  getFooterStatusConfig: () => DEFAULT_FOOTER_STATUS_CONFIG,
+  getDashboardKeybindings: () => DEFAULT_DASHBOARD_KEYBINDINGS,
 }));
 vi.mock("../src/agent-runner.js", () => ({
   getDefaultMaxTurns: vi.fn().mockReturnValue(undefined),

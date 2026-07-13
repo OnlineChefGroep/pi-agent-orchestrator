@@ -18,6 +18,18 @@ node_modules/.vite/
 dist/
 build/
 *.tsbuildinfo
+
+# OpenCode runtime state (keep committed config: agents/, commands/, skills/)
+.opencode/sessions/
+.opencode/state/
+.opencode/history/
+.opencode/cache/
+.opencode/providers/
+.opencode/*.local.*
+
+# Generated artifacts
+_site/
+qa-results/
 plan/
 
 # Logs
@@ -80,6 +92,3 @@ bun.lockb
 
 # Omo run continuations (session data)
 .omo/
-
-# Pages site build output
-_site/

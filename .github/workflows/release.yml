@@ -1,0 +1,114 @@
+name: Release
+
+# Direct-to-npm release flow, triggered by pushing a `v*` tag.
+# Also supports manual dispatch with an explicit version (main only).
+#
+# 1. CI gate (build, typecheck, lint, test)
+# 2. Publish to npmjs.org (public)
+# 3. Create a GitHub Release with auto-generated notes
+#
+# Required secret: NPM_TOKEN (npmjs.org publish token, org scope).
+# Trusted publishing (OIDC) is not enabled for this package yet; see
+# .github/NPM_SETUP.md.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.18.0). Must be > latest published on npm."
+        required: true
+
+permissions:
+  contents: write # create the GitHub Release
+
+jobs:
+  release:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Ensure tag is reachable from main
+        if: github.event_name == 'push'
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Release tag commit must be reachable from origin/main" >&2
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "22.x"
+          registry-url: "https://registry.npmjs.org"
+          # zizmor cache-poisoning: never cache in a release/publish workflow
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Resolve and validate version
+        id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            VERSION="${INPUT_VERSION#v}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid semver: $VERSION" >&2
+            exit 1
+          fi
+          PUBLISHED="$(npm view @onlinechefgroep/pi-agent-orchestrator version)"
+          HIGHER="$(printf '%s\n%s\n' "$PUBLISHED" "$VERSION" | sort -V | tail -n1)"
+          if [ "$VERSION" = "$PUBLISHED" ] || [ "$HIGHER" != "$VERSION" ]; then
+            echo "Release version $VERSION must be > published $PUBLISHED" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing @onlinechefgroep/pi-agent-orchestrator@$VERSION (published=$PUBLISHED)"
+
+      - name: Set package version
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: npm version "$RELEASE_VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Publish to npmjs.org
+        # NPM_TOKEN until trusted publishing is configured; see .github/NPM_SETUP.md
+        run: npm publish --access public # zizmor: ignore[use-trusted-publishing]
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          TAG="v${RELEASE_VERSION}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --generate-notes --title "$TAG" --verify-tag
+          else
+            gh release create "$TAG" --generate-notes --title "$TAG" --target "${GITHUB_SHA}"
+          fi

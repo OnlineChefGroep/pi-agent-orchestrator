@@ -375,6 +375,10 @@ describe("settings persistence", () => {
         setSessionMaxSpawns: vi.fn(),
         setSessionMaxTurns: vi.fn(),
         setPromptCompressionLevel: vi.fn(),
+        setDebugCapture: vi.fn(),
+        setDebugCapturePaths: vi.fn(),
+        setDashboardKeybindings: vi.fn(),
+        setFooterStatusConfig: vi.fn(),
       };
     });
 
@@ -545,6 +549,10 @@ describe("settings persistence", () => {
         setSessionMaxSpawns: vi.fn(),
         setSessionMaxTurns: vi.fn(),
         setPromptCompressionLevel: vi.fn(),
+        setDebugCapture: vi.fn(),
+        setDebugCapturePaths: vi.fn(),
+        setDashboardKeybindings: vi.fn(),
+        setFooterStatusConfig: vi.fn(),
       };
     });
 

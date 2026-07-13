@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_DASHBOARD_KEYBINDINGS } from "../src/ui/dashboard-keybindings.js";
+import { DEFAULT_FOOTER_STATUS_CONFIG } from "../src/ui/footer-status-config.js";
 
 // Mock node:fs
 vi.mock("node:fs", () => ({
@@ -20,6 +22,8 @@ vi.mock("../src/logger.js", () => ({
 // Mock agent-registry
 vi.mock("../src/agent-registry.js", () => ({
   reloadCustomAgents: vi.fn(async () => {}),
+  getFooterStatusConfig: () => DEFAULT_FOOTER_STATUS_CONFIG,
+  getDashboardKeybindings: () => DEFAULT_DASHBOARD_KEYBINDINGS,
 }));
 
 // Mock agent-types
@@ -158,6 +162,21 @@ describe("showManualWizard", () => {
     expect(writeFileSync).toHaveBeenCalledWith(
       "/test/dir/agent1.md",
       expect.stringContaining("model: anthropic/claude-haiku-4-5-20251001"),
+      "utf-8",
+    );
+  });
+
+  it("adds thinking line when xhigh chosen", async () => {
+    const ctx = makeCtx({
+      inputValues: ["agent1", "Agent", "", undefined, ""],
+      selectChoices: ["all", "inherit (parent model)", "xhigh"],
+    });
+    await showManualWizard(ctx as any, "/test/dir");
+
+    const { writeFileSync } = await import("node:fs");
+    expect(writeFileSync).toHaveBeenCalledWith(
+      "/test/dir/agent1.md",
+      expect.stringContaining("thinking: xhigh"),
       "utf-8",
     );
   });

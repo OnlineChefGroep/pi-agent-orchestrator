@@ -203,13 +203,17 @@ If you add new settings, update:
 
 ## Publishing
 
-This package is published to npmjs.org as `@onlinechefgroep/pi-agent-orchestrator`.
+This package is published to npmjs.org as `@onlinechefgroep/pi-agent-orchestrator`
+via the tag-triggered flow in `.github/workflows/release.yml` (see also
+`.pi/skills/release/SKILL.md`).
 
-1. Ensure you have an `NPM_TOKEN` with publish access for the `@onlinechefgroep` scope.
-2. Bump the version in `package.json` and update `CHANGELOG.md`.
-3. Create a PR, get it reviewed, and merge to `main`.
-4. Tag the release: `git tag v<version> && git push origin v<version>`
-5. CI publishes automatically via `publish-npm.yml` (npmjs.org) and `publish.yml` (GitHub Packages mirror).
+1. Ensure the org secret `NPM_TOKEN` has publish access for the `@onlinechefgroep` scope.
+2. Merge the release changes to `main` and update `CHANGELOG.md` (no need to pre-bump
+   `package.json` — CI sets the version from the tag).
+3. Tag a version greater than the published npm `latest`:
+   `git tag vX.Y.Z && git push origin vX.Y.Z`
+4. Watch `release.yml`: it builds, gates on typecheck/lint/test, publishes to npmjs.org,
+   and creates a GitHub Release with `gh release create`.
 
 ---
 
