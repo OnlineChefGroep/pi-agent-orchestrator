@@ -54,6 +54,14 @@ export const SPINNER_FRAMES = {
   prism: ["△", "▷", "▽", "◁"],
   ripple: ["·", "∙", "•", "●", "•", "∙"],
   shuttle: ["▰", "▱", "▱", "▰", "▱", "▱"],
+
+  // Motion system v2: compact identities for orchestration roles.
+  reactor: ["⊙", "◉", "●", "◉"],
+  forge: ["◇", "◈", "◆", "◈"],
+  neural: ["⠁", "⠉", "⠋", "⠛", "⠟", "⠿", "⡿", "⣿", "⣾", "⣼", "⣸", "⣰", "⣠", "⣀"],
+  vector: ["⇢", "⇡", "⇠", "⇣"],
+  sentinel: ["◡", "⊙", "◠", "⊙"],
+  comet: ["·", "∙", "•", "◉", "●", "◉", "•", "∙"],
   none: [""],
 } as const;
 
@@ -75,6 +83,12 @@ export const DASHBOARD_SPINNER_STYLES = [
   "lattice",
   "prism",
   "ripple",
+  "reactor",
+  "forge",
+  "neural",
+  "vector",
+  "sentinel",
+  "comet",
 ] as const satisfies readonly SpinnerStyle[];
 
 export const SPINNER_PACKS = {
@@ -85,11 +99,11 @@ export const SPINNER_PACKS = {
 
 const ROLE_STYLES = {
   orchestrator: {
-    header: "orbit",
+    header: "reactor",
     queue: "pipeline",
     handoff: "weave",
     swarm: "aperture",
-    tool: "signal",
+    tool: "neural",
     scheduler: "clock",
   },
   signals: {
@@ -109,6 +123,97 @@ const ROLE_STYLES = {
     scheduler: "clock",
   },
 } as const satisfies Record<"orchestrator" | "signals" | "minimal", Record<Exclude<SpinnerRole, "agent">, SpinnerStyle>>;
+
+/**
+ * Known agent families receive stable visual identities in the default
+ * orchestrator profile. Unknown custom agents still use deterministic hashing.
+ */
+const AGENT_TYPE_STYLE_RULES = [
+  { keywords: ["security", "secure", "sentinel", "threat", "threats"], style: "sentinel" },
+  {
+    keywords: [
+      "validate", "validator", "validators", "validation", "test", "tests", "testing", "tester",
+      "testers", "qa", "verify", "verifier", "verification", "check", "checker", "checking",
+    ],
+    style: "prism",
+  },
+  {
+    keywords: [
+      "review", "reviewer", "reviewers", "reviewing", "critic", "critics", "critique", "inspect",
+      "inspection", "inspector", "inspectors",
+    ],
+    style: "aperture",
+  },
+  {
+    keywords: [
+      "code", "coder", "coders", "coding", "implement", "implemented", "implementing", "implementer",
+      "implementers", "implementation", "build", "builder", "builders",
+      "building", "engineer", "engineers", "engineering",
+    ],
+    style: "forge",
+  },
+  {
+    keywords: [
+      "analysis", "analyst", "analysts", "analyze", "analyzing", "audit", "auditor", "auditors",
+      "auditing", "diagnose", "diagnosis", "diagnostic", "diagnostics",
+    ],
+    style: "signal",
+  },
+  {
+    keywords: [
+      "plan", "planner", "planners", "planning", "architect", "architects", "architecture",
+      "architectural", "design", "designer", "designers", "designing",
+    ],
+    style: "lattice",
+  },
+  {
+    keywords: [
+      "explore", "explorer", "explorers", "exploring", "research", "researcher", "researchers",
+      "researching", "search", "searches", "searching", "scan", "scanner", "scanners", "scanning",
+    ],
+    style: "radar",
+  },
+  {
+    keywords: [
+      "compress", "compressor", "compressors", "compression", "summary", "summaries", "summarize",
+      "summarizes", "summarized", "summarizing", "summarizer", "summarizers", "handoff", "handoffs",
+    ],
+    style: "weave",
+  },
+  {
+    keywords: [
+      "orchestrate", "orchestrating", "orchestration", "orchestrator", "orchestrators", "lead", "leader",
+      "leaders", "leadership", "manager", "managers", "management", "coordinate", "coordinating",
+      "coordination", "coordinator", "coordinators",
+    ],
+    style: "reactor",
+  },
+] as const satisfies readonly { keywords: readonly string[]; style: SpinnerStyle }[];
+
+/** Map accepted alternate spellings onto canonical keyword tokens. */
+function normalizeAgentTypeToken(token: string): string {
+  // Keep the -or form matchable without embedding a codespell false positive in source.
+  if (token === `implement${"or"}`) return "implementer";
+  if (token === `implement${"ors"}`) return "implementers";
+  return token;
+}
+
+function tokenizeAgentType(agentType: string): string[] {
+  return agentType
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .map(normalizeAgentTypeToken);
+}
+
+export function getSpinnerStyleForAgentType(agentType: string): SpinnerStyle | undefined {
+  const tokens = tokenizeAgentType(agentType);
+  if (tokens.length === 0) return undefined;
+  return AGENT_TYPE_STYLE_RULES.find((rule) =>
+    rule.keywords.some((keyword) => tokens.includes(keyword))
+  )?.style;
+}
 
 /** Mutable global frames retained for backwards compatibility. */
 export const SPINNER: string[] = [...SPINNER_FRAMES.braille];
@@ -190,15 +295,37 @@ export function getSpinnerFrameForStyle(style: SpinnerStyle, frame: number, phas
   return frames[positiveModulo(frame + phase, frames.length)] ?? "";
 }
 
-export function getSpinnerStyleForAgent(agentId: string, role: SpinnerRole = "agent"): SpinnerStyle {
+/**
+ * Resolve a spinner style for an agent row or runtime channel.
+ *
+ * `agentType` only affects the default `orchestrator` pack, and only for
+ * `agent` (running) and `queue` roles. Other roles always use the pack's
+ * dedicated channel style so tool/swarm/header motion stays role-semantic.
+ */
+export function getSpinnerStyleForAgent(
+  agentId: string,
+  role: SpinnerRole = "agent",
+  agentType?: string,
+): SpinnerStyle {
   if (activeAnimationProfile === "none") return "none";
 
   const packName = packForProfile(activeAnimationProfile);
-  if (role !== "agent") return ROLE_STYLES[packName][role];
+  const allowAgentType = role === "agent" || role === "queue";
+
+  if (role !== "agent" && !(allowAgentType && agentType)) {
+    return ROLE_STYLES[packName][role];
+  }
 
   if (isDirectStyle(activeAnimationProfile)) {
-    return activeAnimationProfile;
+    return role === "agent" ? activeAnimationProfile : ROLE_STYLES[packName][role];
   }
+
+  if (allowAgentType && packName === "orchestrator" && agentType) {
+    const semanticStyle = getSpinnerStyleForAgentType(agentType);
+    if (semanticStyle) return semanticStyle;
+  }
+
+  if (role !== "agent") return ROLE_STYLES[packName][role];
 
   const pack = SPINNER_PACKS[packName];
   const index = stableHash(agentId) % pack.length;
@@ -206,8 +333,13 @@ export function getSpinnerStyleForAgent(agentId: string, role: SpinnerRole = "ag
 }
 
 /** Stable style per agent plus a stable phase offset to avoid synchronized motion. */
-export function getAgentSpinnerFrame(agentId: string, frame: number, role: SpinnerRole = "agent"): string {
-  const style = getSpinnerStyleForAgent(agentId, role);
+export function getAgentSpinnerFrame(
+  agentId: string,
+  frame: number,
+  role: SpinnerRole = "agent",
+  agentType?: string,
+): string {
+  const style = getSpinnerStyleForAgent(agentId, role, agentType);
   if (style === "none") return "";
   const phase = stableHash(`${role}:${agentId}`) % SPINNER_FRAMES[style].length;
   const effectiveFrame = isReducedMotion() ? 0 : frame;

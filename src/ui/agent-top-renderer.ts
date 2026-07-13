@@ -3,7 +3,7 @@ import type { AgentRecord } from "../types.js";
 import { getLifetimeTotal } from "../usage.js";
 import { formatMs, formatTokens, formatTurns, getDisplayName } from "./agent-format.js";
 import type { AgentActivity } from "./agent-ui-types.js";
-import { ANIMATION_INTERVAL, getSpinnerFrameForStyle } from "./animation.js";
+import { ANIMATION_INTERVAL, getAgentSpinnerFrame } from "./animation.js";
 import { type DashboardTheme, fastTruncate, padAndTruncate } from "./theme.js";
 import { visibleWidth } from "./tui-shim.js";
 
@@ -11,6 +11,7 @@ export type SortKey = "tokens" | "turns" | "duration" | "toolUses" | "name" | "l
 
 export interface AgentTopEntry {
   id: string;
+  type: string;
   name: string;
   status: string;
   tokens: number;
@@ -36,6 +37,7 @@ export function getAgentTopEntries(
       : (record.lifetimeUsage?.input ?? 0) + (record.lifetimeUsage?.output ?? 0);
     return {
       id: record.id,
+      type: record.type,
       name: getDisplayName(record.type),
       status: record.status,
       tokens,
@@ -97,11 +99,14 @@ function formatLastSeen(lastSeenMs: number | undefined): string {
 }
 
 function statusText(entry: AgentTopEntry, theme: TopTheme): string {
+  const frame = Math.floor(Date.now() / ANIMATION_INTERVAL);
+  const withGlyph = (glyph: string, label: string): string => glyph ? `${glyph} ${label}` : label;
   if (entry.status === "running") {
-    const frame = Math.floor(Date.now() / ANIMATION_INTERVAL);
-    return theme.fg("accent", `${getSpinnerFrameForStyle("orbit", frame)} RUN`);
+    return theme.fg("accent", withGlyph(getAgentSpinnerFrame(entry.id, frame, "agent", entry.type), "RUN"));
   }
-  if (entry.status === "queued") return theme.fg("warning", "◌ QUEUE");
+  if (entry.status === "queued") {
+    return theme.fg("warning", withGlyph(getAgentSpinnerFrame(entry.id, frame, "queue", entry.type), "QUEUE"));
+  }
   if (entry.status === "completed") return theme.fg("success", "✓ DONE");
   if (entry.status === "steered") return theme.fg("warning", "↳ STEER");
   if (entry.status === "aborted" || entry.status === "error") return theme.fg("error", "✕ FAIL");

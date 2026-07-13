@@ -51,6 +51,7 @@ function agent(status: AgentRecord["status"]): AgentRecord {
 const topEntries: AgentTopEntry[] = [
   {
     id: "a",
+    type: "Explore",
     name: "Explore",
     status: "running",
     tokens: 4_000,
@@ -61,6 +62,7 @@ const topEntries: AgentTopEntry[] = [
   },
   {
     id: "b",
+    type: "Plan",
     name: "Plan",
     status: "queued",
     tokens: 800,
