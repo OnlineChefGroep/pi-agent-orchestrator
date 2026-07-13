@@ -173,8 +173,13 @@ export function visibleWidth(str: string): number {
       i += ansiLen;
       continue;
     }
+    const code = str.charCodeAt(i);
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      i += 2;
+    } else {
+      i++;
+    }
     len++;
-    i++;
   }
   return len;
 }
@@ -198,21 +203,23 @@ const DEFAULT_ELLIPSIS = "…";
  */
 function takeVisible(text: string, maxWidth: number): string {
   if (maxWidth <= 0 || text.length === 0) return "";
-  let out = "";
   let visLen = 0;
   let i = 0;
   while (i < text.length && visLen < maxWidth) {
     const ansiLen = getAnsiSequenceLength(text, i);
     if (ansiLen > 0) {
-      out += text.slice(i, i + ansiLen);
       i += ansiLen;
       continue;
     }
-    out += text[i];
+    const code = text.charCodeAt(i);
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      i += 2;
+    } else {
+      i++;
+    }
     visLen++;
-    i++;
   }
-  return out;
+  return text.slice(0, i);
 }
 
 export function truncateToWidth(
