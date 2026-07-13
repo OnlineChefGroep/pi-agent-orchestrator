@@ -91,8 +91,9 @@ See [Custom Agents](docs/custom-agents.md) for the frontmatter schema.
 - **Interactive TUI Dashboard** — six views with vim hotkeys.
 - **Sub-agent System** — specialized agents with permission inheritance and
   partition filtering.
-- **Prompt Compression** — minimal, balanced, and aggressive policies with
-  per-agent overrides.
+- **Prompt Compression** — static system-prompt guidance profiles with global
+  defaults and per-agent overrides; this does not compact conversation history.
+  See [scope and impact](docs/prompt-compression.md).
 - **Cron Scheduling** — persistent recurring jobs with a daemon schedule view.
 - **Handoff Protocol** — structured handoffs for chain-of-agents workflows.
 - **Custom Agents** — Markdown frontmatter definitions in `.pi/agents/*.md`.
