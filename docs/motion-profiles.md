@@ -35,7 +35,7 @@ The `orchestrator` profile recognizes common agent-family names before falling b
 | Orchestrator, lead, manager, coordinator | `reactor` | coordination core |
 | Compressor, summarizer, handoff | `weave` | synthesis and transfer |
 
-Matching is token-aware across kebab-case, snake_case, spaces and camelCase. More specific families such as security and validation take precedence over generic reviewer or builder terms, avoiding accidental matches inside unrelated words.
+Matching tokenizes kebab-case, snake_case, spaces and camelCase, then checks exact supported aliases and inflections. More specific families such as security and validation take precedence over generic reviewer or builder terms. Unrelated names such as `codebase`, `scandal`, `qatar` and `testament` therefore cannot acquire a semantic identity through a shared prefix.
 
 Custom agent names that do not match a family still receive a stable style derived from their agent ID. Selecting `signals`, `minimal` or a direct legacy style intentionally overrides these identities.
 
