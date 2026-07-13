@@ -136,7 +136,7 @@ const AGENT_TYPE_STYLE_RULES = [
   { keywords: ["analysis", "analyst", "audit", "diagnose"], style: "signal" },
   { keywords: ["plan", "architect", "design"], style: "lattice" },
   { keywords: ["explore", "research", "search", "scan"], style: "radar" },
-  { keywords: ["compress", "summar", "handoff"], style: "weave" },
+  { keywords: ["compress", "summary", "summarize", "summarizer", "handoff"], style: "weave" },
   { keywords: ["orchestr", "lead", "manager", "coordinator"], style: "reactor" },
 ] as const satisfies readonly { keywords: readonly string[]; style: SpinnerStyle }[];
 

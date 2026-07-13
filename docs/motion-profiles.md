@@ -28,7 +28,7 @@ The `orchestrator` profile recognizes common agent-family names before falling b
 | Explore, research, search, scan | `radar` | discovery and coverage |
 | Plan, architect, design | `lattice` | structure and decomposition |
 | Analysis, audit, diagnose | `signal` | evidence and telemetry |
-| Coder, implementor, builder, engineer | `forge` | construction |
+| Coder, implementer, builder, engineer | `forge` | construction |
 | Reviewer, critic, inspector | `aperture` | inspection |
 | Validator, test, QA, verify | `prism` | verification |
 | Security, sentinel, threat | `sentinel` | watch and defence |
