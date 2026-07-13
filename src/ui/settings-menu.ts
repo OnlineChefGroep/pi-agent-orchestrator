@@ -304,10 +304,10 @@ async function showPromptCompressionMenu(
     const current = getPromptCompressionLevel();
     const mark = (level: string): string => level === current ? " ◀ current" : "";
     const value = await ctx.ui.select("Prompt compression level", [
-      `minimal — full prompts (~1482 tok, +70%) — max quality${mark("minimal")}`,
-      `balanced — concise prompts (~873 tok, baseline) — default${mark("balanced")}`,
-      `aggressive — ultra-short (~487 tok, ~44% less) — max savings${mark("aggressive")}`,
-      "📊 Compare compression levels — side-by-side token breakdown",
+      `minimal — least compression; most explicit guidance${mark("minimal")}`,
+      `balanced — concise guidance (default)${mark("balanced")}`,
+      `aggressive — shortest guidance; reduced protocol detail${mark("aggressive")}`,
+      "📊 Scope and template-size comparison",
     ]);
     if (!value) return;
     if (value.startsWith("📊")) {
@@ -321,40 +321,45 @@ async function showPromptCompressionMenu(
       continue;
     }
     setPromptCompressionLevel(level);
-    const savings = level === "aggressive"
-      ? " (~386 tok less across all prompt components vs balanced)"
-      : level === "minimal"
-        ? " (~609 more tok across all prompt components vs balanced)"
-        : "";
-    notifyApplied(ctx, pi, manager, getters, `Prompt compression set to ${level}${savings}`);
+    notifyApplied(ctx, pi, manager, getters, `Prompt compression set to ${level}`);
     return;
   }
 }
 
 async function showCompressionComparison(ctx: Ctx): Promise<void> {
-  const table = `# Prompt Compression — Token Comparison
+  const table = `# Prompt Compression — Scope and Template Size
 
-Estimates based on combined handoff + read-only prompt components.
-Env block, bridge section, and agent identity are identical across levels.
+Selects static instruction variants. It does not compact conversation history,
+inherited context, task prompts, custom-agent bodies, memory, skills, or tool schemas.
 
-${"─".repeat(80)}
-| Component            | Minimal         | Balanced        | Aggressive         | Savings (agg vs bal) |
-|──────────────────────|─────────────────|─────────────────|────────────────────|───────────────────────|
-| Handoff prompt       | 2,334 / 584 tok |   971 / 243 tok |    118 /  30 tok  | −87.8% (−213 tok)     |
-| Explore readonly     | 1,159 / 290 tok |   802 / 201 tok |    571 / 143 tok  | −28.8% (−58 tok)      |
-| Plan readonly        | 1,188 / 297 tok |   831 / 208 tok |    600 / 150 tok  | −27.8% (−58 tok)      |
-| Analysis readonly    | 1,244 / 311 tok |   887 / 222 tok |    656 / 164 tok  | −26.0% (−58 tok)      |
-|──────────────────────|─────────────────|─────────────────|────────────────────|───────────────────────|
-| COMBINED             | 5,925 / 1482 tok| 3,491 / 873 tok |  1,945 / 487 tok  | ~44% (−386 tok)       |
-${"─".repeat(80)}
+Character counts below compare isolated templates, not complete model requests.
+They are not tokenizer measurements. Do not add rows together: one agent run uses
+one agent prompt, and the handoff row applies only when handoff: true.
 
-SCOPE: Affects replace-mode built-in agents (Explore, Plan, Analysis)
-       and handoff prompts for all agents with handoff: true.
-       Append-mode agents (e.g. general-purpose) only vary in handoff.
+${"─".repeat(83)}
+| Component            | Minimal chars | Balanced chars | Aggressive chars | Aggressive vs balanced |
+|──────────────────────|──────────────:|───────────────:|─────────────────:|──────────────────────:|
+| Handoff instructions |         2,334 |            971 |              118 |            −853 chars |
+| Explore readonly     |         1,159 |            802 |              571 |            −231 chars |
+| Plan readonly        |         1,188 |            831 |              600 |            −231 chars |
+| Analysis readonly    |         1,244 |            887 |              656 |            −231 chars |
+${"─".repeat(83)}
 
-PRECEDENCE: Per-agent prompt_compression frontmatter > global setting > balanced
+SCOPE:
+- Built-in Explore/Plan/Analysis: read-only warning + tool guidance.
+- Agents with handoff: true: structured handoff instructions.
+- Custom prompt bodies are not compressed. With handoff: false, a custom-agent
+  prompt_compression override currently has no effect.
+- Append-mode agents vary only when an enabled handoff block is present.
+
+ACTUAL IMPACT:
+Provider input tokens depend on the model tokenizer, prompt caching, selected agent,
+turn count, inherited context, memory, skills, and tool schemas. Measure real runs
+with provider-reported input usage or runner telemetry.
+
+PRECEDENCE: per-agent prompt_compression > global setting > balanced
 `;
-  await ctx.ui.editor("Compression Level Comparison", table);
+  await ctx.ui.editor("Prompt Compression Scope", table);
 }
 
 export function notifyApplied(
