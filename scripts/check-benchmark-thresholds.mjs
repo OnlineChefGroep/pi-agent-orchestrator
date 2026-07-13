@@ -95,8 +95,8 @@ async function main () {
       /\[BENCHMARK\] (.+) (.+?)\/(.+?) (\d+)% (.+)/
     )
     if (!match) {
-      console.warn(`${YELLOW}Warning:${RESET} Could not parse: ${line}`)
-      continue
+      console.error(`${RED}ERROR:${RESET} Could not parse benchmark line: ${line}`)
+      process.exit(1)
     }
     const [, name, measuredStr, thresholdStr, pctStr, status] = match
     results.push({

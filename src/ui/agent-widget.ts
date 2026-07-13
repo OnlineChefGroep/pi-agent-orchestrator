@@ -59,6 +59,8 @@ export class AgentWidget {
   private tui: TUI | undefined;
   /** Last status bar text, used to avoid redundant setStatus calls. */
   private lastStatusText: string | undefined;
+  /** Last footer slot written — cleared when the configured slot changes. */
+  private lastFooterSlot: string | undefined;
 
   // ── Performance: dirty detection ──
 
@@ -399,21 +401,27 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
         this.tui = undefined;
       }
       if (this.lastStatusText !== undefined) {
-        const slot = getFooterStatusConfig().slot;
+        const slot = this.lastFooterSlot ?? getFooterStatusConfig().slot;
         this.uiCtx.setStatus(slot, undefined);
         this.lastStatusText = undefined;
+        this.lastFooterSlot = undefined;
       }
       if (this.widgetInterval) { clearTimeout(this.widgetInterval); this.widgetInterval = undefined; }
       this.dirty = false;
       return;
     }
 
-    // Status bar — only call setStatus when the text actually changes
+    // Status bar — only call setStatus when the text or slot actually changes
     const footerConfig = getFooterStatusConfig();
+    if (this.lastFooterSlot !== undefined && this.lastFooterSlot !== footerConfig.slot) {
+      this.uiCtx.setStatus(this.lastFooterSlot, undefined);
+      this.lastStatusText = undefined;
+    }
     const newStatusText = formatFooterStatusText(footerConfig, runningCount, queuedCount);
     if (newStatusText !== this.lastStatusText) {
       this.uiCtx.setStatus(footerConfig.slot, newStatusText);
       this.lastStatusText = newStatusText;
+      this.lastFooterSlot = footerConfig.slot;
     }
 
     // Always advance spinner for smooth animation.

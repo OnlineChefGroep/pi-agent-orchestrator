@@ -39,7 +39,7 @@ pi install npm:@onlinechefgroep/pi-agent-orchestrator -l
 
 After installation, start a Pi session and type `/agents` to open the dashboard.
 
-- The Pi **footer status bar** shows live subagent counts (`2 running agents`) via the `subagents` status slot — active immediately on session start, no tool call required.
+- The Pi **footer status bar** can show live subagent counts (e.g. `2 running agents`) via the `subagents` status slot — the widget binds on session start and updates the slot when agents are active.
 - Press `t` for the resource top view, `?` for the help overlay, `z` for daemon schedules.
 - Navigate the agent list with `j`/`k` or the arrow keys.
 - Create a custom agent by creating `.pi/agents/my-agent.md` with frontmatter (see [Custom Agents](docs/custom-agents.md) for details).

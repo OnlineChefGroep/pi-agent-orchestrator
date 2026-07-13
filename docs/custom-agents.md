@@ -62,8 +62,8 @@ Subdirectories are explicitly ignored. Symlink references are skipped.
 | `disallowed_tools` | CSV | none | Hard floor nullification block. Trumps availability. |
 | `extensions` | boolean / CSV / `none` | `true` | Module access. Set `false`/`none` for zero expansion. |
 | `skills` | boolean / CSV / `none` | `true` | Skill primitive preload list. |
-| `model` | string | host default | Model execution override. Resolves via host registry. |
-| `thinking` | string | none | Inference effort: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` (Pi 0.80.6+). Tool `params.thinking` overrides profile when set. |
+| `model` | string | host default | Model execution override. Resolves via host registry. Tool `params.model` overrides profile when set. |
+| `thinking` | string | none | Inference effort: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`. Tool `params.thinking` overrides profile when set. |
 | `max_turns` | number | host default | Maximum bounded turn integer (`0` = infinite). |
 | `prompt_mode` | `replace` / `append` | `replace` | System directive injection mode. |
 | `inherit_context` | boolean | caller defined | Inheritance directive for vector payload. |
