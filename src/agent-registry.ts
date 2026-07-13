@@ -12,6 +12,16 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getAgentConfig, getDefaultAgentNames, getUserAgentNames, registerAgents } from "./agent-types.js";
 import { loadCustomAgents } from "./custom-agents.js";
 import type { JoinMode, PromptCompressionLevel } from "./types.js";
+import type { DashboardKeybindings, DashboardKeybindingsOverride } from "./ui/dashboard-keybindings.js";
+import {
+  DEFAULT_DASHBOARD_KEYBINDINGS,
+  resolveDashboardKeybindings,
+} from "./ui/dashboard-keybindings.js";
+import type { FooterStatusConfig } from "./ui/footer-status-config.js";
+import {
+  DEFAULT_FOOTER_STATUS_CONFIG,
+  resolveFooterStatusConfig,
+} from "./ui/footer-status-config.js";
 
 // ---- Join mode configuration ----
 
@@ -31,7 +41,9 @@ export function setDefaultJoinMode(mode: JoinMode): void {
 
 export type OrchestrationMode = "auto" | "single" | "swarm" | "crew";
 
-let defaultOrchestrationMode: OrchestrationMode = "auto";
+// One Agent tool call should create one agent unless the user explicitly
+// opts into automatic or multi-agent dispatch in project settings.
+let defaultOrchestrationMode: OrchestrationMode = "single";
 
 /** Get the default orchestration mode for agent execution. */
 export function getOrchestrationMode(): OrchestrationMode {
@@ -208,6 +220,30 @@ export function getDebugCapturePaths(): { project: string; personal: string } {
     project: debugCapturePathOverrides.project ?? join(process.cwd(), ".pi", "subagent-debug"),
     personal: debugCapturePathOverrides.personal ?? join(getAgentDir(), "subagent-debug"),
   };
+}
+
+// ---- Dashboard keybindings ----
+
+let dashboardKeybindings: DashboardKeybindings = DEFAULT_DASHBOARD_KEYBINDINGS;
+
+export function getDashboardKeybindings(): DashboardKeybindings {
+  return dashboardKeybindings;
+}
+
+export function setDashboardKeybindings(override?: DashboardKeybindingsOverride): void {
+  dashboardKeybindings = resolveDashboardKeybindings(override);
+}
+
+// ---- Footer status bar ----
+
+let footerStatusConfig: FooterStatusConfig = DEFAULT_FOOTER_STATUS_CONFIG;
+
+export function getFooterStatusConfig(): FooterStatusConfig {
+  return footerStatusConfig;
+}
+
+export function setFooterStatusConfig(override?: Partial<FooterStatusConfig>): void {
+  footerStatusConfig = resolveFooterStatusConfig(override);
 }
 
 // ---- Custom agent reloading ----

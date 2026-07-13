@@ -24,7 +24,7 @@ describe("logger", () => {
     vi.useRealTimers();
   });
 
-  it("should default to warn level when PI_SUBAGENTS_LOG_LEVEL is undefined", () => {
+  it("should default to warn level in non-interactive processes", () => {
     delete process.env.PI_SUBAGENTS_LOG_LEVEL;
 
     logger.debug("debug message");
@@ -37,7 +37,7 @@ describe("logger", () => {
     expect(console.error).toHaveBeenCalledTimes(1);
   });
 
-  it("should default to warn level when PI_SUBAGENTS_LOG_LEVEL is invalid", () => {
+  it("should default to warn level for invalid configuration in non-interactive processes", () => {
     process.env.PI_SUBAGENTS_LOG_LEVEL = "invalid-level";
 
     logger.debug("debug message");
@@ -48,6 +48,21 @@ describe("logger", () => {
     expect(console.log).not.toHaveBeenCalled();
     expect(console.warn).toHaveBeenCalledTimes(1);
     expect(console.error).toHaveBeenCalledTimes(1);
+  });
+
+  it("should stay silent by default in an interactive terminal", () => {
+    delete process.env.PI_SUBAGENTS_LOG_LEVEL;
+    Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true });
+
+    try {
+      logger.warn("warn message");
+      logger.error("error message");
+
+      expect(console.warn).not.toHaveBeenCalled();
+      expect(console.error).not.toHaveBeenCalled();
+    } finally {
+      delete (process.stdout as { isTTY?: boolean }).isTTY;
+    }
   });
 
   it("should log all messages when set to debug", () => {

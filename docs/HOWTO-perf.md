@@ -103,15 +103,28 @@ De `record()` methode retourneert `true` voor trage renders, zodat callers zelf 
 
 ## 6. CI benchmark checks
 
-De CI draait de render benchmark tests en controleert of gemeten waardes binnen de drempel blijven:
+De CI draait de render benchmark tests en controleert of gemeten waardes binnen de drempel blijven. De **benchmarks-job is blocking** in de required CI gate.
 
 ```bash
-# Lokaal draaien
-npm test -- test/widget-render-perf.test.ts
-
-# Met threshold check script
+# Volledige benchmark suite + threshold tabel
 node scripts/check-benchmark-thresholds.mjs
+
+# Enkele benchmark file
+npm test -- test/widget-render-perf.test.ts
 ```
+
+**Benchmark test files** (alle gebruiken `test/helpers/benchmark-log.ts`):
+
+| File | Meet |
+|---|---|
+| `test/widget-render-perf.test.ts` | Widget render + debounce |
+| `test/dashboard-render-perf.test.ts` | Dashboard `render()` throughput |
+| `test/dashboard.benchmark.test.ts` | 50k-agent body build |
+| `test/spawn-latency-bench.test.ts` | Spawn pipeline micro-ops |
+| `test/spawn-latency-e2e-bench.test.ts` | End-to-end spawn setup |
+| `test/handoff-v2.test.ts` | `parseHandoff` parse time |
+
+Het script draait vitest met `--retry=0`, parseert `[BENCHMARK]` regels, en faalt als vitest zelf faalt of een threshold wordt overschreden.
 
 De checker toont een tabel met alle benchmarks:
 

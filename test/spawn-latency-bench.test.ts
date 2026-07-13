@@ -13,41 +13,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { buildEffectivePrompt } from "../src/agent-runner.js";
 import type { AgentConfig, EnvInfo } from "../src/types.js";
+import { benchmarkLog } from "./helpers/benchmark-log.js";
 
 // ── Benchmark logging ──────────────────────────────────────────────────────
-
-function benchmarkLog(
-  label: string,
-  measured: number,
-  threshold: number,
-  unit = "ms",
-): void {
-  const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
-  let status: string;
-  if (measured > threshold) {
-    status = "FAIL";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`,
-    );
-  } else if (pct > 80) {
-    status = "WARN";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK WARN: ${label} \u2014 ${measured} approaching threshold ${threshold} (${pct.toFixed(0)}%)`,
-    );
-  } else {
-    status = "OK";
-  }
-  const measuredStr = unit === "\u00b5s"
-    ? `${(measured * 1000).toFixed(1)}\u00b5s`
-    : `${measured.toFixed(3)}ms`;
-  const thresholdStr = unit === "\u00b5s"
-    ? `${(threshold * 1000).toFixed(1)}\u00b5s`
-    : `${threshold.toFixed(3)}ms`;
-  process.stdout.write(
-    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
-  );
-}
 
 // ── Conversation helpers ───────────────────────────────────────────────────
 
@@ -334,37 +304,32 @@ describe("Benchmark: buildAgentPrompt — system prompt construction", () => {
 
 // ── 3. Combined: Deferred context pipeline ────────────────────────────
 
-describe("Benchmark: deferred context pipeline — buildEffectivePrompt equivalent", () => {
+describe("Benchmark: deferred context pipeline — buildEffectivePrompt", () => {
   it("no inherit (skip context) under 10\u00b5s", async () => {
-    const _ctx = mockContext([]);
+    const ctx = mockContext([]);
 
     const start = performance.now();
     for (let i = 0; i < 5000; i++) {
-      // Equivalent of buildEffectivePrompt when !inheritContext
-      // (just returns prompt, no serialization)
-      const prompt = "do the thing";
-      const result = prompt;
-      // Avoid dead code elimination
+      const result = buildEffectivePrompt(ctx, "do the thing", { inheritContext: false });
       if (result.length < 0) throw new Error("impossible");
     }
     const elapsed = performance.now() - start;
     const perCall = elapsed / 5000;
 
     benchmarkLog("deferred context skip (no inherit)", perCall, 0.01, "\u00b5s");
+    expect(perCall).toBeGreaterThan(0);
     expect(perCall).toBeLessThan(0.01);
   });
 
   it("inherit context + 10 conversation entries under 100\u00b5s", async () => {
-    const { buildParentContext } = await import("../src/context.js");
     const entries = buildConversation(10);
     const ctx = mockContext(entries);
 
     // Simulate buildEffectivePrompt for inheritContext=true
     const start = performance.now();
     for (let i = 0; i < 1000; i++) {
-      const parentContext = buildParentContext(ctx);
-      const prompt = `do the thing\n${parentContext}`;
-      if (prompt.length < 0) throw new Error("impossible");
+      const result = buildEffectivePrompt(ctx, "do the thing", { inheritContext: true });
+      if (result.length < 0) throw new Error("impossible");
     }
     const elapsed = performance.now() - start;
     const perCall = elapsed / 1000;

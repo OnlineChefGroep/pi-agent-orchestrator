@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_DASHBOARD_KEYBINDINGS } from "../src/ui/dashboard-keybindings.js";
+import { DEFAULT_FOOTER_STATUS_CONFIG } from "../src/ui/footer-status-config.js";
 
 // Mock logger
 vi.mock("../src/logger.js", () => ({
@@ -31,6 +33,10 @@ vi.mock("../src/agent-registry.js", () => ({
   setUiStyle: vi.fn(),
   setDebugCapture: vi.fn(),
   setDebugCapturePaths: vi.fn(),
+  getFooterStatusConfig: () => DEFAULT_FOOTER_STATUS_CONFIG,
+  getDashboardKeybindings: () => DEFAULT_DASHBOARD_KEYBINDINGS,
+  setDashboardKeybindings: vi.fn(),
+  setFooterStatusConfig: vi.fn(),
 }));
 
 // Mock batch-orchestrator
@@ -156,8 +162,10 @@ vi.mock("../src/ui/agent-widget.js", () => ({
     this.update = vi.fn();
     this.markFinished = vi.fn();
     this.setUICtx = vi.fn();
+    this.ensureTimer = vi.fn();
     this.onTurnStart = vi.fn();
     this.getRenderMetrics = vi.fn(() => ({}));
+    this.dispose = vi.fn();
   }),
 }));
 
@@ -167,6 +175,7 @@ vi.mock("../src/ui/notification-renderer.js", () => ({
 }));
 
 const extensionInit = (await import("../src/index.js")).default;
+const { AgentWidget } = await import("../src/ui/agent-widget.js");
 
 function buildPiMock() {
   return {
@@ -271,6 +280,9 @@ describe("extension entry point", () => {
   it("cleanup on session_shutdown removes global registries", async () => {
     const pi = buildPiMock();
     await extensionInit(pi);
+    const widget = vi.mocked(AgentWidget).mock.results.at(-1)?.value as {
+      dispose: ReturnType<typeof vi.fn>;
+    };
 
     const shutdownHandler = (pi.on as any).mock.calls.find(
       (c: any[]) => c[0] === "session_shutdown",
@@ -281,13 +293,37 @@ describe("extension entry point", () => {
 
     expect((globalThis as any)[Symbol.for("pi-subagents:manager")]).toBeUndefined();
     expect((globalThis as any)[Symbol.for("pi-subagents:hooks")]).toBeUndefined();
+    expect(widget.dispose).toHaveBeenCalledOnce();
   });
 
   it("registers session_start handler", async () => {
     const pi = buildPiMock();
     await extensionInit(pi);
     const calls = (pi.on as any).mock.calls.filter((c: any[]) => c[0] === "session_start");
-    expect(calls.length).toBe(1);
+    expect(calls.length).toBe(2);
+  });
+
+  it("binds widget UI context on session_start", async () => {
+    const pi = buildPiMock();
+    await extensionInit(pi);
+    const widget = vi.mocked(AgentWidget).mock.results.at(-1)?.value as {
+      setUICtx: ReturnType<typeof vi.fn>;
+      ensureTimer: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+    const uiCtx = { setWidget: vi.fn(), setStatus: vi.fn() };
+    const ctx = { ui: uiCtx };
+
+    const widgetSessionStart = (pi.on as any).mock.calls
+      .filter((c: any[]) => c[0] === "session_start")
+      .at(-1)?.[1];
+    expect(widgetSessionStart).toBeDefined();
+
+    await widgetSessionStart({}, ctx);
+
+    expect(widget.setUICtx).toHaveBeenCalledWith(uiCtx);
+    expect(widget.ensureTimer).toHaveBeenCalledOnce();
+    expect(widget.update).toHaveBeenCalled();
   });
 
   it("registers session_before_switch handler", async () => {

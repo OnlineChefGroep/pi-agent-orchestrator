@@ -339,7 +339,7 @@ function forwardAbortSignal(session: AgentSession, signal?: AbortSignal): () => 
 // Deferred Context
 // ============================================================================
 
-function buildEffectivePrompt(
+export function buildEffectivePrompt(
   ctx: ExtensionContext,
   prompt: string,
   options: RunOptions,
@@ -367,7 +367,7 @@ export async function runAgent(
   prompt: string,
   options: RunOptions,
 ): Promise<RunResult> {
-  const startTime = Date.now();
+  const startTime = performance.now();
   const quotas = {
     maxTokens: options.quotas?.maxTokens ?? DEFAULT_MAX_TOKENS,
     maxDurationMs: options.quotas?.maxDurationMs ?? DEFAULT_MAX_DURATION_MS,
@@ -376,11 +376,12 @@ export async function runAgent(
 
   // Check duration quota early
   const checkDurationQuota = () => {
-    if (Date.now() - startTime > quotas.maxDurationMs) {
+    const elapsedMs = performance.now() - startTime;
+    if (elapsedMs > quotas.maxDurationMs) {
       throw new AgentRunnerError(
         `Agent exceeded max duration quota (${quotas.maxDurationMs}ms)`,
         "timeout",
-        { elapsedMs: Date.now() - startTime, maxDurationMs: quotas.maxDurationMs },
+        { elapsedMs, maxDurationMs: quotas.maxDurationMs },
       );
     }
   };
@@ -668,7 +669,7 @@ export async function runAgent(
     if (event.type === "message_start") {
       currentMessageText = "";
       if (latencyToFirstToken === undefined) {
-        latencyToFirstToken = Date.now() - startTime;
+        latencyToFirstToken = performance.now() - startTime;
       }
     }
 
@@ -768,7 +769,7 @@ export async function runAgent(
       });
   } catch (err) {
     // End agent span with error status
-    const errDuration = Date.now() - startTime;
+    const errDuration = performance.now() - startTime;
     endAgentSpan(agentSpan, {
       status: "error",
       durationMs: errDuration,
@@ -801,7 +802,7 @@ export async function runAgent(
   }
 
   let responseText = collector.getText().trim() || getLastAssistantText(session);
-  const duration = Date.now() - startTime;
+  const duration = performance.now() - startTime;
 
   // Structured handoff parsing
   let handoff: AgentHandoff | undefined;

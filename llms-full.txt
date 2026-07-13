@@ -63,9 +63,9 @@ Biome is the only linter. The project uses ES modules and explicit `.js` extensi
 
 ## Documentation index
 
-- Overview: https://onlinechefgroep.github.io/pi-agent-orchestrator/README.md
-- Architecture: https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/architecture.md
-- API reference: https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/api-reference.md
-- Custom agents: https://onlinechefgroep.github.io/pi-agent-orchestrator/docs/custom-agents.md
-- Agent guide: https://onlinechefgroep.github.io/pi-agent-orchestrator/AGENTS.md
-- Terminal showcase: https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4
+- Overview: https://orchestrator.chefgroep.online/README.md
+- Architecture: https://orchestrator.chefgroep.online/docs/architecture.md
+- API reference: https://orchestrator.chefgroep.online/docs/api-reference.md
+- Custom agents: https://orchestrator.chefgroep.online/docs/custom-agents.md
+- Agent guide: https://orchestrator.chefgroep.online/AGENTS.md
+- Terminal showcase: https://orchestrator.chefgroep.online/assets/dashboard_preview.mp4

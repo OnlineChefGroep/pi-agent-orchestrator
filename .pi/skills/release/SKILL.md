@@ -10,7 +10,7 @@ Defined in `.github/workflows/release.yml`.
 
 ## Flow (automatic on tag)
 
-Pushing a `v*` tag (or `workflow_dispatch` with a version input) runs:
+Pushing a `v*` tag (or `workflow_dispatch` from `main` with a version input) runs:
 `npm ci` → build → typecheck → lint → test → **`npm publish --access public`** (npmjs.org)
 → **`gh release create`** with auto-generated notes (tag = `v` + resolved version).
 
@@ -19,9 +19,8 @@ so you do **not** need to pre-bump `package.json` — but you **should** update 
 
 ## Version policy
 
-- The published npm `latest` is currently **0.17.1**.
-- The next release MUST be **> 0.17.1** to avoid an npm conflict: use `v0.17.2` (patch),
-  `v0.18.0` (minor), etc. Never reuse or go backwards.
+- The next release MUST exceed the currently published npm `latest`.
+- Never reuse or go backwards on the `latest` dist-tag.
 - Check the latest published version before tagging:
   `npm view @onlinechefgroep/pi-agent-orchestrator version`
 
@@ -45,7 +44,7 @@ so you do **not** need to pre-bump `package.json` — but you **should** update 
 ## Manual dispatch (no tag)
 
 `workflow_dispatch` accepts a `version` input and publishes that version directly
-(use only for re-releases / hotfixes; still must be > published).
+(must be triggered from `main`; still must be > published).
 
 ## Notes
 

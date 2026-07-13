@@ -20,10 +20,12 @@ import {
   isSchedulingEnabled,
   reloadCustomAgents,
   setAnimationStyle,
+  setDashboardKeybindings,
   setDashboardRefreshInterval,
   setDebugCapture,
   setDebugCapturePaths,
   setDefaultJoinMode,
+  setFooterStatusConfig,
   setOrchestrationMode,
   setPromptCompressionLevel,
   setSchedulingEnabled,
@@ -504,6 +506,7 @@ export default async function (pi: ExtensionAPI) {
     currentCtx = undefined;
     clearSubagentsApi();
     clearWidgetMetrics();
+    widget.dispose();
     scheduler.stop();
     manager.abortAll();
     for (const timer of pendingNudges.values()) clearTimeout(timer);
@@ -521,8 +524,21 @@ export default async function (pi: ExtensionAPI) {
   // Live widget: show running agents above editor
   const widget = new AgentWidget(manager, agentActivity);
 
+  function bindWidgetUiCtx(ctx: ExtensionContext | undefined) {
+    const uiCtx = ctx && typeof ctx.ui === "object" ? (ctx.ui as UICtx) : undefined;
+    if (!uiCtx) return;
+    widget.setUICtx(uiCtx);
+    widget.ensureTimer();
+    widget.update();
+  }
+
   setWidgetMetrics({
     getSnapshot: () => widget.getRenderMetrics(),
+  });
+
+  // Footer status bar + editor widget bind on session start (no tool call required after reload).
+  pi.on("session_start", async (_event, ctx) => {
+    bindWidgetUiCtx(ctx);
   });
 
   // ---- Batch orchestrator for smart/group/swarm join modes ----
@@ -538,10 +554,9 @@ export default async function (pi: ExtensionAPI) {
   // avoiding premature agent aging during validator retries within a turn.
   let currentTurnToolCount = 0;
 
-  // Grab UI context from first tool execution + clear lingering widget on new turn
+  // Grab UI context from tool execution + clear lingering widget on new turn
   pi.on("tool_execution_start", async (_event, ctx) => {
-    const uiCtx = ctx && typeof ctx.ui === 'object' ? (ctx.ui as UICtx) : undefined;
-    if (uiCtx) widget.setUICtx(uiCtx);
+    bindWidgetUiCtx(ctx);
     currentTurnToolCount++;
     if (currentTurnToolCount === 1) {
       widget.onTurnStart();
@@ -581,6 +596,8 @@ export default async function (pi: ExtensionAPI) {
       setPromptCompressionLevel,
       setDebugCapture,
       setDebugCapturePaths,
+      setDashboardKeybindings,
+      setFooterStatusConfig,
     },
     (event, payload) => pi.events.emit(event, payload),
   );

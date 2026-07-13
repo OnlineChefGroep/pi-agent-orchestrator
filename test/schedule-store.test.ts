@@ -5,7 +5,7 @@
  * load/save, parse-error self-heal, stale-lock recovery.
  */
 
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -49,6 +49,12 @@ describe("ScheduleStore", () => {
     expect(p.replace(/\\/g, "/")).toBe("/repo/.pi/subagent-schedules/abc123.json");
   });
 
+  it("resolveStorePath hashes unsafe session ids instead of allowing path traversal", () => {
+    const p = resolveStorePath("/repo", "../../outside").replace(/\\/g, "/");
+    expect(p).toMatch(/^\/repo\/\.pi\/subagent-schedules\/session-[a-f0-9]{32}\.json$/);
+    expect(p).not.toContain("../");
+  });
+
   it("starts empty and round-trips a job through add/list", async () => {
     const store = await ScheduleStore.create(join(tmp, "s.json"));
     expect(store.list()).toEqual([]);
@@ -73,11 +79,40 @@ describe("ScheduleStore", () => {
     expect(fresh.list()[0]).toMatchObject({ name: "after", runCount: 3 });
   });
 
+  it("does not allow update patches to change the stable job id", async () => {
+    const store = await ScheduleStore.create(join(tmp, "s.json"));
+    const job = makeJob({ id: "stable" });
+    await store.add(job);
+
+    const updated = await store.update(job.id, { id: "replacement", name: "renamed" });
+    expect(updated).toMatchObject({ id: "stable", name: "renamed" });
+    expect(store.get("replacement")).toBeUndefined();
+  });
+
+  it("rejects duplicate job ids instead of silently overwriting", async () => {
+    const store = await ScheduleStore.create(join(tmp, "s.json"));
+    await store.add(makeJob({ id: "same", name: "first" }));
+    await expect(store.add(makeJob({ id: "same", name: "second" }))).rejects.toThrow("already exists");
+    expect(store.list()).toHaveLength(1);
+  });
+
   it("update returns undefined for unknown id and does not create a record", async () => {
     const store = await ScheduleStore.create(join(tmp, "s.json"));
     const r = await store.update("nonexistent", { name: "x" });
     expect(r).toBeUndefined();
     expect(store.list()).toEqual([]);
+  });
+
+  it("refreshes stale cache before update", async () => {
+    const file = join(tmp, "s.json");
+    const stale = await ScheduleStore.create(file);
+    const writer = await ScheduleStore.create(file);
+    const job = makeJob({ id: "shared", name: "before" });
+    await writer.add(job);
+
+    const updated = await stale.update(job.id, { name: "after" });
+    expect(updated).toMatchObject({ id: "shared", name: "after" });
+    expect((await ScheduleStore.create(file)).get(job.id)?.name).toBe("after");
   });
 
   it("remove returns true on existing job and false on missing", async () => {
@@ -87,6 +122,17 @@ describe("ScheduleStore", () => {
     expect(await store.remove(job.id)).toBe(true);
     expect(store.list()).toEqual([]);
     expect(await store.remove(job.id)).toBe(false);
+  });
+
+  it("refreshes stale cache before remove", async () => {
+    const file = join(tmp, "s.json");
+    const stale = await ScheduleStore.create(file);
+    const writer = await ScheduleStore.create(file);
+    const job = makeJob({ id: "shared" });
+    await writer.add(job);
+
+    expect(await stale.remove(job.id)).toBe(true);
+    expect((await ScheduleStore.create(file)).list()).toEqual([]);
   });
 
   it("hasName excludes a given id (for rename safety)", async () => {
@@ -106,6 +152,17 @@ describe("ScheduleStore", () => {
     expect(readdirSync(tmp).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 
+  it("creates private schedule directories and files on POSIX", async () => {
+    if (process.platform === "win32") return;
+    const dir = join(tmp, "private");
+    const file = join(dir, "s.json");
+    const store = await ScheduleStore.create(file);
+    await store.add(makeJob());
+
+    expect(statSync(dir).mode & 0o777).toBe(0o700);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+  });
+
   it("self-heals from a corrupt JSON file — load silently empties, next save rewrites", async () => {
     const file = join(tmp, "s.json");
     writeFileSync(file, "{ this is not valid JSON");
@@ -118,6 +175,60 @@ describe("ScheduleStore", () => {
     expect(data.version).toBe(1);
     expect(data.jobs).toHaveLength(1);
     expect(data.jobs[0].id).toBe("fresh");
+  });
+
+  it("clears stale in-memory jobs when the backing file becomes corrupt", async () => {
+    const file = join(tmp, "s.json");
+    const store = await ScheduleStore.create(file);
+    const job = makeJob({ id: "stale" });
+    await store.add(job);
+    writeFileSync(file, "not-json");
+
+    expect(await store.update(job.id, { name: "must-not-return" })).toBeUndefined();
+    expect(store.list()).toEqual([]);
+    expect(JSON.parse(readFileSync(file, "utf-8")).jobs).toEqual([]);
+  });
+
+  it("clears the cache on partial jobs-array corruption instead of persisting a truncated set", async () => {
+    const file = join(tmp, "s.json");
+    const store = await ScheduleStore.create(file);
+    const valid = makeJob({ id: "valid", name: "kept-if-bug" });
+    await store.add(valid);
+
+    writeFileSync(
+      file,
+      JSON.stringify({ version: 1, jobs: [valid, { notid: "x" }] }),
+    );
+
+    expect(await store.update(valid.id, { name: "must-not-return" })).toBeUndefined();
+    expect(store.list()).toEqual([]);
+    expect(JSON.parse(readFileSync(file, "utf-8")).jobs).toEqual([]);
+  });
+
+  it("treats duplicate job ids in the backing file as corruption and clears state", async () => {
+    const file = join(tmp, "s.json");
+    const store = await ScheduleStore.create(file);
+    const first = makeJob({ id: "dup", name: "first" });
+    const second = makeJob({ id: "dup", name: "second" });
+    writeFileSync(file, JSON.stringify({ version: 1, jobs: [first, second] }));
+
+    expect(await store.update("dup", { name: "must-not-return" })).toBeUndefined();
+    expect(store.list()).toEqual([]);
+    expect(JSON.parse(readFileSync(file, "utf-8")).jobs).toEqual([]);
+  });
+
+  it("rejects a symlinked backing file instead of following it", async () => {
+    if (process.platform === "win32") return;
+    const target = join(tmp, "outside.json");
+    const file = join(tmp, "s.json");
+    writeFileSync(target, JSON.stringify({ version: 1, jobs: [makeJob({ id: "secret" })] }));
+    symlinkSync(target, file);
+
+    const store = await ScheduleStore.create(file);
+    expect(store.list()).toEqual([]);
+    await expect(store.add(makeJob({ id: "new" }))).rejects.toThrow("regular file");
+    expect(JSON.parse(readFileSync(target, "utf-8")).jobs).toHaveLength(1);
+    expect(JSON.parse(readFileSync(target, "utf-8")).jobs[0].id).toBe("secret");
   });
 
   it("recovers from a legacy plain-file .lock before using proper-lockfile", async () => {
@@ -176,5 +287,17 @@ describe("ScheduleStore", () => {
     await store.remove(job.id);
     await store.deleteFileIfEmpty();
     expect(existsSync(file)).toBe(false);
+  });
+
+  it("deleteFileIfEmpty reloads under lock instead of trusting a stale empty cache", async () => {
+    const file = join(tmp, "s.json");
+    const stale = await ScheduleStore.create(file);
+    const writer = await ScheduleStore.create(file);
+    const job = makeJob({ id: "persisted" });
+    await writer.add(job);
+
+    await stale.deleteFileIfEmpty();
+    expect(existsSync(file)).toBe(true);
+    expect((await ScheduleStore.create(file)).get(job.id)).toMatchObject({ id: "persisted" });
   });
 });

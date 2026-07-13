@@ -198,7 +198,7 @@ describe("orchestration-dispatch integration — Agent tool end-to-end", () => {
   });
 
   afterEach(() => {
-    setOrchestrationMode("auto"); // restore default
+    setOrchestrationMode("single"); // restore default
   });
 
   it("crew mode → 3 members spawned, joined as a group, results aggregated", async () => {

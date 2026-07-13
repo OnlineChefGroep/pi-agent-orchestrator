@@ -100,12 +100,12 @@ describe("registry URL verification", () => {
   it("release.yml publishes to npmjs.org", () => {
     expect(fileExists(".github/workflows/release.yml")).toBe(true);
     const content = readRoot(".github/workflows/release.yml");
-    expect(content).toContain('registry-url: "https://registry.npmjs.org"');
-    expect(content).toContain("run: npm publish --access public");
-    expect(content).toContain("NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}");
-    expect(content).toContain("gh release create");
+    expect(content).toMatch(/registry-url:\s*"https:\/\/registry\.npmjs\.org"/);
+    expect(content).toMatch(/name:\s*Publish to npmjs\.org/);
+    expect(content).toMatch(/NODE_AUTH_TOKEN:\s*\$\{\{\s*secrets\.NPM_TOKEN\s*\}\}/);
+    expect(content).toMatch(/gh release create/);
+    expect(content).toMatch(/v\$\{RELEASE_VERSION\}|v\$\{\{ steps\.version\.outputs\.version \}\}/);
   });
-
 
   it("legacy publish workflows are removed in favor of release.yml", () => {
     expect(fileExists(".github/workflows/publish.yml")).toBe(false);

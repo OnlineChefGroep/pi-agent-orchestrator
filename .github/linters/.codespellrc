@@ -1,0 +1,4 @@
+[codespell]
+# Dutch performance docs + Vitest APIs. Super-Linter passes file paths directly,
+# so `skip` is ineffective; ignore-words-list is required.
+ignore-words-list = acceptabel,actieve,afterAll,als,alle,architectuur,beforeAll,beter,checkt,doen,extreem,implementors,methode,Methode,openen,tabel,te,Wil

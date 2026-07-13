@@ -8,11 +8,11 @@ import {
 
 describe("agent-registry orchestration mode", () => {
   afterEach(() => {
-    setOrchestrationMode("auto");
+    setOrchestrationMode("single");
   });
 
   it("has default orchestration mode", async () => {
-    expect(getOrchestrationMode()).toBe("auto");
+    expect(getOrchestrationMode()).toBe("single");
   });
 
   it("can set orchestration mode", async () => {

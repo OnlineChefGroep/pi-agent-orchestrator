@@ -15,6 +15,7 @@
  *   session creation → deferred context build → session.prompt() → first token
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { benchmarkLog } from "./helpers/benchmark-log.js";
 
 // ============================================================================
 // Hoisted mocks — must be before any vi.mock() calls
@@ -109,34 +110,6 @@ vi.mock("../src/worktree.js", () => ({
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function benchmarkLog(
-  label: string,
-  measured: number,
-  threshold: number,
-  unit = "ms",
-): void {
-  const pct = threshold > 0 ? (measured / threshold) * 100 : 0;
-  let status: string;
-  if (measured > threshold) {
-    status = "FAIL";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK FAIL: ${label} \u2014 ${measured} exceeds threshold ${threshold}`,
-    );
-  } else if (pct > 80) {
-    status = "WARN";
-    console.warn(
-      `\u26a0\ufe0f  BENCHMARK WARN: ${label} \u2014 ${measured} approaching threshold ${threshold} (${pct.toFixed(0)}%)`,
-    );
-  } else {
-    status = "OK";
-  }
-  const measuredStr = `${measured.toFixed(3)}${unit}`;
-  const thresholdStr = `${threshold.toFixed(3)}${unit}`;
-  process.stdout.write(
-    `[BENCHMARK] ${label} ${measuredStr}/${thresholdStr} ${pct.toFixed(0)}% ${status}\n`,
-  );
-}
 
 function createSession() {
   const listeners: Array<(event: any) => void> = [];
@@ -235,9 +208,8 @@ describe("Benchmark: spawn latency — minimal (no inherit, no context)", () => 
       const result = await runAgent(ctx, "Explore", "Hello!", { pi });
 
       expect(result.metrics).toBeDefined();
-      // Mocked pipeline can finish in <1ms; Date.now() precision yields 0 for durations
-      expect(result.metrics.latencyToFirstTokenMs).toBeGreaterThanOrEqual(0);
-      expect(result.metrics.durationMs).toBeGreaterThanOrEqual(0);
+      expect(result.metrics.latencyToFirstTokenMs).toBeGreaterThan(0);
+      expect(result.metrics.durationMs).toBeGreaterThan(0);
       expect(result.metrics.turns).toBeGreaterThan(0);
 
       // Verify telemetry was emitted
@@ -583,15 +555,14 @@ describe("Benchmark: AgentManager permission inheritance", () => {
   });
 
   it("full pipeline with parent on active stack triggers parentConfig lookup", async () => {
-    const { AgentManager } = await import("../src/agent-manager.js");
+    const { activeAgentStorage, AgentManager } = await import("../src/agent-manager.js");
     const manager = new AgentManager();
     const ctx = buildCtx(0);
     const pi = {} as any;
 
-    // Push a synthetic parent record onto the active stack so startAgent
-    // finds it and computes parentConfig via getConfig(parentRecord.type).
+    // Install a synthetic parent record and run the child spawn in its async
+    // context so permission inheritance resolves the correct parent.
     const parentId = "parent-bench";
-    (manager as any).activeAgentIdStack.push(parentId);
     (manager as any).agents.set(parentId, {
       id: parentId,
       type: "Explore",
@@ -599,17 +570,18 @@ describe("Benchmark: AgentManager permission inheritance", () => {
     });
 
     const start = performance.now();
-    const _record = await manager.spawnAndWait(pi, ctx, "general-purpose", "Hello!", {
-      description: "child with permission inheritance",
-      inheritContext: false,
-    });
+    const _record = await activeAgentStorage.run(parentId, () =>
+      manager.spawnAndWait(pi, ctx, "general-purpose", "Hello!", {
+        description: "child with permission inheritance",
+        inheritContext: false,
+      })
+    );
     const elapsed = performance.now() - start;
 
     benchmarkLog("spawn-manager permission inheritance", elapsed, 100);
     expect(elapsed).toBeLessThan(100);
 
     // Clean up synthetic parent
-    (manager as any).activeAgentIdStack.pop();
     (manager as any).agents.delete(parentId);
 
     manager.dispose();
