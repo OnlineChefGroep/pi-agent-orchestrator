@@ -6,6 +6,7 @@ import {
   getSpinnerStyleForAgent,
   SPINNER_FRAMES,
 } from "../src/ui/animation.js";
+import { visibleWidth } from "../src/ui/tui-shim.js";
 
 describe("dashboard spinner profiles", () => {
   it("contains a broad set of original dashboard-safe styles", () => {
@@ -15,12 +16,20 @@ describe("dashboard spinner profiles", () => {
     expect(DASHBOARD_SPINNER_STYLES).toContain("weave");
   });
 
+  it("keeps every dashboard-safe frame to one terminal cell", () => {
+    for (const style of DASHBOARD_SPINNER_STYLES) {
+      for (const frame of SPINNER_FRAMES[style]) {
+        expect(visibleWidth(frame), `${style}: ${frame}`).toBe(1);
+      }
+    }
+  });
+
   it("keeps agent style assignment deterministic", () => {
     expect(getSpinnerStyleForAgent("agent-123")).toBe(getSpinnerStyleForAgent("agent-123"));
   });
 
   it("uses semantic spinner roles", () => {
-    expect(getSpinnerStyleForAgent("any", "header")).toBe("orbit");
+    expect(getSpinnerStyleForAgent("any", "header")).toBe("reactor");
     expect(getSpinnerStyleForAgent("any", "queue")).toBe("pipeline");
     expect(getSpinnerStyleForAgent("any", "swarm")).toBe("aperture");
   });

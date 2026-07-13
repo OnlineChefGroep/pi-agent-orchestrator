@@ -6,8 +6,8 @@
  *
  * Performance features:
  * - Dirty checking: skips TUI re-render when agent list structure hasn't changed.
- * - Adaptive refresh: faster interval (200ms) when agents are running,
- *   falls back to animation interval (80ms) when all agents are finished.
+ * - Adaptive refresh: responsive interval (160ms) while work is active,
+ *   falling back to a low-cost 1000ms idle cadence.
  *
  * UI styles: premium (default), retro, plain
  */
@@ -23,7 +23,7 @@ import type { TUI } from "./tui-shim.js";
 // ---- Constants ----
 
 /** Fast refresh interval when agents are actively running. */
-const ACTIVE_REFRESH_MS = 200;
+const ACTIVE_REFRESH_MS = 160;
 
 /** Idle refresh interval when all agents are finished — animates spinner cheaply. */
 const IDLE_REFRESH_MS = 1000;
@@ -417,9 +417,9 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
     // Always advance spinner for smooth animation.
     this.widgetFrame++;
 
-    // Force re-render periodically when running agents exist (spinner animation).
-    // Without this, the dirty-check optimization freezes spinners indefinitely.
-    if (!this.dirty && hasActive && this.widgetFrame % 3 === 0) {
+    // Render motion every second 160ms tick. This is visibly responsive while
+    // avoiding a full widget redraw on every timer callback over SSH terminals.
+    if (!this.dirty && hasActive && this.widgetFrame % 2 === 0) {
       this.dirty = true;
     }
 

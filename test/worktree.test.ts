@@ -88,6 +88,7 @@ describe("worktree", () => {
       const result = cleanupWorktree(repoDir, wt, "test cleanup");
       expect(result.hasChanges).toBe(false);
       expect(result.branch).toBeUndefined();
+      expect(result.path).toBeUndefined();
     });
 
     it("commits changes and creates branch when changes exist", async () => {
@@ -101,6 +102,7 @@ describe("worktree", () => {
       expect(result.hasChanges).toBe(true);
       expect(result.branch).toBeDefined();
       expect(result.branch).toContain("pi-agent-dirty-1");
+      expect(result.path).toBeUndefined();
 
       // Verify the branch exists in the main repo
       const branches = execFileSync("git", ["branch", "--list", result.branch!], {
@@ -116,6 +118,32 @@ describe("worktree", () => {
 
       // Cleanup branch
       try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+    });
+
+    it("preserves dirty worktree and returns recovery details when staging fails", async () => {
+      const wt = (await createWorktree(repoDir, "stage-failure"))!;
+      const changedFile = join(wt.path, "important-agent-work.txt");
+      writeFileSync(changedFile, "must not be deleted");
+
+      // Hold Git's index lock so `git add -A` fails deterministically.
+      const indexLock = execFileSync("git", ["rev-parse", "--git-path", "index.lock"], {
+        cwd: wt.path,
+        stdio: "pipe",
+      }).toString().trim();
+      writeFileSync(indexLock, "held by test");
+
+      const result = cleanupWorktree(repoDir, wt, "should be recoverable");
+      expect(result).toMatchObject({
+        hasChanges: true,
+        path: wt.path,
+      });
+      expect(result.branch).toBeUndefined();
+      expect(result.error).toContain("preserved for recovery");
+      expect(existsSync(wt.path)).toBe(true);
+      expect(existsSync(changedFile)).toBe(true);
+
+      rmSync(indexLock, { force: true });
+      try { execFileSync("git", ["worktree", "remove", "--force", wt.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
     });
 
     it("does not force-overwrite existing branch", async () => {
@@ -157,7 +185,6 @@ describe("worktree", () => {
       expect(result.hasChanges).toBe(false);
     });
 
-
     it("sanitizes agent description to prevent git hook injection (CVE-001)", async () => {
       const wt = (await createWorktree(repoDir, "sanitize-1"))!;
       writeFileSync(join(wt.path, "change.txt"), "something");
@@ -184,7 +211,6 @@ describe("worktree", () => {
 
       try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
     });
-
 
     it("truncates commit message at 200 chars safely, without splitting surrogate pairs or crashing on non-strings", async () => {
       const wt = (await createWorktree(repoDir, "surrogate-msg"))!;
