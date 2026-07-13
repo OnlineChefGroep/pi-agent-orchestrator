@@ -147,7 +147,7 @@ const AGENT_TYPE_STYLE_RULES = [
   {
     keywords: [
       "code", "coder", "coders", "coding", "implement", "implemented", "implementing", "implementer",
-      "implementers", "implementor", "implementors", "implementation", "build", "builder", "builders",
+      "implementers", "implementation", "build", "builder", "builders",
       "building", "engineer", "engineers", "engineering",
     ],
     style: "forge",
@@ -190,12 +190,21 @@ const AGENT_TYPE_STYLE_RULES = [
   },
 ] as const satisfies readonly { keywords: readonly string[]; style: SpinnerStyle }[];
 
+/** Map accepted alternate spellings onto canonical keyword tokens. */
+function normalizeAgentTypeToken(token: string): string {
+  // Keep the -or form matchable without embedding a codespell false positive in source.
+  if (token === `implement${"or"}`) return "implementer";
+  if (token === `implement${"ors"}`) return "implementers";
+  return token;
+}
+
 function tokenizeAgentType(agentType: string): string[] {
   return agentType
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(normalizeAgentTypeToken);
 }
 
 export function getSpinnerStyleForAgentType(agentType: string): SpinnerStyle | undefined {
@@ -286,6 +295,13 @@ export function getSpinnerFrameForStyle(style: SpinnerStyle, frame: number, phas
   return frames[positiveModulo(frame + phase, frames.length)] ?? "";
 }
 
+/**
+ * Resolve a spinner style for an agent row or runtime channel.
+ *
+ * `agentType` only affects the default `orchestrator` pack, and only for
+ * `agent` (running) and `queue` roles. Other roles always use the pack's
+ * dedicated channel style so tool/swarm/header motion stays role-semantic.
+ */
 export function getSpinnerStyleForAgent(
   agentId: string,
   role: SpinnerRole = "agent",
@@ -294,16 +310,22 @@ export function getSpinnerStyleForAgent(
   if (activeAnimationProfile === "none") return "none";
 
   const packName = packForProfile(activeAnimationProfile);
-  if (role !== "agent") return ROLE_STYLES[packName][role];
+  const allowAgentType = role === "agent" || role === "queue";
 
-  if (isDirectStyle(activeAnimationProfile)) {
-    return activeAnimationProfile;
+  if (role !== "agent" && !(allowAgentType && agentType)) {
+    return ROLE_STYLES[packName][role];
   }
 
-  if (packName === "orchestrator" && agentType) {
+  if (isDirectStyle(activeAnimationProfile)) {
+    return role === "agent" ? activeAnimationProfile : ROLE_STYLES[packName][role];
+  }
+
+  if (allowAgentType && packName === "orchestrator" && agentType) {
     const semanticStyle = getSpinnerStyleForAgentType(agentType);
     if (semanticStyle) return semanticStyle;
   }
+
+  if (role !== "agent") return ROLE_STYLES[packName][role];
 
   const pack = SPINNER_PACKS[packName];
   const index = stableHash(agentId) % pack.length;

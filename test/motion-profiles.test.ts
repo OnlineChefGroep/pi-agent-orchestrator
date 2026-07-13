@@ -31,9 +31,13 @@ describe("motion profiles", () => {
     expect(getSpinnerStyleForAgentType("qatar")).toBeUndefined();
     expect(getSpinnerStyleForAgentType("testament")).toBeUndefined();
     expect(getSpinnerStyleForAgent("agent-a", "agent", "validator")).toBe("prism");
+    expect(getSpinnerStyleForAgent("queued-a", "queue", "validator")).toBe("prism");
+    expect(getSpinnerStyleForAgent("queued-b", "queue")).toBe("pipeline");
+    expect(getSpinnerStyleForAgent("tool-a", "tool", "validator")).toBe("neural");
 
     setSpinnerStyle("signals");
     expect(getSpinnerStyleForAgent("agent-a", "agent", "validator")).not.toBe("prism");
+    expect(getSpinnerStyleForAgent("queued-a", "queue", "validator")).toBe("scanline");
   });
 
   it("switches the semantic role language with the selected pack", () => {

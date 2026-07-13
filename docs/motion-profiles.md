@@ -42,8 +42,8 @@ Custom agent names that do not match a family still receive a stable style deriv
 ## Runtime channels
 
 - Running agent rows use agent identity motion.
-- Queued work uses the profile's queue channel.
-- Tool activity uses the tool channel.
+- Queued Agent Top rows reuse that identity when an agent type is known under `orchestrator`; otherwise they use the profile's queue channel.
+- Tool activity uses the tool channel (`agentType` is ignored for non-agent/non-queue roles).
 - Dashboard headers use the coordination-core channel.
 - Swarms, scheduler jobs and result handoffs each use their own role mapping.
 - Phase offsets prevent a fleet from moving in lockstep.
