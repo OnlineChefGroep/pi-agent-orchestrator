@@ -1,0 +1,37 @@
+name: Full suite failure diagnostic
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/full-suite-failure-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-node-24:
+    if: github.head_ref == 'feat/motion-system-v2'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run full suite with compact failure output
+        shell: bash
+        run: |
+          set +e
+          npm test -- --reporter=dot > /tmp/full-suite.log 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            echo '--- failing assertions and summaries ---'
+            grep -E -A 12 -B 3 'FAIL|Failed Tests|AssertionError|Error:|Test Files|Tests ' /tmp/full-suite.log | tail -n 240 || true
+            echo '--- final output ---'
+            tail -n 180 /tmp/full-suite.log
+            exit "$status"
+          fi
+          tail -n 40 /tmp/full-suite.log
