@@ -1,91 +1,53 @@
 name: Docs & Agent-Ready Pages (Open Source)
 
-# Publishes the open-source documentation + agent-ready knowledge base to GitHub Pages.
-# Fully OSS — no proprietary droid dependency.
-#
-# The "DeepWiki" (agent-ready wiki) for this repo is generated open-source from the
-# public GitHub repository (see https://docs.devin.ai/work-with-devin/deepwiki-mcp and
-# https://deepwiki.com/OnlineChefGroep/pi-agent-orchestrator). This workflow only
-# publishes the human-facing docs site plus the llms.txt / llms-full.txt context that
-# DeepWiki and other agents consume, so nothing depends on droid.
+# Assembles/verifies the OSS docs site. GitHub Pages deploy is owned solely by
+# .github/workflows/pages.yml (post #264).
 
 on:
   push:
     branches: [main]
     paths:
-      - "src/**"
-      - "scripts/**"
-      - "showcase/**"
-      - "site/**"
       - "docs/**"
-      - "README.md"
-      - "AGENTS.md"
+      - "site/**"
       - "llms.txt"
       - "llms-full.txt"
-      - "sitemap.md"
-      - "sitemap.xml"
-      - "robots.txt"
-      - "agent-permissions.json"
+      - "README.md"
+      - "AGENTS.md"
+      - "CHANGELOG.md"
+      - "scripts/build-site.sh"
       - ".github/workflows/docs-site.yml"
-      - "package.json"
-      - "package-lock.json"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "site/**"
+      - "llms.txt"
+      - "llms-full.txt"
+      - "README.md"
+      - "AGENTS.md"
+      - "CHANGELOG.md"
+      - "scripts/build-site.sh"
+      - ".github/workflows/docs-site.yml"
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+permissions: {}
 
 concurrency:
-  group: pages
+  group: docs-site-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  verify:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      - name: Assemble static site (verify; deploy is pages.yml)
+        run: bash scripts/build-site.sh _site
+      - name: Upload assembled site artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install project dependencies
-        run: npm ci
-
-      - name: Render real TUI showcase
-        run: npm run showcase:remotion
-
-      - name: Assemble static site
-        run: |
-          rm -rf _site
-          mkdir -p _site/assets _site/docs _site/.well-known _site/wiki
-          cp site/index.html _site/index.html
-          cp site/index.md _site/index.md
-          cp README.md AGENTS.md CHANGELOG.md _site/
-          cp llms.txt llms-full.txt sitemap.md sitemap.xml robots.txt agent-permissions.json _site/
-          cp -r docs/* _site/docs/
-          cp docs/images/dashboard_preview.mp4 _site/assets/dashboard_preview.mp4
-          cp docs/images/dashboard_preview.png _site/assets/dashboard_preview.png
-          cp agent-permissions.json _site/.well-known/agent-permissions.json
-          # Agent-ready knowledge base (DeepWiki consumes the same llms.txt / llms-full.txt)
-          cp llms-full.txt _site/wiki/index.md
-          cp llms.txt _site/wiki/llms.txt
-          touch _site/.nojekyll
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
-        with:
+          name: docs-site
           path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
