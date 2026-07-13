@@ -4,11 +4,10 @@ import { logger } from "./logger.js";
 import { getTelemetryRegistry, setTelemetryRegistry } from "./ui/global-registry.js";
 
 /**
- * telemetry.ts — Structured event emitter for security and validation events.
+ * telemetry.ts — Structured event emitter for security, validation, and lifecycle events.
  *
  * Provides a lightweight pub/sub system for agent lifecycle events.
- * Events without subscribers are intentionally dropped: writing to stdout or
- * stderr corrupts Pi's interactive terminal rendering.
+ * Fail-open: security events warn; routine lifecycle events are debug-only.
  */
 
 /** Telemetry event types and their payloads */
@@ -29,16 +28,16 @@ export interface TelemetryEvents {
   };
   /**
    * Emitted by `dispatch-history.ts` on every call to
-   `recordDispatchDecision(...)`. Lets downstream consumers (sentry,
-   splunk, the Go cinematic sidecar) reconstruct the same
-   single/swarm/crew + auto/explicit histogram that the in-memory
-   ring buffer feeds into `/agents → Health check`. Note the event
-   carries the resolved `kind` already (so a `auto → crew` decision
-   surfaces as `kind: "crew"` AND `configuredMode: "auto"` +
-   `source: "auto-heuristic"`), not the heuristic's intermediate
-   `analyzePrompt` output — consumers wanting the raw signals can
-   subscribe to a separate (not-yet-emitted) `subagent:dispatch_signals`
-   event if/when that becomes useful.
+   * `recordDispatchDecision(...)`. Lets downstream consumers (sentry,
+   * splunk, the Go cinematic sidecar) reconstruct the same
+   * single/swarm/crew + auto/explicit histogram that the in-memory
+   * ring buffer feeds into `/agents → Health check`. Note the event
+   * carries the resolved `kind` already (so a `auto → crew` decision
+   * surfaces as `kind: "crew"` AND `configuredMode: "auto"` +
+   * `source: "auto-heuristic"`), not the heuristic's intermediate
+   * `analyzePrompt` output — consumers wanting the raw signals can
+   * subscribe to a separate (not-yet-emitted) `subagent:dispatch_signals`
+   * event if/when that becomes useful.
    */
   "subagent:dispatch_decision": {
     kind: "single" | "swarm" | "crew";
@@ -54,6 +53,17 @@ export type TelemetryEventName = keyof TelemetryEvents;
 
 /** Handler function type */
 export type TelemetryHandler<E extends TelemetryEventName> = (payload: TelemetryEvents[E]) => void;
+
+/** Security-relevant events that always warn when no listeners are registered. */
+const SECURITY_EVENTS: ReadonlySet<TelemetryEventName> = new Set<TelemetryEventName>([
+  "agent:validation-failed",
+  "agent:unknown-tools",
+]);
+
+/** Routine lifecycle events retained for opt-in diagnostics without polluting normal stderr. */
+const DEBUG_FALLBACK_EVENTS: ReadonlySet<TelemetryEventName> = new Set<TelemetryEventName>([
+  "agent:loaded",
+]);
 
 /** Global registry of telemetry handlers (Symbol-based to avoid collisions) */
 
@@ -90,7 +100,9 @@ export function onTelemetry<E extends TelemetryEventName>(
 }
 
 /**
- * Emit a telemetry event to registered subscribers.
+ * Emit a telemetry event.
+ * If no listeners are registered, security events warn and routine lifecycle
+ * events are emitted at debug level only.
  */
 export function emitTelemetry<E extends TelemetryEventName>(
   event: E,
@@ -108,6 +120,10 @@ export function emitTelemetry<E extends TelemetryEventName>(
         logger.warn(`Telemetry handler error for ${event}:`, { error: err instanceof Error ? err.message : String(err) });
       }
     }
+  } else if (SECURITY_EVENTS.has(event as TelemetryEventName)) {
+    logger.warn(`[telemetry] security event: ${event}`, { payload });
+  } else if (DEBUG_FALLBACK_EVENTS.has(event as TelemetryEventName)) {
+    logger.debug(`[telemetry] lifecycle event: ${event}`, { payload });
   }
 }
 
