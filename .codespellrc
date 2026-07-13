@@ -1,5 +1,0 @@
-[codespell]
-# Dutch performance docs use NL vocabulary; treat as intentional.
-skip = docs/HOWTO-perf.md,docs/PERFORMANCE.md,package-lock.json,site/web/package-lock.json,dist,node_modules,_site
-# Vitest lifecycle hooks and common API identifiers.
-ignore-words-list = afterAll,beforeAll,als,alle,te,implementors
