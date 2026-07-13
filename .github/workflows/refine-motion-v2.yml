@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Format changed files
+        run: npx biome check --write src/ui/animation.ts src/ui/agent-widget.ts test/motion-profiles.test.ts test/animation-profiles.test.ts
+
       - name: Typecheck
         run: npm run typecheck
 
