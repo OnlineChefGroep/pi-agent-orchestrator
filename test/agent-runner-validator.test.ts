@@ -1,3 +1,4 @@
+import type { AgentSession, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import type {
   ResumeAgentFn,
@@ -29,8 +30,8 @@ function passDeps(overrides: Partial<ValidationDeps> = {}): ValidationDeps {
   };
 }
 
-const session = {} as any;
-const ctx = {} as any;
+const session = {} as unknown as AgentSession;
+const ctx = {} as unknown as ExtensionContext;
 
 const FENCE = "```";
 
