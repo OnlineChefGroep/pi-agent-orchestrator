@@ -5,7 +5,7 @@
  * load/save, parse-error self-heal, stale-lock recovery.
  */
 
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -187,6 +187,48 @@ describe("ScheduleStore", () => {
     expect(await store.update(job.id, { name: "must-not-return" })).toBeUndefined();
     expect(store.list()).toEqual([]);
     expect(JSON.parse(readFileSync(file, "utf-8")).jobs).toEqual([]);
+  });
+
+  it("clears the cache on partial jobs-array corruption instead of persisting a truncated set", async () => {
+    const file = join(tmp, "s.json");
+    const store = await ScheduleStore.create(file);
+    const valid = makeJob({ id: "valid", name: "kept-if-bug" });
+    await store.add(valid);
+
+    writeFileSync(
+      file,
+      JSON.stringify({ version: 1, jobs: [valid, { notid: "x" }] }),
+    );
+
+    expect(await store.update(valid.id, { name: "must-not-return" })).toBeUndefined();
+    expect(store.list()).toEqual([]);
+    expect(JSON.parse(readFileSync(file, "utf-8")).jobs).toEqual([]);
+  });
+
+  it("treats duplicate job ids in the backing file as corruption and clears state", async () => {
+    const file = join(tmp, "s.json");
+    const store = await ScheduleStore.create(file);
+    const first = makeJob({ id: "dup", name: "first" });
+    const second = makeJob({ id: "dup", name: "second" });
+    writeFileSync(file, JSON.stringify({ version: 1, jobs: [first, second] }));
+
+    expect(await store.update("dup", { name: "must-not-return" })).toBeUndefined();
+    expect(store.list()).toEqual([]);
+    expect(JSON.parse(readFileSync(file, "utf-8")).jobs).toEqual([]);
+  });
+
+  it("rejects a symlinked backing file instead of following it", async () => {
+    if (process.platform === "win32") return;
+    const target = join(tmp, "outside.json");
+    const file = join(tmp, "s.json");
+    writeFileSync(target, JSON.stringify({ version: 1, jobs: [makeJob({ id: "secret" })] }));
+    symlinkSync(target, file);
+
+    const store = await ScheduleStore.create(file);
+    expect(store.list()).toEqual([]);
+    await expect(store.add(makeJob({ id: "new" }))).rejects.toThrow("regular file");
+    expect(JSON.parse(readFileSync(target, "utf-8")).jobs).toHaveLength(1);
+    expect(JSON.parse(readFileSync(target, "utf-8")).jobs[0].id).toBe("secret");
   });
 
   it("recovers from a legacy plain-file .lock before using proper-lockfile", async () => {

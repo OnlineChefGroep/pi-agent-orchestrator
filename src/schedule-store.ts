@@ -11,7 +11,7 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, promises as fs } from "node:fs";
+import { constants as fsConstants, existsSync, promises as fs } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { lock } from "proper-lockfile";
 import { logger } from "./logger.js";
@@ -19,15 +19,20 @@ import type { ScheduledSubagent, ScheduleStoreData } from "./types.js";
 
 const MAX_STORE_BYTES = 5 * 1024 * 1024;
 const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
+/** Cover the full stale window: 650 * 50ms ≈ 32.5s > stale 30s. */
 const LOCK_OPTIONS = {
   retries: {
-    retries: 100,
+    retries: 650,
     factor: 1,
     minTimeout: 50,
     maxTimeout: 50,
   },
   stale: 30_000,
+  // Never resolve through symlinks — ScheduleStore rejects non-regular paths.
+  realpath: false,
 } as const;
+
+const OPEN_READ_FLAGS = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0);
 
 function safeSessionFileStem(sessionId: string): string {
   if (SAFE_SESSION_ID.test(sessionId)) return sessionId;
@@ -73,6 +78,10 @@ export class ScheduleStore {
   private async ensureDir(): Promise<void> {
     const dir = dirname(this.filePath);
     await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+    const stat = await fs.lstat(dir);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      throw new Error("Schedule store directory must be a regular directory");
+    }
     if (process.platform !== "win32") {
       await fs.chmod(dir, 0o700);
     }
@@ -89,6 +98,10 @@ export class ScheduleStore {
     } catch (error) {
       if (!isErrno(error, "EEXIST")) throw error;
     }
+    const stat = await fs.lstat(this.filePath);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new Error("Schedule store must be a regular file");
+    }
     if (process.platform !== "win32") {
       await fs.chmod(this.filePath, 0o600);
     }
@@ -100,25 +113,38 @@ export class ScheduleStore {
     // later mutation can write back as apparently valid state.
     this.jobs.clear();
     try {
-      const stat = await fs.lstat(this.filePath);
-      if (stat.isSymbolicLink() || !stat.isFile()) {
-        throw new Error("Schedule store must be a regular file");
+      // Open once with O_NOFOLLOW so a symlink swap between lstat and read cannot win.
+      const handle = await fs.open(this.filePath, OPEN_READ_FLAGS);
+      let content: string;
+      try {
+        const stat = await handle.stat();
+        if (!stat.isFile()) throw new Error("Schedule store must be a regular file");
+        if (stat.size > MAX_STORE_BYTES) throw new Error("Schedule store payload too large");
+        content = await handle.readFile("utf-8");
+      } finally {
+        await handle.close();
       }
-      if (stat.size > MAX_STORE_BYTES) throw new Error("Schedule store payload too large");
 
-      const content = await fs.readFile(this.filePath, "utf-8");
       const data = JSON.parse(content) as Partial<ScheduleStoreData>;
       if (!Array.isArray(data.jobs)) throw new Error("Schedule store jobs must be an array");
 
+      // Validate into a temporary map so a mid-array failure never leaves a
+      // half-populated cache that the next mutation would persist.
+      const next = new Map<string, ScheduledSubagent>();
       for (const value of data.jobs) {
         if (!value || typeof value !== "object") throw new Error("Schedule store contains an invalid job");
         const job = value as ScheduledSubagent;
         if (typeof job.id !== "string" || job.id.length === 0) {
           throw new Error("Schedule store contains a job without a valid id");
         }
-        this.jobs.set(job.id, job);
+        if (next.has(job.id)) {
+          throw new Error("Schedule store contains duplicate job ids");
+        }
+        next.set(job.id, job);
       }
+      this.jobs = next;
     } catch (error) {
+      this.jobs.clear();
       if (!isErrno(error, "ENOENT")) {
         logger.warn("Ignoring corrupt schedule store; next mutation will rewrite it", {
           path: this.filePath,
@@ -160,16 +186,26 @@ export class ScheduleStore {
   private async withLock<T>(fn: () => T): Promise<T> {
     await this.ensureDir();
     await removeLegacyFileLock(this.lockPath);
-    await this.ensureBackingFile();
 
-    const release = await lock(this.filePath, LOCK_OPTIONS);
+    // deleteFileIfEmpty() may unlink between create and lock; recreate and retry.
+    let release: (() => Promise<void>) | undefined;
+    for (let attempt = 0; ; attempt++) {
+      await this.ensureBackingFile();
+      try {
+        release = await lock(this.filePath, LOCK_OPTIONS);
+        break;
+      } catch (error) {
+        if (!isErrno(error, "ENOENT") || attempt >= 5) throw error;
+      }
+    }
+
     try {
       await this.load();
       const result = fn();
       await this.save();
       return result;
     } finally {
-      await release();
+      await release?.();
     }
   }
 
