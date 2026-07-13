@@ -32,11 +32,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate refined motion scope
-        run: |
-          npm run typecheck
-          npx biome check src/ui/animation.ts src/ui/agent-widget.ts test/motion-profiles.test.ts test/animation-profiles.test.ts docs/motion-profiles.md
-          npx vitest run test/motion-profiles.test.ts test/animation-profiles.test.ts test/widget-motion-parity.test.ts
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Check formatting and lint
+        run: npx biome check src/ui/animation.ts src/ui/agent-widget.ts test/motion-profiles.test.ts test/animation-profiles.test.ts
+
+      - name: Test semantic profiles
+        run: npx vitest run test/motion-profiles.test.ts
+
+      - name: Test frame width and animation profiles
+        run: npx vitest run test/animation-profiles.test.ts
+
+      - name: Test widget parity
+        run: npx vitest run test/widget-motion-parity.test.ts
 
       - name: Commit refinement
         run: |
