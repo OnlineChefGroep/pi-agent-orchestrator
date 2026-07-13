@@ -351,8 +351,8 @@ describe("AgentWidget — adaptive refresh interval", () => {
     manager.setAgents([mockRecord({ status: "running" })]);
     widget.ensureTimer();
 
-    // Verify initial interval (ACTIVE_REFRESH_MS = 200ms)
-    expect(widget.currentIntervalMs).toBe(200);
+    // Verify initial state tick interval (ACTIVE_REFRESH_MS = 160ms)
+    expect(widget.currentIntervalMs).toBe(160);
   });
 
   it("switches to idle interval when all agents are finished", () => {
@@ -377,7 +377,7 @@ describe("AgentWidget — adaptive refresh interval", () => {
       mockRecord({ status: "running" }),
     ]);
     widget.update();
-    expect(widget.currentIntervalMs).toBe(200);
+    expect(widget.currentIntervalMs).toBe(160);
   });
 
   it("transitions from active to idle when last running agent finishes", () => {
@@ -385,7 +385,7 @@ describe("AgentWidget — adaptive refresh interval", () => {
     manager.setAgents([mockRecord({ status: "running" })]);
     widget.ensureTimer();
     widget.update();
-    expect(widget.currentIntervalMs).toBe(200);
+    expect(widget.currentIntervalMs).toBe(160);
 
     // Add completed, remove running
     manager.setAgents([mockRecord({ status: "completed", completedAt: Date.now() })]);
