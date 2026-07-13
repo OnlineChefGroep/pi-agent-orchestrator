@@ -1,0 +1,47 @@
+name: Fix motion codespell
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/scripts/fix-motion-codespell.py
+      - .github/workflows/fix-motion-codespell.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    if: github.head_ref == 'feat/motion-system-v2'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/motion-system-v2
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python .github/scripts/fix-motion-codespell.py
+      - run: npm ci
+      - run: python -m pip install codespell==2.4.2
+      - name: Validate formatting, types, tests and spelling
+        run: |
+          npx biome check src/ui/animation.ts
+          npm run typecheck
+          npx vitest run test/motion-profiles.test.ts test/animation-profiles.test.ts test/widget-motion-parity.test.ts
+          codespell docs/motion-profiles.md src/ui/animation.ts test/motion-profiles.test.ts
+      - name: Commit correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/scripts/fix-motion-codespell.py
+          git rm .github/workflows/fix-motion-codespell.yml
+          git add src/ui/animation.ts docs/motion-profiles.md
+          git commit -m "fix(ui): clear motion codespell findings"
+          git push origin HEAD:feat/motion-system-v2
