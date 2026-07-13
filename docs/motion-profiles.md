@@ -49,7 +49,7 @@ Custom agent names that do not match a family still receive a stable style deriv
 ## Rendering guarantees
 
 - Dashboard-safe frames occupy one terminal cell to prevent horizontal jitter.
-- The compact widget refreshes at 160 ms while work is active and returns to a 1000 ms idle cadence.
+- The compact widget advances state on a 160 ms active tick and redraws motion every second tick (about 320 ms), then returns to a 1000 ms idle cadence.
 - `reduced` freezes the selected semantic frame rather than replacing state with a generic marker.
 - `none` suppresses glyphs while preserving labels, counts, status, success/error markers and progress information.
 - Compact widget, full dashboard and Agent Top use the same profile resolver.

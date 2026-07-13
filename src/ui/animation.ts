@@ -129,21 +129,31 @@ const ROLE_STYLES = {
  * orchestrator profile. Unknown custom agents still use deterministic hashing.
  */
 const AGENT_TYPE_STYLE_RULES = [
-  { keywords: ["explore", "research", "search", "scan"], style: "radar" },
-  { keywords: ["plan", "architect", "design"], style: "lattice" },
-  { keywords: ["analysis", "analyst", "audit", "diagnose"], style: "signal" },
-  { keywords: ["code", "coder", "implement", "build", "engineer"], style: "forge" },
-  { keywords: ["review", "critic", "inspect"], style: "aperture" },
-  { keywords: ["valid", "test", "qa", "verify", "check"], style: "prism" },
   { keywords: ["security", "sentinel", "threat"], style: "sentinel" },
-  { keywords: ["orchestr", "lead", "manager", "coordinator"], style: "reactor" },
+  { keywords: ["valid", "test", "qa", "verify", "check"], style: "prism" },
+  { keywords: ["review", "critic", "inspect"], style: "aperture" },
+  { keywords: ["code", "coder", "implement", "build", "engineer"], style: "forge" },
+  { keywords: ["analysis", "analyst", "audit", "diagnose"], style: "signal" },
+  { keywords: ["plan", "architect", "design"], style: "lattice" },
+  { keywords: ["explore", "research", "search", "scan"], style: "radar" },
   { keywords: ["compress", "summar", "handoff"], style: "weave" },
+  { keywords: ["orchestr", "lead", "manager", "coordinator"], style: "reactor" },
 ] as const satisfies readonly { keywords: readonly string[]; style: SpinnerStyle }[];
 
+function tokenizeAgentType(agentType: string): string[] {
+  return agentType
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
 export function getSpinnerStyleForAgentType(agentType: string): SpinnerStyle | undefined {
-  const normalized = agentType.trim().toLowerCase();
-  if (!normalized) return undefined;
-  return AGENT_TYPE_STYLE_RULES.find((rule) => rule.keywords.some((keyword) => normalized.includes(keyword)))?.style;
+  const tokens = tokenizeAgentType(agentType);
+  if (tokens.length === 0) return undefined;
+  return AGENT_TYPE_STYLE_RULES.find((rule) =>
+    rule.keywords.some((keyword) => tokens.some((token) => token === keyword || token.startsWith(keyword)))
+  )?.style;
 }
 
 /** Mutable global frames retained for backwards compatibility. */

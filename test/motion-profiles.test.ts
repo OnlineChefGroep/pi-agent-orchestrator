@@ -24,8 +24,12 @@ describe("motion profiles", () => {
     setSpinnerStyle("orchestrator");
     expect(getSpinnerStyleForAgentType("Explore")).toBe("radar");
     expect(getSpinnerStyleForAgentType("codex-implementor")).toBe("forge");
-    expect(getSpinnerStyleForAgentType("security-reviewer")).toBe("aperture");
+    expect(getSpinnerStyleForAgentType("security-reviewer")).toBe("sentinel");
+    expect(getSpinnerStyleForAgentType("explanation-writer")).toBeUndefined();
     expect(getSpinnerStyleForAgent("agent-a", "agent", "validator")).toBe("prism");
+
+    setSpinnerStyle("signals");
+    expect(getSpinnerStyleForAgent("agent-a", "agent", "validator")).not.toBe("prism");
   });
 
   it("switches the semantic role language with the selected pack", () => {
