@@ -514,8 +514,10 @@ describe("SubagentScheduler — fire path", () => {
 
     it("treats aborted and stopped as errors (terminal failure states)", async () => {
       const records = installFaithfulMock();
-      const futureA = new Date(Date.now() + 1000).toISOString();
-      const futureB = new Date(Date.now() + 200).toISOString();
+      // Keep a comfortable margin: Windows CI can spend >200ms in addJob I/O,
+      // which made `Date.now() + 200` already-past by the second addJob call.
+      const futureA = new Date(Date.now() + 3000).toISOString();
+      const futureB = new Date(Date.now() + 5000).toISOString();
       const a = await scheduler.addJob({
         name: "abort-job", description: "x", schedule: futureA,
         subagent_type: "general-purpose", prompt: "x",
