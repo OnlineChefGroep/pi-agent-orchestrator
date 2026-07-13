@@ -43,7 +43,7 @@ The name `minimal` refers to minimal compression, not a minimal-sized prompt.
 
 ## Current template-size comparison
 
-The settings UI currently derives its estimates from template character counts and divides by four to display approximate tokens. Those values are useful for comparing the static variants, but they are not tokenizer measurements and must not be presented as exact model input usage.
+The updated settings UI displays character counts for the isolated templates. The previous UI divided those counts by four and labelled the result as tokens. That was only a rough estimate—not a tokenizer measurement or provider-reported input usage.
 
 | Component | `minimal` chars | `balanced` chars | `aggressive` chars | Aggressive reduction vs balanced |
 |---|---:|---:|---:|---:|
@@ -56,7 +56,7 @@ Do not add these four rows together to describe one request. A sub-agent invocat
 
 ## Actual cost and latency impact
 
-The operational saving is the difference in the affected system-prompt fragment for the agent that actually runs. It is usually much smaller than the percentage shown for the isolated template because the complete request can also contain inherited context, task text, memory, skills, tool schemas, previous turns, and tool results.
+The operational saving is the difference in the affected system-prompt fragment for the agent that actually runs. Its share of a complete request is usually much smaller because the request can also contain inherited context, task text, memory, skills, tool schemas, previous turns, and tool results.
 
 Actual billed tokens and latency depend on:
 
@@ -66,7 +66,7 @@ Actual billed tokens and latency depend on:
 - the number of agent turns;
 - the size of inherited context, memory, skills, and tool schemas.
 
-Treat the current character table as a static implementation comparison only. Use provider-reported `input_tokens` or the runner's usage telemetry to measure real workloads.
+Treat the character table as a static implementation comparison only. Use provider-reported `input_tokens` or the runner's usage telemetry to measure real workloads.
 
 ## Quality and safety impact
 
@@ -86,7 +86,7 @@ Keep `balanced` as the global default. Use per-agent overrides only after measur
 
 - set `minimal` for weaker/local models, strict read-only tasks, or agents that frequently produce invalid/incomplete handoffs;
 - set `aggressive` for strong models running short, well-scoped tasks where rich handoff metadata is not required;
-- leave custom agents on `balanced` unless `handoff: true`, because their custom body is not compressed by this feature.
+- omit the override on custom agents unless `handoff: true`, because their custom body is not compressed by this feature.
 
 ## Configuration
 
