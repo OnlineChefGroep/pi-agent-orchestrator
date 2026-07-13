@@ -11,7 +11,7 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import { constants as fsConstants, existsSync, promises as fs } from "node:fs";
+import { existsSync, promises as fs, constants as fsConstants } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { lock } from "proper-lockfile";
 import { logger } from "./logger.js";
