@@ -55,3 +55,4 @@ Custom agent names that do not match a family still receive a stable style deriv
 - `reduced` freezes the selected semantic frame rather than replacing state with a generic marker.
 - `none` suppresses glyphs while preserving labels, counts, status, success/error markers and progress information.
 - Compact widget, full dashboard and Agent Top use the same profile resolver.
+- The complete repository test suite covers the new cadence contract alongside targeted Node 24 motion and terminal-width checks.
