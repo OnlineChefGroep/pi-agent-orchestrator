@@ -202,23 +202,28 @@ interface SubagentsSettings {
 
 **FILE:** `src/types.ts`
 
-Controls the verbosity of system prompts injected into agents. Lower compression yields higher-quality instructions at the cost of more tokens; higher compression saves tokens at the cost of instruction detail.
+Selects one of three static instruction variants. This setting does not summarize conversation history, compact inherited context, rewrite task prompts, or compress custom-agent prompt bodies.
 
-| Level | Behavior | Token Impact |
-|---|---|---|
-| `"minimal"` | Full verbose prompts with CAPS emphasis, per-tool bash equivalents, two handoff examples. Maximum instruction quality. | +70% vs balanced |
-| `"balanced"` | Concise prompts with realistic examples (default). Good trade-off between quality and token usage. | Baseline |
-| `"aggressive"` | Ultra-short one-liners for read-only warnings, tool usage, and handoff. Maximum token savings. | −44% vs balanced |
+| Level | Behavior |
+|---|---|
+| `"minimal"` | Minimal compression: the most explicit read-only and handoff guidance. |
+| `"balanced"` | Concise guidance with examples and field descriptions. Default. |
+| `"aggressive"` | The shortest read-only guidance and a minimal handoff schema. |
 
 **SCOPE:**
-- Affects all `replace`-mode built-in agents (Explore, Plan, Analysis) via lazy runtime regeneration.
-- Affects handoff prompt injection for all agents with `handoff: true`.
-- Custom agents (`.pi/agents/*.md`) can override per-agent via the `prompt_compression` frontmatter directive.
-- Append-mode agents (e.g. `general-purpose`) — only the handoff block varies; the inherited system prompt and bridge are unaffected.
+- Regenerates the read-only warning and tool-usage sections for the built-in `Explore`, `Plan`, and `Analysis` agents.
+- Changes the handoff instruction block for agents with `handoff: true`.
+- Does not change built-in additional workflow sections, parent context, inherited system prompts, task prompts, memory, skills, tool schemas, or custom-agent prompt bodies.
+- For a custom agent with the default `handoff: false`, `prompt_compression` currently has no effect on its body.
+- For append-mode agents, only an enabled handoff block varies.
 
 **PRECEDENCE:** Per-agent frontmatter `prompt_compression` > global `promptCompressionLevel` setting > default `"balanced"`.
 
+**MEASUREMENT:** Character tables elsewhere compare isolated templates only. They are not exact tokenizer measurements and must not be interpreted as a fixed percentage reduction for a complete request. Measure real workloads with provider-reported input usage or runner telemetry.
+
 **PERSISTENCE:** Stored in `.pi/subagents.json` and managed via `SettingsAppliers.setPromptCompressionLevel`.
+
+See [`prompt-compression.md`](prompt-compression.md) for the scope matrix, quality/safety trade-offs, and measurement guidance.
 
 ### `saveAndEmitChanged(settings: SubagentsSettings): void`
 
