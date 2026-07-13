@@ -21,8 +21,12 @@ on:
         required: true
 
 # Serialize publishes per version/tag. Never cancel mid-publish.
+# Normalize dispatch (0.18.0) and tag (v0.18.0) to the same key.
 concurrency:
-  group: release-${{ github.event.inputs.version || github.ref_name }}
+  group: >-
+    release-${{ github.event.inputs.version && format('v{0}',
+    github.event.inputs.version) || github.ref_name }}
+  cancel-in-progress: false
 
 permissions: {}
 
@@ -112,20 +116,22 @@ jobs:
           set -euo pipefail
           PUBLISHED="$(npm view @onlinechefgroep/pi-agent-orchestrator version)"
           RESULT="$(node -e '
+            const semver = require("semver");
             const [want, published] = process.argv.slice(1);
-            const parse = (v) => v.split(".").map((n) => Number(n));
-            const [w, p] = [parse(want), parse(published)];
-            for (let i = 0; i < Math.max(w.length, p.length); i++) {
-              const x = w[i] ?? 0;
-              const y = p[i] ?? 0;
-              if (x > y) { process.stdout.write("publish"); process.exit(0); }
-              if (x < y) {
-                console.error(`Refusing release ${want}: must be > published ${published}`);
-                process.exit(1);
-              }
+            if (!semver.valid(want) || !semver.valid(published)) {
+              console.error(`Invalid semver: want=${want} published=${published}`);
+              process.exit(1);
             }
-            // Exact match: npm already has this version (retry after partial success).
-            process.stdout.write("skip");
+            if (semver.eq(want, published)) {
+              process.stdout.write("skip");
+              process.exit(0);
+            }
+            if (semver.gt(want, published)) {
+              process.stdout.write("publish");
+              process.exit(0);
+            }
+            console.error(`Refusing release ${want}: must be > published ${published}`);
+            process.exit(1);
           ' "${RELEASE_VERSION}" "${PUBLISHED}")"
           echo "mode=${RESULT}" >> "${GITHUB_OUTPUT}"
           echo "Publish gate: ${RESULT} (want ${RELEASE_VERSION}, published ${PUBLISHED})"
