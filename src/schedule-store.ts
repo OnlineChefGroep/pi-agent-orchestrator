@@ -10,16 +10,39 @@
  * temp+rename, releases.
  */
 
-import { existsSync, promises as fs } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, promises as fs, constants as fsConstants } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { lock } from "proper-lockfile";
+import { logger } from "./logger.js";
 import type { ScheduledSubagent, ScheduleStoreData } from "./types.js";
 
+const MAX_STORE_BYTES = 5 * 1024 * 1024;
+const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
+/** Cover the full stale window: 650 * 50ms ≈ 32.5s > stale 30s. */
+const LOCK_OPTIONS = {
+  retries: {
+    retries: 650,
+    factor: 1,
+    minTimeout: 50,
+    maxTimeout: 50,
+  },
+  stale: 30_000,
+  // Never resolve through symlinks — ScheduleStore rejects non-regular paths.
+  realpath: false,
+} as const;
 
+const OPEN_READ_FLAGS = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0);
+
+function safeSessionFileStem(sessionId: string): string {
+  if (SAFE_SESSION_ID.test(sessionId)) return sessionId;
+  const digest = createHash("sha256").update(sessionId).digest("hex").slice(0, 32);
+  return `session-${digest}`;
+}
 
 /** Resolve the storage path for a session-scoped store. */
 export function resolveStorePath(cwd: string, sessionId: string): string {
-  return join(cwd, ".pi", "subagent-schedules", `${sessionId}.json`);
+  return join(cwd, ".pi", "subagent-schedules", `${safeSessionFileStem(sessionId)}.json`);
 }
 
 async function removeLegacyFileLock(lockPath: string): Promise<void> {
@@ -31,10 +54,13 @@ async function removeLegacyFileLock(lockPath: string): Promise<void> {
   }
 }
 
+function isErrno(error: unknown, code: string): boolean {
+  return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === code;
+}
+
 export class ScheduleStore {
   private filePath: string;
   private lockPath: string;
-
   private jobs = new Map<string, ScheduledSubagent>();
 
   constructor(filePath: string) {
@@ -50,20 +76,81 @@ export class ScheduleStore {
 
   /** Create the backing directory lazily — only when we're about to persist. */
   private async ensureDir(): Promise<void> {
-    await fs.mkdir(dirname(this.filePath), { recursive: true });
+    const dir = dirname(this.filePath);
+    await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+    const stat = await fs.lstat(dir);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      throw new Error("Schedule store directory must be a regular directory");
+    }
+    if (process.platform !== "win32") {
+      await fs.chmod(dir, 0o700);
+    }
+  }
+
+  /** Ensure a private regular backing file exists without overwriting a concurrent writer. */
+  private async ensureBackingFile(): Promise<void> {
+    try {
+      await fs.writeFile(
+        this.filePath,
+        JSON.stringify({ version: 1, jobs: [] }),
+        { encoding: "utf-8", flag: "wx", mode: 0o600 },
+      );
+    } catch (error) {
+      if (!isErrno(error, "EEXIST")) throw error;
+    }
+    const stat = await fs.lstat(this.filePath);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new Error("Schedule store must be a regular file");
+    }
+    if (process.platform !== "win32") {
+      await fs.chmod(this.filePath, 0o600);
+    }
   }
 
   /** Reload from disk into the in-memory cache (async). */
   private async load(): Promise<void> {
+    // Always invalidate first. A failed parse must never leave stale jobs that a
+    // later mutation can write back as apparently valid state.
+    this.jobs.clear();
     try {
-      const content = await fs.readFile(this.filePath, "utf-8");
-      // CVE-005 FIX: Enforce max payload size to prevent DoS via JSON.parse
-      if (content.length > 5 * 1024 * 1024) throw new Error("Schedule store payload too large");
-      const data: ScheduleStoreData = JSON.parse(content);
+      // Open once with O_NOFOLLOW so a symlink swap between lstat and read cannot win.
+      const handle = await fs.open(this.filePath, OPEN_READ_FLAGS);
+      let content: string;
+      try {
+        const stat = await handle.stat();
+        if (!stat.isFile()) throw new Error("Schedule store must be a regular file");
+        if (stat.size > MAX_STORE_BYTES) throw new Error("Schedule store payload too large");
+        content = await handle.readFile("utf-8");
+      } finally {
+        await handle.close();
+      }
+
+      const data = JSON.parse(content) as Partial<ScheduleStoreData>;
+      if (!Array.isArray(data.jobs)) throw new Error("Schedule store jobs must be an array");
+
+      // Validate into a temporary map so a mid-array failure never leaves a
+      // half-populated cache that the next mutation would persist.
+      const next = new Map<string, ScheduledSubagent>();
+      for (const value of data.jobs) {
+        if (!value || typeof value !== "object") throw new Error("Schedule store contains an invalid job");
+        const job = value as ScheduledSubagent;
+        if (typeof job.id !== "string" || job.id.length === 0) {
+          throw new Error("Schedule store contains a job without a valid id");
+        }
+        if (next.has(job.id)) {
+          throw new Error("Schedule store contains duplicate job ids");
+        }
+        next.set(job.id, job);
+      }
+      this.jobs = next;
+    } catch (error) {
       this.jobs.clear();
-      for (const j of data.jobs ?? []) this.jobs.set(j.id, j);
-    } catch {
-      /* corrupt — start fresh, next save rewrites */
+      if (!isErrno(error, "ENOENT")) {
+        logger.warn("Ignoring corrupt schedule store; next mutation will rewrite it", {
+          path: this.filePath,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 
@@ -73,18 +160,19 @@ export class ScheduleStore {
       version: 1,
       jobs: [...this.jobs.values()],
     };
-    
+
     const targetDir = dirname(this.filePath);
-    const tmpPath = join(
-      targetDir,
-      `${basename(this.filePath)}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`,
-    );
-    
+    const tmpPath = join(targetDir, `${basename(this.filePath)}.${process.pid}.${randomUUID()}.tmp`);
+
     try {
-      await fs.writeFile(tmpPath, JSON.stringify(data, null, 2));
+      await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), {
+        encoding: "utf-8",
+        flag: "wx",
+        mode: 0o600,
+      });
       await fs.rename(tmpPath, this.filePath);
+      if (process.platform !== "win32") await fs.chmod(this.filePath, 0o600);
     } catch (error) {
-      // Clean up temp file if write/rename fails
       try {
         await fs.unlink(tmpPath);
       } catch {
@@ -99,20 +187,17 @@ export class ScheduleStore {
     await this.ensureDir();
     await removeLegacyFileLock(this.lockPath);
 
-    // Ensure the file exists so proper-lockfile has something to lock onto
-    if (!existsSync(this.filePath)) {
-      await fs.writeFile(this.filePath, JSON.stringify({ version: 1, jobs: [] }));
+    // deleteFileIfEmpty() may unlink between create and lock; recreate and retry.
+    let release: (() => Promise<void>) | undefined;
+    for (let attempt = 0; ; attempt++) {
+      await this.ensureBackingFile();
+      try {
+        release = await lock(this.filePath, LOCK_OPTIONS);
+        break;
+      } catch (error) {
+        if (!isErrno(error, "ENOENT") || attempt >= 5) throw error;
+      }
     }
-
-    const release = await lock(this.filePath, {
-      retries: {
-        retries: 100,
-        factor: 1,
-        minTimeout: 50,
-        maxTimeout: 50,
-      },
-      stale: 30000,
-    });
 
     try {
       await this.load();
@@ -120,7 +205,7 @@ export class ScheduleStore {
       await this.save();
       return result;
     } finally {
-      await release();
+      await release?.();
     }
   }
 
@@ -131,8 +216,8 @@ export class ScheduleStore {
 
   /** Read-only check — uses the cache. */
   hasName(name: string, exceptId?: string): boolean {
-    for (const j of this.jobs.values()) {
-      if (j.id !== exceptId && j.name === name) return true;
+    for (const job of this.jobs.values()) {
+      if (job.id !== exceptId && job.name === name) return true;
     }
     return false;
   }
@@ -143,12 +228,14 @@ export class ScheduleStore {
 
   async add(job: ScheduledSubagent, maxSchedules?: number): Promise<void> {
     await this.withLock(() => {
-      // CVE-005 FIX: Enforce limits strictly inside the store lock to prevent TOCTOU race conditions
       if (maxSchedules !== undefined && this.jobs.size >= maxSchedules) {
         throw new Error(`Maximum number of schedules reached (${maxSchedules}). Remove existing schedules before adding new ones.`);
       }
-      for (const j of this.jobs.values()) {
-        if (j.id !== job.id && j.name === job.name) {
+      if (this.jobs.has(job.id)) {
+        throw new Error(`A scheduled job with id "${job.id}" already exists.`);
+      }
+      for (const existing of this.jobs.values()) {
+        if (existing.name === job.name) {
           throw new Error(`A scheduled job named "${job.name}" already exists.`);
         }
       }
@@ -160,32 +247,44 @@ export class ScheduleStore {
     id: string,
     patch: Partial<ScheduledSubagent>,
   ): Promise<ScheduledSubagent | undefined> {
-    // No-op fast path — an unknown id changes nothing, so don't lock or touch
-    // disk (which would otherwise lazily create the backing directory).
-    if (!this.jobs.has(id)) return undefined;
+    // Preserve the lazy no-op contract when neither cache nor disk can contain
+    // the job. If the file exists, re-check under lock to avoid stale-cache TOCTOU.
+    if (!this.jobs.has(id) && !existsSync(this.filePath)) return undefined;
+
     return this.withLock(() => {
       const existing = this.jobs.get(id);
       if (!existing) return undefined;
-      const updated = { ...existing, ...patch };
+      const { id: _ignoredId, ...mutablePatch } = patch;
+      const updated: ScheduledSubagent = { ...existing, ...mutablePatch, id };
+      for (const other of this.jobs.values()) {
+        if (other.id !== id && other.name === updated.name) {
+          throw new Error(`A scheduled job named "${updated.name}" already exists.`);
+        }
+      }
       this.jobs.set(id, updated);
       return updated;
     });
   }
 
   async remove(id: string): Promise<boolean> {
-    // No-op fast path — see update().
-    if (!this.jobs.has(id)) return false;
+    if (!this.jobs.has(id) && !existsSync(this.filePath)) return false;
     return this.withLock(() => this.jobs.delete(id));
   }
 
-  /** Delete the backing file (used when no jobs remain, optional cleanup). */
+  /** Delete the backing file only after a lock-protected disk reload confirms it is empty. */
   async deleteFileIfEmpty(): Promise<void> {
-    if (this.jobs.size === 0) {
-      try {
-        await fs.unlink(this.filePath);
-      } catch {
-        /* ignore */
-      }
+    if (!existsSync(this.filePath)) return;
+    await removeLegacyFileLock(this.lockPath);
+
+    let release: (() => Promise<void>) | undefined;
+    try {
+      release = await lock(this.filePath, LOCK_OPTIONS);
+      await this.load();
+      if (this.jobs.size === 0) await fs.unlink(this.filePath);
+    } catch (error) {
+      if (!isErrno(error, "ENOENT")) throw error;
+    } finally {
+      await release?.();
     }
   }
 }
