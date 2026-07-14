@@ -15,6 +15,23 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFileCb);
 
+/**
+ * Normalize an untrusted runtime identifier to one conservative component that
+ * is safe for both temporary directory names and Git branch names.
+ */
+function sanitizeAgentId(agentId: string): string {
+  if (typeof agentId !== "string" || agentId === "") return "unknown";
+
+  const cleaned = agentId
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9_-]+/g, "-")
+    .replace(/[-_]{2,}/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "");
+
+  return cleaned.slice(0, 64).replace(/[-_]+$/g, "") || "unknown";
+}
+
 export interface WorktreeInfo {
   /** Absolute path to the worktree directory. */
   path: string;
@@ -46,9 +63,10 @@ export async function createWorktree(cwd: string, agentId: string): Promise<Work
     return undefined;
   }
 
-  const branch = `pi-agent-${agentId}`;
+  const safeId = sanitizeAgentId(agentId);
+  const branch = `pi-agent-${safeId}`;
   const suffix = randomUUID().slice(0, 8);
-  const worktreePath = join(tmpdir(), `pi-agent-${agentId}-${suffix}`);
+  const worktreePath = join(tmpdir(), `pi-agent-${safeId}-${suffix}`);
 
   try {
     // Create detached worktree at HEAD
@@ -137,8 +155,7 @@ export function cleanupWorktree(
     // Changes exist — stage, commit, and create a branch.
     execFileSync("git", ["add", "-A"], { cwd: worktree.path, stdio: "pipe", timeout: 10000 });
 
-    // CVE-001 FIX: Sanitize commit message to prevent control-character and
-    // terminal/shell metacharacter injection in logs and downstream tooling.
+    // Sanitize commit messages before they reach git logs or downstream tooling.
     const rawDesc = typeof agentDescription === "string" ? agentDescription : String(agentDescription);
     const safeDescStr = rawDesc
       .replace(/[\r\n\x00-\x1F]/g, " ")
@@ -155,14 +172,12 @@ export function cleanupWorktree(
       timeout: 10000,
     });
 
-    // Create a branch pointing to the worktree's HEAD. If it already exists,
-    // append a suffix instead of overwriting previous agent work.
-    const safeBranchName = worktree.branch
-      .replace(/[\r\n\x00-\x1F]/g, "")
-      .replace(/[~^:?*[\\\];"'`$\s]/g, "-")
-      .replace(/^-+|-+$/g, "");
+    // Keep a final defensive normalization for WorktreeInfo values supplied by
+    // callers other than createWorktree().
+    const rawBranchComponent = worktree.branch.replace(/^pi-agent-/, "");
+    const safeBranchName = `pi-agent-${sanitizeAgentId(rawBranchComponent)}`;
 
-    let branchName = safeBranchName || "pi-agent-update";
+    let branchName = safeBranchName;
     try {
       execFileSync("git", ["branch", "--", branchName], {
         cwd: worktree.path,
