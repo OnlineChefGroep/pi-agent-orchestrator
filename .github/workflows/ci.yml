@@ -58,25 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           npm pack --dry-run --json > npm-pack.json
-          node <<'NODE'
-          const fs = require("node:fs");
-          const report = JSON.parse(fs.readFileSync("npm-pack.json", "utf8"));
-          const files = new Set(report[0].files.map((entry) => entry.path));
-          const required = [
-            "dist/index.js",
-            "dist/index.d.ts",
-            "README.md",
-            "LICENSE",
-            "skills/pi-orchestra/SKILL.md",
-            "prompts/orchestra-audit.md",
-            "prompts/orchestra-plan.md",
-            "prompts/orchestra-implement.md",
-          ];
-          const missing = required.filter((path) => !files.has(path));
-          if (missing.length > 0) {
-            throw new Error(`npm package is missing: ${missing.join(", ")}`);
-          }
-          NODE
+          node scripts/verify-npm-pack.mjs npm-pack.json
 
   compatibility:
     name: Compatibility (${{ matrix.os }}, Node ${{ matrix.node }})
