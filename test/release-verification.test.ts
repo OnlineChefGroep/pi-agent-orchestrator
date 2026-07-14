@@ -158,9 +158,12 @@ describe("0.18 release policy", () => {
     }
   });
 
-  it("accepts the current synchronized repository state", () => {
-    const result = runReleasePolicy("repository");
-    expect(result.status, result.stderr).toBe(0);
+  it("accepts the baseline for repository CI but rejects it for publishing", () => {
+    const repository = runReleasePolicy("repository");
+    expect(repository.status, repository.stderr).toBe(0);
+    const publish = runReleasePolicy("publish");
+    expect(publish.status).not.toBe(0);
+    expect(publish.stderr).toContain("outside the locked 0.18.x release train");
   });
 
   it("ships a non-empty v0.18.0 release record template", () => {
@@ -197,6 +200,7 @@ describe("transactional release workflow", () => {
     expect(content).toMatch(/branches:\s*\[main\]/);
     expect(content).not.toMatch(/tags:\s*\n/);
     expect(content).toContain("chore(release): v$VERSION");
+    expect(content).toContain("npm run verify:release-policy:publish");
     expect(content).toContain("node scripts/verify-release-transaction.mjs");
     expect(content).toContain("node scripts/release-policy.mjs candidate");
     expect(verifier).toContain('ALLOWED_FILES = ["CHANGELOG.md", "package-lock.json", "package.json"]');
@@ -205,12 +209,13 @@ describe("transactional release workflow", () => {
     expect(verifier).toContain("CHANGELOG history from v0.17.1 backwards was modified");
   });
 
-  it("release.yml publishes to npmjs.org with provenance and exact tag recovery", () => {
+  it("release.yml publishes once with provenance and exact tag recovery", () => {
     const content = readRoot(".github/workflows/release.yml");
     expect(content).toMatch(/registry-url:\s*"https:\/\/registry\.npmjs\.org"/);
     expect(content).toMatch(/id-token:\s*write/);
-    expect(content).toMatch(/npm publish --access public --provenance/);
+    expect(content).toMatch(/npm publish --access public --provenance --ignore-scripts/);
     expect(content).toMatch(/NODE_AUTH_TOKEN:\s*\$\{\{\s*secrets\.NPM_TOKEN\s*\}\}/);
+    expect(content).toContain("Run complete immutable release gate once");
     expect(content).toContain("git tag -a");
     expect(content).toContain("git rev-list -n1");
     expect(content).toContain("gh release create");
@@ -227,13 +232,16 @@ describe("transactional release workflow", () => {
     expect(fileExists(".github/workflows/publish-npm.yml")).toBe(false);
   });
 
-  it("package.json publishConfig points to public npm", () => {
+  it("package.json uses separate repository and strict publish policy scripts", () => {
     const pkg = JSON.parse(readRoot("package.json"));
     expect(pkg.publishConfig?.registry).toBe("https://registry.npmjs.org");
     expect(pkg.publishConfig?.access).toBe("public");
     expect(pkg.scripts?.["verify:release-policy"]).toBe(
       "node scripts/release-policy.mjs repository",
     );
-    expect(pkg.scripts?.prepublishOnly).toContain("npm run verify:release-policy");
+    expect(pkg.scripts?.["verify:release-policy:publish"]).toBe(
+      "node scripts/release-policy.mjs publish",
+    );
+    expect(pkg.scripts?.prepublishOnly).toContain("npm run verify:release-policy:publish");
   });
 });
