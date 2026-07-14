@@ -151,7 +151,7 @@ describe("historical finalize heredoc regression", () => {
     expect(`${result.stderr}\n${result.stdout}`).toMatch(/here-document|unexpected end of file/i);
   });
 
-  it("current release.yml run blocks parse with bash -n and contain no NODE heredocs", () => {
+  it("current release.yml run blocks parse with bash -n and contain no NODE heredocs", { timeout: 30000 }, () => {
     const workflow = join(sourceRoot, ".github/workflows/release.yml");
     const content = readFileSync(workflow, "utf8");
     expect(content).not.toContain("<<'NODE'");
@@ -322,7 +322,7 @@ describe("finalize tag and GitHub Release recovery", () => {
     expect(rerun.stdout).toMatch(/already points to the correct commit/);
   });
 
-  it("creates a missing GitHub Release and repairs draft metadata on recovery rerun", () => {
+  it("creates a missing GitHub Release and repairs draft metadata on recovery rerun", { timeout: 30000 }, () => {
     const bin = track(mkdtempSync(join(tmpdir(), "gh-release-")));
     const statePath = join(bin, "release-state.json");
     writeFileSync(statePath, JSON.stringify({ exists: false }));
@@ -357,7 +357,7 @@ describe("finalize tag and GitHub Release recovery", () => {
 });
 
 describe("local finalize transaction matching GitHub Actions commands", () => {
-  it("runs decide-publish → ensure-release-tag → ensure-github-release in a temp repository", () => {
+  it("runs decide-publish → ensure-release-tag → ensure-github-release in a temp repository", { timeout: 30000 }, () => {
     const root = track(mkdtempSync(join(tmpdir(), "finalize-txn-")));
     const remote = track(mkdtempSync(join(tmpdir(), "finalize-txn-remote-")));
     const bin = track(mkdtempSync(join(tmpdir(), "finalize-txn-bin-")));

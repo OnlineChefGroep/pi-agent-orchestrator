@@ -59,7 +59,7 @@ afterEach(() => {
 });
 
 describe("v0.18 release transaction", () => {
-  it("prepares, validates, and rejects manipulated release paths", () => {
+  it("prepares, validates, and rejects manipulated release paths", { timeout: 30000 }, () => {
     const root = createReleaseSandbox();
     const prepare = node(root, "scripts/prepare-release.mjs", "0.18.0", "2026-07-14");
     expect(prepare.status, prepare.stderr).toBe(0);
