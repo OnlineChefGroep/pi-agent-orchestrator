@@ -47,6 +47,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify Pi package metadata
+        run: npm run verify:package
+
       - name: Test
         run: npm test
 
