@@ -69,11 +69,12 @@
   },
   "scripts": {
     "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc",
-    "prepublishOnly": "npm run verify:release-policy && npm run build && npm run typecheck && npm run lint && npm test && npm run verify:package",
+    "prepublishOnly": "npm run verify:release-policy:publish && npm run build && npm run typecheck && npm run lint && npm test && npm run verify:package",
     "test": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --retry=2",
     "test:watch": "vitest",
     "typecheck": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc --noEmit",
     "verify:release-policy": "node scripts/release-policy.mjs repository",
+    "verify:release-policy:publish": "node scripts/release-policy.mjs publish",
     "verify:package": "node scripts/verify-package-metadata.mjs",
     "bench:all": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run test/widget-render-perf.test.ts test/dashboard-render-perf.test.ts test/spawn-latency-bench.test.ts test/spawn-latency-e2e-bench.test.ts --reporter=verbose",
     "lint": "biome check src/ test/ scripts/",
