@@ -23,6 +23,10 @@ function formatJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
+function normalizeLineEndings(value) {
+  return value.replace(/\r\n?/g, "\n");
+}
+
 function cloneJson(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
@@ -58,22 +62,23 @@ async function prepareRelease(version, releaseDate) {
   }
   if (!lock.packages?.[""]) fail("package-lock is missing packages[''] root metadata");
 
-  const changelog = await readFile(changelogPath, "utf8");
+  const changelog = normalizeLineEndings(await readFile(changelogPath, "utf8"));
   if (new RegExp(`^## v${version.replaceAll(".", "\\.")} \\(`, "m").test(changelog)) {
     fail(`CHANGELOG already contains v${version}`);
   }
   const unreleasedHeading = "## [Unreleased]";
   const unreleasedStart = changelog.indexOf(unreleasedHeading);
   if (unreleasedStart < 0) fail("CHANGELOG is missing the [Unreleased] heading");
-  const separatorStart = changelog.indexOf("\n---\n", unreleasedStart);
+  const separator = "\n---\n";
+  const separatorStart = changelog.indexOf(separator, unreleasedStart);
   if (separatorStart < 0) fail("CHANGELOG [Unreleased] section has no terminating separator");
 
   const prefix = changelog.slice(0, unreleasedStart);
   const unreleasedBody = changelog
     .slice(unreleasedStart + unreleasedHeading.length, separatorStart)
     .trim();
-  const history = changelog.slice(separatorStart + "\n---\n".length).replace(/^\s+/, "");
-  const releaseNotes = (await readFile(notesPath, "utf8")).trim();
+  const history = changelog.slice(separatorStart + separator.length).replace(/^\s+/, "");
+  const releaseNotes = normalizeLineEndings(await readFile(notesPath, "utf8")).trim();
   if (!releaseNotes) fail(`release notes template ${notesPath} is empty`);
 
   const additionalChanges = unreleasedBody
