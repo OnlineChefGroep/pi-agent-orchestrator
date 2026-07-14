@@ -95,14 +95,50 @@ export function validateGitHubReleaseMetadata(release, expected) {
   };
 }
 
-export function npmViewVersion(spec) {
-  const result = spawnSync("npm", ["view", spec, "version"], {
+function isNpmNotFound(stderr, stdout) {
+  const text = `${stderr}\n${stdout}`;
+  return /E404|ETARGET|404 Not Found|is not in this registry|No match found for version/i.test(
+    text,
+  );
+}
+
+function spawnErrorMessage(result, fallback) {
+  if (result.error) {
+    return result.error.message || String(result.error);
+  }
+  return String(result.stderr ?? "").trim() || String(result.stdout ?? "").trim() || fallback;
+}
+
+/**
+ * Query `npm view <spec> version`.
+ *
+ * - Missing package/version (E404/ETARGET) → `null`
+ * - Empty successful stdout → throws (ambiguous; never treat as absent)
+ * - Other non-zero exits → throws (network/auth/registry faults)
+ */
+export function npmViewVersion(spec, { npmBin = "npm" } = {}) {
+  const result = spawnSync(npmBin, ["view", spec, "version"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
-  if (result.status !== 0) return null;
-  const version = String(result.stdout ?? "").trim();
-  return version || null;
+  if (result.error) {
+    throw new Error(`failed to spawn ${npmBin}: ${result.error.message}`);
+  }
+
+  const stdout = String(result.stdout ?? "").trim();
+  const stderr = String(result.stderr ?? "");
+
+  if (result.status !== 0) {
+    if (isNpmNotFound(stderr, stdout)) return null;
+    throw new Error(
+      `npm view ${spec} version failed: ${spawnErrorMessage(result, `exit ${result.status}`)}`,
+    );
+  }
+
+  if (!stdout) {
+    throw new Error(`npm view ${spec} version returned empty output`);
+  }
+  return stdout;
 }
 
 function writeGithubOutput(name, value) {
@@ -114,24 +150,33 @@ function writeGithubOutput(name, value) {
   appendFileSync(outputFile, `${name}=${value}\n`);
 }
 
-export function ensureGitHubRelease({ tagName, title = tagName, createIfMissing = true }) {
+export function ensureGitHubRelease({
+  tagName,
+  title = tagName,
+  createIfMissing = true,
+  ghBin = "gh",
+}) {
   const view = spawnSync(
-    "gh",
+    ghBin,
     ["release", "view", tagName, "--json", "tagName,isDraft,isPrerelease,name"],
     { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   );
+
+  if (view.error) {
+    throw new Error(`failed to spawn ${ghBin}: ${view.error.message}`);
+  }
 
   if (view.status !== 0) {
     if (!createIfMissing) {
       throw new Error(`GitHub Release ${tagName} does not exist`);
     }
     const created = spawnSync(
-      "gh",
+      ghBin,
       ["release", "create", tagName, "--verify-tag", "--generate-notes", "--title", title],
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
-    if (created.status !== 0) {
-      throw new Error(created.stderr.trim() || created.stdout.trim() || "gh release create failed");
+    if (created.error || created.status !== 0) {
+      throw new Error(spawnErrorMessage(created, "gh release create failed"));
     }
     console.log(`Created GitHub Release ${tagName}`);
     return { created: true, repaired: false };
@@ -141,12 +186,12 @@ export function ensureGitHubRelease({ tagName, title = tagName, createIfMissing 
   const result = validateGitHubReleaseMetadata(release, { tagName, name: title });
   if (result.repairs.length > 0) {
     const edited = spawnSync(
-      "gh",
+      ghBin,
       ["release", "edit", tagName, "--draft=false", "--prerelease=false", "--title", title],
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
-    if (edited.status !== 0) {
-      throw new Error(edited.stderr.trim() || edited.stdout.trim() || "gh release edit failed");
+    if (edited.error || edited.status !== 0) {
+      throw new Error(spawnErrorMessage(edited, "gh release edit failed"));
     }
     console.log(`Repaired GitHub Release ${tagName} metadata: ${result.repairs.join(", ")}`);
     return { created: false, repaired: true, repairs: result.repairs };

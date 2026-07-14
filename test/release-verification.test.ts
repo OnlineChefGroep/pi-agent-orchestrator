@@ -220,10 +220,13 @@ describe("transactional release workflow", () => {
     expect(prepare).toContain("node scripts/release-recovery.mjs assert-absent");
     expect(release).toContain("node scripts/release-recovery.mjs decide-publish");
     expect(release).toContain("node scripts/release-recovery.mjs ensure-github-release");
+    expect(release).toContain("node scripts/ensure-release-tag.mjs");
     // Critical: finalize must not embed an indented bash here-doc (breaks `if` parsing).
     expect(release).not.toMatch(/Create or verify GitHub Release[\s\S]*?<<'NODE'/);
+    expect(release).not.toContain("<<'NODE'");
     expect(release).toContain("sparse-checkout:");
     expect(release).toContain("scripts/release-recovery.mjs");
+    expect(release).toContain("scripts/verify-published-package.mjs");
   });
 
   it("isolates read-only verification, npm OIDC, and Git write permissions", () => {
@@ -251,13 +254,22 @@ describe("transactional release workflow", () => {
     expect(content).toContain('npm publish "release-artifact/$TARBALL"');
     expect(content).toContain("--access public --provenance --ignore-scripts");
     expect(content).toMatch(/NODE_AUTH_TOKEN:\s*\$\{\{\s*secrets\.NPM_TOKEN\s*\}\}/);
-    expect(content).toContain("Registry dist.integrity does not match the reviewed tarball");
-    expect(content).toContain("Downloaded tarball integrity does not match the reviewed tarball");
-    expect(content).toContain("git tag -a");
-    expect(content).toContain("git rev-list -n1");
+    expect(content).toContain("node scripts/write-release-manifest.mjs");
+    expect(content).toContain("node scripts/verify-published-package.mjs");
+    expect(content).toContain("node scripts/ensure-release-tag.mjs");
     expect(content).toContain("node scripts/release-recovery.mjs ensure-github-release");
+    expect(content).not.toContain("<<'NODE'");
+    expect(content).not.toMatch(/LATEST="\$\(npm view/);
     expect(readRoot("scripts/release-recovery.mjs")).toContain("gh release create");
-    expect(fileExists("scripts/verify-published-package.mjs")).toBe(false);
+    expect(fileExists("scripts/verify-published-package.mjs")).toBe(true);
+    expect(fileExists("scripts/write-release-manifest.mjs")).toBe(true);
+    expect(fileExists("scripts/ensure-release-tag.mjs")).toBe(true);
+    expect(readRoot("scripts/verify-published-package.mjs")).toContain(
+      "Registry dist.integrity does not match the reviewed tarball",
+    );
+    expect(readRoot("scripts/verify-published-package.mjs")).toContain(
+      "Downloaded tarball integrity does not match the reviewed tarball",
+    );
   });
 
   it("Super-Linter supports explicit dispatch and retained diagnostics", () => {

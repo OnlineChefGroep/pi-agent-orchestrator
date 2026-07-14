@@ -122,9 +122,11 @@ describe("validateGitHubReleaseMetadata", () => {
 describe("release-recovery CLI contract", () => {
   it("exposes assert-absent, decide-publish, and ensure-github-release commands", () => {
     const source = readFileSync(new URL("../scripts/release-recovery.mjs", import.meta.url), "utf8");
-    expect(source).toContain('command === "assert-absent"');
-    expect(source).toContain('command === "decide-publish"');
-    expect(source).toContain('command === "ensure-github-release"');
+    expect(source).toContain("command === \"assert-absent\"");
+    expect(source).toContain("command === \"decide-publish\"");
+    expect(source).toContain("command === \"ensure-github-release\"");
     expect(source).toContain("writeGithubOutput(\"publish\"");
+    expect(source).toContain("returned empty output");
+    expect(source).toContain("isNpmNotFound");
   });
 });

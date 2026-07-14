@@ -5,6 +5,9 @@ name: Release
 # merged commit in a read-only job, publishes only the resulting artifact in an
 # OIDC-scoped job, then grants Git write access only to the final tag/release
 # job. Re-running a partially failed workflow is safe and does not republish.
+#
+# Release decisions live in tested scripts under scripts/*.mjs. Workflow steps
+# only orchestrate those scripts — no inline npm/gh decision heredocs.
 
 on:
   push:
@@ -102,30 +105,7 @@ jobs:
           set -euo pipefail
           npm pack --ignore-scripts --json > release-pack.json
           node scripts/verify-npm-pack.mjs release-pack.json
-          node --input-type=module <<'NODE'
-          import { readFile, writeFile } from "node:fs/promises";
-          import { REQUIRED_PACKAGE_FILES } from "./scripts/package-resource-contract.mjs";
-
-          const pkg = JSON.parse(await readFile("package.json", "utf8"));
-          const [packed] = JSON.parse(await readFile("release-pack.json", "utf8"));
-          if (!packed?.filename || !packed?.integrity) {
-            throw new Error("npm pack did not return a filename and integrity");
-          }
-          const manifest = {
-            package: {
-              name: pkg.name,
-              version: pkg.version,
-              license: pkg.license,
-              engines: pkg.engines,
-              peerDependencies: pkg.peerDependencies,
-              pi: pkg.pi,
-            },
-            requiredFiles: REQUIRED_PACKAGE_FILES,
-            tarballFile: packed.filename,
-            tarballIntegrity: packed.integrity,
-          };
-          await writeFile("release-manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
-          NODE
+          node scripts/write-release-manifest.mjs release-pack.json release-manifest.json
           echo "filename=$(node -p "require('./release-manifest.json').tarballFile")" >> "$GITHUB_OUTPUT"
 
       - name: Upload immutable release artifact
@@ -156,6 +136,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/release-recovery.mjs
+            scripts/verify-published-package.mjs
           sparse-checkout-cone-mode: false
 
       - name: Download immutable release artifact
@@ -194,46 +175,10 @@ jobs:
         run: |
           set -euo pipefail
           SPEC="@onlinechefgroep/pi-agent-orchestrator@$RELEASE_VERSION"
-          for attempt in 1 2 3 4 5 6; do
-            if npm view "$SPEC" --json > published-metadata.json; then
-              break
-            fi
-            test "$attempt" -lt 6 || exit 1
-            sleep 5
-          done
-          mkdir published
-          (cd published && npm pack "$SPEC" --ignore-scripts --json > ../published-pack.json)
-          node <<'NODE'
-          const fs = require("node:fs");
-          const expected = JSON.parse(fs.readFileSync("release-artifact/release-manifest.json", "utf8"));
-          const published = JSON.parse(fs.readFileSync("published-metadata.json", "utf8"));
-          const [packed] = JSON.parse(fs.readFileSync("published-pack.json", "utf8"));
-
-          const canonical = (value) => {
-            if (Array.isArray(value)) return value.map(canonical);
-            if (value && typeof value === "object") {
-              return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
-            }
-            return value;
-          };
-          const same = (left, right) => JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
-          for (const field of ["name", "version", "license", "engines", "peerDependencies", "pi"]) {
-            if (!same(published[field], expected.package[field])) {
-              throw new Error(`Published ${field} does not match the reviewed artifact`);
-            }
-          }
-          if (published.dist?.integrity !== expected.tarballIntegrity) {
-            throw new Error("Registry dist.integrity does not match the reviewed tarball");
-          }
-          if (packed?.integrity !== expected.tarballIntegrity) {
-            throw new Error("Downloaded tarball integrity does not match the reviewed tarball");
-          }
-          const files = new Set((packed.files ?? []).map((entry) => entry.path));
-          const missing = expected.requiredFiles.filter((path) => !files.has(path));
-          if (missing.length > 0) {
-            throw new Error(`Published tarball is missing: ${missing.join(", ")}`);
-          }
-          NODE
+          node scripts/verify-published-package.mjs \
+            --spec "$SPEC" \
+            --expected release-artifact/release-manifest.json \
+            --workdir published
 
   finalize:
     name: Tag exact source and create GitHub Release
@@ -256,21 +201,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TAG="v$RELEASE_VERSION"
-          git fetch origin --tags
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            TAG_COMMIT="$(git rev-list -n1 "$TAG")"
-            test "$TAG_COMMIT" = "$GITHUB_SHA" || {
-              echo "$TAG points to $TAG_COMMIT instead of release commit $GITHUB_SHA" >&2
-              exit 1
-            }
-            echo "$TAG already points to the correct commit."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "$TAG" "$GITHUB_SHA" -m "$TAG"
-            git push origin "refs/tags/$TAG"
-          fi
+          node scripts/ensure-release-tag.mjs "v$RELEASE_VERSION" "$GITHUB_SHA"
 
       - name: Create or verify GitHub Release
         shell: bash
@@ -280,6 +211,7 @@ jobs:
           set -euo pipefail
           TAG="v$RELEASE_VERSION"
           node scripts/release-recovery.mjs ensure-github-release "$TAG" "$TAG"
+
       - name: Publish release summary
         run: |
           {
