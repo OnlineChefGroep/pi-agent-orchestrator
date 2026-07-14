@@ -229,10 +229,10 @@ describe("transactional release workflow", () => {
   it("isolates read-only verification, npm OIDC, and Git write permissions", () => {
     const content = readRoot(".github/workflows/release.yml");
     expect(content).toMatch(/^permissions:\s*\{\}/m);
-    const detect = content.match(/\n  detect:[\s\S]*?\n  verify:/)?.[0] ?? "";
-    const verify = content.match(/\n  verify:[\s\S]*?\n  publish:/)?.[0] ?? "";
-    const publish = content.match(/\n  publish:[\s\S]*?\n  finalize:/)?.[0] ?? "";
-    const finalize = content.match(/\n  finalize:[\s\S]*$/)?.[0] ?? "";
+    const detect = content.match(/\n {2}detect:[\s\S]*?\n {2}verify:/)?.[0] ?? "";
+    const verify = content.match(/\n {2}verify:[\s\S]*?\n {2}publish:/)?.[0] ?? "";
+    const publish = content.match(/\n {2}publish:[\s\S]*?\n {2}finalize:/)?.[0] ?? "";
+    const finalize = content.match(/\n {2}finalize:[\s\S]*$/)?.[0] ?? "";
     expect(detect).toContain("contents: read");
     expect(verify).toContain("contents: read");
     expect(verify).not.toContain("id-token: write");

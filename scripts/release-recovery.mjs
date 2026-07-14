@@ -2,8 +2,8 @@
  * Shared release recovery helpers: exact npm version gates and GitHub Release
  * metadata validation/repair. Invoked by unit tests and by release workflows.
  */
-import { appendFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 /**
