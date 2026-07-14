@@ -76,7 +76,19 @@ jobs:
         run: npm run verify:package
 
       - name: Test
-        run: npm test
+        id: tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test.log
+
+      - name: Upload quality test diagnostics
+        if: failure() && steps.tests.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: quality-test-diagnostics-${{ github.run_id }}
+          path: test.log
+          retention-days: 14
 
       - name: Verify npm package contents
         shell: bash
@@ -119,7 +131,19 @@ jobs:
         run: npm ci
 
       - name: Test
-        run: npm test
+        id: tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test.log
+
+      - name: Upload compatibility test diagnostics
+        if: failure() && steps.tests.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: compatibility-${{ matrix.os }}-node-${{ matrix.node }}-${{ github.run_id }}
+          path: test.log
+          retention-days: 14
 
   lowest-peer-dependencies:
     name: Lowest supported peer dependencies
@@ -149,7 +173,19 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm test
+        id: tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test.log
+
+      - name: Upload lowest-peer test diagnostics
+        if: failure() && steps.tests.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lowest-peer-test-diagnostics-${{ github.run_id }}
+          path: test.log
+          retention-days: 14
 
   dependency-review:
     name: Dependency review
