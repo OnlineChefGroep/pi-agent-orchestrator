@@ -4,6 +4,10 @@ const packageJson = JSON.parse(
   await readFile(new URL("../package.json", import.meta.url), "utf8"),
 );
 
+const CANONICAL_REPOSITORY = "https://github.com/OnlineChefGroep/pi-agent-orchestrator";
+const CANONICAL_PREVIEW =
+  "https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4";
+
 function assert(condition, message) {
   if (!condition) {
     throw new Error(`Package metadata check failed: ${message}`);
@@ -18,9 +22,15 @@ assert(packageJson.keywords?.includes("pi-coding-agent"), "missing exact Pi sear
 assert(packageJson.description?.length >= 80, "description is too weak for catalog discovery");
 assert(packageJson.description?.length <= 180, "description is too long for catalog cards");
 
-const repositoryUrl = packageJson.repository?.url ?? "";
+const repositoryValue = packageJson.repository;
+const repositoryUrl =
+  typeof repositoryValue === "string" ? repositoryValue : repositoryValue?.url ?? "";
+const normalizedRepository = repositoryUrl
+  .replace(/^git\+/, "")
+  .replace(/\.git$/, "")
+  .replace(/\/$/, "");
 assert(
-  repositoryUrl === "git+https://github.com/OnlineChefGroep/pi-agent-orchestrator.git",
+  normalizedRepository === CANONICAL_REPOSITORY,
   "repository must point at the public canonical repository",
 );
 
@@ -30,10 +40,17 @@ assert(extensions.includes("./dist/index.js"), "compiled extension entrypoint is
 assert(packageJson.files?.includes("dist/"), "dist/ is excluded from the npm tarball");
 
 const preview = packageJson.pi?.video;
-assert(typeof preview === "string", "Pi gallery video is missing");
-const previewUrl = new URL(preview);
-assert(previewUrl.protocol === "https:", "Pi gallery video must use HTTPS");
-assert(previewUrl.pathname.endsWith(".mp4"), "Pi gallery video must be an MP4");
+assert(preview === CANONICAL_PREVIEW, "Pi gallery video must use the canonical showcase asset");
+try {
+  const previewUrl = new URL(preview);
+  assert(previewUrl.protocol === "https:", "Pi gallery video must use HTTPS");
+  assert(previewUrl.pathname.endsWith(".mp4"), "Pi gallery video must be an MP4");
+} catch (error) {
+  if (error instanceof Error && error.message.startsWith("Package metadata check failed:")) {
+    throw error;
+  }
+  throw new Error("Package metadata check failed: Pi gallery video is not a valid URL");
+}
 
 for (const dependencyName of Object.keys(packageJson.dependencies ?? {})) {
   assert(
