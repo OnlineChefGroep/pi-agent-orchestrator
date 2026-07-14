@@ -1,0 +1,31 @@
+{
+  "version": "0.17.1",
+  "name": "@onlinechefgroep/pi-agent-orchestrator",
+  "displayName": "PI AGENT ORCHESTRATOR",
+  "tagline": "Multi-agent orchestration for Pi: autonomous subagents, worktrees, swarms, schedules, handoffs, prompt compression, and live TUI observability.",
+  "repository": "https://github.com/OnlineChefGroep/pi-agent-orchestrator",
+  "generatedAt": "2026-07-14T13:57:48.552Z",
+  "coreCapabilities": [
+    {"title": "Interactive TUI dashboard", "description": "agent list, resource top, daemon schedules, performance metrics, help, and settings."},
+    {"title": "Subagent lifecycle", "description": "spawn, queue, steer, stop, inspect, and collect structured results."},
+    {"title": "Permission inheritance", "description": "children cannot silently regain tools or scopes removed by a parent."},
+    {"title": "Worktree isolation", "description": "optional branch and filesystem isolation for implementation agents."},
+    {"title": "Prompt compression profiles", "description": "static system-prompt guidance with global defaults and per-agent overrides; this does not compact conversation history."},
+    {"title": "Persistent scheduling", "description": "cron, interval, and one-shot jobs with a daemon schedule view."},
+    {"title": "Structured handoffs", "description": "machine-readable transfer between agents and chained workflows."},
+    {"title": "Swarm coordination", "description": "dynamic membership and coordinated completion."},
+    {"title": "Cross-extension RPC", "description": "capability-based integration for trusted peer extensions."}
+  ],
+  "agentTypes": [
+    {"Type": "Explore", "Mode": "read-only", "Use when": "Parallel codebase discovery and evidence collection"},
+    {"Type": "Plan", "Mode": "read-only", "Use when": "Architecture and implementation planning before edits"},
+    {"Type": "Analysis", "Mode": "read-only + `ctx_*`", "Use when": "Sandboxed data or compute through optional `@onlinechef/context-mode`"},
+    {"Type": "general-purpose", "Mode": "full tools", "Use when": "Bounded implementation and multi-step execution"}
+  ],
+  "compressionLevels": [
+    {"Level": "`minimal`", "Meaning": "Minimal compression", "Current behavior": "Most verbose read-only and handoff guidance", "Recommended use": "Smaller or less instruction-reliable models; debugging instruction-following failures; rich structured handoffs"},
+    {"Level": "`balanced`", "Meaning": "Default", "Current behavior": "Concise guidance while retaining examples and field descriptions", "Recommended use": "General use"},
+    {"Level": "`aggressive`", "Meaning": "Maximum compression", "Current behavior": "Short read-only guidance and a minimal handoff schema", "Recommended use": "Short, low-risk tasks with strong models where small prompt savings matter more than protocol detail"}
+  ],
+  "architectureAscii": "┌─────────────────────────────────────────────────────────────┐\n│                    pi-coding-agent host                     │\n│  (loads this extension, provides ExtensionAPI + AgentMgr)   │\n└────────────────────┬────────────────────────────────────────┘\n                     │\n        ┌────────────┴────────────┐\n        │    Extension Entry      │\n        │    src/index.ts         │\n        │  - registerCommands()   │\n        │  - initSubagents()      │\n        └────────────┬────────────┘\n                     │\n        ┌────────────┴────────────┐\n        │     Agent Registry      │\n        │   src/agent-registry.ts │\n        │  - load default agents    │\n        │  - load custom agents     │\n        │  - settings getters       │\n        └────────────┬────────────┘\n                     │\n        ┌────────────┴────────────┐\n        │      Agent Types        │\n        │   src/agent-types.ts    │\n        │  - builtinToolNames     │\n        │  - PermissionUtils      │\n        │  - partition filtering  │\n        └────────────┬────────────┘\n                     │\n        ┌────────────┴────────────┐\n        │      Agent Runner       │\n        │   src/agent-runner.ts   │\n        │  - createSubagent()     │\n        │  - runAgent()           │\n        │  - compaction logic     │\n        │  - permission inherit   │\n        └────────────┬────────────┘\n                     │\n    ┌────────────────┼────────────────┐\n    │                │                │\n┌───┴────┐    ┌─────┴──────┐  ┌─────┴────────┐\n│ Hooks  │    │  Context   │  │   Handoff    │\n│hooks.ts│    │ context.ts │  │  handoff.ts  │\n└────────┘    └────────────┘  └──────────────┘\n    │                │                │\n    └────────────────┴────────────────┘\n                     │\n        ┌────────────┴────────────┐\n        │         Usage           │\n        │     src/usage.ts        │\n        │  - token tracking       │\n        │  - session context %    │\n        └────────────┬────────────┘\n                     │\n        ┌────────────┴────────────┐\n        │     Output Handler      │\n        │  src/output-handler.ts  │\n        │  - /agents menu         │\n        │  - settings UI          │\n        │  - conversation viewer  │\n        └────────────┬────────────┘\n                     │\n         ┌───────────┴───────────┐\n         │                       │\n   ┌─────┴──────┐        ┌──────┴──────┐\n   │   Agent    │        │  Schedule   │\n   │ Dashboard  │        │    Menu     │\n   │ui/agent-   │        │ui/schedule- │\n   │dashboard.ts│        │menu.ts      │\n   └────────────┘        └─────────────┘"
+}
