@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanupWorktree, createWorktree, pruneWorktrees } from "../src/worktree.js";
 
@@ -33,6 +33,14 @@ describe("worktree", () => {
   });
 
   describe("createWorktree", () => {
+    it("sanitizes agentId to prevent path traversal (CVE-001)", async () => {
+      const wt = await createWorktree(repoDir, "../../etc/passwd");
+      expect(wt).toBeDefined();
+      const resolved = resolve(wt!.path);
+      expect(resolved.startsWith(resolve(tmpdir()))).toBe(true);
+      expect(wt!.branch).toBe("pi-agent-....etcpasswd");
+    });
+
     it("creates a worktree in tmpdir", async () => {
       const wt = await createWorktree(repoDir, "test-id-1");
       expect(wt).toBeDefined();

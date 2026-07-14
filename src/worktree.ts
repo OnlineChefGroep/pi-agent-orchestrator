@@ -15,6 +15,17 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFileCb);
 
+/** CVE-001: sanitize agent IDs before use in filesystem paths and git branch names. */
+function sanitizeAgentId(agentId: string): string {
+  if (typeof agentId !== "string" || agentId === "") return "unknown";
+  const cleaned = agentId
+    .replace(/[\r\n\x00-\x1F]/g, "")
+    .replace(/[/\\]/g, "")
+    .replace(/[~^:?*[\\\];"'`$\s]/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return cleaned.slice(0, 64) || "unknown";
+}
+
 export interface WorktreeInfo {
   /** Absolute path to the worktree directory. */
   path: string;
@@ -46,9 +57,10 @@ export async function createWorktree(cwd: string, agentId: string): Promise<Work
     return undefined;
   }
 
-  const branch = `pi-agent-${agentId}`;
+  const safeId = sanitizeAgentId(agentId);
+  const branch = `pi-agent-${safeId}`;
   const suffix = randomUUID().slice(0, 8);
-  const worktreePath = join(tmpdir(), `pi-agent-${agentId}-${suffix}`);
+  const worktreePath = join(tmpdir(), `pi-agent-${safeId}-${suffix}`);
 
   try {
     // Create detached worktree at HEAD
