@@ -86,6 +86,75 @@ describe("worktree", () => {
       try { execFileSync("git", ["worktree", "remove", "--force", wt1!.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
       try { execFileSync("git", ["worktree", "remove", "--force", wt2!.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
     });
+
+    describe("agentId sanitization edge cases (CVE-001)", () => {
+      const cases: Array<{ name: string; input: unknown; expectedSuffix: string }> = [
+        { name: "empty string falls back to 'unknown'", input: "", expectedSuffix: "unknown" },
+        { name: "null falls back to 'unknown'", input: null, expectedSuffix: "unknown" },
+        { name: "undefined falls back to 'unknown'", input: undefined, expectedSuffix: "unknown" },
+        { name: "non-string (number) falls back to 'unknown'", input: 42, expectedSuffix: "unknown" },
+        { name: "only path separators falls back to 'unknown'", input: "///", expectedSuffix: "unknown" },
+        { name: "only special chars falls back to 'unknown'", input: "~~~", expectedSuffix: "unknown" },
+        { name: "only whitespace/control chars falls back to 'unknown'", input: " \t\n ", expectedSuffix: "unknown" },
+        {
+          name: "spaces become dashes; unlisted punctuation is preserved",
+          input: "My Agent!123",
+          expectedSuffix: "My-Agent!123",
+        },
+        {
+          name: "special chars become dashes and are trimmed from the edges",
+          input: "$$$abc$$$",
+          expectedSuffix: "abc",
+        },
+        {
+          name: "backslashes are stripped like forward slashes",
+          input: "..\\..\\windows",
+          expectedSuffix: "....windows",
+        },
+        {
+          name: "non-ASCII characters are preserved unchanged",
+          input: "😀-agent",
+          expectedSuffix: "😀-agent",
+        },
+      ];
+
+      for (const { name, input, expectedSuffix } of cases) {
+        it(`sanitizes agentId: ${name}`, async () => {
+          const wt = await createWorktree(repoDir, input as any);
+          expect(wt).toBeDefined();
+          expect(wt!.branch).toBe(`pi-agent-${expectedSuffix}`);
+
+          const resolved = resolve(wt!.path);
+          expect(resolved.startsWith(resolve(tmpdir()))).toBe(true);
+
+          try { execFileSync("git", ["worktree", "remove", "--force", wt!.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+        });
+      }
+
+      it("truncates a long agentId to 64 characters", async () => {
+        const longId = "a".repeat(100);
+        const wt = await createWorktree(repoDir, longId);
+        expect(wt).toBeDefined();
+        expect(wt!.branch).toBe(`pi-agent-${"a".repeat(64)}`);
+        expect(wt!.path).toContain(`pi-agent-${"a".repeat(64)}-`);
+
+        try { execFileSync("git", ["worktree", "remove", "--force", wt!.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+      });
+
+      it("keeps the worktree path confined to tmpdir for a combined traversal + injection attempt", async () => {
+        const wt = await createWorktree(repoDir, "../../../tmp/pwned; rm -rf ~");
+        expect(wt).toBeDefined();
+
+        const resolved = resolve(wt!.path);
+        expect(resolved.startsWith(resolve(tmpdir()))).toBe(true);
+        expect(wt!.branch).not.toContain("/");
+        expect(wt!.branch).not.toContain("\\");
+        expect(wt!.branch).not.toContain(";");
+        expect(wt!.branch).not.toContain("~");
+
+        try { execFileSync("git", ["worktree", "remove", "--force", wt!.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+      });
+    });
   });
 
   describe("cleanupWorktree", () => {

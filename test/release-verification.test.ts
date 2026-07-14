@@ -94,6 +94,52 @@ describe("license verification", () => {
   });
 });
 
+// ── Node.js engine version consistency (CVE-001 follow-up: pin to 22.19) ────
+
+describe("Node.js version consistency", () => {
+  it(".nvmrc pins the exact Node version used by CI", () => {
+    expect(fileExists(".nvmrc")).toBe(true);
+    const nvmrc = readRoot(".nvmrc").trim();
+    expect(nvmrc).toBe("22.19.0");
+  });
+
+  it("package.json engines.node requires at least the .nvmrc version", () => {
+    const pkg = JSON.parse(readRoot("package.json"));
+    expect(pkg.engines?.node).toBe(">=22.19.0");
+  });
+
+  it("package-lock.json root package engines.node matches package.json", () => {
+    const pkg = JSON.parse(readRoot("package.json"));
+    const lock = JSON.parse(readRoot("package-lock.json"));
+    const rootPackage = lock.packages?.[""];
+    expect(rootPackage?.engines?.node).toBe(pkg.engines.node);
+    // Top-level name/version metadata should also stay in sync with package.json.
+    expect(lock.name).toBe(pkg.name);
+    expect(lock.version).toBe(pkg.version);
+  });
+
+  it("ci.yml pins setup-node to the same minor version as .nvmrc for jobs that install/build/test", () => {
+    const nvmrc = readRoot(".nvmrc").trim();
+    const [major, minor] = nvmrc.split(".");
+    const expectedNodeVersion = `${major}.${minor}`;
+
+    const ci = readRoot(".github/workflows/ci.yml");
+    // The "quality" and "lowest-peer-dependencies" jobs run typecheck/build/test
+    // and must use the pinned patch-aligned minor version, not a bare major version.
+    const pinnedNodeVersionMatches = [...ci.matchAll(/node-version:\s*([0-9.]+)/g)].map((m) => m[1]);
+    expect(pinnedNodeVersionMatches).toContain(expectedNodeVersion);
+    expect(pinnedNodeVersionMatches.filter((v) => v === expectedNodeVersion).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("ci.yml does not regress to an unpinned bare major Node version for the quality gate job", () => {
+    const ci = readRoot(".github/workflows/ci.yml");
+    const qualityJobMatch = ci.match(/quality:[\s\S]*?compatibility:/);
+    expect(qualityJobMatch).not.toBeNull();
+    expect(qualityJobMatch![0]).toMatch(/node-version:\s*22\.19/);
+    expect(qualityJobMatch![0]).not.toMatch(/node-version:\s*22\s*$/m);
+  });
+});
+
 // ── Task 14: Registry URL verification ──────────────────────────────────────
 
 describe("registry URL verification", () => {
