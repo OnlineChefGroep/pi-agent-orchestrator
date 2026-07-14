@@ -27,6 +27,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Node.js
@@ -40,6 +42,14 @@ jobs:
 
       - name: Verify frozen release policy
         run: npm run verify:release-policy
+
+      - name: Verify package version transition
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        env:
+          CURRENT_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          git fetch origin main
+          node scripts/verify-version-transition.mjs origin/main HEAD "$CURRENT_BRANCH"
 
       - name: Typecheck
         run: npm run typecheck
