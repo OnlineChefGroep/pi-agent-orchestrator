@@ -32,7 +32,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: 22
+          node-version: 22.19
           cache: npm
 
       - name: Install dependencies
@@ -46,6 +46,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Verify Pi package metadata
+        run: npm run verify:package
 
       - name: Test
         run: npm test
@@ -115,7 +118,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: 22
+          node-version: 22.19
           cache: npm
 
       - name: Install lowest supported peer dependencies

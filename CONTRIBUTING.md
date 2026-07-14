@@ -1,233 +1,116 @@
-# Contributing to @onlinechefgroep/pi-agent-orchestrator
+# Contributing
 
-Thank you for contributing. This document covers build, test, lint, and PR workflow.
+Thanks for contributing. This project is a small **pi extension** that
+runs inside a [Pi coding agent](https://github.com/OnlineChefGroep) host.
+Most of what you will need lives in [AGENTS.md](AGENTS.md) — read that
+first, it documents the architecture, conventions, and the long list of
+common mistakes that have cost us review cycles.
 
-This project is a **pi extension** — it runs inside a [pi coding agent](https://github.com/OnlineChefGroep) host, not standalone. The three `@earendil-works/pi-*` packages are the host platform and are never direct dependencies. See the [README](README.md) for installation options.
+Please also read our [Code of Conduct](CODE_OF_CONDUCT.md).
 
-Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
+## TL;DR
 
----
+1. Fork and create a branch.
+2. Make your change. Follow [AGENTS.md](AGENTS.md).
+3. Run `npm run typecheck && npm run lint && npm test`.
+4. Open a PR. Use [Conventional Commits](https://www.conventionalcommits.org/)
+   in the title (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
+   Scope is encouraged (e.g. `feat(dashboard):`).
+5. Wait for review. Merging requires an `@OnlineChefGroep/owners` member to
+   approve — this is enforced by branch protection.
 
-## First-Time Contributors
+## Development setup
 
-New to the project? Start here:
-
-1. Read [AGENTS.md](AGENTS.md) for architecture, common mistakes, and conventions.
-2. Look for issues labeled **good first issue** in the [issue tracker](https://github.com/OnlineChefGroep/pi-agent-orchestrator/issues).
-3. Run `npm run setup:hooks` after clone to enable pre-commit checks.
-
----
-
-## Development Environment
-
-- **Node.js:** 22+ (LTS)
-- **OS:** Linux, macOS, Windows (CI tests run on ubuntu-latest)
-
----
-
-## Quick Start
+- Node.js **22 or 24** (CI matrix). Run `node --version`.
+- Linux, macOS, or Windows.
+- Git.
 
 ```bash
-# Install dependencies
+git clone https://github.com/OnlineChefGroep/pi-agent-orchestrator
+cd pi-agent-orchestrator
 npm install
-
-# Optional: install local git hooks (biome + tsc on commit, full tests on push)
-npm run setup:hooks
-
-# TypeScript typecheck
-npm run typecheck
-
-# Lint (Biome)
-npm run lint
-
-# Run tests
-npm test
-
-# Run performance benchmarks
-npm run bench:all
-
-# Full verification
-npm run typecheck && npm run lint && npm test
+npm run setup:hooks   # optional: pre-commit biome+tsc, pre-push full test
 ```
 
----
-
-## Project Structure
-
-```
-src/
-  index.ts                 # Extension entry point
-  agent-types.ts           # Permission model
-  agent-runner.ts          # Agent lifecycle
-  agent-manager.ts         # Manager wrapper
-  agent-registry.ts        # Agent registry + settings
-  default-agents.ts        # Built-in agent configs
-  custom-agents.ts         # Custom .md agent loader
-  settings.ts              # Persistent settings
-  compaction.ts            # Context pruning
-  context.ts               # Parent context
-  handoff.ts               # Handoff protocol
-  hooks.ts                 # Lifecycle hooks
-  memory.ts                # Memory partitions
-  prompts.ts               # Prompt templates
-  schedule*.ts             # Scheduling engine
-  swarm-join.ts            # Swarm coordination
-  group-join.ts            # Batch/group manager
-  batch-orchestrator.ts    # Parallel agent orchestration
-  orchestration-dispatch.ts # Auto mode dispatch
-  cross-extension-rpc.ts   # Inter-extension RPC
-  validators.ts            # Post-completion validation
-  worktree.ts              # Git worktree ops
-  debug-capture.ts         # Offline debug capture
-  ui/                     # TUI components
-    agent-dashboard.ts       # Interactive dashboard
-    agent-widget.ts          # Above-editor widget
-    conversation-viewer.ts   # Conversation overlay
-    agent-top-renderer.ts    # Top view table
-    dashboard/               # Dashboard modules
-    theme.ts                 # Theme system
-    animation.ts             # Spinner animations
-    settings-menu.ts         # Settings UI
-    schedule-menu.ts         # Schedule management
-test/                   # Vitest tests (95 files)
-docs/                   # Documentation
-.agents/                # Daemon + skill definitions
-  daemons/
-  skills/
-    graphify/
-    overdrive/
-    showcase/
-    testing/
-```
-
----
-
-## Lint & Format
-
-We use **Biome** for both linting and formatting.
+## Verifying a change
 
 ```bash
-# Check (no write)
-npm run lint
-
-# Check + auto-fix safe issues
-node_modules/.bin/biome check --write src/ test/
-
-# Check + auto-fix unsafe issues too
-node_modules/.bin/biome check --write --unsafe src/ test/
+npm run typecheck                  # tsc --noEmit
+npm run lint                       # biome check src/ test/ scripts/
+npm test                           # full vitest suite
+npm test -- test/some-file.test.ts # a single test file
+npm run lint:fix                   # auto-fix biome issues
 ```
 
-**Never run Prettier or ESLint** — they have been removed from the project.
+Before opening a PR also run `npm run build` (builds dist/).
 
----
+The CI matrix runs the same plus cross-platform tests. A PR is green when
+all required checks pass and an `@OnlineChefGroep/owners` team member
+approves.
 
-## Testing
+## Project conventions (the short list)
 
-We use **Vitest**.
+- **ESM with `.js` import extensions.** Source is `.ts`, imports are `.js`.
+- **Biome double quotes.** `"foo"` not `'foo'`. Use template literals for interpolation.
+- **No comments in code unless asked.**
+- **No `as any` in test mocks.** Include all required fields.
+- **Frontmatter booleans are strings in YAML.** Use
+  `parseBooleanWithDefault` from `src/custom-agents.ts` — never
+  `if (frontmatter.handoff)`.
+- **Conventional Commits only.** No `feat!`; use a `BREAKING CHANGE:`
+  footer.
+- **Test files in `test/`, named `*.test.ts`.** Never co-locate.
+- **Map/Set insertion order is intentional.** Don't sort agent lists.
+- **No emoji in commits, code, or PR text** unless asked.
+- **Host platform packages (`@earendil-works/pi-*`) are never direct deps.**
+  Use `import type` at call sites that need them.
 
-```bash
-# All tests
-npm test
-
-# Watch mode during development
-npm test -- --watch
-
-# Single file
-npm test -- test/default-agents.test.ts
-
-# With coverage (if configured)
-npm test -- --coverage
-```
-
-**Known issue:** On Windows, `schedule.test.ts` and `schedule-store.test.ts` have pre-existing flaky tests related to temp directory races. CI marks these `continue-on-error`. These failures should not block PRs or dev workflow on Windows.
-
----
+See [AGENTS.md](AGENTS.md) for the full architecture map and the
+spawn-roles table.
 
 ## Pull Request Workflow
 
-1. **Branch:** Create a feature branch from `main`.
-2. **Commits:** Use [Conventional Commits](https://www.conventionalcommits.org/) style:
-   - `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
-3. **Pre-commit:** Ensure `npm run typecheck`, `npm run lint`, and `npm test` pass (Windows schedule flakiness excepted). Git hooks handle this automatically if installed.
-4. **PR description:** Reference any related issues or VERVOLG_PLAN items.
-5. **Review:** All PRs require at least one review before merge.
-
----
+1. Fork the repo or create a branch directly.
+2. Make commits using Conventional Commits.
+3. Ensure `npm run typecheck`, `npm run lint`, and `npm test` pass.
+4. Open a PR against `main`.
+5. An `@OnlineChefGroep/owners` team member must approve.
+6. The merge must be a fast-forward or squash merge — linear history is enforced.
+7. The branch is deleted after merge.
 
 ## Git Hooks (Optional)
 
-The project includes local git hooks that run checks automatically:
+Run once after clone: `npm run setup:hooks`.
 
-| Hook | When | What it runs |
-|---|---|---|
-| `pre-commit` | Before each `git commit` | Biome lint with auto-fix on staged `.ts/.js/.sh` files + full `tsc --noEmit` typecheck |
-| `pre-push` | Before each `git push` | `npm test` (full test suite) |
+| Hook | When | What |
+| --- | --- | --- |
+| `pre-commit` | Before commit | Biome lint + tsc typecheck |
+| `pre-push` | Before push | Full test suite |
 
-**Install:** `bash scripts/setup-git-hooks.sh` or `npm run setup:hooks` (run once after clone)
+Skip with `git commit --no-verify` or `git push --no-verify`.
 
-**Skip:** `git commit --no-verify` or `git push --no-verify`
+## Windows tests
 
-The hooks live in `scripts/git-hooks/` and are copied to `.git/hooks/` during setup. Since `.git/hooks/` is not version-controlled, the setup script ensures new clones can enable them with one command.
+`schedule.test.ts` and `schedule-store.test.ts` have pre-existing flaky
+tests on Windows related to temp directory races. These are
+`continue-on-error` in CI and should not block your PR.
 
----
+## Adding a built-in agent or setting
 
-## Common Pitfalls
+- New agent type → update `src/default-agents.ts` +
+  `test/default-agents.test.ts` + a row in the README agents table.
+- New setting → update `src/settings.ts` (interface + defaults) +
+  `buildSettingsSnapshot` in `src/output-handler.ts` + settings menu.
+  See `docs/api-reference.md` for the schema.
 
-Before contributing, read [AGENTS.md → Common Mistakes](AGENTS.md#common-mistakes) for the 15-item checklist of patterns that have caused bugs or wasted review cycles in this codebase. Highlights:
+## Release flow
 
-- YAML booleans from `js-yaml` are strings — use the parsing helpers in `src/custom-agents.ts`
-- ESM imports need `.js` extensions even in TypeScript
-- Tests live in `test/`, not `tests/`
-- The `pi-*` peer packages are never direct dependencies
-- Biome uses double quotes; formatter is disabled
+- Conventional Commits drive changelog groups.
+- The maintainer (currently the only member of `@OnlineChefGroep/owners`)
+  updates `CHANGELOG.md` (CI sets `package.json` version from the tag).
+- Tag `vX.Y.Z` and push it; `release.yml` builds, gates, publishes to npm,
+  and creates the GitHub Release. Don't publish manually.
 
----
+## Need help?
 
----
-
-## Custom Agent Development
-
-If you add a new built-in agent type, update:
-
-- `src/default-agents.ts` — add the `AgentConfig` to `DEFAULT_AGENTS`
-- `test/default-agents.test.ts` — add assertions for the new config
-- `README.md` — add to the Agent Types table
-
-If you add new settings, update:
-
-- `src/settings.ts` — add to `SubagentsSettings` interface and defaults
-- `src/output-handler.ts` — wire into `buildSettingsSnapshot` and settings menu
-- `docs/api-reference.md` — add to the public API settings documentation
-
----
-
-## Publishing
-
-This package is published to npmjs.org as `@onlinechefgroep/pi-agent-orchestrator`
-via the tag-triggered flow in `.github/workflows/release.yml` (see also
-`.pi/skills/release/SKILL.md`).
-
-1. Ensure the org secret `NPM_TOKEN` has publish access for the `@onlinechefgroep` scope.
-2. Merge the release changes to `main` and update `CHANGELOG.md` (no need to pre-bump
-   `package.json` — CI sets the version from the tag).
-3. Tag a version greater than the published npm `latest`:
-   `git tag vX.Y.Z && git push origin vX.Y.Z`
-4. Watch `release.yml`: it builds, gates on typecheck/lint/test, publishes to npmjs.org,
-   and creates a GitHub Release with `gh release create`.
-
----
-
-## License
-
-By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
-
-## Questions?
-
-Open an issue or refer to `docs/` for architecture, API reference, and troubleshooting guides.
-
-## Branch Protection
-
-The `main` branch has protection rules:
-- CI must pass before merge
-- Branches must be up-to-date before merge
-- At least one review recommended (not strictly required for solo maintainer)
+Open an issue.

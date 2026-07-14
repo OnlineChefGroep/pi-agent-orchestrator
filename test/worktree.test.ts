@@ -1,13 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanupWorktree, createWorktree, pruneWorktrees } from "../src/worktree.js";
 
-/**
- * Helper: create a temporary git repo with an initial commit.
- */
 function initGitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), "pi-wt-test-"));
   execFileSync("git", ["init"], { cwd: dir, stdio: "pipe" });
@@ -19,6 +16,26 @@ function initGitRepo(): string {
   return dir;
 }
 
+function removeWorktree(repoDir: string, path: string): void {
+  try {
+    execFileSync("git", ["worktree", "remove", "--force", path], {
+      cwd: repoDir,
+      stdio: "pipe",
+    });
+  } catch {
+    // Best-effort test cleanup.
+  }
+}
+
+function removeBranch(repoDir: string, branch: string | undefined): void {
+  if (!branch) return;
+  try {
+    execFileSync("git", ["branch", "-D", branch], { cwd: repoDir, stdio: "pipe" });
+  } catch {
+    // Best-effort test cleanup.
+  }
+}
+
 describe("worktree", () => {
   let repoDir: string;
 
@@ -27,274 +44,259 @@ describe("worktree", () => {
   });
 
   afterEach(() => {
-    // Clean up any lingering worktrees first, then remove repo
-    try { pruneWorktrees(repoDir); } catch { /* ignore */ }
+    try {
+      pruneWorktrees(repoDir);
+    } catch {
+      // Best-effort test cleanup.
+    }
     rmSync(repoDir, { recursive: true, force: true });
   });
 
   describe("createWorktree", () => {
-    it("creates a worktree in tmpdir", async () => {
-      const wt = await createWorktree(repoDir, "test-id-1");
-      expect(wt).toBeDefined();
-      expect(existsSync(wt!.path)).toBe(true);
-      expect(wt!.branch).toBe("pi-agent-test-id-1");
-
-      // Verify it's a valid worktree with the repo's files
-      expect(existsSync(join(wt!.path, "README.md"))).toBe(true);
-
-      // Cleanup
-      try { execFileSync("git", ["worktree", "remove", "--force", wt!.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+    it("normalizes traversal input to a confined path and valid branch", async () => {
+      const worktree = await createWorktree(repoDir, "../../etc/passwd");
+      expect(worktree).toBeDefined();
+      expect(resolve(worktree!.path).startsWith(resolve(tmpdir()))).toBe(true);
+      expect(worktree!.branch).toBe("pi-agent-etc-passwd");
+      expect(worktree!.branch).not.toMatch(/\.\./);
+      execFileSync("git", ["check-ref-format", "--branch", worktree!.branch], {
+        cwd: repoDir,
+        stdio: "pipe",
+      });
+      removeWorktree(repoDir, worktree!.path);
     });
 
-    it("returns undefined for non-git directory", async () => {
+    it("creates a detached worktree in tmpdir", async () => {
+      const worktree = await createWorktree(repoDir, "test-id-1");
+      expect(worktree).toBeDefined();
+      expect(existsSync(worktree!.path)).toBe(true);
+      expect(worktree!.branch).toBe("pi-agent-test-id-1");
+      expect(existsSync(join(worktree!.path, "README.md"))).toBe(true);
+      removeWorktree(repoDir, worktree!.path);
+    });
+
+    it("returns undefined outside a git repository", async () => {
       const nonGit = mkdtempSync(join(tmpdir(), "pi-wt-nongit-"));
       try {
-        const wt = await createWorktree(nonGit, "test-id-2");
-        expect(wt).toBeUndefined();
+        expect(await createWorktree(nonGit, "test-id-2")).toBeUndefined();
       } finally {
         rmSync(nonGit, { recursive: true, force: true });
       }
     });
 
-    it("returns undefined for git repo with no commits", async () => {
+    it("returns undefined for a repository without commits", async () => {
       const emptyRepo = mkdtempSync(join(tmpdir(), "pi-wt-empty-"));
       try {
         execFileSync("git", ["init"], { cwd: emptyRepo, stdio: "pipe" });
-        const wt = await createWorktree(emptyRepo, "no-commits");
-        expect(wt).toBeUndefined();
+        expect(await createWorktree(emptyRepo, "no-commits")).toBeUndefined();
       } finally {
         rmSync(emptyRepo, { recursive: true, force: true });
       }
     });
 
-    it("uses unique paths for multiple worktrees", async () => {
-      const wt1 = await createWorktree(repoDir, "multi-1");
-      const wt2 = await createWorktree(repoDir, "multi-2");
-      expect(wt1).toBeDefined();
-      expect(wt2).toBeDefined();
-      expect(wt1!.path).not.toBe(wt2!.path);
+    it("uses unique paths for concurrent worktrees", async () => {
+      const first = await createWorktree(repoDir, "multi-1");
+      const second = await createWorktree(repoDir, "multi-2");
+      expect(first).toBeDefined();
+      expect(second).toBeDefined();
+      expect(first!.path).not.toBe(second!.path);
+      removeWorktree(repoDir, first!.path);
+      removeWorktree(repoDir, second!.path);
+    });
 
-      // Cleanup
-      try { execFileSync("git", ["worktree", "remove", "--force", wt1!.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
-      try { execFileSync("git", ["worktree", "remove", "--force", wt2!.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+    it.each([
+      ["empty string", "", "unknown"],
+      ["null runtime bypass", null, "unknown"],
+      ["undefined runtime bypass", undefined, "unknown"],
+      ["number runtime bypass", 42, "unknown"],
+      ["path separators only", "///", "unknown"],
+      ["special characters only", "~~~", "unknown"],
+      ["whitespace and controls", " \t\n ", "unknown"],
+      ["spaces and punctuation", "My Agent!123", "My-Agent-123"],
+      ["edge punctuation", "$$$abc$$$", "abc"],
+      ["backslash traversal", "..\\..\\windows", "windows"],
+      ["unicode prefix", "😀-agent", "agent"],
+      ["accent normalization", "déploiement", "deploiement"],
+    ])("normalizes %s", async (_name, input, expectedSuffix) => {
+      const worktree = await createWorktree(repoDir, input as string);
+      expect(worktree).toBeDefined();
+      expect(worktree!.branch).toBe(`pi-agent-${expectedSuffix}`);
+      expect(resolve(worktree!.path).startsWith(resolve(tmpdir()))).toBe(true);
+      execFileSync("git", ["check-ref-format", "--branch", worktree!.branch], {
+        cwd: repoDir,
+        stdio: "pipe",
+      });
+      removeWorktree(repoDir, worktree!.path);
+    });
+
+    it("truncates identifiers to 64 normalized characters", async () => {
+      const worktree = await createWorktree(repoDir, "a".repeat(100));
+      expect(worktree).toBeDefined();
+      expect(worktree!.branch).toBe(`pi-agent-${"a".repeat(64)}`);
+      expect(worktree!.path).toContain(`pi-agent-${"a".repeat(64)}-`);
+      removeWorktree(repoDir, worktree!.path);
+    });
+
+    it("rejects traversal and shell syntax from the exposed branch", async () => {
+      const worktree = await createWorktree(repoDir, "../../../tmp/pwned; rm -rf ~");
+      expect(worktree).toBeDefined();
+      expect(worktree!.branch).toBe("pi-agent-tmp-pwned-rm-rf");
+      expect(worktree!.branch).not.toMatch(/[\\/;~]/);
+      expect(worktree!.branch).not.toMatch(/\.\./);
+      execFileSync("git", ["check-ref-format", "--branch", worktree!.branch], {
+        cwd: repoDir,
+        stdio: "pipe",
+      });
+      removeWorktree(repoDir, worktree!.path);
     });
   });
 
   describe("cleanupWorktree", () => {
-    it("removes worktree when no changes made", async () => {
-      const wt = (await createWorktree(repoDir, "clean-1"))!;
-      expect(wt).toBeDefined();
-
-      const result = cleanupWorktree(repoDir, wt, "test cleanup");
-      expect(result.hasChanges).toBe(false);
-      expect(result.branch).toBeUndefined();
-      expect(result.path).toBeUndefined();
+    it("removes a clean worktree", async () => {
+      const worktree = (await createWorktree(repoDir, "clean-1"))!;
+      const result = cleanupWorktree(repoDir, worktree, "test cleanup");
+      expect(result).toEqual({ hasChanges: false });
+      expect(existsSync(worktree.path)).toBe(false);
     });
 
-    it("commits changes and creates branch when changes exist", async () => {
-      const wt = (await createWorktree(repoDir, "dirty-1"))!;
-      expect(wt).toBeDefined();
+    it("commits changes, creates the branch, and removes the worktree", async () => {
+      const worktree = (await createWorktree(repoDir, "dirty-1"))!;
+      writeFileSync(join(worktree.path, "new-file.txt"), "agent wrote this");
 
-      // Make a change in the worktree
-      writeFileSync(join(wt.path, "new-file.txt"), "agent wrote this");
+      const result = cleanupWorktree(repoDir, worktree, "added new file");
+      expect(result).toEqual({ hasChanges: true, branch: "pi-agent-dirty-1" });
+      expect(existsSync(worktree.path)).toBe(false);
 
-      const result = cleanupWorktree(repoDir, wt, "added new file");
-      expect(result.hasChanges).toBe(true);
-      expect(result.branch).toBeDefined();
-      expect(result.branch).toContain("pi-agent-dirty-1");
-      expect(result.path).toBeUndefined();
-
-      // Verify the branch exists in the main repo
       const branches = execFileSync("git", ["branch", "--list", result.branch!], {
-        cwd: repoDir, stdio: "pipe",
-      }).toString().trim();
+        cwd: repoDir,
+        stdio: "pipe",
+      }).toString();
       expect(branches).toContain(result.branch!);
 
-      // Verify the commit message
       const log = execFileSync("git", ["log", "--oneline", "-1", result.branch!], {
-        cwd: repoDir, stdio: "pipe",
-      }).toString().trim();
+        cwd: repoDir,
+        stdio: "pipe",
+      }).toString();
       expect(log).toContain("pi-agent: added new file");
-
-      // Cleanup branch
-      try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+      removeBranch(repoDir, result.branch);
     });
 
-    it("preserves dirty worktree and returns recovery details when staging fails", async () => {
-      const wt = (await createWorktree(repoDir, "stage-failure"))!;
-      const changedFile = join(wt.path, "important-agent-work.txt");
+    it("preserves dirty work when staging fails", async () => {
+      const worktree = (await createWorktree(repoDir, "stage-failure"))!;
+      const changedFile = join(worktree.path, "important-agent-work.txt");
       writeFileSync(changedFile, "must not be deleted");
-
-      // Hold Git's index lock so `git add -A` fails deterministically.
       const indexLock = execFileSync("git", ["rev-parse", "--git-path", "index.lock"], {
-        cwd: wt.path,
+        cwd: worktree.path,
         stdio: "pipe",
       }).toString().trim();
       writeFileSync(indexLock, "held by test");
 
-      const result = cleanupWorktree(repoDir, wt, "should be recoverable");
-      expect(result).toMatchObject({
-        hasChanges: true,
-        path: wt.path,
-      });
+      const result = cleanupWorktree(repoDir, worktree, "should be recoverable");
+      expect(result).toMatchObject({ hasChanges: true, path: worktree.path });
       expect(result.branch).toBeUndefined();
       expect(result.error).toContain("preserved for recovery");
-      expect(existsSync(wt.path)).toBe(true);
       expect(existsSync(changedFile)).toBe(true);
 
       rmSync(indexLock, { force: true });
-      try { execFileSync("git", ["worktree", "remove", "--force", wt.path], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+      removeWorktree(repoDir, worktree.path);
     });
 
-    it("does not force-overwrite existing branch", async () => {
-      // Create first worktree, make changes, cleanup → creates branch
-      const wt1 = (await createWorktree(repoDir, "conflict-1"))!;
-      writeFileSync(join(wt1.path, "file1.txt"), "first run");
-      const result1 = cleanupWorktree(repoDir, wt1, "first");
-      expect(result1.branch).toBe("pi-agent-conflict-1");
+    it("does not overwrite an existing branch", async () => {
+      const first = (await createWorktree(repoDir, "conflict-1"))!;
+      writeFileSync(join(first.path, "first.txt"), "first");
+      const firstResult = cleanupWorktree(repoDir, first, "first");
+      expect(firstResult.branch).toBe("pi-agent-conflict-1");
 
-      // Create second worktree with same agent ID, make changes
-      const wt2 = (await createWorktree(repoDir, "conflict-1"))!;
-      writeFileSync(join(wt2.path, "file2.txt"), "second run");
-      const result2 = cleanupWorktree(repoDir, wt2, "second");
+      const second = (await createWorktree(repoDir, "conflict-1"))!;
+      writeFileSync(join(second.path, "second.txt"), "second");
+      const secondResult = cleanupWorktree(repoDir, second, "second");
+      expect(secondResult.branch).toMatch(/^pi-agent-conflict-1-\d+$/);
 
-      // Should use a different branch name (timestamp suffix)
-      expect(result2.hasChanges).toBe(true);
-      expect(result2.branch).toBeDefined();
-      expect(result2.branch).not.toBe("pi-agent-conflict-1");
-      expect(result2.branch).toContain("pi-agent-conflict-1-");
-
-      // Both branches should exist
-      const branches = execFileSync("git", ["branch", "--list", "pi-agent-conflict-1*"], {
-        cwd: repoDir, stdio: "pipe",
-      }).toString().trim();
-      expect(branches).toContain("pi-agent-conflict-1");
-      expect(branches).toContain(result2.branch!);
-
-      // Cleanup
-      try { execFileSync("git", ["branch", "-D", result1.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
-      try { execFileSync("git", ["branch", "-D", result2.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+      removeBranch(repoDir, firstResult.branch);
+      removeBranch(repoDir, secondResult.branch);
     });
 
-    it("handles already-deleted worktree gracefully", async () => {
-      const wt = (await createWorktree(repoDir, "gone-1"))!;
-      // Manually delete the worktree directory
-      rmSync(wt.path, { recursive: true, force: true });
-
-      const result = cleanupWorktree(repoDir, wt, "already gone");
-      expect(result.hasChanges).toBe(false);
+    it("handles an already deleted worktree", async () => {
+      const worktree = (await createWorktree(repoDir, "gone-1"))!;
+      rmSync(worktree.path, { recursive: true, force: true });
+      expect(cleanupWorktree(repoDir, worktree, "already gone")).toEqual({ hasChanges: false });
     });
 
-    it("sanitizes agent description to prevent git hook injection (CVE-001)", async () => {
-      const wt = (await createWorktree(repoDir, "sanitize-1"))!;
-      writeFileSync(join(wt.path, "change.txt"), "something");
-
-      const maliciousDesc = 'test\n`malicious`\r\n$(echo foo)\x00"quote"';
-      const result = cleanupWorktree(repoDir, wt, maliciousDesc);
-      expect(result.hasChanges).toBe(true);
-
-      const log = execFileSync("git", ["log", "--oneline", "-1", result.branch!], {
-        cwd: repoDir, stdio: "pipe",
-      }).toString().trim();
-
-      // Ensure no control characters or shell meta characters are present in the commit log
-      expect(log).not.toContain("\n");
-      expect(log).not.toContain("\r");
-      expect(log).not.toContain("`");
-      expect(log).not.toContain("$");
-      expect(log).not.toContain("\\");
-      expect(log).not.toContain('"');
-
-      // The sanitized string should be space-normalized
-      // The exact sanitization is: replace control chars with space, strip quotes/backticks/dollar/backslash, normalize whitespace
-      expect(log).toContain("test malicious (echo foo) quote");
-
-      try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
-    });
-
-    it("truncates commit message at 200 chars safely, without splitting surrogate pairs or crashing on non-strings", async () => {
-      const wt = (await createWorktree(repoDir, "surrogate-msg"))!;
-      writeFileSync(join(wt.path, "change.txt"), "something");
-
-      // Construct a string that is 199 regular characters + 1 emoji (which is 2 code units)
-      // Standard .slice(0, 200) would split the emoji
-      const longDesc = `${"a".repeat(199)}😀`;
-      const result = cleanupWorktree(repoDir, wt, longDesc);
-      expect(result.hasChanges).toBe(true);
-
+    it("sanitizes control and shell characters in commit descriptions", async () => {
+      const worktree = (await createWorktree(repoDir, "sanitize-1"))!;
+      writeFileSync(join(worktree.path, "change.txt"), "something");
+      const result = cleanupWorktree(repoDir, worktree, 'test\n`malicious`\r\n$(echo foo)\x00"quote"');
       const log = execFileSync("git", ["log", "--format=%s", "-1", result.branch!], {
-        cwd: repoDir, stdio: "pipe",
+        cwd: repoDir,
+        stdio: "pipe",
       }).toString().trim();
+      expect(log).toBe("pi-agent: test malicious (echo foo) quote");
+      removeBranch(repoDir, result.branch);
+    });
 
-      // Expected length: "pi-agent: ".length (10) + 199 "a"s = 209 chars total
+    it("truncates descriptions without splitting surrogate pairs", async () => {
+      const worktree = (await createWorktree(repoDir, "surrogate-msg"))!;
+      writeFileSync(join(worktree.path, "change.txt"), "something");
+      const result = cleanupWorktree(repoDir, worktree, `${"a".repeat(199)}😀`);
+      const log = execFileSync("git", ["log", "--format=%s", "-1", result.branch!], {
+        cwd: repoDir,
+        stdio: "pipe",
+      }).toString().trim();
       expect(log.length).toBe(209);
-      expect(log).not.toContain("\uFFFD"); // Ensure no broken surrogate character
-      expect(log).toContain("a".repeat(199));
-
-      try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+      expect(log).not.toContain("\uFFFD");
+      removeBranch(repoDir, result.branch);
     });
 
-    it("defensively handles non-string agentDescription without crashing", async () => {
-      const wt = (await createWorktree(repoDir, "non-string-msg"))!;
-      writeFileSync(join(wt.path, "change.txt"), "something");
-
-      // Force pass an array (this simulates a runtime bypass)
-      const badDesc = ["hello", "world"] as any;
-      const result = cleanupWorktree(repoDir, wt, badDesc);
-      expect(result.hasChanges).toBe(true);
-
+    it("converts non-string descriptions defensively", async () => {
+      const worktree = (await createWorktree(repoDir, "non-string-msg"))!;
+      writeFileSync(join(worktree.path, "change.txt"), "something");
+      const result = cleanupWorktree(repoDir, worktree, ["hello", "world"] as unknown as string);
       const log = execFileSync("git", ["log", "--format=%s", "-1", result.branch!], {
-        cwd: repoDir, stdio: "pipe",
+        cwd: repoDir,
+        stdio: "pipe",
       }).toString().trim();
-
-      expect(log).toContain("hello,world"); // String conversion of array
-
-      try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+      expect(log).toContain("hello,world");
+      removeBranch(repoDir, result.branch);
     });
 
-    it("truncates commit message at 200 chars", async () => {
-      const wt = (await createWorktree(repoDir, "long-msg"))!;
-      writeFileSync(join(wt.path, "change.txt"), "something");
-      const longDesc = "x".repeat(300);
-      const result = cleanupWorktree(repoDir, wt, longDesc);
-      expect(result.hasChanges).toBe(true);
-
+    it("caps long descriptions at 200 characters plus prefix", async () => {
+      const worktree = (await createWorktree(repoDir, "long-msg"))!;
+      writeFileSync(join(worktree.path, "change.txt"), "something");
+      const result = cleanupWorktree(repoDir, worktree, "x".repeat(300));
       const log = execFileSync("git", ["log", "--format=%s", "-1", result.branch!], {
-        cwd: repoDir, stdio: "pipe",
+        cwd: repoDir,
+        stdio: "pipe",
       }).toString().trim();
-      // "pi-agent: " prefix (10 chars) + 200 chars of x = 210 total max
       expect(log.length).toBeLessThanOrEqual(210);
+      removeBranch(repoDir, result.branch);
+    });
 
-      // Cleanup
-      try { execFileSync("git", ["branch", "-D", result.branch!], { cwd: repoDir, stdio: "pipe" }); } catch { /* ignore */ }
+    it("normalizes caller-supplied branch values defensively", async () => {
+      const worktree = (await createWorktree(repoDir, "manual-branch"))!;
+      worktree.branch = "pi-agent-feature..escape/$bad";
+      writeFileSync(join(worktree.path, "change.txt"), "something");
+      const result = cleanupWorktree(repoDir, worktree, "defensive branch normalization");
+      expect(result.branch).toBe("pi-agent-feature-escape-bad");
+      execFileSync("git", ["check-ref-format", "--branch", result.branch!], {
+        cwd: repoDir,
+        stdio: "pipe",
+      });
+      removeBranch(repoDir, result.branch);
     });
   });
 
   describe("pruneWorktrees", () => {
-    it("does not throw on a clean repo", () => {
+    it("does not throw for a clean repository", () => {
       expect(() => pruneWorktrees(repoDir)).not.toThrow();
     });
 
-    it("does not throw on non-git directory", () => {
-      const nonGit = mkdtempSync(join(tmpdir(), "pi-wt-nongit-"));
+    it("does not throw outside a repository", () => {
+      const nonGit = mkdtempSync(join(tmpdir(), "pi-wt-prune-nongit-"));
       try {
         expect(() => pruneWorktrees(nonGit)).not.toThrow();
       } finally {
         rmSync(nonGit, { recursive: true, force: true });
       }
-    });
-  });
-
-  describe("CVE-001 mitigations for branch names", () => {
-    it("sanitizes branch names to prevent command injection", async () => {
-      const unsafeBranchName = "feature/$(touch /tmp/pwned)-`whoami`-;echo 'hacked'";
-      const safeBranchName = unsafeBranchName
-        .replace(/[\r\n\x00-\x1F]/g, "")
-        .replace(/[~^:?*[\\\];"'`$\s]/g, "-")
-        .replace(/^-+|-+$/g, "");
-      expect(safeBranchName).not.toContain("`");
-      expect(safeBranchName).not.toContain(";");
-      expect(safeBranchName).toBe("feature/-(touch-/tmp/pwned)--whoami---echo--hacked");
     });
   });
 });

@@ -1,7 +1,7 @@
 {
   "name": "@onlinechefgroep/pi-agent-orchestrator",
   "version": "0.17.1",
-  "description": "Pi extension for orchestrating autonomous coding agents with TUI dashboard, scheduling, swarms, handoffs, and prompt compression.",
+  "description": "Multi-agent orchestration for Pi: autonomous subagents, worktrees, swarms, schedules, handoffs, prompt compression, and live TUI observability.",
   "author": "OnlineChef",
   "license": "MIT",
   "repository": {
@@ -15,19 +15,24 @@
   "keywords": [
     "pi-package",
     "pi",
+    "pi-coding-agent",
     "pi-extension",
+    "agent-orchestrator",
     "subagent",
-    "agent",
-    "autonomous",
+    "subagents",
+    "multi-agent",
+    "parallel-agents",
+    "autonomous-agents",
+    "coding-agent",
     "orchestration",
+    "worktree",
+    "swarm",
+    "scheduling",
+    "handoff",
+    "prompt-compression",
     "tui",
     "dashboard",
-    "multi-agent",
-    "coding-agent",
-    "developer-tools",
-    "scheduling",
-    "swarm",
-    "autonomous-agents"
+    "developer-tools"
   ],
   "files": [
     "dist/",
@@ -36,7 +41,11 @@
     "examples/",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CODE_OF_CONDUCT.md"
   ],
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.80.6",
@@ -56,10 +65,11 @@
   },
   "scripts": {
     "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc",
-    "prepublishOnly": "npm run build && npm run typecheck && npm run lint && npm test",
+    "prepublishOnly": "npm run build && npm run typecheck && npm run lint && npm test && npm run verify:package",
     "test": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --retry=2",
     "test:watch": "vitest",
     "typecheck": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc --noEmit",
+    "verify:package": "node scripts/verify-package-metadata.mjs",
     "bench:all": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run test/widget-render-perf.test.ts test/dashboard-render-perf.test.ts test/spawn-latency-bench.test.ts test/spawn-latency-e2e-bench.test.ts --reporter=verbose",
     "lint": "biome check src/ test/ scripts/",
     "lint:fix": "biome check --write --unsafe src/ test/ scripts/",
@@ -75,7 +85,7 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.19.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.2",
@@ -91,7 +101,8 @@
   "pi": {
     "extensions": [
       "./dist/index.js"
-    ]
+    ],
+    "video": "https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",

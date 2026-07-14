@@ -514,8 +514,13 @@ describe("SubagentScheduler — fire path", () => {
 
     it("treats aborted and stopped as errors (terminal failure states)", async () => {
       const records = installFaithfulMock();
+      // Use the same +1000ms margin as the other fire-path tests: Windows CI can
+      // spend >200ms in addJob I/O, which made `Date.now() + 200` already-past by
+      // the second addJob call. Keep the margin inside waitFor's poll budget below
+      // so both jobs still fire before the deadline (a larger margin than the
+      // waitFor timeout would time out deterministically on every platform).
       const futureA = new Date(Date.now() + 1000).toISOString();
-      const futureB = new Date(Date.now() + 200).toISOString();
+      const futureB = new Date(Date.now() + 1000).toISOString();
       const a = await scheduler.addJob({
         name: "abort-job", description: "x", schedule: futureA,
         subagent_type: "general-purpose", prompt: "x",

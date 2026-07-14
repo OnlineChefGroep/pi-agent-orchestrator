@@ -1,57 +1,101 @@
-# npmjs.org Publish Setup
+# npm release setup
 
-The `publish-npm.yml` workflow publishes `@onlinechefgroep/pi-agent-orchestrator` to the public npmjs registry on every `v*` tag push.
+`@onlinechefgroep/pi-agent-orchestrator` is published to the public npm registry by `.github/workflows/release.yml`.
 
-## Prerequisites
+The release workflow has one canonical path:
 
-### 1. npmjs.org Organization
+1. Check out the release commit.
+2. Verify the tag is reachable from `main` when triggered by a tag.
+3. Install, build, typecheck, lint, test, and validate the package.
+4. Confirm the requested version is newer than the latest npm version.
+5. Publish the public scoped package.
+6. Create the matching GitHub Release.
 
-The `@onlinechefgroep` scope must exist on [npmjs.com](https://www.npmjs.com/org/onlinechefgroep). If not yet created:
+Do not add a second npm or GitHub Packages publish workflow. Duplicate tag triggers create split release state and make failures harder to recover.
 
-1. Go to https://www.npmjs.com/org/create
-2. Create `@onlinechefgroep` organization
-3. Add team members who need publish access
+## Current authentication: granular npm token
 
-### 2. Publish Access Token
+The workflow currently reads the `NPM_TOKEN` GitHub Actions secret.
 
-Generate a granular access token for CI:
+Create a granular npm access token with the smallest possible scope:
 
-1. Go to https://www.npmjs.com/settings/<your-username>/tokens
-2. Click "Generate New Token" → "Granular Access Token"
-3. Set:
-   - **Token name**: `GitHub Actions - pi-agent-orchestrator`
-   - **Expiration**: 365 days (or as appropriate)
-   - **Packages and scopes**: `@onlinechefgroep/pi-agent-orchestrator` (Read and write)
-4. Copy the generated token
+- Package: `@onlinechefgroep/pi-agent-orchestrator`
+- Permission: read and write
+- Expiration: the shortest operationally practical period
 
-### 3. GitHub Repository Secret
+Store it as the repository Actions secret `NPM_TOKEN`.
 
-Add the token as a GitHub secret:
+Repository secret location:
 
-1. Go to https://github.com/OnlineChefGroep/pi-agent-orchestrator/settings/secrets/actions
-2. Click "New repository secret"
-3. Set:
-   - **Name**: `NPM_TOKEN`
-   - **Value**: The token from step 2
-
-## Verification
-
-After setup, push a `v*` tag to trigger both publish workflows:
-
-```bash
-git tag v0.11.1
-git push origin v0.11.1
+```text
+https://github.com/OnlineChefGroep/pi-agent-orchestrator/settings/secrets/actions
 ```
 
-Both workflows should succeed:
-- `Publish to npmjs.org (Public)` — publishes to `https://registry.npmjs.org`
-- `Publish to GitHub Packages (Internal Mirror)` — publishes to `https://npm.pkg.github.com`
+## Preferred authentication: npm trusted publishing
 
-## Troubleshooting
+Migrate to npm trusted publishing so releases use GitHub OIDC instead of a long-lived npm token.
 
-| Error | Solution |
-|-------|----------|
-| `402 Payment Required` / `402 Could not login` | Token has expired. Regenerate. |
-| `403 Forbidden` | Token lacks write access to the package scope. |
-| `404 Not Found` | The `@onlinechefgroep` org does not exist on npmjs.com. |
-| `Package already exists` | Version already published. Bump the version. |
+In npm package settings, configure a trusted publisher with:
+
+- Provider: GitHub Actions
+- Organization or user: `OnlineChefGroep`
+- Repository: `pi-agent-orchestrator`
+- Workflow filename: `release.yml`
+- Environment: leave empty unless the workflow is moved behind a protected release environment
+
+After npm accepts the trusted publisher:
+
+1. Add `id-token: write` to the workflow permissions.
+2. Remove `NODE_AUTH_TOKEN` and the `NPM_TOKEN` dependency.
+3. Publish with provenance:
+
+```bash
+npm publish --access public --provenance
+```
+
+Do not remove token authentication before trusted publishing is configured on npm.
+
+## Release methods
+
+### Tag release
+
+The tag must point to a commit reachable from `main`.
+
+```bash
+git switch main
+git pull --ff-only
+git tag v0.18.0
+git push origin v0.18.0
+```
+
+### Manual release
+
+Run the `Release` workflow from GitHub Actions on `main` and supply a version newer than the currently published npm version, for example `0.18.0`.
+
+The workflow updates the package version only inside the release job. A separate source version commit is not required.
+
+## Post-release verification
+
+```bash
+npm view @onlinechefgroep/pi-agent-orchestrator version
+npm view @onlinechefgroep/pi-agent-orchestrator pi --json
+pi -e npm:@onlinechefgroep/pi-agent-orchestrator
+```
+
+Verify that:
+
+- npm shows the expected version;
+- `pi.extensions` contains `./dist/index.js`;
+- `pi.video` contains the public MP4 showcase URL;
+- the Pi package catalog refreshes the package card;
+- the GitHub Release exists for the same version.
+
+## Failure recovery
+
+| Failure | Response |
+| --- | --- |
+| `401` or `ENEEDAUTH` | Verify `NPM_TOKEN`, or the npm trusted publisher configuration after migration. |
+| `403 Forbidden` | Verify package-level publish permission for the `@onlinechefgroep` scope. |
+| Version already exists | Never overwrite. Choose a new semver and rerun the canonical release workflow. |
+| npm publish succeeded but GitHub Release failed | Create the missing GitHub Release for the already-published version; do not republish. |
+| GitHub Release exists but npm publish failed | Fix authentication or package validation, delete only an incorrect unannounced tag/release if necessary, then release a valid new version. |

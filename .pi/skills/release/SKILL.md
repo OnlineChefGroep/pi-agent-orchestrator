@@ -1,54 +1,96 @@
 ---
 name: release
-description: Cut a release of @onlinechefgroep/pi-agent-orchestrator to npmjs.org + GitHub. Use when publishing a new version, creating a release tag, or explaining the release workflow. Triggered by pushing a `v*` tag.
+description: Cut a release of @onlinechefgroep/pi-agent-orchestrator to npmjs.org and GitHub. Use when publishing a new version, creating a release tag, or validating the canonical release workflow.
 ---
 
 # Release — pi-agent-orchestrator
 
-Releases are **tag-triggered and direct-to-npm**, with an automatic GitHub Release.
-Defined in `.github/workflows/release.yml`.
+Releases use one canonical workflow: `.github/workflows/release.yml`.
 
-## Flow (automatic on tag)
+Do not add parallel npm or GitHub Packages publish workflows. Duplicate tag triggers can publish only part of a release and leave npm, GitHub Releases, and source metadata out of sync.
 
-Pushing a `v*` tag (or `workflow_dispatch` with a version input) runs:
-`npm ci` → build → typecheck → lint → test → **`npm publish --access public`** (npmjs.org)
-→ **create GitHub Release** with auto-generated notes (`gh release create`).
+## Automated release flow
 
-The package version is set from the tag inside CI (`npm version <tag> --no-git-tag-version`),
-so you do **not** need to pre-bump `package.json` — but you **should** update `CHANGELOG.md`.
+A `v*` tag reachable from `main`, or a manual workflow dispatch on `main`, runs:
 
-## Version policy
+```text
+npm ci
+→ build
+→ typecheck
+→ lint
+→ test
+→ package metadata and prepublish validation
+→ npm publish --access public
+→ GitHub Release
+```
 
-- The next release MUST exceed the currently published npm `latest`.
-- Never reuse or go backwards on the `latest` dist-tag.
-- Check the latest published version before tagging:
-  `npm view @onlinechefgroep/pi-agent-orchestrator version`
+The workflow resolves the target version from the tag or manual input and sets it inside CI with `npm version --no-git-tag-version`. Do not create a standalone package-version commit solely for the release.
 
-## Steps to release
+## Before releasing
 
-1. On `main`, up to date: `git pull origin main`.
-2. Update `CHANGELOG.md` (add the new version + notes). Commit with `docs:`/`chore:`.
-3. Choose version `X.Y.Z` (> published). Tag it:
-   `git tag vX.Y.Z`
-4. Push the tag (this triggers the release):
-   `git push origin vX.Y.Z`
-5. Watch `.github/workflows/release.yml` → on success the package is on npm and a GitHub
-   Release exists at `https://github.com/OnlineChefGroep/pi-agent-orchestrator/releases`.
+1. Confirm the release commit is on `main` and required CI is green.
+2. Check the currently published version:
 
-## Requirements
+   ```bash
+   npm view @onlinechefgroep/pi-agent-orchestrator version
+   ```
 
-- Repo **org secret `NPM_TOKEN`** with publish access to the `@onlinechefgroep` scope
-  (configured in repo/organization settings). The release job fails without it.
-- `main` must be protected + green CI before tagging (branch protection enforces this).
+3. Update `CHANGELOG.md` with user-visible changes.
+4. Choose a new semantic version that is strictly greater than npm `latest`.
+5. Ensure the package catalog contract passes:
 
-## Manual dispatch (no tag)
+   ```bash
+   npm run verify:package
+   npm pack --dry-run
+   ```
 
-`workflow_dispatch` accepts a `version` input and publishes that version directly
-(use only for re-releases / hotfixes; still must be > published).
+## Tag release
 
-## Notes
+```bash
+git switch main
+git pull --ff-only
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
 
-- `prepublishOnly` also runs build + typecheck + lint + test locally as a safety net.
-- Old `publish.yml` (GitHub Packages mirror) and `publish-npm.yml` were consolidated into
-  `release.yml` to avoid double triggers on a tag.
-- Do NOT commit build output (`dist/` is gitignored; `prepublishOnly` builds it).
+The release tag must be reachable from `main`.
+
+## Manual release
+
+Run the `Release` workflow on `main` and supply `X.Y.Z`. Use the same validation and changelog discipline as a tag release.
+
+## Authentication
+
+Current workflow authentication uses the repository Actions secret `NPM_TOKEN` with package-scoped publish permission.
+
+Preferred target state is npm trusted publishing through GitHub OIDC:
+
+1. Configure `OnlineChefGroep/pi-agent-orchestrator` and workflow `release.yml` as the trusted publisher in npm.
+2. Add `id-token: write` to release workflow permissions.
+3. Remove `NODE_AUTH_TOKEN` and the `NPM_TOKEN` dependency.
+4. Publish with `npm publish --access public --provenance`.
+
+Do not remove token authentication until npm trusted publishing is configured.
+
+## Post-release verification
+
+```bash
+npm view @onlinechefgroep/pi-agent-orchestrator version
+npm view @onlinechefgroep/pi-agent-orchestrator pi --json
+pi -e npm:@onlinechefgroep/pi-agent-orchestrator
+```
+
+Confirm that:
+
+- npm reports the intended version;
+- `pi.extensions` includes `./dist/index.js`;
+- `pi.video` contains the public showcase MP4;
+- the matching GitHub Release exists;
+- the package card refreshes in the Pi package catalog.
+
+## Recovery rules
+
+- Never overwrite or reuse a published version.
+- If npm succeeded and GitHub Release creation failed, create the missing release; do not republish.
+- If npm failed, repair authentication or validation and release a new valid version.
+- `dist/` is generated during publishing and must remain uncommitted.

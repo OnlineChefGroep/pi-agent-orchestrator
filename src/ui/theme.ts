@@ -98,12 +98,7 @@ export function padVisible(content: string, width: number): string {
       i += ansiLen;
       continue;
     }
-    const code = content.charCodeAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF) {
-      i += 2;
-    } else {
-      i++;
-    }
+    i++;
     visLen++;
   }
   return content + " ".repeat(Math.max(0, width - visLen));
@@ -121,13 +116,7 @@ export function fastTruncate(str: string, maxWidth: number): string {
     }
     visLen++;
     if (visLen > maxWidth) return truncateToWidth(str, maxWidth);
-
-    const code = str.charCodeAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF) {
-      i += 2;
-    } else {
-      i++;
-    }
+    i++;
   }
   return str;
 }
@@ -143,13 +132,7 @@ export function padAndTruncate(str: string, targetWidth: number): string {
     }
     visLen++;
     if (visLen > targetWidth) return truncateToWidth(str, targetWidth);
-
-    const code = str.charCodeAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF) {
-      i += 2;
-    } else {
-      i++;
-    }
+    i++;
   }
   if (visLen === targetWidth) return str;
   return str + " ".repeat(targetWidth - visLen);

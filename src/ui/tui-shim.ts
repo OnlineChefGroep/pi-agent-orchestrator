@@ -173,12 +173,7 @@ export function visibleWidth(str: string): number {
       i += ansiLen;
       continue;
     }
-    const code = str.charCodeAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF) {
-      i += 2;
-    } else {
-      i++;
-    }
+    i++;
     len++;
   }
   return len;
@@ -211,12 +206,10 @@ function takeVisible(text: string, maxWidth: number): string {
       i += ansiLen;
       continue;
     }
-    const code = text.charCodeAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF) {
-      i += 2;
-    } else {
-      i++;
-    }
+    // We do not model wide characters or surrogate pairs explicitly;
+    // they count as 1 visible width per 16-bit code unit, yielding a conservative over-count
+    // (e.g. an emoji counts as width 2), which is benign in our UI.
+    i++;
     visLen++;
   }
   return text.slice(0, i);
