@@ -44,7 +44,10 @@ jobs:
         run: npm ci
 
       - name: Render showcase suite
-        run: bash scripts/render-showcase-remotion.sh 2>&1 | tee remotion-render.log
+        shell: bash
+        run: |
+          set -o pipefail
+          bash scripts/render-showcase-remotion.sh 2>&1 | tee remotion-render.log
 
       - name: Verify generated promo data
         run: npm --prefix showcase/remotion run promo:data:check
