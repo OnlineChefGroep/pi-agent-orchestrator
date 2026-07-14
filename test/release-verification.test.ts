@@ -209,22 +209,45 @@ describe("transactional release workflow", () => {
     expect(verifier).toContain("CHANGELOG history from v0.17.1 backwards was modified");
   });
 
-  it("release.yml publishes once with provenance and exact tag recovery", () => {
+  it("isolates read-only verification, npm OIDC, and Git write permissions", () => {
+    const content = readRoot(".github/workflows/release.yml");
+    expect(content).toMatch(/^permissions:\s*\{\}/m);
+    const detect = content.match(/\n  detect:[\s\S]*?\n  verify:/)?.[0] ?? "";
+    const verify = content.match(/\n  verify:[\s\S]*?\n  publish:/)?.[0] ?? "";
+    const publish = content.match(/\n  publish:[\s\S]*?\n  finalize:/)?.[0] ?? "";
+    const finalize = content.match(/\n  finalize:[\s\S]*$/)?.[0] ?? "";
+    expect(detect).toContain("contents: read");
+    expect(verify).toContain("contents: read");
+    expect(verify).not.toContain("id-token: write");
+    expect(verify).not.toContain("contents: write");
+    expect(publish).toContain("id-token: write");
+    expect(publish).not.toContain("contents: write");
+    expect(finalize).toContain("contents: write");
+    expect(finalize).not.toContain("id-token: write");
+  });
+
+  it("publishes one immutable tarball with provenance and verifies registry integrity", () => {
     const content = readRoot(".github/workflows/release.yml");
     expect(content).toMatch(/registry-url:\s*"https:\/\/registry\.npmjs\.org"/);
-    expect(content).toMatch(/id-token:\s*write/);
-    expect(content).toMatch(/npm publish --access public --provenance --ignore-scripts/);
+    expect(content).toContain("actions/upload-artifact@");
+    expect(content).toContain("actions/download-artifact@");
+    expect(content).toContain('npm publish "release-artifact/$TARBALL"');
+    expect(content).toContain("--access public --provenance --ignore-scripts");
     expect(content).toMatch(/NODE_AUTH_TOKEN:\s*\$\{\{\s*secrets\.NPM_TOKEN\s*\}\}/);
-    expect(content).toContain("Run complete immutable release gate once");
+    expect(content).toContain("Registry dist.integrity does not match the reviewed tarball");
+    expect(content).toContain("Downloaded tarball integrity does not match the reviewed tarball");
     expect(content).toContain("git tag -a");
     expect(content).toContain("git rev-list -n1");
     expect(content).toContain("gh release create");
+    expect(fileExists("scripts/verify-published-package.mjs")).toBe(false);
   });
 
-  it("Super-Linter supports explicit dispatch for bot-created release PRs", () => {
+  it("Super-Linter supports explicit dispatch and retained diagnostics", () => {
     const linter = readRoot(".github/workflows/linter.yml");
     expect(linter).toMatch(/workflow_dispatch:/);
     expect(linter).toContain("github.event_name == 'workflow_dispatch'");
+    expect(linter).toContain("SAVE_SUPER_LINTER_OUTPUT: true");
+    expect(linter).toContain("Upload Super-Linter diagnostics");
   });
 
   it("legacy publish workflows remain removed", () => {
