@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: super-linter-${{ github.event.pull_request.number || github.ref }}
@@ -29,7 +30,9 @@ jobs:
       - name: Lint Code Base
         uses: super-linter/super-linter@4ce20838b8ab83717e78138c5b3a1407148e0918 # v8.7.0
         env:
-          VALIDATE_ALL_CODEBASE: false
+          # Bot-created release PRs explicitly dispatch this workflow because
+          # GitHub suppresses pull_request events created with GITHUB_TOKEN.
+          VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'workflow_dispatch' }}
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ENABLE_GITHUB_PULL_REQUEST_SUMMARY_COMMENT: false
