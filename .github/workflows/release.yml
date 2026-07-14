@@ -1,114 +1,173 @@
 name: Release
 
-# Direct-to-npm release flow, triggered by pushing a `v*` tag.
-# Also supports manual dispatch with an explicit version (main only).
-#
-# 1. CI gate (build, typecheck, lint, test)
-# 2. Publish to npmjs.org (public)
-# 3. Create a GitHub Release with auto-generated notes
-#
-# Required secret: NPM_TOKEN (npmjs.org publish token, org scope).
-# Trusted publishing (OIDC) is not enabled for this package yet; see
-# .github/NPM_SETUP.md.
+# Canonical npm publisher. This workflow never invents a version and never
+# publishes from an unreviewed branch or a floating tag. The guarded
+# prepare-release.yml workflow creates a minimal release PR. After that PR is
+# approved and squash-merged, this workflow publishes and tags that exact main
+# commit. Re-running a partially failed job is safe and does not republish.
 
 on:
   push:
-    tags:
-      - "v*"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to release (e.g. 0.18.0). Must be > latest published on npm."
-        required: true
+    branches: [main]
+    paths:
+      - CHANGELOG.md
+      - package.json
+      - package-lock.json
 
 permissions:
-  contents: write # create the GitHub Release
+  contents: write
+  id-token: write
+
+concurrency:
+  group: npm-release-production
+  cancel-in-progress: false
 
 jobs:
-  release:
-    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+  detect:
+    name: Detect reviewed release commit
     runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.release.outputs.should_release }}
+      version: ${{ steps.release.outputs.version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Checkout release candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          fetch-depth: 0
+          fetch-depth: 2
           persist-credentials: false
 
-      - name: Ensure tag is reachable from main
-        if: github.event_name == 'push'
+      - name: Match the canonical release commit
+        id: release
+        shell: bash
         run: |
-          git fetch origin main
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "Release tag commit must be reachable from origin/main" >&2
-            exit 1
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          SUBJECT="$(git log -1 --pretty=%s)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$SUBJECT" != "chore(release): v$VERSION" ]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "No release: main commit is not the canonical release transaction."
+            exit 0
           fi
+          node scripts/release-policy.mjs candidate "$VERSION"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Publish, tag, and create GitHub Release
+    needs: detect
+    if: needs.detect.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      RELEASE_VERSION: ${{ needs.detect.outputs.version }}
+    steps:
+      - name: Checkout exact merged release commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: "22.x"
+          node-version: 22.19
           registry-url: "https://registry.npmjs.org"
-          # zizmor cache-poisoning: never cache in a release/publish workflow
           package-manager-cache: false
+
+      - name: Validate release transaction and source integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git log -1 --pretty=%s)" = "chore(release): v$RELEASE_VERSION"
+          ACTUAL="$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | sort)"
+          EXPECTED="$(printf '%s\n' CHANGELOG.md package-lock.json package.json | sort)"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "Release commit contains files outside the transactional allowlist:" >&2
+            printf '%s\n' "$ACTUAL" >&2
+            exit 1
+          fi
+          npm run verify:release-policy
+          node scripts/release-policy.mjs candidate "$RELEASE_VERSION"
+          grep -Eq "^## v${RELEASE_VERSION//./\\.} \\([0-9]{4}-[0-9]{2}-[0-9]{2}\\)$" CHANGELOG.md
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm test
-
-      - name: Resolve and validate version
-        id: version
-        env:
-          INPUT_VERSION: ${{ github.event.inputs.version }}
+      - name: Run complete immutable release gate
         run: |
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            VERSION="${INPUT_VERSION#v}"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-          fi
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid semver: $VERSION" >&2
-            exit 1
-          fi
+          npm run build
+          npm run typecheck
+          npm run lint
+          npm test
+          npm run verify:package
+          npm pack --dry-run --json > npm-pack.json
+          node scripts/verify-npm-pack.mjs npm-pack.json
+
+      - name: Determine whether npm publish is required
+        id: npm
+        shell: bash
+        run: |
+          set -euo pipefail
           PUBLISHED="$(npm view @onlinechefgroep/pi-agent-orchestrator version)"
-          HIGHER="$(printf '%s\n%s\n' "$PUBLISHED" "$VERSION" | sort -V | tail -n1)"
-          if [ "$VERSION" = "$PUBLISHED" ] || [ "$HIGHER" != "$VERSION" ]; then
-            echo "Release version $VERSION must be > published $PUBLISHED" >&2
+          if [ "$PUBLISHED" = "$RELEASE_VERSION" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "npm already contains $RELEASE_VERSION; continuing recovery with tag/release verification."
+            exit 0
+          fi
+          HIGHEST="$(printf '%s\n%s\n' "$PUBLISHED" "$RELEASE_VERSION" | sort -V | tail -n1)"
+          if [ "$HIGHEST" != "$RELEASE_VERSION" ]; then
+            echo "Refusing to publish $RELEASE_VERSION behind npm version $PUBLISHED." >&2
             exit 1
           fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Releasing @onlinechefgroep/pi-agent-orchestrator@$VERSION (published=$PUBLISHED)"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
 
-      - name: Set package version
-        env:
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-        run: npm version "$RELEASE_VERSION" --no-git-tag-version --allow-same-version
-
-      - name: Publish to npmjs.org
-        # NPM_TOKEN until trusted publishing is configured; see .github/NPM_SETUP.md
-        run: npm publish --access public # zizmor: ignore[use-trusted-publishing]
+      - name: Publish to npmjs.org with provenance
+        if: steps.npm.outputs.publish == 'true'
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Create GitHub Release
+      - name: Create or verify exact Git tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="v$RELEASE_VERSION"
+          git fetch origin --tags
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            TAG_COMMIT="$(git rev-list -n1 "$TAG")"
+            test "$TAG_COMMIT" = "$GITHUB_SHA" || {
+              echo "$TAG points to $TAG_COMMIT instead of release commit $GITHUB_SHA" >&2
+              exit 1
+            }
+            echo "$TAG already points to the correct commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" "$GITHUB_SHA" -m "$TAG"
+            git push origin "refs/tags/$TAG"
+          fi
+
+      - name: Create or verify GitHub Release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          TAG="v${RELEASE_VERSION}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --generate-notes --title "$TAG" --verify-tag
+          set -euo pipefail
+          TAG="v$RELEASE_VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "GitHub Release $TAG already exists."
           else
-            gh release create "$TAG" --generate-notes --title "$TAG" --target "${GITHUB_SHA}"
+            gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
           fi
+
+      - name: Publish release summary
+        run: |
+          {
+            echo "## Released v$RELEASE_VERSION"
+            echo
+            echo "- Source commit: \`$GITHUB_SHA\`"
+            echo "- npm: \`@onlinechefgroep/pi-agent-orchestrator@$RELEASE_VERSION\`"
+            echo "- Tag: \`v$RELEASE_VERSION\`"
+            echo "- Release train remains locked to \`0.18.x\`; \`0.19.0\` is blocked by policy."
+          } >> "$GITHUB_STEP_SUMMARY"
