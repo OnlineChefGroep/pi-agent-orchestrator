@@ -40,6 +40,7 @@ function createReleaseSandbox(): string {
     "scripts/prepare-release.mjs",
     "scripts/release-policy.mjs",
     "scripts/verify-release-transaction.mjs",
+    "scripts/verify-version-transition.mjs",
   ]) {
     copyFixture(root, path);
   }
@@ -58,7 +59,7 @@ afterEach(() => {
 });
 
 describe("v0.18 release transaction", () => {
-  it("prepares, validates, and rejects a manipulated release commit", () => {
+  it("prepares, validates, and rejects manipulated release paths", () => {
     const root = createReleaseSandbox();
     const prepare = node(root, "scripts/prepare-release.mjs", "0.18.0", "2026-07-14");
     expect(prepare.status, prepare.stderr).toBe(0);
@@ -87,6 +88,24 @@ describe("v0.18 release transaction", () => {
       "0.18.0",
     );
     expect(verify.status, verify.stderr).toBe(0);
+
+    const transition = node(
+      root,
+      "scripts/verify-version-transition.mjs",
+      "HEAD^",
+      "HEAD",
+      "release/v0.18.0",
+    );
+    expect(transition.status, transition.stderr).toBe(0);
+    const wrongBranch = node(
+      root,
+      "scripts/verify-version-transition.mjs",
+      "HEAD^",
+      "HEAD",
+      "feature/version-bump",
+    );
+    expect(wrongBranch.status).not.toBe(0);
+    expect(wrongBranch.stderr).toContain("version changes are allowed only on release/v0.18.0");
 
     pkg.description = "tampered after release preparation";
     writeFileSync(join(root, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
