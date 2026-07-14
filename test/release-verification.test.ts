@@ -1,10 +1,11 @@
 /**
- * release-verification.test.ts — Verify release artifacts for MIT open-source dual-publish.
+ * release-verification.test.ts — Offline verification of the public npm release contract.
  *
- * Tests cover: npm pack output, license consistency, registry URL correctness.
- * These tests run offline — no network access required.
+ * Tests cover package contents, license consistency, registry configuration,
+ * the frozen 0.18 release train, and the prepare/publish workflow split.
  */
 
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -19,16 +20,30 @@ function fileExists(file: string): boolean {
   return existsSync(resolve(root, file));
 }
 
-// ── Task 12: npm pack verification ──────────────────────────────────────────
+function runReleasePolicy(...args: string[]) {
+  return spawnSync(process.execPath, ["scripts/release-policy.mjs", ...args], {
+    cwd: root,
+    encoding: "utf8",
+  });
+}
+
+// ── npm pack verification ────────────────────────────────────────────────────
 
 describe("npm pack verification", () => {
-  it("package.json files field includes expected entries", () => {
+  it("package.json files field includes every public package resource", () => {
     const pkg = JSON.parse(readRoot("package.json"));
     const files: string[] = pkg.files ?? [];
-    expect(files).toContain("src/");
-    expect(files).toContain("README.md");
-    expect(files).toContain("CHANGELOG.md");
-    expect(files).toContain("LICENSE");
+    for (const required of [
+      "dist/",
+      "src/",
+      "skills/",
+      "prompts/",
+      "README.md",
+      "CHANGELOG.md",
+      "LICENSE",
+    ]) {
+      expect(files).toContain(required);
+    }
   });
 
   it(".npmignore excludes package-lock.json", () => {
@@ -46,7 +61,7 @@ describe("npm pack verification", () => {
   });
 });
 
-// ── Task 13: License header verification ────────────────────────────────────
+// ── License verification ─────────────────────────────────────────────────────
 
 describe("license verification", () => {
   it("LICENSE file exists and is MIT", () => {
@@ -61,13 +76,8 @@ describe("license verification", () => {
     expect(pkg.license).toBe("MIT");
   });
 
-  it("no proprietary markings in source files", () => {
-    const proprietaryTerms = [
-      "All Rights Reserved",
-      "Proprietary",
-      "Confidential",
-    ];
-    // Spot-check a few key source files
+  it("no proprietary markings in key source files", () => {
+    const proprietaryTerms = ["All Rights Reserved", "Proprietary", "Confidential"];
     const sourceFiles = [
       "src/index.ts",
       "src/types.ts",
@@ -77,30 +87,24 @@ describe("license verification", () => {
     for (const file of sourceFiles) {
       if (!fileExists(file)) continue;
       const content = readRoot(file);
-      for (const term of proprietaryTerms) {
-        expect(content).not.toContain(term);
-      }
+      for (const term of proprietaryTerms) expect(content).not.toContain(term);
     }
   });
 
-  it("SECURITY.md and CODE_OF_CONDUCT.md exist", () => {
+  it("public governance and security files exist", () => {
     expect(fileExists("SECURITY.md")).toBe(true);
     expect(fileExists("CODE_OF_CONDUCT.md")).toBe(true);
-  });
-
-  it("ROADMAP.md exists and ENTERPRISE_READINESS.md is deleted", () => {
     expect(fileExists("ROADMAP.md")).toBe(true);
     expect(fileExists("ENTERPRISE_READINESS.md")).toBe(false);
   });
 });
 
-// ── Node.js engine version consistency (CVE-001 follow-up: pin to 22.19) ────
+// ── Node.js version consistency ──────────────────────────────────────────────
 
 describe("Node.js version consistency", () => {
-  it(".nvmrc pins the exact Node version used by CI", () => {
+  it(".nvmrc pins the exact Node version used by release-critical CI", () => {
     expect(fileExists(".nvmrc")).toBe(true);
-    const nvmrc = readRoot(".nvmrc").trim();
-    expect(nvmrc).toBe("22.19.0");
+    expect(readRoot(".nvmrc").trim()).toBe("22.19.0");
   });
 
   it("package.json engines.node requires at least the .nvmrc version", () => {
@@ -108,59 +112,122 @@ describe("Node.js version consistency", () => {
     expect(pkg.engines?.node).toBe(">=22.19.0");
   });
 
-  it("package-lock.json root package engines.node matches package.json", () => {
+  it("package-lock root metadata matches package.json", () => {
     const pkg = JSON.parse(readRoot("package.json"));
     const lock = JSON.parse(readRoot("package-lock.json"));
     const rootPackage = lock.packages?.[""];
     expect(rootPackage?.engines?.node).toBe(pkg.engines.node);
-    // Top-level name/version metadata should also stay in sync with package.json.
     expect(lock.name).toBe(pkg.name);
+    expect(rootPackage?.name).toBe(pkg.name);
     expect(lock.version).toBe(pkg.version);
+    expect(rootPackage?.version).toBe(pkg.version);
   });
 
-  it("ci.yml pins setup-node to the same minor version as .nvmrc for jobs that install/build/test", () => {
-    const nvmrc = readRoot(".nvmrc").trim();
-    const [major, minor] = nvmrc.split(".");
-    const expectedNodeVersion = `${major}.${minor}`;
-
+  it("ci.yml pins release-critical Linux jobs to Node 22.19", () => {
     const ci = readRoot(".github/workflows/ci.yml");
-    // The "quality" and "lowest-peer-dependencies" jobs run typecheck/build/test
-    // and must use the pinned patch-aligned minor version, not a bare major version.
-    const pinnedNodeVersionMatches = [...ci.matchAll(/node-version:\s*([0-9.]+)/g)].map((m) => m[1]);
-    expect(pinnedNodeVersionMatches).toContain(expectedNodeVersion);
-    expect(pinnedNodeVersionMatches.filter((v) => v === expectedNodeVersion).length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("ci.yml does not regress to an unpinned bare major Node version for the quality gate job", () => {
-    const ci = readRoot(".github/workflows/ci.yml");
-    const qualityJobMatch = ci.match(/quality:[\s\S]*?compatibility:/);
-    expect(qualityJobMatch).not.toBeNull();
-    expect(qualityJobMatch![0]).toMatch(/node-version:\s*22\.19/);
-    expect(qualityJobMatch![0]).not.toMatch(/node-version:\s*22\s*$/m);
+    const pinned = [...ci.matchAll(/node-version:\s*22\.19/g)];
+    expect(pinned.length).toBeGreaterThanOrEqual(3);
+    const qualityJob = ci.match(/quality:[\s\S]*?compatibility:/)?.[0] ?? "";
+    expect(qualityJob).toMatch(/node-version:\s*22\.19/);
+    expect(qualityJob).not.toMatch(/node-version:\s*22\s*$/m);
   });
 });
 
-// ── Task 14: Registry URL verification ──────────────────────────────────────
+// ── Frozen release train ─────────────────────────────────────────────────────
 
-describe("registry URL verification", () => {
-  it("release.yml publishes to npmjs.org", () => {
-    expect(fileExists(".github/workflows/release.yml")).toBe(true);
-    const content = readRoot(".github/workflows/release.yml");
-    expect(content).toMatch(/registry-url:\s*"https:\/\/registry\.npmjs\.org"/);
-    expect(content).toMatch(/name:\s*Publish to npmjs\.org/);
-    expect(content).toMatch(/NODE_AUTH_TOKEN:\s*\$\{\{\s*secrets\.NPM_TOKEN\s*\}\}/);
-    expect(content).toMatch(/gh release create/);
-    expect(content).toMatch(/v\$\{RELEASE_VERSION\}|v\$\{\{ steps\.version\.outputs\.version \}\}/);
+describe("0.18 release policy", () => {
+  it("declares 0.18.x as the only allowed train and blocks 0.19.0", () => {
+    const policy = JSON.parse(readRoot(".release-policy.json"));
+    expect(policy.releaseTrain).toBe("0.18");
+    expect(policy.initialRelease).toBe("0.18.0");
+    expect(policy.sourceBaselines).toEqual(["0.17.1"]);
+    expect(policy.allowPrerelease).toBe(false);
+    expect(policy.blockedNextMinor).toBe("0.19.0");
+    expect(policy.releaseCommitTitle).toBe("chore(release): v0.18.0");
   });
 
-  it("legacy publish workflows are removed in favor of release.yml", () => {
+  it("accepts stable 0.18 candidates", () => {
+    expect(runReleasePolicy("candidate", "0.18.0").status).toBe(0);
+    expect(runReleasePolicy("candidate", "0.18.7").status).toBe(0);
+  });
+
+  it("rejects 0.19, old trains, and prereleases", () => {
+    for (const blocked of ["0.19.0", "0.17.2", "1.0.0", "0.18.0-beta.1"]) {
+      const result = runReleasePolicy("candidate", blocked);
+      expect(result.status, `${blocked}: ${result.stderr}`).not.toBe(0);
+    }
+  });
+
+  it("accepts the current synchronized repository state", () => {
+    const result = runReleasePolicy("repository");
+    expect(result.status, result.stderr).toBe(0);
+  });
+
+  it("ships a non-empty v0.18.0 release record template", () => {
+    const notes = readRoot("docs/releases/v0.18.0.md");
+    expect(notes).toContain("### Pi package distribution");
+    expect(notes).toContain("### Release integrity");
+    expect(notes).toContain("### Runtime and security hardening");
+  });
+});
+
+// ── Transactional release workflows ─────────────────────────────────────────
+
+describe("transactional release workflow", () => {
+  it("provides an explicit guarded Prepare Release 0.18.0 button", () => {
+    expect(fileExists(".github/workflows/prepare-release.yml")).toBe(true);
+    const content = readRoot(".github/workflows/prepare-release.yml");
+    expect(content).toMatch(/name:\s*Prepare Release 0\.18\.0/);
+    expect(content).toMatch(/workflow_dispatch:/);
+    expect(content).toContain("RELEASE 0.18.0");
+    expect(content).toContain("node scripts/prepare-release.mjs");
+    expect(content).toContain("gh pr create");
+    expect(content).toContain("gh workflow run ci.yml");
+    expect(content).toContain("gh workflow run linter.yml");
+    expect(content).toContain("--auto --squash");
+    expect(content).not.toMatch(/npm publish/);
+  });
+
+  it("release.yml publishes only a reviewed main version commit", () => {
+    expect(fileExists(".github/workflows/release.yml")).toBe(true);
+    const content = readRoot(".github/workflows/release.yml");
+    expect(content).toMatch(/branches:\s*\[main\]/);
+    expect(content).not.toMatch(/tags:\s*\n/);
+    expect(content).toContain("chore(release): v$VERSION");
+    expect(content).toContain("git diff-tree --no-commit-id --name-only");
+    expect(content).toContain("CHANGELOG.md package-lock.json package.json");
+    expect(content).toContain("node scripts/release-policy.mjs candidate");
+  });
+
+  it("release.yml publishes to npmjs.org with provenance and exact tag recovery", () => {
+    const content = readRoot(".github/workflows/release.yml");
+    expect(content).toMatch(/registry-url:\s*"https:\/\/registry\.npmjs\.org"/);
+    expect(content).toMatch(/id-token:\s*write/);
+    expect(content).toMatch(/npm publish --access public --provenance/);
+    expect(content).toMatch(/NODE_AUTH_TOKEN:\s*\$\{\{\s*secrets\.NPM_TOKEN\s*\}\}/);
+    expect(content).toContain("git tag -a");
+    expect(content).toContain("git rev-list -n1");
+    expect(content).toContain("gh release create");
+  });
+
+  it("Super-Linter supports explicit dispatch for bot-created release PRs", () => {
+    const linter = readRoot(".github/workflows/linter.yml");
+    expect(linter).toMatch(/workflow_dispatch:/);
+    expect(linter).toContain("github.event_name == 'workflow_dispatch'");
+  });
+
+  it("legacy publish workflows remain removed", () => {
     expect(fileExists(".github/workflows/publish.yml")).toBe(false);
     expect(fileExists(".github/workflows/publish-npm.yml")).toBe(false);
   });
 
-  it("package.json publishConfig.registry points to npmjs.org", () => {
+  it("package.json publishConfig points to public npm", () => {
     const pkg = JSON.parse(readRoot("package.json"));
     expect(pkg.publishConfig?.registry).toBe("https://registry.npmjs.org");
     expect(pkg.publishConfig?.access).toBe("public");
+    expect(pkg.scripts?.["verify:release-policy"]).toBe(
+      "node scripts/release-policy.mjs repository",
+    );
+    expect(pkg.scripts?.prepublishOnly).toContain("npm run verify:release-policy");
   });
 });
