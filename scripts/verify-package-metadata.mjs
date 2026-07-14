@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { REQUIRED_RESOURCE_FILES } from "./package-resource-contract.mjs";
 
 const packageJson = JSON.parse(
   await readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -7,12 +8,6 @@ const packageJson = JSON.parse(
 const CANONICAL_REPOSITORY = "https://github.com/OnlineChefGroep/pi-agent-orchestrator";
 const CANONICAL_PREVIEW =
   "https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4";
-const REQUIRED_RESOURCE_FILES = [
-  "skills/pi-orchestra/SKILL.md",
-  "prompts/orchestra-audit.md",
-  "prompts/orchestra-plan.md",
-  "prompts/orchestra-implement.md",
-];
 
 function assert(condition, message) {
   if (!condition) {
@@ -62,14 +57,19 @@ for (const resourcePath of REQUIRED_RESOURCE_FILES) {
   const normalizedContent = content.replace(/^\uFEFF/, "");
   const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(normalizedContent);
   assert(frontmatter, `${resourcePath} is missing valid frontmatter`);
+  const frontmatterBody = frontmatter[1];
   assert(
-    /(?:^|\r?\n)description:\s*\S/.test(frontmatter[1]),
+    /(?:^|\r?\n)description:\s*\S/.test(frontmatterBody),
     `${resourcePath} is missing a frontmatter description`,
   );
-}
 
-const skill = await readFile(new URL("../skills/pi-orchestra/SKILL.md", import.meta.url), "utf8");
-assert(skill.replace(/^\uFEFF/, "").includes("name: pi-orchestra"), "Orchestra skill name is invalid");
+  if (resourcePath === "skills/pi-orchestra/SKILL.md") {
+    assert(
+      /(?:^|\r?\n)name:\s*pi-orchestra\s*(?:\r?\n|$)/.test(frontmatterBody),
+      "Orchestra skill frontmatter name is invalid",
+    );
+  }
+}
 
 const preview = packageJson.pi?.video;
 assert(preview === CANONICAL_PREVIEW, "Pi gallery video must use the canonical showcase asset");
