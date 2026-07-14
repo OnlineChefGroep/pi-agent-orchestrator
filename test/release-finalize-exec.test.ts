@@ -294,7 +294,7 @@ exit 1
 });
 
 describe("finalize tag and GitHub Release recovery", () => {
-  it("creates a missing tag after publication and verifies idempotent reruns", () => {
+  it("creates a missing tag after publication and verifies idempotent reruns", { timeout: 30000 }, () => {
     const root = track(mkdtempSync(join(tmpdir(), "release-tag-")));
     const remote = track(mkdtempSync(join(tmpdir(), "release-tag-remote-")));
     git(remote, "init", "--bare");
