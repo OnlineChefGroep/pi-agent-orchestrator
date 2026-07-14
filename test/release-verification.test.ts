@@ -181,6 +181,7 @@ describe("transactional release workflow", () => {
     expect(content).toMatch(/workflow_dispatch:/);
     expect(content).toContain("RELEASE 0.18.0");
     expect(content).toContain("node scripts/prepare-release.mjs");
+    expect(content).toContain("node scripts/verify-release-transaction.mjs HEAD^ HEAD");
     expect(content).toContain("gh pr create");
     expect(content).toContain("gh workflow run ci.yml");
     expect(content).toContain("gh workflow run linter.yml");
@@ -188,15 +189,20 @@ describe("transactional release workflow", () => {
     expect(content).not.toMatch(/npm publish/);
   });
 
-  it("release.yml publishes only a reviewed main version commit", () => {
+  it("release.yml publishes only a semantically verified reviewed commit", () => {
     expect(fileExists(".github/workflows/release.yml")).toBe(true);
+    expect(fileExists("scripts/verify-release-transaction.mjs")).toBe(true);
     const content = readRoot(".github/workflows/release.yml");
+    const verifier = readRoot("scripts/verify-release-transaction.mjs");
     expect(content).toMatch(/branches:\s*\[main\]/);
     expect(content).not.toMatch(/tags:\s*\n/);
     expect(content).toContain("chore(release): v$VERSION");
-    expect(content).toContain("git diff-tree --no-commit-id --name-only");
-    expect(content).toContain("CHANGELOG.md package-lock.json package.json");
+    expect(content).toContain("node scripts/verify-release-transaction.mjs");
     expect(content).toContain("node scripts/release-policy.mjs candidate");
+    expect(verifier).toContain('ALLOWED_FILES = ["CHANGELOG.md", "package-lock.json", "package.json"]');
+    expect(verifier).toContain("package.json changed fields other than version");
+    expect(verifier).toContain("package-lock changed outside top-level version");
+    expect(verifier).toContain("CHANGELOG history from v0.17.1 backwards was modified");
   });
 
   it("release.yml publishes to npmjs.org with provenance and exact tag recovery", () => {
