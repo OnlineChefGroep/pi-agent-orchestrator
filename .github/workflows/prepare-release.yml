@@ -65,11 +65,12 @@ jobs:
             echo "Tag v$RELEASE_VERSION already exists." >&2
             exit 1
           fi
-          PUBLISHED="$(npm view @onlinechefgroep/pi-agent-orchestrator version)"
-          test "$PUBLISHED" != "$RELEASE_VERSION" || {
-            echo "npm already contains $RELEASE_VERSION; use release recovery instead of preparing again." >&2
+          PACKAGE="@onlinechefgroep/pi-agent-orchestrator"
+          # Exact version existence — never use the floating `latest` dist-tag here.
+          if npm view "$PACKAGE@$RELEASE_VERSION" version >/dev/null 2>&1; then
+            echo "npm already contains $PACKAGE@$RELEASE_VERSION; use release recovery instead of preparing again." >&2
             exit 1
-          }
+          fi
 
       - name: Install dependencies
         run: npm ci

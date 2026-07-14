@@ -167,15 +167,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PUBLISHED="$(npm view @onlinechefgroep/pi-agent-orchestrator version)"
-          if [ "$PUBLISHED" = "$RELEASE_VERSION" ]; then
+          PACKAGE="@onlinechefgroep/pi-agent-orchestrator"
+          # Exact version first. `npm view pkg version` only reads the `latest` tag
+          # and would mis-classify recovery when latest points elsewhere.
+          if npm view "$PACKAGE@$RELEASE_VERSION" version >/dev/null 2>&1; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "npm already contains $RELEASE_VERSION; continuing recovery with registry/tag/release verification."
+            echo "npm already contains $PACKAGE@$RELEASE_VERSION; continuing recovery with registry/tag/release verification."
             exit 0
           fi
-          HIGHEST="$(printf '%s\n%s\n' "$PUBLISHED" "$RELEASE_VERSION" | sort -V | tail -n1)"
+          LATEST="$(npm view "$PACKAGE" version)"
+          HIGHEST="$(printf '%s\n%s\n' "$LATEST" "$RELEASE_VERSION" | sort -V | tail -n1)"
           if [ "$HIGHEST" != "$RELEASE_VERSION" ]; then
-            echo "Refusing to publish $RELEASE_VERSION behind npm version $PUBLISHED." >&2
+            echo "Refusing to publish $RELEASE_VERSION behind npm latest $LATEST." >&2
             exit 1
           fi
           echo "publish=true" >> "$GITHUB_OUTPUT"
@@ -277,13 +280,36 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.detect.outputs.version }}
+          EXPECTED_TITLE: v${{ needs.detect.outputs.version }}
         run: |
           set -euo pipefail
-          TAG="v$RELEASE_VERSION"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "GitHub Release $TAG already exists."
+          if gh release view "$TAG" --json tagName,isDraft,isPrerelease,name > release-meta.json 2>/dev/null; then
+            node --input-type=module <<'NODE'
+            import { readFile } from "node:fs/promises";
+            import { spawnSync } from "node:child_process";
+            import { validateGitHubReleaseMetadata } from "./scripts/release-recovery.mjs";
+
+            const release = JSON.parse(await readFile("release-meta.json", "utf8"));
+            const tagName = process.env.TAG;
+            const expected = { tagName, name: process.env.EXPECTED_TITLE };
+            const result = validateGitHubReleaseMetadata(release, expected);
+            if (result.repairs.length > 0) {
+              const edited = spawnSync(
+                "gh",
+                ["release", "edit", tagName, "--draft=false", "--prerelease=false", "--title", expected.name],
+                { encoding: "utf8" },
+              );
+              if (edited.status !== 0) {
+                throw new Error(edited.stderr || edited.stdout || "gh release edit failed");
+              }
+              console.log(`Repaired GitHub Release ${tagName} metadata: ${result.repairs.join(", ")}`);
+            } else {
+              console.log(`GitHub Release ${tagName} already exists with correct metadata.`);
+            }
+            NODE
           else
-            gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
+            gh release create "$TAG" --verify-tag --generate-notes --title "$EXPECTED_TITLE"
           fi
 
       - name: Publish release summary

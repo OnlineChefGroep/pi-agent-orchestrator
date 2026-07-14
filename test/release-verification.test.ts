@@ -190,6 +190,10 @@ describe("transactional release workflow", () => {
     expect(content).toContain("gh workflow run linter.yml");
     expect(content).toContain("--auto --squash");
     expect(content).not.toMatch(/npm publish/);
+    expect(content).toContain('npm view "$PACKAGE@$RELEASE_VERSION" version');
+    expect(content).not.toMatch(
+      /PUBLISHED="\$\(npm view @onlinechefgroep\/pi-agent-orchestrator version\)"/,
+    );
   });
 
   it("release.yml publishes only a semantically verified reviewed commit", () => {
@@ -207,6 +211,20 @@ describe("transactional release workflow", () => {
     expect(verifier).toContain("package.json changed fields other than version");
     expect(verifier).toContain("package-lock changed outside top-level version");
     expect(verifier).toContain("CHANGELOG history from v0.17.1 backwards was modified");
+  });
+
+  it("checks exact npm versions and validates GitHub Release recovery metadata", () => {
+    const prepare = readRoot(".github/workflows/prepare-release.yml");
+    const release = readRoot(".github/workflows/release.yml");
+    expect(fileExists("scripts/release-recovery.mjs")).toBe(true);
+    expect(prepare).toContain('npm view "$PACKAGE@$RELEASE_VERSION" version');
+    expect(release).toContain('npm view "$PACKAGE@$RELEASE_VERSION" version');
+    expect(release).toContain('LATEST="$(npm view "$PACKAGE" version)"');
+    expect(release).toContain("gh release view \"$TAG\" --json tagName,isDraft,isPrerelease,name");
+    expect(release).toContain("validateGitHubReleaseMetadata");
+    expect(release).toContain("gh release edit");
+    expect(release).toContain("--draft=false");
+    expect(release).toContain("--prerelease=false");
   });
 
   it("isolates read-only verification, npm OIDC, and Git write permissions", () => {
