@@ -36,7 +36,7 @@ export interface PromoData {
   architectureAscii: string;
 }
 
-export interface FeatureTourProps {
+export interface FeatureTourProps extends Record<string, unknown> {
   dataFile?: string;
 }
 
