@@ -7,6 +7,12 @@ const packageJson = JSON.parse(
 const CANONICAL_REPOSITORY = "https://github.com/OnlineChefGroep/pi-agent-orchestrator";
 const CANONICAL_PREVIEW =
   "https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4";
+const REQUIRED_RESOURCE_FILES = [
+  "skills/pi-orchestra/SKILL.md",
+  "prompts/orchestra-audit.md",
+  "prompts/orchestra-plan.md",
+  "prompts/orchestra-implement.md",
+];
 
 function assert(condition, message) {
   if (!condition) {
@@ -35,9 +41,29 @@ assert(
 );
 
 const extensions = packageJson.pi?.extensions;
+const skills = packageJson.pi?.skills;
+const prompts = packageJson.pi?.prompts;
 assert(Array.isArray(extensions) && extensions.length > 0, "pi.extensions must not be empty");
 assert(extensions.includes("./dist/index.js"), "compiled extension entrypoint is not declared");
+assert(Array.isArray(skills) && skills.includes("./skills"), "Orchestra skill resources are not declared");
+assert(Array.isArray(prompts) && prompts.includes("./prompts"), "Orchestra prompt resources are not declared");
 assert(packageJson.files?.includes("dist/"), "dist/ is excluded from the npm tarball");
+assert(packageJson.files?.includes("skills/"), "skills/ is excluded from the npm tarball");
+assert(packageJson.files?.includes("prompts/"), "prompts/ is excluded from the npm tarball");
+
+for (const resourcePath of REQUIRED_RESOURCE_FILES) {
+  let content;
+  try {
+    content = await readFile(new URL(`../${resourcePath}`, import.meta.url), "utf8");
+  } catch {
+    throw new Error(`Package metadata check failed: missing required resource ${resourcePath}`);
+  }
+  assert(content.startsWith("---\n"), `${resourcePath} is missing frontmatter`);
+  assert(content.includes("description:"), `${resourcePath} is missing a description`);
+}
+
+const skill = await readFile(new URL("../skills/pi-orchestra/SKILL.md", import.meta.url), "utf8");
+assert(skill.includes("name: pi-orchestra"), "Orchestra skill name is invalid");
 
 const preview = packageJson.pi?.video;
 assert(preview === CANONICAL_PREVIEW, "Pi gallery video must use the canonical showcase asset");
@@ -60,5 +86,5 @@ for (const dependencyName of Object.keys(packageJson.dependencies ?? {})) {
 }
 
 console.log(
-  `Package metadata ready: ${packageJson.name}@${packageJson.version} with Pi gallery video`,
+  `Package metadata ready: ${packageJson.name}@${packageJson.version} with extension, skill, prompts, and Pi gallery video`,
 );
