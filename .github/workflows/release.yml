@@ -149,6 +149,15 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.detect.outputs.version }}
     steps:
+      - name: Checkout release helpers read-only
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/release-recovery.mjs
+          sparse-checkout-cone-mode: false
+
       - name: Download immutable release artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -168,20 +177,7 @@ jobs:
         run: |
           set -euo pipefail
           PACKAGE="@onlinechefgroep/pi-agent-orchestrator"
-          # Exact version first. `npm view pkg version` only reads the `latest` tag
-          # and would mis-classify recovery when latest points elsewhere.
-          if npm view "$PACKAGE@$RELEASE_VERSION" version >/dev/null 2>&1; then
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "npm already contains $PACKAGE@$RELEASE_VERSION; continuing recovery with registry/tag/release verification."
-            exit 0
-          fi
-          LATEST="$(npm view "$PACKAGE" version)"
-          HIGHEST="$(printf '%s\n%s\n' "$LATEST" "$RELEASE_VERSION" | sort -V | tail -n1)"
-          if [ "$HIGHEST" != "$RELEASE_VERSION" ]; then
-            echo "Refusing to publish $RELEASE_VERSION behind npm latest $LATEST." >&2
-            exit 1
-          fi
-          echo "publish=true" >> "$GITHUB_OUTPUT"
+          node scripts/release-recovery.mjs decide-publish "$PACKAGE" "$RELEASE_VERSION"
 
       - name: Publish immutable tarball with provenance
         if: steps.npm.outputs.publish == 'true'
@@ -280,38 +276,10 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: v${{ needs.detect.outputs.version }}
-          EXPECTED_TITLE: v${{ needs.detect.outputs.version }}
         run: |
           set -euo pipefail
-          if gh release view "$TAG" --json tagName,isDraft,isPrerelease,name > release-meta.json 2>/dev/null; then
-            node --input-type=module <<'NODE'
-            import { readFile } from "node:fs/promises";
-            import { spawnSync } from "node:child_process";
-            import { validateGitHubReleaseMetadata } from "./scripts/release-recovery.mjs";
-
-            const release = JSON.parse(await readFile("release-meta.json", "utf8"));
-            const tagName = process.env.TAG;
-            const expected = { tagName, name: process.env.EXPECTED_TITLE };
-            const result = validateGitHubReleaseMetadata(release, expected);
-            if (result.repairs.length > 0) {
-              const edited = spawnSync(
-                "gh",
-                ["release", "edit", tagName, "--draft=false", "--prerelease=false", "--title", expected.name],
-                { encoding: "utf8" },
-              );
-              if (edited.status !== 0) {
-                throw new Error(edited.stderr || edited.stdout || "gh release edit failed");
-              }
-              console.log(`Repaired GitHub Release ${tagName} metadata: ${result.repairs.join(", ")}`);
-            } else {
-              console.log(`GitHub Release ${tagName} already exists with correct metadata.`);
-            }
-            NODE
-          else
-            gh release create "$TAG" --verify-tag --generate-notes --title "$EXPECTED_TITLE"
-          fi
-
+          TAG="v$RELEASE_VERSION"
+          node scripts/release-recovery.mjs ensure-github-release "$TAG" "$TAG"
       - name: Publish release summary
         run: |
           {

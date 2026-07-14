@@ -190,7 +190,7 @@ describe("transactional release workflow", () => {
     expect(content).toContain("gh workflow run linter.yml");
     expect(content).toContain("--auto --squash");
     expect(content).not.toMatch(/npm publish/);
-    expect(content).toContain('npm view "$PACKAGE@$RELEASE_VERSION" version');
+    expect(content).toContain("node scripts/release-recovery.mjs assert-absent");
     expect(content).not.toMatch(
       /PUBLISHED="\$\(npm view @onlinechefgroep\/pi-agent-orchestrator version\)"/,
     );
@@ -217,14 +217,13 @@ describe("transactional release workflow", () => {
     const prepare = readRoot(".github/workflows/prepare-release.yml");
     const release = readRoot(".github/workflows/release.yml");
     expect(fileExists("scripts/release-recovery.mjs")).toBe(true);
-    expect(prepare).toContain('npm view "$PACKAGE@$RELEASE_VERSION" version');
-    expect(release).toContain('npm view "$PACKAGE@$RELEASE_VERSION" version');
-    expect(release).toContain('LATEST="$(npm view "$PACKAGE" version)"');
-    expect(release).toContain("gh release view \"$TAG\" --json tagName,isDraft,isPrerelease,name");
-    expect(release).toContain("validateGitHubReleaseMetadata");
-    expect(release).toContain("gh release edit");
-    expect(release).toContain("--draft=false");
-    expect(release).toContain("--prerelease=false");
+    expect(prepare).toContain("node scripts/release-recovery.mjs assert-absent");
+    expect(release).toContain("node scripts/release-recovery.mjs decide-publish");
+    expect(release).toContain("node scripts/release-recovery.mjs ensure-github-release");
+    // Critical: finalize must not embed an indented bash here-doc (breaks `if` parsing).
+    expect(release).not.toMatch(/Create or verify GitHub Release[\s\S]*?<<'NODE'/);
+    expect(release).toContain("sparse-checkout:");
+    expect(release).toContain("scripts/release-recovery.mjs");
   });
 
   it("isolates read-only verification, npm OIDC, and Git write permissions", () => {
@@ -256,7 +255,8 @@ describe("transactional release workflow", () => {
     expect(content).toContain("Downloaded tarball integrity does not match the reviewed tarball");
     expect(content).toContain("git tag -a");
     expect(content).toContain("git rev-list -n1");
-    expect(content).toContain("gh release create");
+    expect(content).toContain("node scripts/release-recovery.mjs ensure-github-release");
+    expect(readRoot("scripts/release-recovery.mjs")).toContain("gh release create");
     expect(fileExists("scripts/verify-published-package.mjs")).toBe(false);
   });
 
