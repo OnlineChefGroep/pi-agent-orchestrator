@@ -80,7 +80,8 @@ export function assertReleaseCandidate(version, policy) {
   return parsed;
 }
 
-export async function verifyRepositoryReleaseState(root = ROOT) {
+export async function verifyRepositoryReleaseState(root = ROOT, options = {}) {
+  const { requireCandidate = false } = options;
   const policy = await loadReleasePolicy(root);
   const pkg = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
   const lock = JSON.parse(await readFile(resolve(root, "package-lock.json"), "utf8"));
@@ -97,7 +98,7 @@ export async function verifyRepositoryReleaseState(root = ROOT) {
 
   parseStableVersion(pkg.version);
   const isBaseline = policy.sourceBaselines.includes(pkg.version);
-  if (!isBaseline) {
+  if (requireCandidate || !isBaseline) {
     assertReleaseCandidate(pkg.version, policy);
     for (const field of ROOT_LOCK_FIELDS) {
       if (!sameJson(rootLock[field], pkg[field])) {
@@ -114,6 +115,9 @@ export async function verifyRepositoryReleaseState(root = ROOT) {
   if (!releaseHeader.test(changelog) && !templateExists) {
     fail(`missing CHANGELOG entry or release template for v${policy.initialRelease}`);
   }
+  if (requireCandidate && !releaseHeader.test(changelog)) {
+    fail(`publish state requires a finalized dated CHANGELOG entry for v${policy.initialRelease}`);
+  }
 
   return { policy, packageVersion: pkg.version, isBaseline };
 }
@@ -125,6 +129,13 @@ async function main() {
     const policy = await loadReleasePolicy();
     assertReleaseCandidate(version, policy);
     console.log(`Release candidate accepted: ${version} within ${policy.releaseTrain}.x`);
+    return;
+  }
+  if (mode === "publish") {
+    const result = await verifyRepositoryReleaseState(ROOT, { requireCandidate: true });
+    console.log(
+      `Publish policy ready: package=${result.packageVersion}, train=${result.policy.releaseTrain}.x, blocked=${result.policy.blockedNextMinor}`,
+    );
     return;
   }
   if (mode !== "repository") fail(`unknown mode ${JSON.stringify(mode)}`);
