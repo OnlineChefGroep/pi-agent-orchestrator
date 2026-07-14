@@ -36,13 +36,14 @@ describe("worktree agent ID safety", () => {
     const worktree = await createWorktree(repoDir, "../../etc/passwd");
     expect(worktree).toBeDefined();
     expect(resolve(worktree!.path).startsWith(resolve(tmpdir()))).toBe(true);
+    expect(worktree!.branch).toBe("pi-agent-etc-passwd");
 
     writeFileSync(join(worktree!.path, "agent-output.txt"), "safe");
     const result = cleanupWorktree(repoDir, worktree!, "validate sanitized agent ID");
 
     expect(result).toMatchObject({
       hasChanges: true,
-      branch: "pi-agent-etcpasswd",
+      branch: "pi-agent-etc-passwd",
     });
     expect(result.path).toBeUndefined();
 
