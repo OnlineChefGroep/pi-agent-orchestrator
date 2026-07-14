@@ -58,8 +58,14 @@ for (const resourcePath of REQUIRED_RESOURCE_FILES) {
   } catch {
     throw new Error(`Package metadata check failed: missing required resource ${resourcePath}`);
   }
-  assert(content.startsWith("---\n"), `${resourcePath} is missing frontmatter`);
-  assert(content.includes("description:"), `${resourcePath} is missing a description`);
+
+  const normalizedContent = content.replace(/^\uFEFF/, "");
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(normalizedContent);
+  assert(frontmatter, `${resourcePath} is missing valid frontmatter`);
+  assert(
+    /(?:^|\r?\n)description:\s*\S/.test(frontmatter[1]),
+    `${resourcePath} is missing a frontmatter description`,
+  );
 }
 
 const skill = await readFile(new URL("../skills/pi-orchestra/SKILL.md", import.meta.url), "utf8");
