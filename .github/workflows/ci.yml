@@ -55,7 +55,19 @@ jobs:
         run: npm run typecheck
 
       - name: Lint
-        run: npm run lint
+        id: lint
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee biome.log
+
+      - name: Upload Biome diagnostics
+        if: failure() && steps.lint.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: biome-diagnostics-${{ github.run_id }}
+          path: biome.log
+          retention-days: 14
 
       - name: Build
         run: npm run build
