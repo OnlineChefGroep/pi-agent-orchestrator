@@ -4,6 +4,16 @@ import { fileURLToPath } from "node:url";
 import { assertReleaseCandidate, loadReleasePolicy } from "./release-policy.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT_LOCK_FIELDS = [
+  "name",
+  "version",
+  "license",
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "peerDependenciesMeta",
+  "engines",
+];
 
 function fail(message) {
   throw new Error(`Release preparation failed: ${message}`);
@@ -11,6 +21,10 @@ function fail(message) {
 
 function formatJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function cloneJson(value) {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
 
 function validateDate(value) {
@@ -42,6 +56,7 @@ async function prepareRelease(version, releaseDate) {
   if (lock.version !== pkg.version || lock.packages?.[""]?.version !== pkg.version) {
     fail("package-lock versions are not synchronized before release preparation");
   }
+  if (!lock.packages?.[""]) fail("package-lock is missing packages[''] root metadata");
 
   const changelog = await readFile(changelogPath, "utf8");
   if (new RegExp(`^## v${version.replaceAll(".", "\\.")} \\(`, "m").test(changelog)) {
@@ -68,13 +83,19 @@ async function prepareRelease(version, releaseDate) {
 
   pkg.version = version;
   lock.version = version;
-  if (!lock.packages?.[""]) fail("package-lock is missing packages[''] root metadata");
-  lock.packages[""].version = version;
+  for (const field of ROOT_LOCK_FIELDS) {
+    const value = field === "version" ? version : pkg[field];
+    if (value === undefined) {
+      delete lock.packages[""][field];
+    } else {
+      lock.packages[""][field] = cloneJson(value);
+    }
+  }
 
   await writeFile(packagePath, formatJson(pkg));
   await writeFile(lockPath, formatJson(lock));
   await writeFile(changelogPath, nextChangelog);
-  console.log(`Prepared v${version} for ${releaseDate}`);
+  console.log(`Prepared v${version} for ${releaseDate} with synchronized package-lock root metadata`);
 }
 
 const version = process.argv[2];
