@@ -80,14 +80,13 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF" = "refs/heads/main"
           test "$(git log -1 --pretty=%s)" = "chore(release): v$RELEASE_VERSION"
-          npm run verify:release-policy
-          node scripts/release-policy.mjs candidate "$RELEASE_VERSION"
+          npm run verify:release-policy:publish
           node scripts/verify-release-transaction.mjs "$GITHUB_SHA^" "$GITHUB_SHA" "$RELEASE_VERSION"
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run complete immutable release gate
+      - name: Run complete immutable release gate once
         run: |
           npm run build
           npm run typecheck
@@ -117,7 +116,9 @@ jobs:
 
       - name: Publish to npmjs.org with provenance
         if: steps.npm.outputs.publish == 'true'
-        run: npm publish --access public --provenance
+        # Validation already ran explicitly above. Ignore lifecycle scripts here
+        # so npm does not execute prepublishOnly a second time.
+        run: npm publish --access public --provenance --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
