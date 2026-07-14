@@ -188,7 +188,7 @@ interface SubagentsSettings {
   showActivityStream?: boolean;        // Show real-time activity stream in widget (default: true)
   showTokenUsage?: boolean;            // Show token usage and context fill percentage (default: true)
   showTurnProgress?: boolean;          // Show turn progress (current/max) for running agents (default: true)
-  orchestrationMode?: "auto" | "single" | "swarm" | "crew";  // Execution topology (default: "auto")
+  orchestrationMode?: "auto" | "single" | "swarm" | "crew";  // Execution topology (default: "single"; multi-agent modes are opt-in)
   dashboardRefreshInterval?: number;   // Dashboard refresh interval in ms (default: 750, min: 100, max: 60000)
   sessionMaxSpawns?: number;           // Guardrail: max agents spawned per session
   sessionMaxTurns?: number;            // Guardrail: max cumulative turns per session
@@ -202,23 +202,28 @@ interface SubagentsSettings {
 
 **FILE:** `src/types.ts`
 
-Controls the verbosity of system prompts injected into agents. Lower compression yields higher-quality instructions at the cost of more tokens; higher compression saves tokens at the cost of instruction detail.
+Selects one of three static instruction variants. This setting does not summarize conversation history, compact inherited context, rewrite task prompts, or compress custom-agent prompt bodies.
 
-| Level | Behavior | Token Impact |
-|---|---|---|
-| `"minimal"` | Full verbose prompts with CAPS emphasis, per-tool bash equivalents, two handoff examples. Maximum instruction quality. | +70% vs balanced |
-| `"balanced"` | Concise prompts with realistic examples (default). Good trade-off between quality and token usage. | Baseline |
-| `"aggressive"` | Ultra-short one-liners for read-only warnings, tool usage, and handoff. Maximum token savings. | −44% vs balanced |
+| Level | Behavior |
+|---|---|
+| `"minimal"` | Minimal compression: the most explicit read-only and handoff guidance. |
+| `"balanced"` | Concise guidance with examples and field descriptions. Default. |
+| `"aggressive"` | The shortest read-only guidance and a minimal handoff schema. |
 
 **SCOPE:**
-- Affects all `replace`-mode built-in agents (Explore, Plan, Analysis) via lazy runtime regeneration.
-- Affects handoff prompt injection for all agents with `handoff: true`.
-- Custom agents (`.pi/agents/*.md`) can override per-agent via the `prompt_compression` frontmatter directive.
-- Append-mode agents (e.g. `general-purpose`) — only the handoff block varies; the inherited system prompt and bridge are unaffected.
+- Regenerates the read-only warning and tool-usage sections for the built-in `Explore`, `Plan`, and `Analysis` agents.
+- Changes the handoff instruction block for agents with `handoff: true`.
+- Does not change built-in additional workflow sections, parent context, inherited system prompts, task prompts, memory, skills, tool schemas, or custom-agent prompt bodies.
+- For a custom agent with the default `handoff: false`, `prompt_compression` currently has no effect on its body.
+- For append-mode agents, only an enabled handoff block varies.
 
 **PRECEDENCE:** Per-agent frontmatter `prompt_compression` > global `promptCompressionLevel` setting > default `"balanced"`.
 
+**MEASUREMENT:** Character tables elsewhere compare isolated templates only. They are not exact tokenizer measurements and must not be interpreted as a fixed percentage reduction for a complete request. Measure real workloads with provider-reported input usage or runner telemetry.
+
 **PERSISTENCE:** Stored in `.pi/subagents.json` and managed via `SettingsAppliers.setPromptCompressionLevel`.
+
+See [`prompt-compression.md`](prompt-compression.md) for the scope matrix, quality/safety trade-offs, and measurement guidance.
 
 ### `saveAndEmitChanged(settings: SubagentsSettings): void`
 
@@ -503,6 +508,49 @@ Older agents that emit loose artifacts (e.g. `{type: "design", path, title, valu
 | anything else | dropped with `logger.warn` |
 
 **EXPORTS:** `HandoffFileArtifact`, `HandoffBranchArtifact`, `HandoffUrlArtifact`, `HandoffNoteArtifact`, `HandoffArtifactV2` (the discriminated union), `HandoffArtifact` (kept as a loose structural alias for source-level backwards compat), `HANDOFF_ARTIFACT_TYPES`, `HandoffArtifactType`, `parseHandoff`, `renderHandoffForParent`, `buildHandoffPrompt`.
+
+---
+
+## // INTERACTIVE UI
+
+### Footer status bar (`setStatus`)
+
+**FILE:** `src/ui/agent-widget.ts`, wired from `src/index.ts`
+
+The orchestrator occupies Pi's footer status slot `"subagents"`:
+
+```ts
+ctx.ui.setStatus("subagents", "2 running, 1 queued agents");
+ctx.ui.setStatus("subagents", undefined); // clear when idle
+```
+
+Binding happens on `session_start` and `tool_execution_start` via `bindWidgetUiCtx()`.
+
+### Editor widget (`setWidget`)
+
+**FILE:** `src/ui/agent-widget.ts`
+
+```ts
+ctx.ui.setWidget("agents", (tui, theme) => ({
+  render: () => [] as string[],
+  invalidate: () => {},
+}), { placement: "aboveEditor" });
+```
+
+### Logging in interactive sessions
+
+**FILE:** `src/logger.ts`
+
+| Environment | Default level | Override |
+|---|---|---|
+| TTY (interactive Pi) | silent | `PI_SUBAGENTS_LOG_LEVEL=debug\|info\|warn\|error` |
+| Non-TTY (CI, pipes) | `warn` | same env var |
+
+### Telemetry emission
+
+**FILE:** `src/telemetry.ts`
+
+`emitTelemetry(event)` forwards to registered handlers only. Unsubscribed events are dropped silently in TTY mode so stdout is never polluted.
 
 ---
 

@@ -13,4 +13,4 @@ Allow: /
 User-agent: Google-Extended
 Allow: /
 
-Sitemap: https://onlinechefgroep.github.io/pi-agent-orchestrator/sitemap.xml
+Sitemap: https://orchestrator.chefgroep.online/sitemap.xml

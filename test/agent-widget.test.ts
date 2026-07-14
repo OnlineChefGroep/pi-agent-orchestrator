@@ -174,6 +174,24 @@ describe("AgentWidget — debouncedUpdate (spawn batching)", () => {
     vi.useRealTimers();
   });
 
+  it("dispose clears widget, status, and pending timers", () => {
+    manager.setAgents([mockRecord({ status: "running" })]);
+    widget.setUICtx(uiCtx as any);
+    widget.debouncedUpdate();
+
+    const setWidgetCalls = vi.mocked(uiCtx.setWidget).mock.calls.length;
+    const setStatusCalls = vi.mocked(uiCtx.setStatus).mock.calls.length;
+
+    widget.dispose();
+
+    expect(uiCtx.setWidget).toHaveBeenLastCalledWith("agents", undefined);
+    expect(uiCtx.setStatus).toHaveBeenLastCalledWith("subagents", undefined);
+
+    vi.advanceTimersByTime(5000);
+    expect(uiCtx.setWidget.mock.calls.length).toBe(setWidgetCalls + 1);
+    expect(uiCtx.setStatus.mock.calls.length).toBe(setStatusCalls + 1);
+  });
+
   it("debouncedUpdate without UI context is a no-op", () => {
     // No uiCtx set → debouncedUpdate should do nothing
     widget.debouncedUpdate();
@@ -291,6 +309,18 @@ describe("AgentWidget — debouncedUpdate (spawn batching)", () => {
       "1 running, 1 queued agents",
     );
   });
+
+  it("clears widget and status from the previous UI context", () => {
+    const previousCtx = createMockUiCtx();
+    manager.setAgents([mockRecord({ status: "running" })]);
+    widget.setUICtx(previousCtx as any);
+    widget.update();
+
+    widget.setUICtx(uiCtx as any);
+
+    expect(previousCtx.setWidget).toHaveBeenLastCalledWith("agents", undefined);
+    expect(previousCtx.setStatus).toHaveBeenLastCalledWith("subagents", undefined);
+  });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -321,8 +351,8 @@ describe("AgentWidget — adaptive refresh interval", () => {
     manager.setAgents([mockRecord({ status: "running" })]);
     widget.ensureTimer();
 
-    // Verify initial interval (ACTIVE_REFRESH_MS = 200ms)
-    expect(widget.currentIntervalMs).toBe(200);
+    // Verify initial state tick interval (ACTIVE_REFRESH_MS = 160ms)
+    expect(widget.currentIntervalMs).toBe(160);
   });
 
   it("switches to idle interval when all agents are finished", () => {
@@ -347,7 +377,7 @@ describe("AgentWidget — adaptive refresh interval", () => {
       mockRecord({ status: "running" }),
     ]);
     widget.update();
-    expect(widget.currentIntervalMs).toBe(200);
+    expect(widget.currentIntervalMs).toBe(160);
   });
 
   it("transitions from active to idle when last running agent finishes", () => {
@@ -355,7 +385,7 @@ describe("AgentWidget — adaptive refresh interval", () => {
     manager.setAgents([mockRecord({ status: "running" })]);
     widget.ensureTimer();
     widget.update();
-    expect(widget.currentIntervalMs).toBe(200);
+    expect(widget.currentIntervalMs).toBe(160);
 
     // Add completed, remove running
     manager.setAgents([mockRecord({ status: "completed", completedAt: Date.now() })]);

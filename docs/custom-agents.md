@@ -62,8 +62,8 @@ Subdirectories are explicitly ignored. Symlink references are skipped.
 | `disallowed_tools` | CSV | none | Hard floor nullification block. Trumps availability. |
 | `extensions` | boolean / CSV / `none` | `true` | Module access. Set `false`/`none` for zero expansion. |
 | `skills` | boolean / CSV / `none` | `true` | Skill primitive preload list. |
-| `model` | string | host default | Model execution override. Resolves via host registry. |
-| `thinking` | string | none | Inference effort passthrough metric. |
+| `model` | string | host default | Model execution override. Resolves via host registry. Tool `params.model` overrides profile when set. |
+| `thinking` | string | none | Inference effort: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`. Tool `params.thinking` overrides profile when set. |
 | `max_turns` | number | host default | Maximum bounded turn integer (`0` = infinite). |
 | `prompt_mode` | `replace` / `append` | `replace` | System directive injection mode. |
 | `inherit_context` | boolean | caller defined | Inheritance directive for vector payload. |
@@ -72,10 +72,12 @@ Subdirectories are explicitly ignored. Symlink references are skipped.
 | `memory` | `user` / `project` / `local` | none | State persistence storage volume. |
 | `isolation` | `worktree` | none | Git worktree detachment mode. |
 | `handoff` | boolean / string | `false` | Produce structured JSON handoff at end of response. Enables chain-of-agents workflows. |
-| `prompt_compression` | `minimal` / `balanced` / `aggressive` | inherits global | Per-agent compression override. `minimal` = full verbose prompts (+70% tokens), `balanced` = concise (default), `aggressive` = ultra-short (−44% tokens). |
+| `prompt_compression` | `minimal` / `balanced` / `aggressive` | inherits global | Per-agent selection for generated read-only/handoff guidance. It does not compress this file's custom prompt body. With the default `handoff: false`, it currently has no effect on an ordinary custom agent. |
 | `enabled` | boolean | `true` | Binary load toggle. |
 
 Non-schema fields are silently dropped. Loader explicitly ignores `name`, `systemPrompt`, `builtinToolNames`, `disallowedTools`, `validators` within the YAML block.
+
+See [Prompt compression](prompt-compression.md) for the exact scope and measurement limitations.
 
 ---
 
@@ -180,13 +182,13 @@ When `handoff: true` is set, the agent produces a structured JSON handoff at the
 
 ### Handoff + Compression
 
-Compression levels affect the handoff prompt injected into the agent:
+Compression levels affect only the generated handoff instructions; they do not rewrite the custom prompt body:
 
 | Level | Handoff Prompt Style |
 |---|---|
-| `minimal` | Full verbose instructions with two examples |
+| `minimal` | Full verbose instructions with field descriptions and two examples |
 | `balanced` | Concise instructions with one example (default) |
-| `aggressive` | One-liner instruction |
+| `aggressive` | Minimal required schema; optional protocol detail is omitted |
 
 ```markdown
 ---
@@ -227,4 +229,3 @@ Base state includes full primitive access. Explicit definition of `tools` and `d
 ### Corrupted System Directives
 
 System prompt defined strictly via post-frontmatter Markdown. YAML field definitions (`systemPrompt: ...`) fail ingestion parser.
-

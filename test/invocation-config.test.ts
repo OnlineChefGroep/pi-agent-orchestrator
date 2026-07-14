@@ -19,7 +19,21 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
 }
 
 describe("resolveAgentInvocationConfig", () => {
-  it("prefers agent config over tool-call params for locked fields", () => {
+  it("uses agent profile model/thinking when params omit them", () => {
+    const resolved = resolveAgentInvocationConfig(
+      makeConfig({
+        model: "provider/profile-model",
+        thinking: "high",
+      }),
+      {},
+    );
+
+    expect(resolved.modelInput).toBe("provider/profile-model");
+    expect(resolved.modelFromParams).toBe(false);
+    expect(resolved.thinking).toBe("high");
+  });
+
+  it("uses explicit model/thinking overrides while preserving locked strategy fields", () => {
     const resolved = resolveAgentInvocationConfig(
       makeConfig({
         model: "provider/config-model",
@@ -41,9 +55,9 @@ describe("resolveAgentInvocationConfig", () => {
       },
     );
 
-    expect(resolved.modelInput).toBe("provider/config-model");
-    expect(resolved.modelFromParams).toBe(false);
-    expect(resolved.thinking).toBe("high");
+    expect(resolved.modelInput).toBe("provider/param-model");
+    expect(resolved.modelFromParams).toBe(true);
+    expect(resolved.thinking).toBe("minimal");
     expect(resolved.maxTurns).toBe(42);
     expect(resolved.inheritContext).toBe(false);
     expect(resolved.runInBackground).toBe(false);

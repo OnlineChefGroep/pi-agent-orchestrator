@@ -73,7 +73,7 @@ export interface TUI {
  * renderers should drop their cache here).
  *
  * Mirrors the host's `Component` exactly, no more — TypeScript's structural
- * typing needs every REQUIRED member present on implementors in order for
+ * typing needs every REQUIRED member present on implementers in order for
  * `new Text(...)` / our agent-dashboard classes to be assignable to the
  * host's `Component` type at the boundary (e.g. `defineTool({ renderCall })`,
  * `registerMessageRenderer`). If you add an optional member here, you must
@@ -330,7 +330,7 @@ export function wrapTextWithAnsi(text: string, width: number): string[] {
 // ────────────────────────────────────────────────────────────────────────────
 
 export function matchesKey(data: string, keyId: string): boolean {
-  // Fast path: direct match handles all keys except Escape variants.
+  // Fast path: direct match handles most keys.
   if (data === keyId) return true;
 
   // Escape key: normalise "escape" ↔ "esc" ↔ raw \u001b byte.
@@ -340,5 +340,22 @@ export function matchesKey(data: string, keyId: string): boolean {
     return true;
   }
 
+  // Ctrl+letter: host may send "ctrl+c" or the raw control character (\x03 for c).
+  if (keyId.startsWith("ctrl+") && keyId.length >= 6) {
+    const letter = keyId.slice(5).toLowerCase();
+    if (letter.length === 1 && letter >= "a" && letter <= "z") {
+      const ctrlChar = String.fromCharCode(letter.charCodeAt(0) - 96);
+      if (data === ctrlChar) return true;
+    }
+  }
+
+  return false;
+}
+
+/** True when `data` matches any key id in `keyIds`. */
+export function matchesAnyKey(data: string, keyIds: readonly string[]): boolean {
+  for (let i = 0; i < keyIds.length; i++) {
+    if (matchesKey(data, keyIds[i])) return true;
+  }
   return false;
 }

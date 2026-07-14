@@ -9,7 +9,7 @@ Pi Agent Orchestrator runs inside the Pi coding-agent host. It adds a bounded co
 The showcase video is generated from the compiled dashboard, resource top-view, and widget renderers. Remotion frames and encodes the video, but the terminal content comes from the real implementation.
 
 - [Watch the MP4 terminal showcase](./assets/dashboard_preview.mp4)
-- [Open the poster image](./assets/dashboard_preview.png)
+- [Open the poster image](./assets/dashboard_preview.gif)
 
 ## Install
 

@@ -4,6 +4,10 @@ export default defineConfig({
   test: {
     retry: 2,
     globals: true,
+    // site/ is a standalone sub-project (see site/web/vitest.config.ts) with its
+    // own `@/` alias and test script — keep it out of the root suite.
+    include: ["test/**/*.test.ts"],
+    exclude: ["**/node_modules/**", "**/dist/**", "site/**"],
     coverage: {
       enabled: false, // opt-in via --coverage flag
       provider: "v8",

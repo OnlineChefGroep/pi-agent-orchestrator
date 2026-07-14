@@ -14,7 +14,7 @@ import type { DashboardTheme } from "../theme.js";
 export { getDisplayName };
 
 export function statusIcon(rec: AgentRecord, frame: number): string {
-  if (rec.status === "running") return getAgentSpinnerFrame(rec.id, frame);
+  if (rec.status === "running") return getAgentSpinnerFrame(rec.id, frame, "agent", rec.type);
   if (rec.status === "queued") return getAgentSpinnerFrame(rec.id, frame, "queue");
   if (rec.status === "completed" || rec.status === "steered") return "✓";
   if (rec.status === "stopped") return "■";

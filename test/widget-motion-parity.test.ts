@@ -40,8 +40,8 @@ describe("compact widget motion parity", () => {
       tui: { terminal: { columns: 140 } },
     });
     const output = lines.join("\n");
-    expect(output).toContain(getAgentSpinnerFrame("alpha", 3));
-    expect(output).toContain(getAgentSpinnerFrame("bravo", 3));
+    expect(output).toContain(getAgentSpinnerFrame("alpha", 3, "agent", "Explore"));
+    expect(output).toContain(getAgentSpinnerFrame("bravo", 3, "agent", "Explore"));
   });
 
   it("uses queue-role motion for queued work", () => {

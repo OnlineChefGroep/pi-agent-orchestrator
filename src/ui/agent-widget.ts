@@ -6,16 +6,18 @@
  *
  * Performance features:
  * - Dirty checking: skips TUI re-render when agent list structure hasn't changed.
- * - Adaptive refresh: faster interval (200ms) when agents are running,
- *   falls back to animation interval (80ms) when all agents are finished.
+ * - Adaptive refresh: responsive interval (160ms) while work is active,
+ *   falling back to a low-cost 1000ms idle cadence.
  *
  * UI styles: premium (default), retro, plain
  */
 
 import type { AgentManager } from "../agent-manager.js";
+import { getFooterStatusConfig } from "../agent-registry.js";
 import type { AgentRecord } from "../types.js";
 import type { AgentActivity, UICtx } from "./agent-ui-types.js";
 import { ERROR_STATUSES, renderAgentWidget } from "./agent-widget-renderer.js";
+import { formatFooterStatusText } from "./footer-status-config.js";
 import { RenderMetrics } from "./render-metrics.js";
 import type { Theme } from "./theme.js";
 import type { TUI } from "./tui-shim.js";
@@ -23,7 +25,7 @@ import type { TUI } from "./tui-shim.js";
 // ---- Constants ----
 
 /** Fast refresh interval when agents are actively running. */
-const ACTIVE_REFRESH_MS = 200;
+const ACTIVE_REFRESH_MS = 160;
 
 /** Idle refresh interval when all agents are finished — animates spinner cheaply. */
 const IDLE_REFRESH_MS = 1000;
@@ -57,6 +59,8 @@ export class AgentWidget {
   private tui: TUI | undefined;
   /** Last status bar text, used to avoid redundant setStatus calls. */
   private lastStatusText: string | undefined;
+  /** Last footer slot written — cleared when the configured slot changes. */
+  private lastFooterSlot: string | undefined;
 
   // ── Performance: dirty detection ──
 
@@ -108,6 +112,11 @@ export class AgentWidget {
   /** Set the UI context (grabbed from first tool execution). */
   setUICtx(ctx: UICtx) {
     if (ctx !== this.uiCtx) {
+      if (this.uiCtx) {
+        this.uiCtx.setWidget("agents", undefined);
+        const slot = getFooterStatusConfig().slot;
+        this.uiCtx.setStatus(slot, undefined);
+      }
       // UICtx changed — the widget registered on the old context is gone.
       // Force re-registration on next update().
       this.uiCtx = ctx;
@@ -392,34 +401,35 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
         this.tui = undefined;
       }
       if (this.lastStatusText !== undefined) {
-        this.uiCtx.setStatus("subagents", undefined);
+        const slot = this.lastFooterSlot ?? getFooterStatusConfig().slot;
+        this.uiCtx.setStatus(slot, undefined);
         this.lastStatusText = undefined;
+        this.lastFooterSlot = undefined;
       }
       if (this.widgetInterval) { clearTimeout(this.widgetInterval); this.widgetInterval = undefined; }
       this.dirty = false;
       return;
     }
 
-    // Status bar — only call setStatus when the text actually changes
-    let newStatusText: string | undefined;
-    if (hasActive) {
-      const statusParts: string[] = [];
-      if (runningCount > 0) statusParts.push(`${runningCount} running`);
-      if (queuedCount > 0) statusParts.push(`${queuedCount} queued`);
-      const total = runningCount + queuedCount;
-      newStatusText = `${statusParts.join(", ")} agent${total === 1 ? "" : "s"}`;
+    // Status bar — only call setStatus when the text or slot actually changes
+    const footerConfig = getFooterStatusConfig();
+    if (this.lastFooterSlot !== undefined && this.lastFooterSlot !== footerConfig.slot) {
+      this.uiCtx.setStatus(this.lastFooterSlot, undefined);
+      this.lastStatusText = undefined;
     }
+    const newStatusText = formatFooterStatusText(footerConfig, runningCount, queuedCount);
     if (newStatusText !== this.lastStatusText) {
-      this.uiCtx.setStatus("subagents", newStatusText);
+      this.uiCtx.setStatus(footerConfig.slot, newStatusText);
       this.lastStatusText = newStatusText;
+      this.lastFooterSlot = footerConfig.slot;
     }
 
     // Always advance spinner for smooth animation.
     this.widgetFrame++;
 
-    // Force re-render periodically when running agents exist (spinner animation).
-    // Without this, the dirty-check optimization freezes spinners indefinitely.
-    if (!this.dirty && hasActive && this.widgetFrame % 3 === 0) {
+    // Render motion every second 160ms tick. This is visibly responsive while
+    // avoiding a full widget redraw on every timer callback over SSH terminals.
+    if (!this.dirty && hasActive && this.widgetFrame % 2 === 0) {
       this.dirty = true;
     }
 
@@ -455,13 +465,18 @@ private renderWidget(tui: TUI, theme: Theme): string[] {
 
   dispose() {
     this.closed = true;
+    if (this.updateTimer) {
+      clearTimeout(this.updateTimer);
+      this.updateTimer = undefined;
+    }
     if (this.widgetInterval) {
       clearTimeout(this.widgetInterval);
       this.widgetInterval = undefined;
     }
     if (this.uiCtx) {
       this.uiCtx.setWidget("agents", undefined);
-      this.uiCtx.setStatus("subagents", undefined);
+      const slot = getFooterStatusConfig().slot;
+      this.uiCtx.setStatus(slot, undefined);
     }
     this.widgetRegistered = false;
     this.tui = undefined;

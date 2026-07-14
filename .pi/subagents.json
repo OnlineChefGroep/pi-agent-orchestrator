@@ -1,5 +1,5 @@
 {
-  "maxConcurrent": 8,
+  "maxConcurrent": 4,
   "defaultMaxTurns": 50,
   "graceTurns": 3,
   "defaultJoinMode": "smart",
@@ -7,7 +7,7 @@
   "tracingEnabled": true,
   "animationStyle": "orchestrator",
   "uiStyle": "premium",
-  "orchestrationMode": "crew",
+  "orchestrationMode": "single",
   "dashboardRefreshInterval": 750,
   "sessionMaxSpawns": 100,
   "sessionMaxTurns": 1000,

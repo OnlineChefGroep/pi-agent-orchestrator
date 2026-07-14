@@ -155,7 +155,6 @@ jobs:
     needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -182,6 +181,7 @@ jobs:
       - compatibility
       - lowest-peer-dependencies
       - dependency-review
+      - benchmarks
     runs-on: ubuntu-latest
     steps:
       - name: Verify required jobs
@@ -190,8 +190,10 @@ jobs:
           COMPATIBILITY_RESULT: ${{ needs.compatibility.result }}
           LOWEST_PEER_RESULT: ${{ needs.lowest-peer-dependencies.result }}
           DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
+          BENCHMARKS_RESULT: ${{ needs.benchmarks.result }}
         run: |
           test "$QUALITY_RESULT" = "success"
           test "$COMPATIBILITY_RESULT" = "success"
           test "$LOWEST_PEER_RESULT" = "success"
           test "$DEPENDENCY_REVIEW_RESULT" = "success" -o "$DEPENDENCY_REVIEW_RESULT" = "skipped"
+          test "$BENCHMARKS_RESULT" = "success"

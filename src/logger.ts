@@ -7,13 +7,15 @@ const LEVELS: Record<LogLevel, number> = {
   error: 40,
 };
 
-function currentLevel(): LogLevel {
+function currentLevel(): LogLevel | undefined {
   const raw = process.env.PI_SUBAGENTS_LOG_LEVEL?.toLowerCase();
-  return raw === "debug" || raw === "info" || raw === "warn" || raw === "error" ? raw : "warn";
+  if (raw === "debug" || raw === "info" || raw === "warn" || raw === "error") return raw;
+  return process.stdout.isTTY || process.stderr.isTTY ? undefined : "warn";
 }
 
 function shouldLog(level: LogLevel): boolean {
-  return LEVELS[level] >= LEVELS[currentLevel()];
+  const configuredLevel = currentLevel();
+  return configuredLevel !== undefined && LEVELS[level] >= LEVELS[configuredLevel];
 }
 
 function write(level: LogLevel, message: string, fields?: Record<string, unknown>): void {
