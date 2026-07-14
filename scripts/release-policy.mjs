@@ -4,9 +4,35 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const STABLE_SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const ROOT_LOCK_FIELDS = [
+  "name",
+  "version",
+  "license",
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "peerDependenciesMeta",
+  "engines",
+];
 
 function fail(message) {
   throw new Error(`Release policy violation: ${message}`);
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, canonicalJson(value[key])]),
+    );
+  }
+  return value;
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(canonicalJson(left)) === JSON.stringify(canonicalJson(right));
 }
 
 export function parseStableVersion(value) {
@@ -58,18 +84,27 @@ export async function verifyRepositoryReleaseState(root = ROOT) {
   const policy = await loadReleasePolicy(root);
   const pkg = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
   const lock = JSON.parse(await readFile(resolve(root, "package-lock.json"), "utf8"));
+  const rootLock = lock.packages?.[""];
 
   if (pkg.name !== policy.packageName) fail(`package name must remain ${policy.packageName}`);
-  if (lock.name !== pkg.name || lock.packages?.[""]?.name !== pkg.name) {
+  if (!rootLock) fail("package-lock is missing packages[''] root metadata");
+  if (lock.name !== pkg.name || rootLock.name !== pkg.name) {
     fail("package-lock package names do not match package.json");
   }
-  if (lock.version !== pkg.version || lock.packages?.[""]?.version !== pkg.version) {
+  if (lock.version !== pkg.version || rootLock.version !== pkg.version) {
     fail("package.json and both package-lock root versions must match");
   }
 
   parseStableVersion(pkg.version);
   const isBaseline = policy.sourceBaselines.includes(pkg.version);
-  if (!isBaseline) assertReleaseCandidate(pkg.version, policy);
+  if (!isBaseline) {
+    assertReleaseCandidate(pkg.version, policy);
+    for (const field of ROOT_LOCK_FIELDS) {
+      if (!sameJson(rootLock[field], pkg[field])) {
+        fail(`package-lock root field ${field} does not match package.json for a release candidate`);
+      }
+    }
+  }
 
   const changelog = await readFile(resolve(root, "CHANGELOG.md"), "utf8");
   const releaseHeader = new RegExp(`^## v${policy.initialRelease.replaceAll(".", "\\.")} \\((?:UNRELEASED|\\d{4}-\\d{2}-\\d{2})\\)$`, "m");
