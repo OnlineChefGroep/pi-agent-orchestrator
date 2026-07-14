@@ -21,6 +21,10 @@ function fail(message) {
   throw new Error(`Release transaction violation: ${message}`);
 }
 
+function normalizeLineEndings(value) {
+  return value.replace(/\r\n?/g, "\n");
+}
+
 function git(args) {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
@@ -112,7 +116,9 @@ async function verify(parentRef, releaseRef, expectedVersion) {
   }
   const datedHeader = new RegExp(`^## v${expectedVersion.replaceAll(".", "\\.")} \\(\\d{4}-\\d{2}-\\d{2}\\)$`, "m");
   if (!datedHeader.test(releaseChangelog)) fail(`release CHANGELOG lacks a dated v${expectedVersion} heading`);
-  const notes = (await readFile(resolve(ROOT, `docs/releases/v${expectedVersion}.md`), "utf8")).trim();
+  const notes = normalizeLineEndings(
+    await readFile(resolve(ROOT, `docs/releases/v${expectedVersion}.md`), "utf8"),
+  ).trim();
   if (!notes || !releaseChangelog.includes(notes)) fail("release CHANGELOG does not contain the canonical release notes template");
 
   console.log(`Release transaction verified: ${parentRef} -> ${releaseRef} as v${expectedVersion}`);
