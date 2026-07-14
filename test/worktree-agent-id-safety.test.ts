@@ -42,7 +42,7 @@ describe("worktree agent ID safety", () => {
 
     expect(result).toMatchObject({
       hasChanges: true,
-      branch: "pi-agent-etc-passwd",
+      branch: "pi-agent-etcpasswd",
     });
     expect(result.path).toBeUndefined();
 
