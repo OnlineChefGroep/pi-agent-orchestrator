@@ -15,20 +15,28 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFileCb);
 
-/**
- * Convert an untrusted runtime identifier into a conservative component that is
- * valid in both a temporary directory name and a Git branch name.
- */
+/** Remove path separators and control characters before using an ID in tmpdir. */
 function sanitizeAgentId(agentId: string): string {
   if (typeof agentId !== "string" || agentId === "") return "unknown";
-
   const cleaned = agentId
+    .replace(/[\r\n\x00-\x1F]/g, "")
+    .replace(/[/\\]/g, "")
+    .replace(/[~^:?*[\\\];"'`$\s]/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return cleaned.slice(0, 64) || "unknown";
+}
+
+/**
+ * Normalize a component to the conservative Git-ref subset used when dirty
+ * worktree changes are persisted as a branch.
+ */
+function sanitizeBranchComponent(value: string): string {
+  const cleaned = value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^A-Za-z0-9_-]+/g, "-")
     .replace(/[-_]{2,}/g, "-")
     .replace(/^[-_]+|[-_]+$/g, "");
-
   return cleaned.slice(0, 64).replace(/[-_]+$/g, "") || "unknown";
 }
 
@@ -172,9 +180,8 @@ export function cleanupWorktree(
       timeout: 10000,
     });
 
-    // The branch component was normalized when the worktree was created. Keep a
-    // defensive final pass for callers that construct WorktreeInfo themselves.
-    const safeBranchName = `pi-agent-${sanitizeAgentId(worktree.branch.replace(/^pi-agent-/, ""))}`;
+    const rawBranchComponent = worktree.branch.replace(/^pi-agent-/, "");
+    const safeBranchName = `pi-agent-${sanitizeBranchComponent(rawBranchComponent)}`;
 
     let branchName = safeBranchName;
     try {
