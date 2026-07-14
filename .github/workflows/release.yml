@@ -80,16 +80,9 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF" = "refs/heads/main"
           test "$(git log -1 --pretty=%s)" = "chore(release): v$RELEASE_VERSION"
-          ACTUAL="$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | sort)"
-          EXPECTED="$(printf '%s\n' CHANGELOG.md package-lock.json package.json | sort)"
-          if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "Release commit contains files outside the transactional allowlist:" >&2
-            printf '%s\n' "$ACTUAL" >&2
-            exit 1
-          fi
           npm run verify:release-policy
           node scripts/release-policy.mjs candidate "$RELEASE_VERSION"
-          grep -Eq "^## v${RELEASE_VERSION//./\\.} \\([0-9]{4}-[0-9]{2}-[0-9]{2}\\)$" CHANGELOG.md
+          node scripts/verify-release-transaction.mjs "$GITHUB_SHA^" "$GITHUB_SHA" "$RELEASE_VERSION"
 
       - name: Install dependencies
         run: npm ci
