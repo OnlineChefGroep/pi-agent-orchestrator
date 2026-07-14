@@ -44,17 +44,18 @@ jobs:
         run: npm ci
 
       - name: Render showcase suite
-        run: bash scripts/render-showcase-remotion.sh
+        run: bash scripts/render-showcase-remotion.sh 2>&1 | tee remotion-render.log
 
       - name: Verify generated promo data
         run: npm --prefix showcase/remotion run promo:data:check
 
-      - name: Upload rendered assets
+      - name: Upload rendered assets and log
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: remotion-showcase-${{ github.sha }}
           path: |
+            remotion-render.log
             docs/images/dashboard_preview.mp4
             docs/images/dashboard_preview.png
             docs/images/promo_banner.png
