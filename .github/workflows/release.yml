@@ -53,11 +53,11 @@ jobs:
           echo "should_release=true" >> "$GITHUB_OUTPUT"
 
   release:
-    name: Publish, tag, and create GitHub Release
+    name: Publish, verify, tag, and create GitHub Release
     needs: detect
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     env:
       RELEASE_VERSION: ${{ needs.detect.outputs.version }}
     steps:
@@ -104,7 +104,7 @@ jobs:
           PUBLISHED="$(npm view @onlinechefgroep/pi-agent-orchestrator version)"
           if [ "$PUBLISHED" = "$RELEASE_VERSION" ]; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "npm already contains $RELEASE_VERSION; continuing recovery with tag/release verification."
+            echo "npm already contains $RELEASE_VERSION; continuing recovery with registry/tag/release verification."
             exit 0
           fi
           HIGHEST="$(printf '%s\n%s\n' "$PUBLISHED" "$RELEASE_VERSION" | sort -V | tail -n1)"
@@ -121,6 +121,9 @@ jobs:
         run: npm publish --access public --provenance --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify published npm metadata and tarball
+        run: node scripts/verify-published-package.mjs "$RELEASE_VERSION"
 
       - name: Create or verify exact Git tag
         shell: bash
@@ -162,6 +165,7 @@ jobs:
             echo
             echo "- Source commit: \`$GITHUB_SHA\`"
             echo "- npm: \`@onlinechefgroep/pi-agent-orchestrator@$RELEASE_VERSION\`"
+            echo "- Registry metadata and downloaded tarball: verified"
             echo "- Tag: \`v$RELEASE_VERSION\`"
             echo "- Release train remains locked to \`0.18.x\`; \`0.19.0\` is blocked by policy."
           } >> "$GITHUB_STEP_SUMMARY"
