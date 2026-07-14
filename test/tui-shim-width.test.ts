@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { visibleWidth, truncateToWidth } from "../src/ui/tui-shim.js";
+import { truncateToWidth, visibleWidth } from "../src/ui/tui-shim.js";
 
 describe("TUI Width Calculations", () => {
   it("counts standard characters normally", () => {
