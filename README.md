@@ -29,8 +29,8 @@ For a project-local install:
 pi install npm:@onlinechefgroep/pi-agent-orchestrator -l
 ```
 
-Requires Node.js 22.19.0 or newer and `@earendil-works/pi-coding-agent` 0.80.6 or newer.
-Use `pi install`; running `npm install` alone does not register the package resources with Pi.
+Requires Node.js 22 or newer and `@earendil-works/pi-coding-agent` 0.80.6 or newer.
+Use `pi install`; running `npm install` alone does not register the extension with Pi.
 
 ## Why this package
 
@@ -40,7 +40,6 @@ Use `pi install`; running `npm install` alone does not register the package reso
 | Parallel orchestration | Background groups, swarms, structured handoffs, and controlled concurrency |
 | Safe isolation | Permission inheritance, partition filtering, budgets, depth limits, and optional git worktrees |
 | Operator control | Interactive `/agents` dashboard, live status, steering, termination, schedules, and performance views |
-| Ready-made workflows | A progressive-disclosure orchestration skill and audit, plan, and implementation prompt templates |
 | Local execution | No hosted control plane, no package-owned telemetry backend, and no package-owned data service |
 
 The extension runs inside the Pi host process. It does not make outbound network calls of its own and does not store user data on a hosted service.
@@ -57,16 +56,16 @@ The preview is rendered from the compiled dashboard, resource top view, and widg
 
 ## First useful run
 
-Start Pi with the package, then run the packaged audit template:
-
-```text
-/orchestra-audit src
-```
-
-Open the control surface while the agents run:
+Start Pi with the package, then open the control surface:
 
 ```text
 /agents
+```
+
+A practical first prompt:
+
+```text
+Run three Explore agents in parallel. Map the architecture, test strategy, and release path with exact file evidence. Then hand the combined findings to one Plan agent and return a prioritized implementation plan. Do not edit files.
 ```
 
 Useful controls:
@@ -80,19 +79,6 @@ Useful controls:
 - `/perf`: performance metrics
 
 The Pi footer can expose live running and queued counts through the `subagents` status slot.
-
-## Packaged Orchestra workflows
-
-The npm package includes one skill and three prompt templates. Pi loads only the skill description into the system prompt; the full workflow is read on demand.
-
-| Command | Use |
-| --- | --- |
-| `/skill:pi-orchestra` | Load the complete evidence-first orchestration operating model |
-| `/orchestra-audit [scope]` | Run three parallel read-only audits and synthesize ranked findings |
-| `/orchestra-plan <goal>` | Gather evidence in parallel and produce a mechanically verifiable plan |
-| `/orchestra-implement <goal>` | Discover, plan, implement in one isolated writer, and independently verify |
-
-The templates deliberately avoid automatic merge, publish, tag, or deploy actions unless those actions are explicitly part of the request.
 
 ## Built-in agent types
 
@@ -127,7 +113,6 @@ Default orchestration mode is `single`; multi-agent modes are opt-in.
 - [Prompt compression](docs/prompt-compression.md) — exact scope and impact.
 - [Performance](docs/PERFORMANCE.md) — render budgets and benchmarks.
 - [Troubleshooting](docs/troubleshooting.md) — common operator fixes.
-- [Orchestra skill](skills/pi-orchestra/SKILL.md) — evidence-first multi-agent operating model.
 - [AGENTS.md](AGENTS.md) — repository invariants for contributors and coding agents.
 - [CHANGELOG.md](CHANGELOG.md) — release history.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution workflow.

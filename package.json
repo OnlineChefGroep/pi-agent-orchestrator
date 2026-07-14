@@ -17,8 +17,6 @@
     "pi",
     "pi-coding-agent",
     "pi-extension",
-    "pi-skill",
-    "prompt-template",
     "agent-orchestrator",
     "subagent",
     "subagents",
@@ -39,8 +37,6 @@
   "files": [
     "dist/",
     "src/",
-    "skills/",
-    "prompts/",
     "docs/*.md",
     "examples/",
     "README.md",
@@ -105,12 +101,6 @@
   "pi": {
     "extensions": [
       "./dist/index.js"
-    ],
-    "skills": [
-      "./skills"
-    ],
-    "prompts": [
-      "./prompts"
     ],
     "video": "https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4"
   },
