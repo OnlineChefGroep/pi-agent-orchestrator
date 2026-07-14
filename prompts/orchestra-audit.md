@@ -3,7 +3,7 @@ description: Run a parallel, evidence-first repository audit without editing fil
 argument-hint: "[scope]"
 ---
 
-Audit ${1:-the current repository} with Pi Agent Orchestrator.
+Audit the current repository with Pi Agent Orchestrator. Apply this user-supplied scope when present: $ARGUMENTS
 
 Use exactly three read-only agents in parallel with non-overlapping scopes:
 
