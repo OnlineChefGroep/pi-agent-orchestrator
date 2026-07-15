@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, delimiter as pathDelimiter } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const sourceRoot = resolve(import.meta.dirname ?? ".", "..");
@@ -85,8 +85,13 @@ function nodeEnv(extraPath: string, env: Record<string, string> = {}) {
   return {
     ...process.env,
     ...env,
-    PATH: `${extraPath}${process.env.PATH ? `:${process.env.PATH}` : ""}`,
+    PATH: `${extraPath}${process.env.PATH ? `${pathDelimiter}${process.env.PATH}` : ""}`,
   };
+}
+
+function shellcheckAvailable(): boolean {
+  const probe = spawnSync("shellcheck", ["--version"], { encoding: "utf8" });
+  return probe.error == null;
 }
 
 function script(...parts: string[]): string {
@@ -164,6 +169,7 @@ describe("historical finalize heredoc regression", () => {
       writeFileSync(scriptPath, `#!/usr/bin/env bash\n${body}`);
       const syntax = spawnSync("bash", ["-n", scriptPath], { encoding: "utf8" });
       expect(syntax.status, `block ${index}: ${syntax.stderr}`).toBe(0);
+      if (!shellcheckAvailable()) continue;
       const shell = spawnSync(
         "shellcheck",
         ["-x", "-e", "SC2154,SC2164", scriptPath],
@@ -174,7 +180,7 @@ describe("historical finalize heredoc regression", () => {
   });
 });
 
-describe("decide-publish CLI with real npm stubs", () => {
+describe.skipIf(process.platform === "win32")("decide-publish CLI with real npm stubs", () => {
   it("publishes when the package was never published (exact and latest both 404)", () => {
     const bin = track(mkdtempSync(join(tmpdir(), "npm-never-")));
     writeStub(
@@ -356,7 +362,7 @@ describe("finalize tag and GitHub Release recovery", () => {
   });
 });
 
-describe("local finalize transaction matching GitHub Actions commands", () => {
+describe.skipIf(process.platform === "win32")("local finalize transaction matching GitHub Actions commands", () => {
   it("runs decide-publish → ensure-release-tag → ensure-github-release in a temp repository", { timeout: 30000 }, () => {
     const root = track(mkdtempSync(join(tmpdir(), "finalize-txn-")));
     const remote = track(mkdtempSync(join(tmpdir(), "finalize-txn-remote-")));
