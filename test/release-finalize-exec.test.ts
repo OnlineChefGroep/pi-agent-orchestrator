@@ -7,7 +7,10 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   chmodSync,
+  copyFileSync,
   cpSync,
+  existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -20,6 +23,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const sourceRoot = resolve(import.meta.dirname ?? ".", "..");
 const sandboxes: string[] = [];
+const ghHookName = "gh-hook.cjs";
 
 function track(dir: string): string {
   sandboxes.push(dir);
@@ -34,11 +38,10 @@ function writeStub(binDir: string, name: string, body: string): string {
   return path;
 }
 
-function writeGhStub(binDir: string, statePath: string): string {
-  // Node stub avoids bash/$ escaping fights with Biome template-literal lint.
-  const body = `const fs = require("node:fs");
+function ghHandler(argsExpression: string, statePath: string): string {
+  return `const fs = require("node:fs");
 const statePath = ${JSON.stringify(statePath)};
-const args = process.argv.slice(2);
+const args = ${argsExpression};
 const read = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
 const write = (state) => fs.writeFileSync(statePath, JSON.stringify(state));
 
@@ -74,23 +77,49 @@ if (args[0] === "release" && args[1] === "edit") {
 console.error("unexpected gh args: " + args.join(" "));
 process.exit(2);
 `;
+}
 
+function writeGhStub(binDir: string, statePath: string): string {
+  // On Windows, spawn() cannot execute .cmd files without a shell. A hardlink to
+  // node.exe is a real executable; NODE_OPTIONS preloads the isolated handler.
   if (process.platform === "win32") {
-    const scriptPath = writeStub(binDir, "gh-stub.cjs", body);
-    return writeStub(
+    const hookPath = writeStub(
       binDir,
-      "gh.cmd",
-      `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`,
+      ghHookName,
+      `const path = require("node:path");
+if (path.basename(process.execPath).toLowerCase() === "gh.exe") {
+${ghHandler("process.argv.slice(1)", statePath)}}
+`,
     );
+    const executablePath = join(binDir, "gh.exe");
+    try {
+      linkSync(process.execPath, executablePath);
+    } catch {
+      copyFileSync(process.execPath, executablePath);
+    }
+    return hookPath;
   }
 
-  return writeStub(binDir, "gh", `#!/usr/bin/env node\n${body}`);
+  return writeStub(
+    binDir,
+    "gh",
+    `#!/usr/bin/env node
+${ghHandler("process.argv.slice(2)", statePath)}`,
+  );
 }
 
 function nodeEnv(extraPath: string, env: Record<string, string> = {}) {
+  const hookPath = join(extraPath, ghHookName);
+  const inheritedNodeOptions = env.NODE_OPTIONS ?? process.env.NODE_OPTIONS;
+  const nodeOptions =
+    process.platform === "win32" && existsSync(hookPath)
+      ? [inheritedNodeOptions, `--require=${hookPath}`].filter(Boolean).join(" ")
+      : inheritedNodeOptions;
+
   return {
     ...process.env,
     ...env,
+    ...(nodeOptions ? { NODE_OPTIONS: nodeOptions } : {}),
     PATH: `${extraPath}${process.env.PATH ? `${pathDelimiter}${process.env.PATH}` : ""}`,
   };
 }
