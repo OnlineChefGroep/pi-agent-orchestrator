@@ -80,6 +80,19 @@ export function assertReleaseCandidate(version, policy) {
   return parsed;
 }
 
+/** Pre-train maintenance baselines (e.g. 0.17.5) listed in sourceBaselines. */
+export function assertMaintenanceBaseline(version, policy) {
+  const parsed = parseStableVersion(version);
+  const initial = parseStableVersion(policy.initialRelease);
+  if (!policy.sourceBaselines.includes(parsed.raw)) {
+    fail(`${version} is not an approved maintenance baseline in sourceBaselines`);
+  }
+  if (compareVersions(parsed, initial) >= 0) {
+    fail(`${version} is not a maintenance baseline; use the ${policy.releaseTrain}.x release train instead`);
+  }
+  return parsed;
+}
+
 export async function verifyRepositoryReleaseState(root = ROOT, options = {}) {
   const { requireCandidate = false } = options;
   const policy = await loadReleasePolicy(root);
@@ -136,6 +149,23 @@ async function main() {
     console.log(
       `Publish policy ready: package=${result.packageVersion}, train=${result.policy.releaseTrain}.x, blocked=${result.policy.blockedNextMinor}`,
     );
+    return;
+  }
+  if (mode === "baseline") {
+    const version = process.argv[3];
+    const policy = await loadReleasePolicy();
+    assertMaintenanceBaseline(version, policy);
+    const pkg = JSON.parse(await readFile(resolve(ROOT, "package.json"), "utf8"));
+    if (pkg.version !== version) {
+      fail(`package.json version ${pkg.version} does not match requested baseline ${version}`);
+    }
+    const changelog = await readFile(resolve(ROOT, "CHANGELOG.md"), "utf8");
+    const datedHeader = new RegExp(`^## v${String(version).replaceAll(".", "\\.")} \\(\\d{4}-\\d{2}-\\d{2}\\)$`, "m");
+    if (!datedHeader.test(changelog)) {
+      fail(`CHANGELOG lacks a dated v${version} heading required for maintenance publish`);
+    }
+    await verifyRepositoryReleaseState(ROOT);
+    console.log(`Maintenance baseline accepted for publish: ${version}`);
     return;
   }
   if (mode !== "repository") fail(`unknown mode ${JSON.stringify(mode)}`);
