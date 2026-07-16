@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { logger } from "../src/logger.js";
+import { __test_resetLoggerCache, logger } from "../src/logger.js";
 
 describe("logger", () => {
   let originalEnv: string | undefined;
 
   beforeEach(() => {
     originalEnv = process.env.PI_SUBAGENTS_LOG_LEVEL;
+    __test_resetLoggerCache();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2024-01-01T12:00:00.000Z"));
 
@@ -123,6 +124,16 @@ describe("logger", () => {
     expect(console.log).not.toHaveBeenCalled();
     expect(console.warn).not.toHaveBeenCalled();
     expect(console.error).toHaveBeenCalledTimes(1);
+  });
+
+  it("should respect runtime changes to PI_SUBAGENTS_LOG_LEVEL without a cache reset", () => {
+    process.env.PI_SUBAGENTS_LOG_LEVEL = "error";
+    logger.info("info message");
+    expect(console.log).not.toHaveBeenCalled();
+
+    process.env.PI_SUBAGENTS_LOG_LEVEL = "info";
+    logger.info("info message");
+    expect(console.log).toHaveBeenCalledTimes(1);
   });
 
   it("should format output as JSON with correct fields", () => {

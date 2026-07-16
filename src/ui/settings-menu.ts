@@ -53,6 +53,7 @@ export async function showSettings(
     `Session limits (agents: ${manager.getSessionLimits().maxAgentsPerSession ?? "unlimited"}, turns: ${manager.getSessionLimits().maxTotalTurnsPerSession ?? "unlimited"})`,
     `Default max turns (current: ${getters.getDefaultMaxTurns() ?? "unlimited"})`,
     `Grace turns (current: ${getters.getGraceTurns()})`,
+    `End-hook revisions (current: ${getters.getMaxEndHookRevisions()})`,
     `Coordination (join: ${getters.getDefaultJoinMode()}, orch: ${getOrchestrationMode()})`,
     `Scheduling (current: ${getters.isSchedulingEnabled() ? "enabled" : "disabled"})`,
     `Tracing (current: ${getters.isTracingEnabled() ? "enabled" : "disabled"})`,
@@ -118,6 +119,21 @@ export async function showSettings(
     if (parsed < 1) return ctx.ui.notify("Must be a positive integer.", "warning");
     setters.setGraceTurns(parsed);
     notifyApplied(ctx, pi, manager, getters, `Grace turns set to ${parsed}`);
+    return;
+  }
+
+  if (choice.startsWith("End-hook revisions")) {
+    const value = await ctx.ui.input(
+      "Max revision turns after a blocking subagent:end hook (0 = fail closed, no revision)",
+      String(getters.getMaxEndHookRevisions()),
+    );
+    if (!value) return;
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isNaN(parsed) || parsed < 0 || parsed > 10) {
+      return ctx.ui.notify("Must be an integer from 0 to 10.", "warning");
+    }
+    setters.setMaxEndHookRevisions(parsed);
+    notifyApplied(ctx, pi, manager, getters, `End-hook revisions set to ${parsed}`);
     return;
   }
 

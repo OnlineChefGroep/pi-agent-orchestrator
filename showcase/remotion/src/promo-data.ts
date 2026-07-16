@@ -49,7 +49,7 @@ export const featureTourTiming = {
 } as const;
 
 export const fallbackPromoData: PromoData = {
-  version: "0.17.1",
+  version: "0.17.5",
   name: "@onlinechefgroep/pi-agent-orchestrator",
   displayName: "PI AGENT ORCHESTRATOR",
   tagline:

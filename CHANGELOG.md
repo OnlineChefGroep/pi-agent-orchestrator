@@ -2,46 +2,45 @@
 
 ## [Unreleased]
 
-### Fixed
+## v0.17.5 (2026-07-16)
 
-- Modernize 4 stale v1 dashboard test files to assert against v2 source
-  (glyphs, header, mocks). Fixes 62 of 79 previously-failing tests.
-- Import order in `test/dashboard-v2-rendering.test.ts` (Biome lint).
+Hardening sweep on the 0.17 line. The transactional 0.18 release train remains
+parked — see `ROADMAP.md` and `docs/releases/v0.18.0.md`.
 
 ### Added
 
-- `.opencode/` — OpenCode V2 skill, `opencode-architect` agent
-  (all-mode), `opencode-explore` subagent (read-only), `/opencode`
-  command.
-- `.agents/skills/fish/` — fish-shell safety skill and project snippets.
-- `OnlineChefGroep/owners` team and CODEOWNERS — org-only PR approvals.
-- `.github/dependabot.yml`, `.github/ISSUE_TEMPLATE/`,
-  `.github/PULL_REQUEST_TEMPLATE.md`.
+- Bounded `subagent:end` revision gate: blocking end hooks can force in-session
+  revision turns via `maxEndHookRevisions` (default `0` = fail closed). Supports
+  `{ action: "block", feedback?, reason? }` in addition to `"block"`.
+- Settings + `/agents → Settings` entry for `maxEndHookRevisions`.
+- Async parallel file reads in `loadCustomAgents` (`fs/promises` + `Promise.all`).
+- Logger TTY-default memoization with live `PI_SUBAGENTS_LOG_LEVEL` reads.
+- Import-graph guard pins `madge@6.1.0` via npx (predictable CI, no registry drift).
+
+### Changed
+
+- Fresh-install defaults: `maxConcurrent` **3** (was 4), swarm default size **2**
+  (was 3); `orchestrationMode` remains `single`.
+- Roadmap rebuilt as a steering doc aimed at **0.17.5 first**, 0.18 later.
+
+### Fixed
+
+- Windows `gh.exe` release-finalize stub argv (`["release", ...process.argv.slice(2)]`)
+  so Node-as-gh hardlink tests pass on Windows Node 22/24 (#286).
+- Deduplicated `AgentManager.abort` stopped-state updates (#287).
+- `task-budget` ALS inheritance test: `mockReset` between cases + assert active parent id.
 
 ### Security
 
-- Repository is now public; secret scanning, push protection, and
-  non-provider pattern scanning enabled.
-- `SECURITY.md` rewritten for private-first reporting (GitHub advisories /
-  `security@chefgroep.nl`), with local sub-agent command execution treated as
-  an in-scope security boundary.
-- Branch protection on `main`: 1 owner-team approver, dismiss-stale,
-  last-push-approval, linear history, no force-push, no admin bypass.
+- RPC request IDs and auto-generated hook IDs use `randomUUID()` instead of `Math.random`.
 
-### CI / Hardening
+### Previously unreleased on 0.17.x (landed before this cut)
 
-- Deleted misconfigured `qodana.yaml` (pinned `qodana-python-community` on a
-  TypeScript repo). Qodana workflows were already replaced by the TypeScript
-  required CI gate (#257); this removes the leftover wrong analyzer config.
-- `package.json` `files` allowlist now publishes AGENTS.md, CONTRIBUTING.md,
-  SECURITY.md, and CODE_OF_CONDUCT.md.
-- Super-Linter codespell skip globs updated so root-level files (including
-  Dutch CHANGELOG history) are skipped under absolute-path invocation.
-- `package-lock.json` regenerated for v0.17.1.
-- Showcase media (`docs/images/*.gif`, `*.mp4`, `*.svg`) regenerated.
+- OpenCode V2 skill/agents and fish-shell safety skill.
+- CODEOWNERS / Dependabot / issue+PR templates; public-repo security scanning.
+- Dashboard v2 test modernization; Super-Linter codespell skip globs; showcase media refresh.
 
 ---
-
 
 ## v0.17.1 (2026-07-06)
 

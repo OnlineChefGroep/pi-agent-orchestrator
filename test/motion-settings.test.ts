@@ -18,6 +18,7 @@ function appliers(setAnimationStyle: (style: Parameters<SettingsAppliers["setAni
     setSessionLimits: noop,
     setDefaultMaxTurns: noop,
     setGraceTurns: noop,
+    setMaxEndHookRevisions: noop,
     setDefaultJoinMode: noop,
     setSchedulingEnabled: noop,
     setTracingEnabled: noop,
@@ -33,6 +34,8 @@ function appliers(setAnimationStyle: (style: Parameters<SettingsAppliers["setAni
     setPromptCompressionLevel: noop,
     setDebugCapture: noop,
     setDebugCapturePaths: noop,
+    setDashboardKeybindings: noop,
+    setFooterStatusConfig: noop,
   };
 }
 

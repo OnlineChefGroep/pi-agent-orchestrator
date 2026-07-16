@@ -197,7 +197,16 @@ describe("settings persistence", () => {
       expect(loadSettings(projectDir)).toEqual({});
     });
 
-    it("drops graceTurns < 1", () => {
+    it("accepts maxEndHookRevisions including 0", () => {
+    writeProject({ maxEndHookRevisions: 0 });
+    expect(loadSettings(projectDir)).toEqual({ maxEndHookRevisions: 0 });
+    writeProject({ maxEndHookRevisions: 3 });
+    expect(loadSettings(projectDir)).toEqual({ maxEndHookRevisions: 3 });
+    writeProject({ maxEndHookRevisions: 11 });
+    expect(loadSettings(projectDir).maxEndHookRevisions).toBeUndefined();
+  });
+
+  it("drops graceTurns < 1", () => {
       writeProject({ graceTurns: 0 });
       expect(loadSettings(projectDir)).toEqual({});
     });
@@ -362,6 +371,7 @@ describe("settings persistence", () => {
         setSessionLimits: vi.fn(),
         setDefaultMaxTurns: vi.fn(),
         setGraceTurns: vi.fn(),
+        setMaxEndHookRevisions: vi.fn(),
         setDefaultJoinMode: vi.fn(),
         setSchedulingEnabled: vi.fn(),
         setTracingEnabled: vi.fn(),
@@ -536,6 +546,7 @@ describe("settings persistence", () => {
         setSessionLimits: vi.fn(),
         setDefaultMaxTurns: vi.fn(),
         setGraceTurns: vi.fn(),
+        setMaxEndHookRevisions: vi.fn(),
         setDefaultJoinMode: vi.fn(),
         setSchedulingEnabled: vi.fn(),
         setTracingEnabled: vi.fn(),

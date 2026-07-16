@@ -2,7 +2,8 @@
  * custom-agents.ts — Load user-defined agents from project (.pi/agents/) and global ($PI_CODING_AGENT_DIR/agents/, default ~/.pi/agent/agents/) locations.
  */
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { BUILTIN_TOOL_NAMES, getDefaultAgentNames } from "./agent-types.js";
@@ -131,14 +132,18 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
   } catch {
     return;
   }
-  for (const file of files) {
-    const name = basename(file, ".md");
-    let content: string;
+  const fileContents = await Promise.all(files.map(async (file) => {
     try {
-      content = readFileSync(join(dir, file), "utf-8");
+      return { file, content: await readFile(join(dir, file), "utf-8") };
     } catch {
-      continue;
+      return null;
     }
+  }));
+
+  for (const result of fileContents) {
+    if (!result) continue;
+    const { file, content } = result;
+    const name = basename(file, ".md");
     const { frontmatter: fm, body } = parseFrontmatter<Record<string, unknown>>(content);
     const config: AgentConfig = {
       name,

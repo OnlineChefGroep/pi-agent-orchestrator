@@ -83,6 +83,15 @@ export interface AgentEndData {
   result?: string;
   error?: string;
   durationMs?: number;
+  tokensIn?: number;
+  tokensOut?: number;
+  turns?: number;
+  /** Final assistant text available to quality-gate hooks. */
+  responseText?: string;
+  /** 1-based end-hook attempt (initial completion = 1). */
+  attempt?: number;
+  /** Total allowed attempts = 1 + maxEndHookRevisions. */
+  maxAttempts?: number;
 }
 
 export interface AgentErrorData {
@@ -432,4 +441,7 @@ export {
   type HookPayload,
   HookRegistry,
   type HookResponse,
+  isBlockResponse,
+  type NormalizedHookDecision,
+  normalizeHookResponse,
 } from "./hooks.js";

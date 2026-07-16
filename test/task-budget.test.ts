@@ -39,6 +39,7 @@ describe("Task Budget", () => {
 
   afterEach(() => {
     manager?.dispose();
+    vi.mocked(runAgent).mockReset();
     vi.clearAllMocks();
   });
 
@@ -241,11 +242,15 @@ describe("Task Budget", () => {
     manager = new AgentManager();
     let nestedChildId: string | undefined;
 
-    vi.mocked(runAgent).mockImplementation(async () => {
-      nestedChildId = manager.spawn(mockPi, mockCtx, "Explore", "nested", {
-        description: "nested",
-        isBackground: true,
-      });
+    vi.mocked(runAgent).mockImplementation(async (_ctx, _type, prompt) => {
+      // Only the parent run should nest-spawn. Background children also invoke
+      // this mock under their own ALS id — ignore those to avoid overwriting.
+      if (prompt === "parent task") {
+        nestedChildId = manager.spawn(mockPi, mockCtx, "Explore", "nested", {
+          description: "nested",
+          isBackground: true,
+        });
+      }
       return {
         responseText: "done",
         session: mockSession(),
@@ -260,6 +265,8 @@ describe("Task Budget", () => {
     });
 
     await manager.getRecord(parentId)!.promise;
+    // Drain so the nested background child can finish without re-entering the parent mock path.
+    await manager.waitForAll();
 
     expect(nestedChildId).toBeDefined();
     const child = manager.getRecord(nestedChildId!)!;

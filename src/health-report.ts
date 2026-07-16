@@ -90,6 +90,7 @@ export interface HealthReport {
   settings: {
     defaultMaxTurns: number | null;
     graceTurns: number;
+    maxEndHookRevisions: number;
     defaultJoinMode: string;
     schedulingEnabled: boolean;
     tracingEnabled: boolean;
@@ -154,6 +155,7 @@ export function buildHealthReport(deps: HealthReportDeps): HealthReport {
   const schedulingEnabled = getters.isSchedulingEnabled();
   const defaultMaxTurns = getters.getDefaultMaxTurns();
   const graceTurns = getters.getGraceTurns();
+  const maxEndHookRevisions = getters.getMaxEndHookRevisions();
   const defaultJoinMode = getters.getDefaultJoinMode();
   const animationStyle = getAnimationStyle();
   const uiStyle = getUiStyle();
@@ -253,6 +255,7 @@ export function buildHealthReport(deps: HealthReportDeps): HealthReport {
     settings: {
       defaultMaxTurns: defaultMaxTurns ?? null,
       graceTurns,
+      maxEndHookRevisions,
       defaultJoinMode,
       schedulingEnabled,
       tracingEnabled,
@@ -345,6 +348,7 @@ export function formatHealthReport(r: HealthReport): string {
   push(`  maxConcurrent              : ${r.settings.maxConcurrent}`);
   push(`  defaultMaxTurns            : ${r.settings.defaultMaxTurns ?? "unlimited"}`);
   push(`  graceTurns                 : ${r.settings.graceTurns}`);
+  push(`  maxEndHookRevisions        : ${r.settings.maxEndHookRevisions}`);
   push(`  defaultJoinMode            : ${r.settings.defaultJoinMode}`);
   push(`  schedulingEnabled          : ${r.settings.schedulingEnabled}`);
   push(`  tracingEnabled             : ${r.settings.tracingEnabled}`);

@@ -2,7 +2,7 @@ import { logger } from "./logger.js";
 /**
  * agent-manager.ts — Tracks agents, background execution, resume support.
  *
- * Background agents are subject to a configurable concurrency limit (default: 4).
+ * Background agents are subject to a configurable concurrency limit (default: 3).
  * Excess agents are queued and auto-started as running agents complete.
  * Foreground agents bypass the queue (they block the parent anyway).
  */
@@ -31,7 +31,8 @@ export type BudgetWarningType = "agents_at_80" | "turns_at_80" | "agents_at_90" 
 export type OnBudgetWarning = (type: BudgetWarningType, usage: { spawnedAgents: number; totalTurns: number }, limits: { maxAgents: number; maxTurns: number }) => void;
 
 /** Default max concurrent background agents. */
-const DEFAULT_MAX_CONCURRENT = 4;
+/** Fresh-install default: keep typical fan-out in the 1–3 agent range. */
+const DEFAULT_MAX_CONCURRENT = 3;
 
 export interface SessionLimits {
   maxAgentsPerSession?: number;
@@ -628,13 +629,12 @@ export class AgentManager {
     // Remove from queue if queued
     if (record.status === "queued") {
       this.queue = this.queue.filter(q => q.id !== id);
-      record.status = "stopped";
-      record.completedAt = Date.now();
-      return true;
+    } else if (record.status === "running") {
+      record.abortController?.abort();
+    } else {
+      return false;
     }
 
-    if (record.status !== "running") return false;
-    record.abortController?.abort();
     record.status = "stopped";
     record.completedAt = Date.now();
     return true;

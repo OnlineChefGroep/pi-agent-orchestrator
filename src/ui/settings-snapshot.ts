@@ -13,6 +13,7 @@ export function buildSettingsSnapshot(manager: AgentManager, getters: SettingsGe
     // normalizeMaxTurns() in agent-runner.ts (which maps 0 → undefined).
     defaultMaxTurns: getters.getDefaultMaxTurns() ?? 0,
     graceTurns: getters.getGraceTurns(),
+    maxEndHookRevisions: getters.getMaxEndHookRevisions(),
     defaultJoinMode: getters.getDefaultJoinMode(),
     schedulingEnabled: getters.isSchedulingEnabled(),
     tracingEnabled: getters.isTracingEnabled(),

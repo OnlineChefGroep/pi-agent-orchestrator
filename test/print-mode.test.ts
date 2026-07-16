@@ -7,9 +7,11 @@ vi.mock("../src/agent-runner.js", () => ({
   getAgentConversation: vi.fn(),
   getDefaultMaxTurns: vi.fn(),
   getGraceTurns: vi.fn(),
+  getMaxEndHookRevisions: vi.fn(),
   normalizeMaxTurns: vi.fn((n: number | undefined) => n),
   setDefaultMaxTurns: vi.fn(),
   setGraceTurns: vi.fn(),
+  setMaxEndHookRevisions: vi.fn(),
 }));
 
 import { runAgent } from "../src/agent-runner.js";

@@ -21,7 +21,7 @@ import {
   setTracingEnabled,
   setUiStyle,
 } from "../src/agent-registry.js";
-import { getDefaultMaxTurns, getGraceTurns, setDefaultMaxTurns, setGraceTurns } from "../src/agent-runner.js";
+import { getDefaultMaxTurns, getGraceTurns, getMaxEndHookRevisions, setDefaultMaxTurns, setGraceTurns, setMaxEndHookRevisions } from "../src/agent-runner.js";
 import {
   recordDispatchDecision,
   resetDispatchHistory,
@@ -54,6 +54,7 @@ class StubSwarm {
 const baseGetters: SettingsGetters = {
   getDefaultMaxTurns,
   getGraceTurns,
+  getMaxEndHookRevisions,
   getDefaultJoinMode,
   isSchedulingEnabled,
   isTracingEnabled,
@@ -225,6 +226,7 @@ describe("buildHealthReport — settings section", () => {
     const r = buildHealthReport(makeDeps());
     expect(r.settings.defaultMaxTurns).toBe(20);
     expect(r.settings.graceTurns).toBe(3);
+    expect(r.settings.maxEndHookRevisions).toBe(0);
     expect(r.settings.defaultJoinMode).toBe("smart");
     expect(r.settings.animationStyle).toBe("braille");
     expect(r.settings.uiStyle).toBe("premium");
@@ -257,6 +259,12 @@ describe("buildHealthReport — settings section", () => {
   it("graceTurns reflects the current registry value", () => {
     setGraceTurns(7);
     expect(buildHealthReport(makeDeps()).settings.graceTurns).toBe(7);
+  });
+
+  it("maxEndHookRevisions reflects the current registry value", () => {
+    setMaxEndHookRevisions(2);
+    expect(buildHealthReport(makeDeps()).settings.maxEndHookRevisions).toBe(2);
+    setMaxEndHookRevisions(0);
   });
 });
 

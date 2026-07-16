@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AgentManager } from "../agent-manager.js";
 import { getDefaultJoinMode, isSchedulingEnabled, isTracingEnabled, setDefaultJoinMode, setSchedulingEnabled, setTracingEnabled } from "../agent-registry.js";
-import { getDefaultMaxTurns, getGraceTurns, setDefaultMaxTurns, setGraceTurns } from "../agent-runner.js";
+import { getDefaultMaxTurns, getGraceTurns, getMaxEndHookRevisions, setDefaultMaxTurns, setGraceTurns, setMaxEndHookRevisions } from "../agent-runner.js";
 import { showAgentsMenu } from "../output-handler.js";
 import type { SubagentScheduler } from "../schedule.js";
 import type { SettingsGetters, SettingsSetters } from "../settings.js";
@@ -16,6 +16,7 @@ import type { AgentActivity } from "../ui/agent-ui-types.js";
 const settingsGetters: SettingsGetters = {
   getDefaultMaxTurns,
   getGraceTurns,
+  getMaxEndHookRevisions,
   getDefaultJoinMode,
   isSchedulingEnabled,
   isTracingEnabled,
@@ -25,6 +26,7 @@ const settingsGetters: SettingsGetters = {
 const settingsSetters: SettingsSetters = {
   setDefaultMaxTurns,
   setGraceTurns,
+  setMaxEndHookRevisions,
   setDefaultJoinMode,
   setSchedulingEnabled,
   setTracingEnabled,

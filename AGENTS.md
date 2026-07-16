@@ -184,4 +184,4 @@ See `docs/architecture.md` for the full module map and data-flow diagram.
 ## Verification Suite
 
 Ensure you run `npm run typecheck && npm run lint && npm test` before committing.
-Currently passing: **1693 tests** across **95 test files**, including performance benchmarks for render, snapshot, virtual scrolling, and spawn latency.
+Currently passing: **1875 tests** across **110 test files**, including performance benchmarks for render, snapshot, virtual scrolling, and spawn latency.

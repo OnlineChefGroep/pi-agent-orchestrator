@@ -34,7 +34,7 @@ import { DEFAULT_AGENTS } from "./default-agents.js";
 import { detectEnv } from "./env.js";
 import { buildEnvFromContext } from "./env-context.js";
 import { type AgentHandoff, parseHandoff, renderHandoffForParent } from "./handoff.js";
-import { type HookRegistry } from "./hooks.js";
+import { type HookRegistry, normalizeHookResponse } from "./hooks.js";
 import { logger } from "./logger.js";
 import { buildMemoryBlock, buildReadOnlyMemoryBlock } from "./memory.js";
 import { buildAgentPrompt, type PromptExtras } from "./prompts.js";
@@ -72,6 +72,13 @@ let defaultMaxTurns: number | undefined;
 
 /** Additional turns allowed after the soft limit steer message. */
 let graceTurns = 5;
+
+/**
+ * Max revision turns after a blocking `subagent:end` hook.
+ * 0 = fail closed immediately (no revision). Fresh-install default keeps
+ * end hooks observational unless a quality gate opts into revisions.
+ */
+let maxEndHookRevisions = 0;
 
 /** Resource quota defaults. */
 const DEFAULT_MAX_TOKENS = 500_000;
@@ -116,6 +123,14 @@ export function getGraceTurns(): number {
 
 export function setGraceTurns(n: number): void {
   graceTurns = Math.max(1, n);
+}
+
+export function getMaxEndHookRevisions(): number {
+  return maxEndHookRevisions;
+}
+
+export function setMaxEndHookRevisions(n: number): void {
+  maxEndHookRevisions = Number.isFinite(n) ? Math.max(0, Math.min(10, Math.trunc(n))) : 0;
 }
 
 // ============================================================================
@@ -276,6 +291,11 @@ export interface RunOptions {
   swarm?: SwarmOptions;
   /** Called when a swarm message is received. */
   onSwarmMessage?: (from: string, payload: unknown) => void;
+  /**
+   * Override the module-level `maxEndHookRevisions` setting for this run.
+   * `0` = fail closed on `subagent:end` block with no revision turn.
+   */
+  maxEndHookRevisions?: number;
 }
 
 export interface RunResult {
@@ -524,7 +544,7 @@ export async function runAgent(
       model: `${model.provider}/${model.id}`,
       quotas,
     });
-    if (hookResult === "block") {
+    if (normalizeHookResponse(hookResult).action === "block") {
       throw new AgentRunnerError("Blocked by hook", "aborted", { hook: "subagent:start" });
     }
   }
@@ -756,17 +776,53 @@ export async function runAgent(
 
   const collector = collectResponseText(session);
   const cleanupAbort = forwardAbortSignal(session, options.signal);
+  let gatedResponseText = "";
 
   try {
     await session.prompt(effectivePrompt);
-    options.hooks
-      ?.dispatch("subagent:end", options.agentId ?? "unknown", {
-        tokensIn,
-        tokensOut,
-      })
-      .catch((err) => {
-        logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
-      });
+    gatedResponseText = collector.getText().trim() || getLastAssistantText(session);
+
+    if (options.hooks) {
+      const revisionBudget = options.maxEndHookRevisions ?? maxEndHookRevisions;
+      let attempt = 1;
+      const maxAttempts = revisionBudget + 1;
+
+      while (true) {
+        const endDecision = normalizeHookResponse(
+          await options.hooks.dispatch("subagent:end", options.agentId ?? "unknown", {
+            status: "completed",
+            tokensIn,
+            tokensOut,
+            turns: turnCount,
+            responseText: gatedResponseText,
+            attempt,
+            maxAttempts,
+          }),
+        );
+
+        if (endDecision.action !== "block") break;
+
+        if (attempt > revisionBudget) {
+          throw new AgentRunnerError(
+            endDecision.reason ?? "Blocked by hook",
+            "aborted",
+            {
+              hook: "subagent:end",
+              attempt,
+              maxAttempts,
+              ...(endDecision.feedback !== undefined ? { feedback: endDecision.feedback } : {}),
+            },
+          );
+        }
+
+        const revisionPrompt =
+          endDecision.feedback?.trim() ||
+          "Your previous output was rejected by a quality gate. Revise and improve it.";
+        await session.prompt(revisionPrompt);
+        gatedResponseText = collector.getText().trim() || getLastAssistantText(session);
+        attempt++;
+      }
+    }
   } catch (err) {
     // End agent span with error status
     const errDuration = performance.now() - startTime;
@@ -801,7 +857,7 @@ export async function runAgent(
     if (messagePollInterval) clearInterval(messagePollInterval);
   }
 
-  let responseText = collector.getText().trim() || getLastAssistantText(session);
+  let responseText = gatedResponseText || collector.getText().trim() || getLastAssistantText(session);
   const duration = performance.now() - startTime;
 
   // Structured handoff parsing

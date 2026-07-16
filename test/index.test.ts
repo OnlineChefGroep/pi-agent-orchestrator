@@ -11,6 +11,10 @@ vi.mock("../src/logger.js", () => ({
 vi.mock("../src/agent-runner.js", () => ({
   setDefaultMaxTurns: vi.fn(),
   setGraceTurns: vi.fn(),
+  setMaxEndHookRevisions: vi.fn(),
+  getDefaultMaxTurns: vi.fn(),
+  getGraceTurns: vi.fn(() => 5),
+  getMaxEndHookRevisions: vi.fn(() => 0),
 }));
 
 // Mock agent-registry
