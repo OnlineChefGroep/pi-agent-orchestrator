@@ -167,7 +167,16 @@ export class HookRegistry {
       circuitBreakerThreshold?: number;
     },
   ): string {
-    const id = options?.id || `${event}-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+    // `id` is the primary key for `metrics` and `handlerEventMap`; a collision would
+    // overwrite those entries and, after unregisterById(), leave a ghost handler that
+    // runHandlers() silently skips (metrics missing). Use a 64-bit suffix and, for
+    // auto-generated ids, regenerate on the vanishingly rare clash to guarantee uniqueness.
+    let id = options?.id;
+    if (!id) {
+      do {
+        id = `${event}-${Date.now().toString(36)}-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+      } while (this.metrics.has(id));
+    }
     const priority = typeof options?.priority === "number"
       ? options.priority
       : PRIORITY_MAP[options?.priority ?? "normal"];
