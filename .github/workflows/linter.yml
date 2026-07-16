@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: super-linter-${{ github.event.pull_request.number || github.ref }}
@@ -29,12 +30,16 @@ jobs:
       - name: Lint Code Base
         uses: super-linter/super-linter@4ce20838b8ab83717e78138c5b3a1407148e0918 # v8.7.0
         env:
-          VALIDATE_ALL_CODEBASE: false
+          # Bot-created release PRs explicitly dispatch this workflow because
+          # GitHub suppresses pull_request events created with GITHUB_TOKEN.
+          VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'workflow_dispatch' }}
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ENABLE_GITHUB_PULL_REQUEST_SUMMARY_COMMENT: false
           ENABLE_GITHUB_ACTIONS_STEP_SUMMARY: true
           SAVE_SUPER_LINTER_SUMMARY: true
+          SAVE_SUPER_LINTER_OUTPUT: true
+          SUPER_LINTER_OUTPUT_DIRECTORY_NAME: super-linter-output
           # Biome owns TypeScript/JavaScript linting. Super-Linter supplies
           # complementary workflow, secret, dependency, and repository checks.
           VALIDATE_GITHUB_ACTIONS_ZIZMOR: true
@@ -46,3 +51,12 @@ jobs:
           VALIDATE_SPELL_CODESPELL: true
           VALIDATE_TRIVY: true
           VALIDATE_YAML: true
+
+      - name: Upload Super-Linter diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: super-linter-diagnostics-${{ github.run_id }}
+          path: super-linter-output
+          if-no-files-found: error
+          retention-days: 14

@@ -1,21 +1,60 @@
 # npm release setup
 
-`@onlinechefgroep/pi-agent-orchestrator` is published to the public npm registry by `.github/workflows/release.yml`.
+`@onlinechefgroep/pi-agent-orchestrator` has one canonical, transactional release path.
 
-The release workflow has one canonical path:
+Do not create tags manually and do not add another npm or GitHub Packages publish workflow. A release must move source, npm, Git tag, and GitHub Release together.
 
-1. Check out the release commit.
-2. Verify the tag is reachable from `main` when triggered by a tag.
-3. Install, build, typecheck, lint, test, and validate the package.
-4. Confirm the requested version is newer than the latest npm version.
-5. Publish the public scoped package.
-6. Create the matching GitHub Release.
+## Release architecture
 
-Do not add a second npm or GitHub Packages publish workflow. Duplicate tag triggers create split release state and make failures harder to recover.
+Two workflows divide preparation from publication:
 
-## Current authentication: granular npm token
+1. `.github/workflows/prepare-release.yml` — the human-facing **Prepare Release 0.18.0** button.
+2. `.github/workflows/release.yml` — the automatic npm publisher for the exact reviewed release commit on `main`.
 
-The workflow currently reads the `NPM_TOKEN` GitHub Actions secret.
+The button does not publish directly. It:
+
+1. Refuses non-`main`, stale, duplicate, already-tagged, or already-published attempts.
+2. Verifies `.release-policy.json` and the locked `0.18.x` train.
+3. Updates `package.json`, both package-lock root versions, and `CHANGELOG.md` to `0.18.0`.
+4. Runs build, typecheck, lint, tests, package metadata validation, and real npm tarball inspection.
+5. Proves only `CHANGELOG.md`, `package.json`, and `package-lock.json` changed.
+6. Creates `release/v0.18.0` and a reviewable release PR.
+7. Explicitly dispatches CI and Super-Linter because GitHub suppresses `pull_request` events created with `GITHUB_TOKEN`.
+8. Requests an external reviewer and enables auto-merge after checks and approval.
+
+After the release PR squash-merges, `release.yml`:
+
+1. Requires the exact commit subject `chore(release): v0.18.0`.
+2. Requires the commit to contain exactly the three transactional release files.
+3. Re-runs the immutable release gate from the merged source commit.
+4. Publishes npm with provenance.
+5. Creates `v0.18.0` on that exact commit.
+6. Creates the matching GitHub Release.
+
+## Version freeze
+
+`.release-policy.json` is the source of truth.
+
+Current policy:
+
+- source baseline before release: `0.17.1`;
+- allowed release train: stable `0.18.x` only;
+- initial release: `0.18.0`;
+- prereleases: blocked;
+- `0.19.0` and all other release lines: blocked.
+
+The policy is enforced by:
+
+```bash
+npm run verify:release-policy
+node scripts/release-policy.mjs candidate 0.18.0
+```
+
+Do not unlock `0.19.x` as part of a feature, dependency, or routine release PR. It requires a dedicated reviewed policy change after the `0.18.x` stabilization period.
+
+## Current authentication
+
+The publisher currently reads the repository Actions secret `NPM_TOKEN` and also requests `id-token: write` so npm provenance can be attached.
 
 Create a granular npm access token with the smallest possible scope:
 
@@ -23,9 +62,7 @@ Create a granular npm access token with the smallest possible scope:
 - Permission: read and write
 - Expiration: the shortest operationally practical period
 
-Store it as the repository Actions secret `NPM_TOKEN`.
-
-Repository secret location:
+Store it at:
 
 ```text
 https://github.com/OnlineChefGroep/pi-agent-orchestrator/settings/secrets/actions
@@ -33,69 +70,65 @@ https://github.com/OnlineChefGroep/pi-agent-orchestrator/settings/secrets/action
 
 ## Preferred authentication: npm trusted publishing
 
-Migrate to npm trusted publishing so releases use GitHub OIDC instead of a long-lived npm token.
-
-In npm package settings, configure a trusted publisher with:
+Configure a trusted publisher in npm with:
 
 - Provider: GitHub Actions
 - Organization or user: `OnlineChefGroep`
 - Repository: `pi-agent-orchestrator`
 - Workflow filename: `release.yml`
-- Environment: leave empty unless the workflow is moved behind a protected release environment
+- Environment: leave empty unless a protected release environment is introduced
 
-After npm accepts the trusted publisher:
+After npm trusted publishing is verified:
 
-1. Add `id-token: write` to the workflow permissions.
-2. Remove `NODE_AUTH_TOKEN` and the `NPM_TOKEN` dependency.
-3. Publish with provenance:
+1. Remove `NODE_AUTH_TOKEN` and the `NPM_TOKEN` dependency from `release.yml`.
+2. Keep `id-token: write`.
+3. Keep `npm publish --access public --provenance`.
 
-```bash
-npm publish --access public --provenance
-```
+Do not remove token authentication before the trusted publisher is active.
 
-Do not remove token authentication before trusted publishing is configured on npm.
+## How to release 0.18.0
 
-## Release methods
+1. Open GitHub Actions.
+2. Select **Prepare Release 0.18.0**.
+3. Choose `main`.
+4. Select `RELEASE 0.18.0` in the confirmation field.
+5. Run the workflow.
+6. Review the generated PR and its checks.
 
-### Tag release
-
-The tag must point to a commit reachable from `main`.
-
-```bash
-git switch main
-git pull --ff-only
-git tag v0.18.0
-git push origin v0.18.0
-```
-
-### Manual release
-
-Run the `Release` workflow from GitHub Actions on `main` and supply a version newer than the currently published npm version, for example `0.18.0`.
-
-The workflow updates the package version only inside the release job. A separate source version commit is not required.
+No version text, tag, or npm command needs to be entered manually. Branch protection still requires approval from someone other than the last pusher. After that approval and green checks, auto-merge and publication continue automatically.
 
 ## Post-release verification
 
 ```bash
 npm view @onlinechefgroep/pi-agent-orchestrator version
 npm view @onlinechefgroep/pi-agent-orchestrator pi --json
+npm pack @onlinechefgroep/pi-agent-orchestrator@0.18.0 --dry-run
 pi -e npm:@onlinechefgroep/pi-agent-orchestrator
 ```
 
-Verify that:
+Verify:
 
-- npm shows the expected version;
+- npm shows `0.18.0`;
 - `pi.extensions` contains `./dist/index.js`;
+- `pi.skills` contains `./skills`;
+- `pi.prompts` contains `./prompts`;
 - `pi.video` contains the public MP4 showcase URL;
-- the Pi package catalog refreshes the package card;
-- the GitHub Release exists for the same version.
+- the packed artifact contains the Orchestra skill and all three prompts;
+- tag `v0.18.0` points to the same commit as the source version bump;
+- the GitHub Release exists for `v0.18.0`;
+- pi.dev refreshes the package as extension + skill + prompt.
 
 ## Failure recovery
 
+The publisher is intentionally idempotent.
+
 | Failure | Response |
 | --- | --- |
-| `401` or `ENEEDAUTH` | Verify `NPM_TOKEN`, or the npm trusted publisher configuration after migration. |
+| Release preparation fails | Fix the hardening PR or remove an abandoned `release/v0.18.0` branch, then press the button again. |
+| Release PR checks fail | Fix the release branch; do not bypass branch protection. |
+| `401` or `ENEEDAUTH` | Verify `NPM_TOKEN`, or the npm trusted publisher after migration. |
 | `403 Forbidden` | Verify package-level publish permission for the `@onlinechefgroep` scope. |
-| Version already exists | Never overwrite. Choose a new semver and rerun the canonical release workflow. |
-| npm publish succeeded but GitHub Release failed | Create the missing GitHub Release for the already-published version; do not republish. |
-| GitHub Release exists but npm publish failed | Fix authentication or package validation, delete only an incorrect unannounced tag/release if necessary, then release a valid new version. |
+| npm already contains `0.18.0` | Re-run the failed Release job. It skips npm publish and completes tag/release verification. |
+| npm publish succeeds but tag or GitHub Release fails | Re-run the failed Release job. Never increment the version solely to repair release metadata. |
+| Existing tag points elsewhere | Stop. Do not force-move the tag; investigate the source-integrity violation. |
+| A request attempts `0.19.0` | Keep it blocked until a dedicated policy-unlock PR is intentionally approved. |
