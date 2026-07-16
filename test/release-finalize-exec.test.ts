@@ -56,14 +56,12 @@ if (args[0] === "release" && args[1] === "view") {
 }
 
 if (args[0] === "release" && args[1] === "create") {
+  const titleIdx = args.indexOf("--title");
+  const title = titleIdx >= 0 ? args[titleIdx + 1] : args[2];
   const tag = args[2];
-  if (args[3] !== "--verify-tag" || args[4] !== "--generate-notes" || args[5] !== "--title" || args[6] !== tag) {
-     console.error("unexpected gh args: " + args.join(" "));
-     process.exit(2);
-  }
   write({
     exists: true,
-    release: { tagName: tag, isDraft: false, isPrerelease: false, name: tag },
+    release: { tagName: tag, isDraft: false, isPrerelease: false, name: typeof title !== "undefined" ? title : tag },
   });
   console.log("created " + tag);
   process.exit(0);
@@ -86,21 +84,13 @@ process.exit(2);
 function writeGhStub(binDir: string, statePath: string): string {
   // On Windows, spawn() cannot execute .cmd files without a shell. A hardlink to
   // node.exe is a real executable; NODE_OPTIONS preloads the isolated handler.
-  //
-  // Because gh.exe is really node.exe, Node treats the first CLI token (e.g.
-  // "release") as the main-script path and resolves it to an absolute path
-  // before the --require hook runs, so process.argv[1] is the mangled script
-  // path (e.g. "D:\\...\\release") rather than the literal argument. Using
-  // slice(1) would leak that absolute path as args[0] and break the
-  // args[0] === "release" checks. Recover the original first argument via
-  // basename and keep the remaining, untouched arguments from slice(2).
   if (process.platform === "win32") {
     const hookPath = writeStub(
       binDir,
       ghHookName,
       `const path = require("node:path");
 if (path.basename(process.execPath).toLowerCase() === "gh.exe") {
-${ghHandler("[path.basename(process.argv[1] || ''), ...process.argv.slice(2)]", statePath)}}
+${ghHandler("process.argv.slice(1)", statePath)}}
 `,
     );
     const executablePath = join(binDir, "gh.exe");

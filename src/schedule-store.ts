@@ -109,10 +109,9 @@ export class ScheduleStore {
 
   /** Reload from disk into the in-memory cache (async). */
   private async load(): Promise<void> {
-    // Build into a temporary map and swap atomically at the end. Because list()
-    // and get() are unlocked cache reads, clearing eagerly here would let a
-    // concurrent reader observe a transiently-empty cache mid-load. A failed
-    // parse must never leave stale jobs, so the catch below clears on any error.
+    // Always invalidate first. A failed parse must never leave stale jobs that a
+    // later mutation can write back as apparently valid state.
+    this.jobs.clear();
     try {
       // Open once with O_NOFOLLOW so a symlink swap between lstat and read cannot win.
       const handle = await fs.open(this.filePath, OPEN_READ_FLAGS);
