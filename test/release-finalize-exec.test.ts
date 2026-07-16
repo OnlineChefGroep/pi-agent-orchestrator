@@ -82,19 +82,13 @@ process.exit(2);
 function writeGhStub(binDir: string, statePath: string): string {
   // On Windows, spawn() cannot execute .cmd files without a shell. A hardlink to
   // node.exe is a real executable; NODE_OPTIONS preloads the isolated handler.
-  //
-  // Because gh.exe is node.exe, invoking `gh release <sub> ...` makes node treat
-  // the first positional (`release`) as the main script and rewrite argv[1] to
-  // its resolved absolute path. So neither slice(1) (keeps the resolved path as
-  // args[0]) nor slice(2) (drops the `release` token entirely) yields the real
-  // gh argv. Recover the subcommand from basename(argv[1]) and append the rest.
   if (process.platform === "win32") {
     const hookPath = writeStub(
       binDir,
       ghHookName,
       `const path = require("node:path");
 if (path.basename(process.execPath).toLowerCase() === "gh.exe") {
-${ghHandler("[path.basename(process.argv[1]), ...process.argv.slice(2)]", statePath)}}
+${ghHandler("process.argv.slice(process.argv.findIndex(x => x === 'release'))", statePath)}}
 `,
     );
     const executablePath = join(binDir, "gh.exe");
@@ -110,7 +104,7 @@ ${ghHandler("[path.basename(process.argv[1]), ...process.argv.slice(2)]", stateP
     binDir,
     "gh",
     `#!/usr/bin/env node
-${ghHandler("process.argv.slice(2)", statePath)}`,
+${ghHandler("process.argv.slice(process.argv.findIndex(x => x === 'release'))", statePath)}`,
   );
 }
 
