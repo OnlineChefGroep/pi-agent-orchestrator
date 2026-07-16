@@ -44,6 +44,9 @@ const statePath = ${JSON.stringify(statePath)};
 const args = ${argsExpression};
 const read = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
 const write = (state) => fs.writeFileSync(statePath, JSON.stringify(state));
+while (args.length > 0 && !args[0].startsWith("release")) {
+  args.shift();
+}
 
 if (args[0] === "release" && args[1] === "view") {
   const state = read();
@@ -82,20 +85,13 @@ process.exit(2);
 function writeGhStub(binDir: string, statePath: string): string {
   // On Windows, spawn() cannot execute .cmd files without a shell. A hardlink to
   // node.exe is a real executable; NODE_OPTIONS preloads the isolated handler.
-  //
-  // Because gh.exe is node.exe, invoking `gh release <sub> ...` makes node treat
-  // the first positional (`release`) as the main script and rewrite argv[1] to
-  // its resolved absolute path (e.g. D:\...\release). The bare "release" token
-  // never appears in argv, and argv[0] is the gh.exe execPath, so scanning for a
-  // "gh"/"gh.exe" element matches argv[0] and leaks the resolved release path.
-  // Instead recover the subcommand from basename(argv[1]) and append slice(2).
   if (process.platform === "win32") {
     const hookPath = writeStub(
       binDir,
       ghHookName,
       `const path = require("node:path");
 if (path.basename(process.execPath).toLowerCase() === "gh.exe") {
-${ghHandler("[path.basename(process.argv[1]), ...process.argv.slice(2)]", statePath)}}
+${ghHandler("process.argv.slice(process.argv.findIndex(x => typeof x === 'string' && x.toLowerCase().endsWith('gh.exe')) > -1 ? process.argv.findIndex(x => typeof x === 'string' && x.toLowerCase().endsWith('gh.exe')) + 1 : (process.argv[1].endsWith('gh') ? 2 : 1))", statePath)}}
 `,
     );
     const executablePath = join(binDir, "gh.exe");
@@ -107,13 +103,11 @@ ${ghHandler("[path.basename(process.argv[1]), ...process.argv.slice(2)]", stateP
     return hookPath;
   }
 
-  // Non-Windows: a real shebang script, so argv is [node, gh, release, ...] and
-  // slice(2) yields the gh argv directly.
   return writeStub(
     binDir,
     "gh",
     `#!/usr/bin/env node
-${ghHandler("process.argv.slice(2)", statePath)}`,
+${ghHandler("process.argv.slice(process.argv.findIndex(x => typeof x === 'string' && x.toLowerCase().endsWith('gh')) > -1 ? process.argv.findIndex(x => typeof x === 'string' && x.toLowerCase().endsWith('gh')) + 1 : 2)", statePath)}`,
   );
 }
 
