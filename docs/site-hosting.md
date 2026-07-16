@@ -23,6 +23,8 @@ Production deploys run from the `main` branch:
 
 Showcase media is staged from `docs/images/` before the Vite build. Documentation markdown is **bundled into the SPA as HTML** — raw `.md` is not published on the public site. Agents read `docs/*.md`, `llms.txt`, and `AGENTS.md` from the installed `@onlinechefgroep/pi-agent-orchestrator` npm package.
 
+**SPA routing:** Cloudflare Pages enables native SPA fallback when `404.html` is absent (canonical deploy, `SITE_BASE=/`). The GitHub mirror build (`SITE_BASE=/pi-agent-orchestrator/`) copies `index.html` → `404.html` because GitHub Pages has no equivalent. `_redirects` keeps **301-only** legacy `.md` redirects — never `/* /index.html 200` (Cloudflare turns those into 308 loops).
+
 ## Custom domain
 
 `orchestrator.chefgroep.online` is attached to the Pages project in the same Cloudflare account as the `chefgroep.online` zone. DNS is a proxied CNAME from that subdomain to the Pages project origin.

@@ -52,7 +52,11 @@ mkdir -p "$OUT"
 cp -a "$WEB_DIR/dist/." "$OUT/"
 
 touch "$OUT/.nojekyll"
-cp "$OUT/index.html" "$OUT/404.html"
+# Cloudflare Pages: omit 404.html so native SPA mode serves deep links (see site-hosting.md).
+# GitHub Pages mirror (SITE_BASE != /) has no built-in SPA fallback — copy index.html to 404.html.
+if [ "$SITE_BASE" != "/" ]; then
+  cp "$OUT/index.html" "$OUT/404.html"
+fi
 
 # Crawler + agent-permissions only — no raw markdown on the public site.
 mkdir -p "$OUT/.well-known"
