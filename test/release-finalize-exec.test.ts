@@ -42,13 +42,13 @@ function ghHandler(argsExpression: string, statePath: string): string {
   return `const fs = require("node:fs");
 const statePath = ${JSON.stringify(statePath)};
 let args = ${argsExpression};
-if (args[0] && args[0] !== "release" && (args[0].endsWith("release") || args[0].endsWith("gh"))) {
+if (args[0] && (args[0] !== "release" && args[0] !== "create" && args[0] !== "view" && args[0] !== "edit") && !args[0].startsWith("-")) {
   args.shift();
 }
 const read = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
 const write = (state) => fs.writeFileSync(statePath, JSON.stringify(state));
 
-if (args[0] === "release" && args[1] === "view") {
+if ((args[0] === "release" && args[1] === "view") || (args[0] === "view")) {
   const state = read();
   if (!state.exists) {
     console.error("release not found");
@@ -58,8 +58,8 @@ if (args[0] === "release" && args[1] === "view") {
   process.exit(0);
 }
 
-if (args[0] === "release" && args[1] === "create") {
-  const tag = args[2];
+if ((args[0] === "release" && args[1] === "create") || (args[0] === "create")) {
+  const tag = args[0] === "release" ? args[2] : args[1];
   write({
     exists: true,
     release: { tagName: tag, isDraft: false, isPrerelease: false, name: tag },
@@ -68,8 +68,8 @@ if (args[0] === "release" && args[1] === "create") {
   process.exit(0);
 }
 
-if (args[0] === "release" && args[1] === "edit") {
-  const tag = args[2];
+if ((args[0] === "release" && args[1] === "edit") || (args[0] === "edit")) {
+  const tag = args[0] === "release" ? args[2] : args[1];
   const state = read();
   state.release = { tagName: tag, isDraft: false, isPrerelease: false, name: tag };
   write(state);
