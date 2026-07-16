@@ -126,7 +126,12 @@ export function estimateReduction(
               )
             : 0;
 
-    const turnCount = original.filter((m) => m.role === "assistant").length;
+    let turnCount = 0;
+    for (let i = 0; i < original.length; i++) {
+        if (original[i].role === "assistant") {
+            turnCount++;
+        }
+    }
 
     return { originalTokens, compactedTokens, reductionPercent, turnCount };
 }
