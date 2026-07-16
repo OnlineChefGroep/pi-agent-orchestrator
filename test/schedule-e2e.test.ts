@@ -231,6 +231,8 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
     expect(eventTypes).toContain("fired");
 
     await scheduler.removeJob(job.id);
+
+    await waitFor(() => pi.events.emit.mock.calls.some((c: any[]) => c[0] === "subagents:scheduled" && c[1].type === "removed"));
     const after = pi.events.emit.mock.calls
       .filter((c: any[]) => c[0] === "subagents:scheduled")
       .map((c: any[]) => c[1].type);
