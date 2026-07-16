@@ -1,19 +1,22 @@
+import { rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { getSessionContextPercent } from "../src/usage.js";
-import { listTemplates, getTemplateInfo } from "../src/agent-templates.js";
+import { activeAgentStorage } from "../src/agent-manager.js";
+import { buildEffectivePrompt } from "../src/agent-runner.js";
+import { getTemplateInfo, listTemplates } from "../src/agent-templates.js";
 import { configureRateLimit, RpcError } from "../src/cross-extension-rpc.js";
-import { formatHealthReport, type HealthReport } from "../src/health-report.js";
-import { formatLifetimeTokens, escapeXml, textResult } from "../src/tool-result-helpers.js";
-import { hashContentSync } from "../src/telemetry.js";
-import { safeJsonParse } from "../src/handoff.js";
 import { recordDispatchDecision } from "../src/dispatch-history.js";
-import { SubagentScheduler } from "../src/schedule.js";
-import { loadSettings, saveSettings } from "../src/settings.js";
+import { safeJsonParse } from "../src/handoff.js";
+import { formatHealthReport, type HealthReport } from "../src/health-report.js";
 import { composeHandlers } from "../src/hooks.js";
 import { writeInitialEntry } from "../src/output-file.js";
-import { activeAgentStorage } from "../src/agent-manager.js";
+import { SubagentScheduler } from "../src/schedule.js";
+import { loadSettings, saveSettings } from "../src/settings.js";
 import { SwarmCoordinator } from "../src/swarm-join.js";
-import { buildEffectivePrompt } from "../src/agent-runner.js";
+import { hashContentSync } from "../src/telemetry.js";
+import { escapeXml, formatLifetimeTokens, textResult } from "../src/tool-result-helpers.js";
+import { getSessionContextPercent } from "../src/usage.js";
 
 describe("Missing tests coverage", () => {
 
@@ -119,13 +122,23 @@ describe("Missing tests coverage", () => {
   });
 
   it("Missing error test for saveSettings", () => {
-    expect(saveSettings({} as any, "/invalid/path/that/does/not/exist")).toBe(false);
+    // saveSettings uses mkdirSync({ recursive: true }), so a merely non-existent
+    // path succeeds. Force a real failure by posing a regular file as the cwd so
+    // creating the ".pi" subdirectory fails with ENOTDIR.
+    const filePosingAsCwd = join(tmpdir(), `pi-missing-coverage-notdir-${Date.now()}`);
+    writeFileSync(filePosingAsCwd, "");
+    try {
+      expect(saveSettings({} as any, filePosingAsCwd)).toBe(false);
+    } finally {
+      rmSync(filePosingAsCwd, { force: true });
+    }
   });
 
   it("Missing test for composeHandlers", () => {
     const handler1 = () => "h1";
     const handler2 = () => "h2";
     const composed = composeHandlers(handler1 as any, handler2 as any);
+    expect(composed).toBeDefined();
   });
 
   it("Missing error test for loadSettings", () => {
