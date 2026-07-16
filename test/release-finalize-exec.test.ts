@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve, delimiter as pathDelimiter } from "node:path";
+import { dirname, join, delimiter as pathDelimiter, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const sourceRoot = resolve(import.meta.dirname ?? ".", "..");
@@ -36,11 +36,7 @@ function writeStub(binDir: string, name: string, body: string): string {
 
 function writeGhStub(binDir: string, statePath: string): string {
   // Node stub avoids bash/$ escaping fights with Biome template-literal lint.
-  return writeStub(
-    binDir,
-    "gh",
-    `#!/usr/bin/env node
-const fs = require("node:fs");
+  const body = `const fs = require("node:fs");
 const statePath = ${JSON.stringify(statePath)};
 const args = process.argv.slice(2);
 const read = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
@@ -77,8 +73,18 @@ if (args[0] === "release" && args[1] === "edit") {
 
 console.error("unexpected gh args: " + args.join(" "));
 process.exit(2);
-`,
-  );
+`;
+
+  if (process.platform === "win32") {
+    const scriptPath = writeStub(binDir, "gh-stub.cjs", body);
+    return writeStub(
+      binDir,
+      "gh.cmd",
+      `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`,
+    );
+  }
+
+  return writeStub(binDir, "gh", `#!/usr/bin/env node\n${body}`);
 }
 
 function nodeEnv(extraPath: string, env: Record<string, string> = {}) {
