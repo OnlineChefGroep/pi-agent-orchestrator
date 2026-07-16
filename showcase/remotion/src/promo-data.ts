@@ -1,4 +1,4 @@
-import {useEffect, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import {
   staticFile,
   useDelayRender,
@@ -122,6 +122,7 @@ export const loadPromoData = async (dataFile = "promo-data.json") => {
 export const usePromoData = (dataFile = "promo-data.json") => {
   const [data, setData] = useState<PromoData>(fallbackPromoData);
   const {delayRender, continueRender} = useDelayRender();
+  const continueRenderRef = useRef(continueRender);
   const [handle] = useState(() => delayRender(`Loading ${dataFile}`));
 
   useEffect(() => {
@@ -132,17 +133,17 @@ export const usePromoData = (dataFile = "promo-data.json") => {
         if (active) {
           setData(value);
         }
-        continueRender(handle);
+        continueRenderRef.current(handle);
       })
       .catch((error: unknown) => {
         console.warn(`Using fallback promo data for ${dataFile}`, error);
-        continueRender(handle);
+        continueRenderRef.current(handle);
       });
 
     return () => {
       active = false;
     };
-  }, [continueRender, dataFile, handle]);
+  }, [dataFile, handle]);
 
   return data;
 };
@@ -150,10 +151,6 @@ export const usePromoData = (dataFile = "promo-data.json") => {
 export const calculateFeatureTourMetadata: CalculateMetadataFunction<FeatureTourProps> = async ({
   props,
 }) => {
-  try {
-    const data = await loadPromoData(props.dataFile);
-    return {durationInFrames: getFeatureTourDuration(data)};
-  } catch {
-    return {durationInFrames: getFeatureTourDuration(fallbackPromoData)};
-  }
+  const data = await loadPromoData(props.dataFile);
+  return {durationInFrames: getFeatureTourDuration(data)};
 };
