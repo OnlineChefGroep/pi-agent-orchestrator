@@ -126,6 +126,18 @@ describe("logger", () => {
     expect(console.error).toHaveBeenCalledTimes(1);
   });
 
+  it("should respect runtime changes to PI_SUBAGENTS_LOG_LEVEL without a cache reset", () => {
+    process.env.PI_SUBAGENTS_LOG_LEVEL = "error";
+    logger.info("info message");
+    expect(console.log).not.toHaveBeenCalled();
+
+    // Change the level at runtime; the next call must pick it up. The env var is
+    // read live, so only the TTY probe is memoized between calls.
+    process.env.PI_SUBAGENTS_LOG_LEVEL = "info";
+    logger.info("info message");
+    expect(console.log).toHaveBeenCalledTimes(1);
+  });
+
   it("should format output as JSON with correct fields", () => {
     process.env.PI_SUBAGENTS_LOG_LEVEL = "info";
 
