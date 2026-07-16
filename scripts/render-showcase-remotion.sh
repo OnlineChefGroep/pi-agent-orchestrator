@@ -13,7 +13,7 @@ npm run build
 npm --prefix "$REMOTION_DIR" install --no-audit --no-fund --ignore-scripts
 node "$REMOTION_DIR/scripts/capture-terminal.mjs"
 node "$REMOTION_DIR/scripts/extract-promo-data.mjs"
-npm --prefix "$REMOTION_DIR" run typecheck
+npm --prefix "$REMOTION_DIR" run verify
 
 EXTRA_ARGS=()
 if [[ -n "${REMOTION_BROWSER_EXECUTABLE:-}" ]]; then
