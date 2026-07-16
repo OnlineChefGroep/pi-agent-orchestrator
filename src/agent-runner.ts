@@ -783,7 +783,10 @@ export async function runAgent(
     gatedResponseText = collector.getText().trim() || getLastAssistantText(session);
 
     if (options.hooks) {
-      const revisionBudget = options.maxEndHookRevisions ?? maxEndHookRevisions;
+      const rawRevisionBudget = options.maxEndHookRevisions ?? maxEndHookRevisions;
+      const revisionBudget = Number.isFinite(rawRevisionBudget)
+        ? Math.max(0, Math.min(10, Math.trunc(rawRevisionBudget)))
+        : 0;
       let attempt = 1;
       const maxAttempts = revisionBudget + 1;
 
