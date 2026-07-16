@@ -7,7 +7,7 @@ interface PromoCardProps {
   compact?: boolean;
 }
 
-const CommandLine = () => (
+const CommandLine = ({packageName}: {packageName: string}) => (
   <div
     style={{
       display: "flex",
@@ -20,7 +20,7 @@ const CommandLine = () => (
   >
     <span style={{color: theme.ok}}>➜</span>
     <span style={{color: theme.muted}}>pi</span>
-    <span style={{color: theme.text}}>install npm:@onlinechefgroep/pi-agent-orchestrator</span>
+    <span style={{color: theme.text}}>install npm:{packageName}</span>
   </div>
 );
 
@@ -87,7 +87,7 @@ const PromoCard = ({compact = false}: PromoCardProps) => {
           <Panel style={{overflow: "hidden", minWidth: 0}}>
             <TerminalHeader title="pi — orchestra" right={<span style={{color: theme.muted}}>xterm-256color</span>} />
             <div style={{padding: "26px 28px 22px"}}>
-              <CommandLine />
+              <CommandLine packageName={data.name} />
               <div
                 style={{
                   height: 1,
@@ -133,7 +133,7 @@ const PromoCard = ({compact = false}: PromoCardProps) => {
           <Panel style={{overflow: "hidden"}}>
             <TerminalHeader title="pi — orchestra" />
             <div style={{padding: "22px 26px"}}>
-              <CommandLine />
+              <CommandLine packageName={data.name} />
               <div style={{display: "flex", gap: 12, marginTop: 22, flexWrap: "wrap"}}>
                 {capabilities.map((capability) => (
                   <Badge key={capability.title}>{capability.title}</Badge>
