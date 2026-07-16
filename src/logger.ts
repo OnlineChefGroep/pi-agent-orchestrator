@@ -7,29 +7,23 @@ const LEVELS: Record<LogLevel, number> = {
   error: 40,
 };
 
-// PI_SUBAGENTS_LOG_LEVEL is read on every call so runtime changes take effect
-// immediately. Only the TTY probe (the expensive part) is memoized. `ttyResolved`
-// tracks whether the probe has run, since the cached value itself may legitimately
-// be `undefined` (interactive terminals stay silent by default).
-let cachedTtyLevel: LogLevel | undefined;
-let ttyResolved = false;
+let cachedLevel: LogLevel | undefined | null = null;
 
 export function __test_resetLoggerCache(): void {
-  cachedTtyLevel = undefined;
-  ttyResolved = false;
+  cachedLevel = null;
 }
 
 function currentLevel(): LogLevel | undefined {
+  if (cachedLevel !== null) return cachedLevel;
+
   const raw = process.env.PI_SUBAGENTS_LOG_LEVEL?.toLowerCase();
   if (raw === "debug" || raw === "info" || raw === "warn" || raw === "error") {
-    return raw;
+    cachedLevel = raw;
+    return cachedLevel;
   }
 
-  if (!ttyResolved) {
-    cachedTtyLevel = process.stdout.isTTY || process.stderr.isTTY ? undefined : "warn";
-    ttyResolved = true;
-  }
-  return cachedTtyLevel;
+  cachedLevel = process.stdout.isTTY || process.stderr.isTTY ? undefined : "warn";
+  return cachedLevel;
 }
 
 function shouldLog(level: LogLevel): boolean {
