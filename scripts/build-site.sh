@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Assemble the GitHub Pages publish directory for the project site.
+# Assemble the publish directory for orchestrator.chefgroep.online (and GH mirror).
 #
-# The site lives under site/ and links (via relative paths) to docs and assets
-# that live elsewhere in the repo. This script stages exactly the files the
-# published site references into a self-contained directory that can be handed
-# to actions/upload-pages-artifact.
+# Primary surface: Vite + React SPA in site/web/. Documentation markdown is bundled
+# into the SPA as HTML — raw .md is NOT published on the public site. Agents read
+# docs/*.md from the installed npm package instead.
 #
 # Usage: scripts/build-site.sh [output_dir]   (default: ./_site)
+# Env:   SITE_BASE — Vite base path (default /). Set to /pi-agent-orchestrator/
+#        for the GitHub Pages org mirror.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_RAW="${1:-$ROOT/_site}"
+SITE_BASE="${SITE_BASE:-/}"
 
-# Refuse dangerous targets before any path math (basename "/" is "/").
 case "$OUT_RAW" in
   ""|"/"|"$HOME"|"$ROOT"|"."|"..")
     echo "error: refusing to delete unsafe output path: ${OUT_RAW:-<empty>}" >&2
@@ -20,12 +21,10 @@ case "$OUT_RAW" in
     ;;
 esac
 
-# Resolve OUT to an absolute path without requiring the directory to exist yet.
 OUT_PARENT="$(cd "$(dirname "$OUT_RAW")" && pwd -P)"
 OUT_BASE="$(basename "$OUT_RAW")"
 OUT="$OUT_PARENT/$OUT_BASE"
 
-# Only allow deleting a directory under the repo root (never the root itself).
 case "$OUT" in
   "$ROOT"/*)
     if [ "$OUT" = "$ROOT" ]; then
@@ -39,42 +38,26 @@ case "$OUT" in
     ;;
 esac
 
-echo "→ Assembling site into: $OUT"
+echo "→ Building marketing site into: $OUT (SITE_BASE=${SITE_BASE})"
 rm -rf -- "$OUT"
-mkdir -p "$OUT/assets" "$OUT/docs/images" "$OUT/.well-known"
 
-# Disable Jekyll so GitHub Pages serves staged files (incl. index.md) verbatim.
+WEB_DIR="$ROOT/site/web"
+(
+  cd "$WEB_DIR"
+  npm ci --ignore-scripts
+  SITE_BASE="$SITE_BASE" npm run build
+)
+
+mkdir -p "$OUT"
+cp -a "$WEB_DIR/dist/." "$OUT/"
+
 touch "$OUT/.nojekyll"
+cp "$OUT/index.html" "$OUT/404.html"
 
-# Top-level pages + markdown mirror.
-cp "$ROOT/site/index.html" "$OUT/index.html"
-cp "$ROOT/site/index.md"   "$OUT/index.md"
-
-# Root docs that the landing page (and published entrypoints) link to.
-cp "$ROOT/README.md"   "$OUT/README.md"
-cp "$ROOT/AGENTS.md"   "$OUT/AGENTS.md"
-cp "$ROOT/llms.txt"    "$OUT/llms.txt"
-cp "$ROOT/llms-full.txt" "$OUT/llms-full.txt"
-cp "$ROOT/sitemap.md"  "$OUT/sitemap.md"
-cp "$ROOT/sitemap.xml" "$OUT/sitemap.xml"
-cp "$ROOT/robots.txt"  "$OUT/robots.txt"
+# Crawler + agent-permissions only — no raw markdown on the public site.
+mkdir -p "$OUT/.well-known"
 cp "$ROOT/agent-permissions.json" "$OUT/agent-permissions.json"
 cp "$ROOT/agent-permissions.json" "$OUT/.well-known/agent-permissions.json"
-
-# Only the specific docs the site links to (do NOT copy internal handoff docs).
-cp "$ROOT/docs/architecture.md"   "$OUT/docs/architecture.md"
-cp "$ROOT/docs/api-reference.md"  "$OUT/docs/api-reference.md"
-cp "$ROOT/docs/custom-agents.md"  "$OUT/docs/custom-agents.md"
-
-# Docs-tree images referenced by staged markdown (keep relative ./images/ paths).
-cp "$ROOT/docs/images/dashboard_preview.svg" \
-  "$OUT/docs/images/dashboard_preview.svg"
-cp "$ROOT/docs/images/orchestrator_architecture.png" \
-  "$OUT/docs/images/orchestrator_architecture.png"
-
-# Showcase assets referenced by index.html / index.md.
-cp "$ROOT/docs/images/dashboard_preview.mp4" "$OUT/assets/dashboard_preview.mp4"
-cp "$ROOT/docs/images/dashboard_preview.gif" "$OUT/assets/dashboard_preview.gif"
 
 echo "✓ Site staged. Contents:"
 ( cd "$OUT" && find . -type f -printf '%P\t%s bytes\n' | sort )

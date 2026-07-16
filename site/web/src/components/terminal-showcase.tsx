@@ -1,6 +1,10 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { siteAssetUrl } from "@/lib/site";
 
 export function TerminalShowcase() {
+  const poster = siteAssetUrl("/assets/dashboard_preview.gif");
+  const video = siteAssetUrl("/assets/dashboard_preview.mp4");
+
   return (
     <Card className="overflow-hidden border-border/80 bg-[#080a0d] shadow-[0_42px_110px_rgba(0,0,0,0.52)]">
       <div className="flex h-12 items-center border-b border-border/80 bg-linear-to-b from-[#1a1d23] to-[#121419] px-4 font-mono text-xs text-muted-foreground">
@@ -15,13 +19,13 @@ export function TerminalShowcase() {
         <video
           controls
           preload="metadata"
-          poster="/assets/dashboard_preview.gif"
+          poster={poster}
           aria-label="Pi Agent Orchestrator terminal dashboard walkthrough"
           className="block aspect-video w-full bg-[#080a0d]"
         >
-          <source src="/assets/dashboard_preview.mp4" type="video/mp4" />
+          <source src={video} type="video/mp4" />
           Your browser does not support embedded MP4 video. Open the{" "}
-          <a href="/assets/dashboard_preview.mp4" className="text-accent underline">
+          <a href={video} className="text-accent underline">
             direct video file
           </a>
           .

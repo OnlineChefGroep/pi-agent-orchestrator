@@ -1,6 +1,22 @@
 # SPA client routes only — never use /* here.
 # Cloudflare Pages always applies _redirects, even when a static asset exists,
-# so a catch-all would shadow /docs/*.md, robots.txt, assets, etc.
+# so a catch-all would shadow robots.txt, assets, etc.
 /install /index.html 200
 /capabilities /index.html 200
 /docs /index.html 200
+/docs/* /index.html 200
+/showcase /index.html 200
+# Legacy raw-markdown URLs → rendered HTML routes
+/README.md /docs/readme 301
+/AGENTS.md /docs/agents 301
+/index.md /
+/docs/README.md /docs/readme 301
+/docs/AGENTS.md /docs/agents 301
+/docs/architecture.md /docs/architecture 301
+/docs/api-reference.md /docs/api-reference 301
+/docs/custom-agents.md /docs/custom-agents 301
+/docs/troubleshooting.md /docs/troubleshooting 301
+/docs/PERFORMANCE.md /docs/performance 301
+/docs/HOWTO-perf.md /docs/howto-perf 301
+/docs/overdrive-patterns.md /docs/overdrive-patterns 301
+/docs/repository.md /docs/repository 301

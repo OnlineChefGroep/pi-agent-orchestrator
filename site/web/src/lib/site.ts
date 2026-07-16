@@ -8,3 +8,10 @@ export function canonicalUrl(path = "/"): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return `${CANONICAL_BASE_URL}${normalized === "/" ? "" : normalized}`;
 }
+
+/** Prefix static asset paths with the Vite base (GitHub Pages mirror uses a subpath). */
+export function siteAssetUrl(path: string): string {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${normalized}`;
+}

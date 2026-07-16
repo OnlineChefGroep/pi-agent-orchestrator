@@ -5,13 +5,18 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(configDir, "../..");
 
 export default defineConfig({
+  base: process.env.SITE_BASE || "/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       "@": path.resolve(configDir, "./src"),
     },
+  },
+  server: {
+    fs: { allow: [repoRoot] },
   },
   build: {
     outDir: "dist",

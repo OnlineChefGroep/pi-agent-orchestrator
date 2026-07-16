@@ -31,6 +31,9 @@ export function LandingPage() {
           <Button asChild variant="secondary" size="lg">
             <Link to="/capabilities">View capabilities</Link>
           </Button>
+          <Button asChild variant="ghost" size="lg">
+            <Link to="/showcase">Watch showcase</Link>
+          </Button>
         </div>
       </section>
 
@@ -46,6 +49,11 @@ export function LandingPage() {
           </p>
         </div>
         <TerminalShowcase />
+        <div>
+          <Button asChild variant="outline">
+            <Link to="/showcase">Full media gallery</Link>
+          </Button>
+        </div>
       </section>
 
       <Separator className="my-16" />

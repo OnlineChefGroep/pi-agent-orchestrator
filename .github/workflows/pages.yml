@@ -20,22 +20,11 @@ on:
     branches: [main]
     paths:
       - 'site/**'
-      - 'docs/images/dashboard_preview.gif'
-      - 'docs/images/dashboard_preview.mp4'
-      - 'docs/images/dashboard_preview.svg'
-      - 'docs/images/orchestrator_architecture.png'
-      - 'docs/architecture.md'
-      - 'docs/api-reference.md'
-      - 'docs/custom-agents.md'
-      - 'README.md'
-      - 'AGENTS.md'
-      - 'llms.txt'
-      - 'llms-full.txt'
-      - 'sitemap.md'
+      - 'docs/**'
+      - 'scripts/build-site.sh'
       - 'sitemap.xml'
       - 'robots.txt'
       - 'agent-permissions.json'
-      - 'scripts/build-site.sh'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -62,6 +51,8 @@ jobs:
         with:
           persist-credentials: false
       - name: Assemble publish directory
+        env:
+          SITE_BASE: /pi-agent-orchestrator/
         run: bash scripts/build-site.sh _site
       - name: Setup Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5

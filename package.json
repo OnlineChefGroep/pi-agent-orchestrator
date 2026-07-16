@@ -47,6 +47,8 @@
     "CHANGELOG.md",
     "LICENSE",
     "AGENTS.md",
+    "llms.txt",
+    "llms-full.txt",
     "CONTRIBUTING.md",
     "SECURITY.md",
     "CODE_OF_CONDUCT.md"
