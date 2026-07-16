@@ -35,12 +35,16 @@ npm install
 npm run promo:data
 npm run promo:data:check
 npm run typecheck
+npm run lint
+npm test
+npm run verify
 npm run studio
 npm run promo:all
 ```
 
 `promo:data:check` ignores only the volatile `generatedAt` value. Every product
 claim, table row, and architecture line must otherwise match the canonical
-repository documents.
+repository documents. `npm run verify` executes the package typecheck, static
+checks, and snapshot test before media is rendered.
 
 See `references/remotion-conventions.md` for visual and rendering invariants.
