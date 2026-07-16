@@ -134,11 +134,13 @@ describe("Missing tests coverage", () => {
     }
   });
 
-  it("Missing test for composeHandlers", () => {
-    const handler1 = () => "h1";
-    const handler2 = () => "h2";
-    const composed = composeHandlers(handler1 as any, handler2 as any);
-    expect(composed).toBeDefined();
+  it("Missing test for composeHandlers", async () => {
+    const allow = async () => "allow" as const;
+    const block = async () => "block" as const;
+    // Non-blocking handlers fall through to "allow".
+    expect(await composeHandlers(allow, allow)({} as any)).toBe("allow");
+    // Any blocking handler short-circuits to "block".
+    expect(await composeHandlers(allow, block)({} as any)).toBe("block");
   });
 
   it("Missing error test for loadSettings", () => {
