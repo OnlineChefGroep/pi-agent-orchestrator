@@ -166,6 +166,23 @@ describe("0.18 release policy", () => {
     expect(publish.stderr).toContain("outside the locked 0.18.x release train");
   });
 
+  it("accepts maintenance baseline publish policy for 0.17.5", () => {
+    const baseline = runReleasePolicy("baseline", "0.17.5");
+    expect(baseline.status, baseline.stderr).toBe(0);
+    expect(baseline.stdout).toContain("Maintenance baseline accepted");
+    const blocked = runReleasePolicy("baseline", "0.18.0");
+    expect(blocked.status).not.toBe(0);
+  });
+
+  it("ships a workflow_dispatch path for maintenance baseline npm publish", () => {
+    expect(fileExists(".github/workflows/publish-baseline.yml")).toBe(true);
+    const content = readRoot(".github/workflows/publish-baseline.yml");
+    expect(content).toContain("workflow_dispatch:");
+    expect(content).toContain('inputs.confirm == \'0.17.5\'');
+    expect(content).toContain("node scripts/release-policy.mjs baseline");
+    expect(content).toContain("npm publish");
+  });
+
   it("ships a non-empty v0.18.0 release record template", () => {
     const notes = readRoot("docs/releases/v0.18.0.md");
     expect(notes).toContain("### Pi package distribution");
