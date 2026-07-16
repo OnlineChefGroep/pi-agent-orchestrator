@@ -86,6 +86,149 @@ export type Capability = {
   badge?: string;
 };
 
+export type ShowcasePipeline = "remotion" | "programmatic" | "tmux" | "live" | "vhs";
+
+export type ShowcaseMedium = {
+  id: string;
+  title: string;
+  description: string;
+  href: string;
+  kind: "video" | "image" | "gif";
+  pipeline: ShowcasePipeline;
+  featured?: boolean;
+};
+
+export const showcasePipelines: Array<{
+  id: ShowcasePipeline;
+  label: string;
+  summary: string;
+  command: string;
+}> = [
+  {
+    id: "remotion",
+    label: "Remotion",
+    summary: "Source-derived promo suite: terminal hero, feature tour, architecture stills, and social cards.",
+    command: "npm run showcase:remotion",
+  },
+  {
+    id: "programmatic",
+    label: "Programmatic",
+    summary: "CI-safe casts from compiled dashboard, top, and widget renderers — no external recorder deps.",
+    command: "npm run showcase:ci",
+  },
+  {
+    id: "tmux",
+    label: "Tmux",
+    summary: "Full scripted terminal session with scene labels and compressed MP4 output.",
+    command: "npm run showcase:tmux",
+  },
+  {
+    id: "live",
+    label: "Live",
+    summary: "Stdout playback captured with asciinema from the live demo script.",
+    command: "npm run showcase:live",
+  },
+  {
+    id: "vhs",
+    label: "VHS",
+    summary: "Declarative Charmbracelet tape for stylized install-and-agents recordings.",
+    command: "npm run showcase:vhs",
+  },
+];
+
+/** Paths are relative to /assets — optional files are hidden in the UI when absent. */
+export const showcaseMedia: ShowcaseMedium[] = [
+  {
+    id: "feature-tour",
+    title: "Feature tour",
+    description: "Animated tour of capabilities, agent types, and compression levels from repo metadata.",
+    href: "/assets/feature_tour.mp4",
+    kind: "video",
+    pipeline: "remotion",
+    featured: true,
+  },
+  {
+    id: "architecture-remotion",
+    title: "Architecture overview (Remotion)",
+    description: "Source-derived ASCII architecture diagram rendered as a shareable still.",
+    href: "/assets/architecture_overview.png",
+    kind: "image",
+    pipeline: "remotion",
+  },
+  {
+    id: "social-card",
+    title: "Social preview card",
+    description: "Open Graph / Twitter card still generated from package metadata.",
+    href: "/assets/social_preview.png",
+    kind: "image",
+    pipeline: "remotion",
+  },
+  {
+    id: "promo-banner",
+    title: "Promo banner",
+    description: "Wide banner for README embeds and release posts.",
+    href: "/assets/promo_banner.png",
+    kind: "image",
+    pipeline: "remotion",
+  },
+  {
+    id: "tmux-session",
+    title: "Tmux session recording",
+    description: "Seven-scene dashboard tour with calm pacing and title overlays.",
+    href: "/assets/showcase_tmux.mp4",
+    kind: "video",
+    pipeline: "tmux",
+  },
+  {
+    id: "tmux-gif",
+    title: "Tmux GIF",
+    description: "Looping GIF variant of the tmux capture.",
+    href: "/assets/showcase_tmux.gif",
+    kind: "gif",
+    pipeline: "tmux",
+  },
+  {
+    id: "live-demo",
+    title: "Live stdout capture",
+    description: "Scripted live demo recorded via asciinema.",
+    href: "/assets/showcase_live.mp4",
+    kind: "video",
+    pipeline: "live",
+  },
+  {
+    id: "programmatic-dashboard",
+    title: "Programmatic dashboard",
+    description: "Deterministic dashboard cast for CI and fast README refreshes.",
+    href: "/assets/showcase_dashboard.gif",
+    kind: "gif",
+    pipeline: "programmatic",
+  },
+  {
+    id: "programmatic-top",
+    title: "Programmatic top view",
+    description: "Resource top table renderer capture.",
+    href: "/assets/showcase_top_view.gif",
+    kind: "gif",
+    pipeline: "programmatic",
+  },
+  {
+    id: "programmatic-widget",
+    title: "Programmatic widget",
+    description: "Compact batch widget renderer capture.",
+    href: "/assets/showcase_widget.gif",
+    kind: "gif",
+    pipeline: "programmatic",
+  },
+  {
+    id: "vhs-tape",
+    title: "VHS install tape",
+    description: "Declarative terminal recording of build + agents flow.",
+    href: "/assets/showcase_vhs.mp4",
+    kind: "video",
+    pipeline: "vhs",
+  },
+];
+
 export const capabilities: Capability[] = [
   {
     title: "Sub-agents",

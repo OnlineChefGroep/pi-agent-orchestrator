@@ -14,6 +14,7 @@ npm test         # smoke tests
 ## Routes
 
 - `/` — landing page with terminal showcase
+- `/showcase` — full media gallery (Remotion, programmatic, tmux, live, VHS)
 - `/install` — install instructions
 - `/docs` — documentation index (links to staged markdown)
 - `/capabilities` — feature overview

@@ -15,12 +15,13 @@ GitHub Pages requires a one-time repo enablement (`build_type=workflow`). The De
 
 ## Deployment
 
-Production deploys run from the `main` branch via [`.github/workflows/cloudflare-pages.yml`](../.github/workflows/cloudflare-pages.yml):
+Production deploys run from the `main` branch:
 
-1. `scripts/build-site.sh` assembles static assets into `_site/`
-2. `wrangler pages deploy` publishes to the `pi-agent-orchestrator` Pages project
+1. `scripts/build-site.sh` builds the Vite SPA in `site/web/` and assembles `_site/`
+2. Cloudflare: `wrangler pages deploy` via [`.github/workflows/cloudflare-pages.yml`](../.github/workflows/cloudflare-pages.yml)
+3. GitHub mirror: [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) (base path `/pi-agent-orchestrator/`)
 
-The workflow runs on a daily schedule and on manual `workflow_dispatch`. Required secrets live in the GitHub `cloudflare-pages` environment: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+Showcase media is staged from `docs/images/` before the Vite build. Remotion outputs (`feature_tour.mp4`, promo stills) are generated on `main` by the Showcase workflow and appear in the `/showcase` gallery when present.
 
 ## Custom domain
 

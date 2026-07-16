@@ -24,7 +24,5 @@
 
 ## Showcase
 
-- [Media gallery](https://orchestrator.chefgroep.online/showcase)
 - [Terminal video](https://orchestrator.chefgroep.online/assets/dashboard_preview.mp4)
 - [Terminal poster](https://orchestrator.chefgroep.online/assets/dashboard_preview.gif)
-- [Tmux recording](https://orchestrator.chefgroep.online/assets/showcase_tmux.mp4)

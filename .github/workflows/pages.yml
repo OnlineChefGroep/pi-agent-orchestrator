@@ -62,6 +62,8 @@ jobs:
         with:
           persist-credentials: false
       - name: Assemble publish directory
+        env:
+          SITE_BASE: /pi-agent-orchestrator/
         run: bash scripts/build-site.sh _site
       - name: Setup Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
