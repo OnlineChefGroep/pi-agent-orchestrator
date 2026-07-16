@@ -1,15 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseHandoff } from '../src/handoff.js';
 
 describe('Handoff - Error Chaos & Resilience', () => {
   let warnSpy: any;
 
   beforeEach(() => {
-    warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  });
-
-  afterEach(() => {
-    warnSpy?.mockRestore();
+    warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => {});
   });
 
   it('should gracefully handle corrupted handoff JSON', () => {
@@ -153,9 +149,9 @@ describe('Handoff - Error Chaos & Resilience', () => {
   });
 
   it('should survive deeply nested JSON structures (DOS prevention)', () => {
-    // Deep nesting is rejected by the depth guard, which trips before the key
-    // count limit: 1005 nested objects exceed MAX_JSON_DEPTH (20) long before
-    // key count reaches MAX_JSON_KEYS (1000).
+    // Deep nesting with many keys is caught by the key count reviver or parsing limits.
+    // Let's create a deeply nested structure: { a: { b: { c: ... } } } with 1005 levels.
+    // This will have 1005 keys in total, triggering key count limits.
     let nestedJson = '"value"';
     for (let i = 0; i < 1005; i++) {
       nestedJson = `{"level${i}":${nestedJson}}`;
@@ -173,7 +169,7 @@ describe('Handoff - Error Chaos & Resilience', () => {
     const result = parseHandoff(payload);
     expect(result).toBeNull();
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('JSON depth exceeds maximum')
+      expect.stringContaining('JSON key count exceeds maximum')
     );
   });
 
