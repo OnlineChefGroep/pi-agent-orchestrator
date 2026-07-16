@@ -173,8 +173,12 @@ export class AgentManager {
     return { ...this.sessionLimits };
   }
 
+  private normalizePositiveInt(n: number): number {
+    return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+  }
+
   setSessionMaxSpawns(n: number): void {
-    const normalized = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+    const normalized = this.normalizePositiveInt(n);
     this.sessionMaxSpawns = normalized;
     this.sessionLimits.maxAgentsPerSession = normalized > 0 ? normalized : undefined;
   }
@@ -184,7 +188,7 @@ export class AgentManager {
   }
 
   setSessionMaxTurns(n: number): void {
-    const normalized = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+    const normalized = this.normalizePositiveInt(n);
     this.sessionMaxTurns = normalized;
     this.sessionLimits.maxTotalTurnsPerSession = normalized > 0 ? normalized : undefined;
   }
