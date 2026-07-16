@@ -328,8 +328,14 @@ function buildManagerHandle(manager: SubagentManagerLike): SubagentManagerHandle
         description: r.description?.slice(0, SUBAGENT_MANAGER_MAX_DESCRIPTION_CHARS),
       };
     },
-    listAgentIds: (type: string) =>
-      manager.listAgents().filter((a) => a.type === type).map((a) => a.id),
+    listAgentIds: (type: string) => {
+      const all = manager.listAgents();
+      const ids: string[] = [];
+      for (const a of all) {
+        if (a.type === type) ids.push(a.id);
+      }
+      return ids;
+    },
   };
 }
 
