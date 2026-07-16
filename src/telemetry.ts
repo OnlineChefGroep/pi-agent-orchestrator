@@ -15,7 +15,6 @@ export interface TelemetryEvents {
   "agent:loaded": { name: string; source: "project" | "global" | "embedded"; hash: string; enabled: boolean };
   "agent:validation-failed": { name: string; errors: string[] };
   "agent:unknown-tools": { name: string; tools: string[] };
-  "agent:file-read-failed": { file: string; source: "project" | "global"; code: string };
   "agent:spawned": { type: string; parentType?: string; depth: number; budget?: number };
   "agent:completed": { type: string; duration: number; validatorResults?: { passed: boolean; summary: string }[] };
   "rpc:audit": {
@@ -59,11 +58,6 @@ export type TelemetryHandler<E extends TelemetryEventName> = (payload: Telemetry
 const SECURITY_EVENTS: ReadonlySet<TelemetryEventName> = new Set<TelemetryEventName>([
   "agent:validation-failed",
   "agent:unknown-tools",
-]);
-
-/** Reliability events that always warn when no listeners are registered so failures are never silent. */
-const RELIABILITY_EVENTS: ReadonlySet<TelemetryEventName> = new Set<TelemetryEventName>([
-  "agent:file-read-failed",
 ]);
 
 /** Routine lifecycle events retained for opt-in diagnostics without polluting normal stderr. */
@@ -128,8 +122,6 @@ export function emitTelemetry<E extends TelemetryEventName>(
     }
   } else if (SECURITY_EVENTS.has(event as TelemetryEventName)) {
     logger.warn(`[telemetry] security event: ${event}`, { payload });
-  } else if (RELIABILITY_EVENTS.has(event as TelemetryEventName)) {
-    logger.warn(`[telemetry] reliability event: ${event}`, { payload });
   } else if (DEBUG_FALLBACK_EVENTS.has(event as TelemetryEventName)) {
     logger.debug(`[telemetry] lifecycle event: ${event}`, { payload });
   }
