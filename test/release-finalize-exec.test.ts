@@ -41,13 +41,7 @@ function writeStub(binDir: string, name: string, body: string): string {
 function ghHandler(argsExpression: string, statePath: string): string {
   return `const fs = require("node:fs");
 const statePath = ${JSON.stringify(statePath)};
-const rawArgs = ${argsExpression};
-// On Windows the gh stub is a hardlink to node.exe, so node consumes the "release"
-// subcommand as process.argv[1] and resolves it to an absolute script path
-// (e.g. "D:\\\\...\\\\release"). Reduce args[0] to its basename so the
-// \`args[0] === "release"\` guards match on every platform (no-op on POSIX where
-// args[0] is already the bare subcommand).
-const args = rawArgs.length ? [require("node:path").basename(rawArgs[0]), ...rawArgs.slice(1)] : rawArgs;
+const args = ${argsExpression};
 const read = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
 const write = (state) => fs.writeFileSync(statePath, JSON.stringify(state));
 
@@ -73,7 +67,11 @@ if (args[0] === "release" && args[1] === "create") {
       break;
     }
   }
-  if (!tag) tag = args.find(a => !a.startsWith("-") && a !== "release" && a !== "create" && a !== "edit");
+  if (!tag) tag = args.find(a => !a.startsWith("-") && a !== "release" && a !== "create" && a !== "edit" && a !== "--verify-tag" && a !== "--generate-notes");
+  if (!tag) {
+    console.error("unexpected gh args: " + args.join(" "));
+    process.exit(2);
+  }
   write({
     exists: true,
     release: { tagName: tag, isDraft: false, isPrerelease: false, name: tag },
@@ -94,7 +92,11 @@ if (args[0] === "release" && args[1] === "edit") {
       break;
     }
   }
-  if (!tag) tag = args.find(a => !a.startsWith("-") && a !== "release" && a !== "create" && a !== "edit");
+  if (!tag) tag = args.find(a => !a.startsWith("-") && a !== "release" && a !== "create" && a !== "edit" && a !== "--verify-tag" && a !== "--generate-notes");
+  if (!tag) {
+    console.error("unexpected gh args: " + args.join(" "));
+    process.exit(2);
+  }
   const state = read();
   state.release = { tagName: tag, isDraft: false, isPrerelease: false, name: tag };
   write(state);
