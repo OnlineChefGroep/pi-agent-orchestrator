@@ -118,7 +118,15 @@ function writeGhStub(binDir: string, statePath: string): string {
       ghHookName,
       `const path = require("node:path");
 if (path.basename(process.execPath).toLowerCase() === "gh.exe") {
-${ghHandler("process.argv.slice(1)", statePath)}}
+${ghHandler(
+  // On Windows the gh stub is a hardlink to node.exe, so node consumes the
+  // "release" subcommand as process.argv[1] and resolves it to an absolute
+  // script path (e.g. "D:\\...\\release"). Reduce args[0] to its basename here,
+  // in the Windows-only call site, so ghHandler's `args[0] === "release"` guards
+  // match on every platform while its body stays platform-agnostic.
+  `(() => { const a = process.argv.slice(1); return a.length ? [path.basename(a[0]), ...a.slice(1)] : a; })()`,
+  statePath,
+)}}
 `,
     );
     const executablePath = join(binDir, "gh.exe");
