@@ -40,8 +40,12 @@ function writeStub(binDir: string, name: string, body: string): string {
 
 function ghHandler(argsExpression: string, statePath: string): string {
   return `const fs = require("node:fs");
+const path = require("node:path");
 const statePath = ${JSON.stringify(statePath)};
-const args = ${argsExpression};
+let args = ${argsExpression};
+if (args.length > 0 && typeof args[0] === "string" && (path.basename(args[0]).toLowerCase() === "release.exe" || path.basename(args[0]).toLowerCase() === "release")) {
+  args[0] = "release";
+}
 const read = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
 const write = (state) => fs.writeFileSync(statePath, JSON.stringify(state));
 
@@ -56,7 +60,7 @@ if (args[0] === "release" && args[1] === "view") {
 }
 
 if (args[0] === "release" && args[1] === "create") {
-  const tag = args[2];
+  const tag = args.find((a, i) => i > 1 && !a.startsWith("--")) || args[2];
   write({
     exists: true,
     release: { tagName: tag, isDraft: false, isPrerelease: false, name: tag },
