@@ -41,7 +41,11 @@ function writeStub(binDir: string, name: string, body: string): string {
 function ghHandler(argsExpression: string, statePath: string): string {
   return `const fs = require("node:fs");
 const statePath = ${JSON.stringify(statePath)};
-const args = ${argsExpression};
+let args = ${argsExpression};
+if (args[0] && (args[0].endsWith("release.exe") || args[0].endsWith("release") || args[0].includes("release"))) {
+  const path = require("path");
+  args[0] = path.basename(args[0], ".exe");
+}
 const read = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
 const write = (state) => fs.writeFileSync(statePath, JSON.stringify(state));
 
@@ -75,25 +79,20 @@ if (args[0] === "release" && args[1] === "edit") {
 }
 
 console.error("unexpected gh args: " + args.join(" "));
-process.exit(2);
+process.exit(1);
 `;
 }
 
 function writeGhStub(binDir: string, statePath: string): string {
   // On Windows, spawn() cannot execute .cmd files without a shell. A hardlink to
   // node.exe is a real executable; NODE_OPTIONS preloads the isolated handler.
-  //
-  // Because gh.exe is really node.exe, Node treats the first gh argument (the
-  // subcommand, e.g. "release") as the entry-script path and resolves it to an
-  // absolute path relative to CWD. Only argv[1] is rewritten this way, so the
-  // hook restores the bare subcommand via basename before dispatching.
   if (process.platform === "win32") {
     const hookPath = writeStub(
       binDir,
       ghHookName,
       `const path = require("node:path");
 if (path.basename(process.execPath).toLowerCase() === "gh.exe") {
-${ghHandler("process.argv.slice(1).map((arg, index) => (index === 0 ? path.basename(arg) : arg))", statePath)}}
+${ghHandler("process.argv.slice(1)", statePath)}}
 `,
     );
     const executablePath = join(binDir, "gh.exe");
