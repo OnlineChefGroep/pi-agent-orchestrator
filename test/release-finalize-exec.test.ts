@@ -83,12 +83,16 @@ function writeGhStub(binDir: string, statePath: string): string {
   // On Windows, spawn() cannot execute .cmd files without a shell. A hardlink to
   // node.exe is a real executable; NODE_OPTIONS preloads the isolated handler.
   if (process.platform === "win32") {
+    // node.exe treats its first non-option argument (the gh subcommand, e.g.
+    // "release") as the main module path and rewrites process.argv[1] to its
+    // resolved absolute path. Recover the original subcommand via basename;
+    // the remaining arguments (process.argv[2..]) are passed through verbatim.
     const hookPath = writeStub(
       binDir,
       ghHookName,
       `const path = require("node:path");
 if (path.basename(process.execPath).toLowerCase() === "gh.exe") {
-${ghHandler("process.argv.slice(1)", statePath)}}
+${ghHandler("(process.argv.length > 1 ? [path.basename(process.argv[1]), ...process.argv.slice(2)] : [])", statePath)}}
 `,
     );
     const executablePath = join(binDir, "gh.exe");
