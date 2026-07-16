@@ -21,7 +21,7 @@ Production deploys run from the `main` branch:
 2. Cloudflare: `wrangler pages deploy` via [`.github/workflows/cloudflare-pages.yml`](../.github/workflows/cloudflare-pages.yml)
 3. GitHub mirror: [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) (base path `/pi-agent-orchestrator/`)
 
-Showcase media is staged from `docs/images/` before the Vite build. Remotion outputs (`feature_tour.mp4`, promo stills) are generated on `main` by the Showcase workflow and appear in the `/showcase` gallery when present.
+Showcase media is staged from `docs/images/` before the Vite build. Documentation markdown is **bundled into the SPA as HTML** — raw `.md` is not published on the public site. Agents read `docs/*.md`, `llms.txt`, and `AGENTS.md` from the installed `@onlinechefgroep/pi-agent-orchestrator` npm package.
 
 ## Custom domain
 

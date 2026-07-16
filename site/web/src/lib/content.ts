@@ -1,6 +1,7 @@
 export type DocLink = {
   title: string;
   href: string;
+  docId: string;
   description: string;
   category: "core" | "operations" | "repo";
 };
@@ -8,74 +9,72 @@ export type DocLink = {
 export const docLinks: DocLink[] = [
   {
     title: "README",
-    href: "/docs/README.md",
+    docId: "readme",
+    href: "/docs/readme",
     description: "Installation, quick start, and feature overview",
     category: "repo",
   },
   {
     title: "Architecture",
-    href: "/docs/architecture.md",
+    docId: "architecture",
+    href: "/docs/architecture",
     description: "System topology, data flow, and permission model",
     category: "core",
   },
   {
     title: "API reference",
-    href: "/docs/api-reference.md",
+    docId: "api-reference",
+    href: "/docs/api-reference",
     description: "Settings schema, tools, hooks, and CLI commands",
     category: "core",
   },
   {
     title: "Custom agents",
-    href: "/docs/custom-agents.md",
+    docId: "custom-agents",
+    href: "/docs/custom-agents",
     description: "Markdown frontmatter format and handoff protocol",
     category: "core",
   },
   {
     title: "Troubleshooting",
-    href: "/docs/troubleshooting.md",
+    docId: "troubleshooting",
+    href: "/docs/troubleshooting",
     description: "Common issues, diagnostics, and environment checks",
     category: "core",
   },
   {
     title: "Performance",
-    href: "/docs/PERFORMANCE.md",
+    docId: "performance",
+    href: "/docs/performance",
     description: "Benchmarks, spawn latency, and compaction efficiency",
     category: "operations",
   },
   {
     title: "How-To: Performance",
-    href: "/docs/HOWTO-perf.md",
+    docId: "howto-perf",
+    href: "/docs/howto-perf",
     description: "Profiling steps, thresholds, and CI interpretation",
     category: "operations",
   },
   {
     title: "Overdrive patterns",
-    href: "/docs/overdrive-patterns.md",
+    docId: "overdrive-patterns",
+    href: "/docs/overdrive-patterns",
     description: "Optimization patterns and linter rules",
     category: "operations",
   },
   {
     title: "Repository index",
-    href: "/docs/repository.md",
+    docId: "repository",
+    href: "/docs/repository",
     description: "Repository structure overview",
     category: "repo",
   },
   {
     title: "AGENTS.md",
-    href: "/docs/AGENTS.md",
+    docId: "agents",
+    href: "/docs/agents",
     description: "Repository invariants for coding agents",
-    category: "repo",
-  },
-  {
-    title: "llms.txt",
-    href: "/docs/llms.txt",
-    description: "Compact LLM discovery index",
-    category: "repo",
-  },
-  {
-    title: "llms-full.txt",
-    href: "/docs/llms-full.txt",
-    description: "Expanded model context bundle",
     category: "repo",
   },
 ];

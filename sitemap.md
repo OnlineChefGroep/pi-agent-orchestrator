@@ -1,30 +1,26 @@
 # Pi Agent Orchestrator Sitemap
 
-> Human- and agent-readable map of the project website and documentation.
+> Human-readable map of the project website. Raw markdown is **not** published on the site — use the installed npm package for agent context.
 
 ## Start here
 
 - [Product overview](https://orchestrator.chefgroep.online/)
 - [Showcase gallery](https://orchestrator.chefgroep.online/showcase)
-- [Markdown mirror](https://orchestrator.chefgroep.online/index.md)
-- [README](https://orchestrator.chefgroep.online/README.md)
+- [Documentation index](https://orchestrator.chefgroep.online/docs)
 
-## Technical documentation
+## Technical documentation (HTML)
 
-- [Architecture](https://orchestrator.chefgroep.online/docs/architecture.md)
-- [API reference](https://orchestrator.chefgroep.online/docs/api-reference.md)
-- [Custom agents](https://orchestrator.chefgroep.online/docs/custom-agents.md)
-- [Coding-agent guide](https://orchestrator.chefgroep.online/AGENTS.md)
+- [Architecture](https://orchestrator.chefgroep.online/docs/architecture)
+- [API reference](https://orchestrator.chefgroep.online/docs/api-reference)
+- [Custom agents](https://orchestrator.chefgroep.online/docs/custom-agents)
+- [Coding-agent guide](https://orchestrator.chefgroep.online/docs/agents)
 
-## Agent discovery
+## Agent context (npm package only)
 
-- [llms.txt](https://orchestrator.chefgroep.online/llms.txt)
-- [llms-full.txt](https://orchestrator.chefgroep.online/llms-full.txt)
-- [Agent permissions](https://orchestrator.chefgroep.online/agent-permissions.json)
+- `docs/api-reference.md` — inside `@onlinechefgroep/pi-agent-orchestrator`
+- `llms.txt` / `llms-full.txt` — shipped with the package, not served as raw site files
 
 ## Showcase
 
 - [Media gallery](https://orchestrator.chefgroep.online/showcase)
 - [Terminal video](https://orchestrator.chefgroep.online/assets/dashboard_preview.mp4)
-- [Terminal poster](https://orchestrator.chefgroep.online/assets/dashboard_preview.gif)
-- [Tmux recording](https://orchestrator.chefgroep.online/assets/showcase_tmux.mp4)

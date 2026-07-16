@@ -8,7 +8,6 @@ const webRoot = path.resolve(here, "..");
 const repoRoot = path.resolve(webRoot, "../..");
 const publicRoot = path.join(webRoot, "public");
 const assetsDir = path.join(publicRoot, "assets");
-const docsDir = path.join(publicRoot, "docs");
 
 /** Copied before every dev/build; missing required files fail fast. */
 const requiredAssets = [
@@ -37,27 +36,11 @@ const optionalAssets = [
   "showcase_vhs.gif",
 ];
 
-const docFiles = [
-  "README.md",
-  "AGENTS.md",
-  "llms.txt",
-  "llms-full.txt",
-  "architecture.md",
-  "api-reference.md",
-  "custom-agents.md",
-  "troubleshooting.md",
-  "PERFORMANCE.md",
-  "HOWTO-perf.md",
-  "overdrive-patterns.md",
-  "repository.md",
-];
-
-const rootDocFiles = ["sitemap.md", "sitemap.xml", "robots.txt"];
+const rootSiteFiles = ["sitemap.xml", "robots.txt"];
 
 rmSync(assetsDir, { recursive: true, force: true });
-rmSync(docsDir, { recursive: true, force: true });
+rmSync(path.join(publicRoot, "docs"), { recursive: true, force: true });
 mkdirSync(assetsDir, { recursive: true });
-mkdirSync(docsDir, { recursive: true });
 
 function copyAsset(file, required) {
   const source = path.join(repoRoot, "docs/images", file);
@@ -79,22 +62,15 @@ for (const file of optionalAssets) {
   if (copyAsset(file, false)) optionalCount++;
 }
 
-for (const file of docFiles) {
-  const fromDocs = path.join(repoRoot, "docs", file);
-  const fromRoot = path.join(repoRoot, file);
-  const source = existsSync(fromDocs) ? fromDocs : fromRoot;
-  if (!existsSync(source)) {
-    throw new Error(`Missing documentation file: ${file}`);
-  }
-  cpSync(source, path.join(docsDir, file));
-}
-
-for (const file of rootDocFiles) {
+for (const file of rootSiteFiles) {
   const source = path.join(repoRoot, file);
   if (!existsSync(source)) throw new Error(`Missing site file: ${source}`);
   cpSync(source, path.join(publicRoot, file));
 }
 
+// Drop legacy public markdown mirrors if they linger from older stage runs.
+rmSync(path.join(publicRoot, "sitemap.md"), { force: true });
+
 console.log(
-  `Staged ${requiredCount} required + ${optionalCount} optional assets and ${docFiles.length} docs into ${publicRoot}`,
+  `Staged ${requiredCount} required + ${optionalCount} optional showcase assets into ${publicRoot}`,
 );

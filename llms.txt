@@ -2,21 +2,24 @@
 
 > Multi-agent orchestration extension for the Pi coding-agent host, including sub-agents, structured handoffs, swarms, scheduling, prompt compression, and a responsive TUI.
 
-## Primary documentation
+## Primary documentation (installed package)
 
-- [Overview and installation](https://orchestrator.chefgroep.online/README.md)
-- [Architecture](https://orchestrator.chefgroep.online/docs/architecture.md)
-- [API reference](https://orchestrator.chefgroep.online/docs/api-reference.md)
-- [Custom agents](https://orchestrator.chefgroep.online/docs/custom-agents.md)
-- [Coding-agent repository guide](https://orchestrator.chefgroep.online/AGENTS.md)
+After `pi install npm:@onlinechefgroep/pi-agent-orchestrator`, read raw markdown from the package root (e.g. `node_modules/@onlinechefgroep/pi-agent-orchestrator/`):
 
-## Machine-readable context
+- `README.md` — overview and installation
+- `docs/architecture.md` — system topology and permission model
+- `docs/api-reference.md` — settings schema, tools, hooks, CLI
+- `docs/custom-agents.md` — agent frontmatter and handoff protocol
+- `AGENTS.md` — repository invariants for coding agents
+- `llms-full.txt` — expanded machine-readable context (this file's sibling)
 
-- [Expanded context](https://orchestrator.chefgroep.online/llms-full.txt)
-- [Markdown site mirror](https://orchestrator.chefgroep.online/index.md)
-- [Human-readable sitemap](https://orchestrator.chefgroep.online/sitemap.md)
-- [XML sitemap](https://orchestrator.chefgroep.online/sitemap.xml)
+## Human-readable web UI
+
+- https://orchestrator.chefgroep.online/docs/api-reference
+- https://orchestrator.chefgroep.online/docs/architecture
+- https://orchestrator.chefgroep.online/docs/custom-agents
+- https://orchestrator.chefgroep.online/showcase
 
 ## Media
 
-- [Real terminal showcase](https://orchestrator.chefgroep.online/assets/dashboard_preview.mp4)
+- https://orchestrator.chefgroep.online/assets/dashboard_preview.mp4

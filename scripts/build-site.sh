@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Assemble the publish directory for orchestrator.chefgroep.online (and GH mirror).
 #
-# Primary surface: Vite + React SPA in site/web/. Static markdown, sitemaps, and
-# showcase media are staged into the Vite public/ tree before build, then copied
-# alongside the dist output for direct file URLs (/README.md, /sitemap.xml, …).
+# Primary surface: Vite + React SPA in site/web/. Documentation markdown is bundled
+# into the SPA as HTML — raw .md is NOT published on the public site. Agents read
+# docs/*.md from the installed npm package instead.
 #
 # Usage: scripts/build-site.sh [output_dir]   (default: ./_site)
 # Env:   SITE_BASE — Vite base path (default /). Set to /pi-agent-orchestrator/
@@ -14,7 +14,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_RAW="${1:-$ROOT/_site}"
 SITE_BASE="${SITE_BASE:-/}"
 
-# Refuse dangerous targets before any path math (basename "/" is "/").
 case "$OUT_RAW" in
   ""|"/"|"$HOME"|"$ROOT"|"."|"..")
     echo "error: refusing to delete unsafe output path: ${OUT_RAW:-<empty>}" >&2
@@ -52,25 +51,13 @@ WEB_DIR="$ROOT/site/web"
 mkdir -p "$OUT"
 cp -a "$WEB_DIR/dist/." "$OUT/"
 
-# GitHub Pages: serve SPA deep links via 404 fallback.
 touch "$OUT/.nojekyll"
 cp "$OUT/index.html" "$OUT/404.html"
 
-# Direct URLs outside the Vite bundle (agents, crawlers, mirrors).
-mkdir -p "$OUT/.well-known" "$OUT/docs/images"
-for file in README.md AGENTS.md llms.txt llms-full.txt sitemap.md sitemap.xml robots.txt agent-permissions.json; do
-  cp "$ROOT/$file" "$OUT/$file"
-done
-cp "$ROOT/site/index.md" "$OUT/index.md"
+# Crawler + agent-permissions only — no raw markdown on the public site.
+mkdir -p "$OUT/.well-known"
+cp "$ROOT/agent-permissions.json" "$OUT/agent-permissions.json"
 cp "$ROOT/agent-permissions.json" "$OUT/.well-known/agent-permissions.json"
-
-for doc in architecture.md api-reference.md custom-agents.md; do
-  cp "$ROOT/docs/$doc" "$OUT/docs/$doc"
-done
-cp "$ROOT/docs/images/dashboard_preview.svg" "$OUT/docs/images/dashboard_preview.svg"
-if [[ -f "$ROOT/docs/images/orchestrator_architecture.png" ]]; then
-  cp "$ROOT/docs/images/orchestrator_architecture.png" "$OUT/docs/images/orchestrator_architecture.png"
-fi
 
 echo "✓ Site staged. Contents:"
 ( cd "$OUT" && find . -type f -printf '%P\t%s bytes\n' | sort )
