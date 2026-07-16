@@ -1,13 +1,17 @@
 # Site hosting
 
-The pi-agent-orchestrator product site is hosted on **Cloudflare Pages** as a standalone property. It is not served from or coupled to `chefgroep.nl`.
+Canonical product URL is a **subdomain of `chefgroep.online`**. Cloudflare Pages is only the deploy backend; GitHub Pages is an optional mirror for org `.github.io` links.
 
 ## URLs
 
 | Host | Role |
 |------|------|
-| `https://pi-agent-orchestrator.pages.dev` | Default Pages subdomain |
-| `https://orchestrator.chefgroep.online` | Custom domain (`chefgroep.online` zone) |
+| `https://orchestrator.chefgroep.online` | **Canonical** product site (`chefgroep.online` zone) |
+| `https://onlinechefgroep.github.io/pi-agent-orchestrator/` | GitHub Pages mirror (Actions deploy; README/legacy links) |
+
+Internal only (not a public brand URL): the Cloudflare project default host `pi-agent-orchestrator.pages.dev` exists as the Pages origin behind the CNAME. Do not advertise it; point humans and agents at `orchestrator.chefgroep.online`.
+
+GitHub Pages requires a one-time repo enablement (`build_type=workflow`). The Deploy Pages workflow only publishes from `main` and cannot flip that enablement bit with `GITHUB_TOKEN`.
 
 ## Deployment
 
@@ -20,6 +24,6 @@ The workflow runs on a daily schedule and on manual `workflow_dispatch`. Require
 
 ## Custom domain
 
-`orchestrator.chefgroep.online` is attached to the Pages project in the same Cloudflare account as the `chefgroep.online` zone. DNS is a proxied CNAME to `pi-agent-orchestrator.pages.dev`.
+`orchestrator.chefgroep.online` is attached to the Pages project in the same Cloudflare account as the `chefgroep.online` zone. DNS is a proxied CNAME from that subdomain to the Pages project origin.
 
 To add or change custom domains: **Workers & Pages** → **pi-agent-orchestrator** → **Custom domains**.

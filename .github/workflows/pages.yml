@@ -7,6 +7,12 @@
 # the published page references (landing page + linked docs + showcase assets).
 #
 # This is the sole workflow that deploys to GitHub Pages.
+#
+# One-time repo setup (cannot be done with GITHUB_TOKEN):
+#   gh api -X POST repos/OWNER/REPO/pages \
+#     -f build_type=workflow -f 'source[branch]=main' -f 'source[path]=/'
+# After that, configure-pages only reads site metadata; it does not need
+# enablement (which requires a PAT/App with administration:write).
 name: Deploy Pages
 
 on:
@@ -43,6 +49,9 @@ concurrency:
 
 jobs:
   build:
+    # Production publish is main-only (matches Cloudflare Pages deploy guard).
+    # workflow_dispatch on other refs must not stage/enable production Pages.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -63,6 +72,7 @@ jobs:
 
   deploy:
     needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       pages: write
