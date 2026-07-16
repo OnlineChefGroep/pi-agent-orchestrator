@@ -155,6 +155,10 @@ async function main() {
     const version = process.argv[3];
     const policy = await loadReleasePolicy();
     assertMaintenanceBaseline(version, policy);
+    const pkg = JSON.parse(await readFile(resolve(ROOT, "package.json"), "utf8"));
+    if (pkg.version !== version) {
+      fail(`package.json version ${pkg.version} does not match requested baseline ${version}`);
+    }
     const changelog = await readFile(resolve(ROOT, "CHANGELOG.md"), "utf8");
     const datedHeader = new RegExp(`^## v${String(version).replaceAll(".", "\\.")} \\(\\d{4}-\\d{2}-\\d{2}\\)$`, "m");
     if (!datedHeader.test(changelog)) {

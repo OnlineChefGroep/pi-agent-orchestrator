@@ -178,7 +178,7 @@ describe("0.18 release policy", () => {
     expect(fileExists(".github/workflows/publish-baseline.yml")).toBe(true);
     const content = readRoot(".github/workflows/publish-baseline.yml");
     expect(content).toContain("workflow_dispatch:");
-    expect(content).toContain('inputs.confirm == \'0.17.5\'');
+    expect(content).toContain("inputs.confirm == '0.17.5'");
     expect(content).toContain("node scripts/release-policy.mjs baseline");
     expect(content).toContain("npm publish");
   });
