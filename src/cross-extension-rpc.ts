@@ -189,6 +189,14 @@ export function resetRpcRateLimitsForTests(): void {
   rateLimitMap.clear();
   rateLimitWindow = DEFAULT_RATE_LIMIT_WINDOW;
   rateLimitMax = DEFAULT_RATE_LIMIT_MAX;
+  clearInterval(rateLimitCleanup);
+  rateLimitCleanup = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of rateLimitMap.entries()) {
+      if (now > entry.resetAt) rateLimitMap.delete(key);
+    }
+  }, Math.max(1_000, Math.floor(rateLimitWindow / 2)));
+  rateLimitCleanup.unref?.();
 }
 
 /** Return current effective rate-limit settings (useful in tests & diagnostics). */
