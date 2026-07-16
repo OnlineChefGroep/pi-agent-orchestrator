@@ -1,13 +1,16 @@
 # Site hosting
 
-The pi-agent-orchestrator product site is hosted on **Cloudflare Pages** as a standalone property. It is not served from or coupled to `chefgroep.nl`.
+The pi-agent-orchestrator product site has two static hosts. **Cloudflare Pages** is the product URL; **GitHub Pages** mirrors the same staged `_site/` tree for the org `.github.io` link used in README/canonical metadata.
 
 ## URLs
 
 | Host | Role |
 |------|------|
-| `https://pi-agent-orchestrator.pages.dev` | Default Pages subdomain |
+| `https://pi-agent-orchestrator.pages.dev` | Default Cloudflare Pages subdomain |
 | `https://orchestrator.chefgroep.online` | Custom domain (`chefgroep.online` zone) |
+| `https://onlinechefgroep.github.io/pi-agent-orchestrator/` | GitHub Pages mirror (Actions deploy) |
+
+GitHub Pages requires a one-time repo enablement (`build_type=workflow`). The Deploy Pages workflow only publishes from `main` and cannot flip that enablement bit with `GITHUB_TOKEN`.
 
 ## Deployment
 
