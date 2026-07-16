@@ -1,11 +1,18 @@
-# SPA client routes only — never use /* here.
-# Cloudflare Pages always applies _redirects, even when a static asset exists,
-# so a catch-all would shadow robots.txt, assets, etc.
+# SPA client routes — explicit paths (Cloudflare splat rewrites are unreliable).
 /install /index.html 200
 /capabilities /index.html 200
-/docs /index.html 200
-/docs/* /index.html 200
 /showcase /index.html 200
+/docs /index.html 200
+/docs/readme /index.html 200
+/docs/agents /index.html 200
+/docs/architecture /index.html 200
+/docs/api-reference /index.html 200
+/docs/custom-agents /index.html 200
+/docs/troubleshooting /index.html 200
+/docs/performance /index.html 200
+/docs/howto-perf /index.html 200
+/docs/overdrive-patterns /index.html 200
+/docs/repository /index.html 200
 # Legacy raw-markdown URLs → rendered HTML routes
 /README.md /docs/readme 301
 /AGENTS.md /docs/agents 301
