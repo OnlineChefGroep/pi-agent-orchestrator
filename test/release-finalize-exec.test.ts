@@ -46,18 +46,17 @@ const read = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
 const write = (state) => fs.writeFileSync(statePath, JSON.stringify(state));
 
 // Some node setups might pass node.exe as arg 0, or gh.exe as arg 0/1. Let's filter to just the relevant bits.
-const ghArgs = args.filter(a => !a.includes("node") && !a.includes("gh-hook"));
 
-const cmdIndex = ghArgs.findIndex(a => a === "release");
-if (cmdIndex === -1) {
-  console.error(\`unexpected gh args: \${args.join(" ")}\`);
-  process.exit(2);
-}
 
-const subCmd = ghArgs[cmdIndex + 1];
 
-if (subCmd === "create" || subCmd === "edit" || subCmd === "view") {
-  const tag = ghArgs.find(a => a.startsWith("v0."));
+
+
+
+
+
+  const subCmd = args.find(a => a === "view" || a === "create" || a === "edit");
+  const tagIndex = args.findIndex(a => String(a).startsWith("v0."));
+  const tag = tagIndex >= 0 ? args[tagIndex] : (subCmd === "create" || subCmd === "edit" ? args[args.indexOf(subCmd) + 1] : undefined);
 
   if (subCmd === "view") {
     const state = read();
@@ -85,8 +84,8 @@ if (subCmd === "create" || subCmd === "edit" || subCmd === "view") {
     console.log("edited " + tag);
     process.exit(0);
   }
-}
-console.error(\`unexpected gh args: \${args.join(" ")}\`);
+
+console.error("unexpected gh args: " + args.join(" "));
 process.exit(2);
 `;
 }
@@ -94,21 +93,13 @@ process.exit(2);
 function writeGhStub(binDir: string, statePath: string): string {
   // On Windows, spawn() cannot execute .cmd files without a shell. A hardlink to
   // node.exe is a real executable; NODE_OPTIONS preloads the isolated handler.
-  //
-  // When node.exe is invoked as `gh release create ...`, Node treats the first
-  // token (`release`) as the entry script and resolves it to an absolute path in
-  // process.argv[1] (e.g. D:\...\release). So slice(1) would leave that absolute
-  // path in args[0] instead of "release", so the `findIndex(a => a === "release")`
-  // guard never matches and the stub aborts with "unexpected gh args". Rebuild
-  // args from the basename of argv[1] plus the untouched trailing args to recover
-  // the real gh argument vector.
   if (process.platform === "win32") {
     const hookPath = writeStub(
       binDir,
       ghHookName,
       `const path = require("node:path");
 if (path.basename(process.execPath).toLowerCase() === "gh.exe") {
-${ghHandler("[path.basename(process.argv[1]), ...process.argv.slice(2)]", statePath)}}
+${ghHandler("process.argv.slice(1)", statePath)}}
 `,
     );
     const executablePath = join(binDir, "gh.exe");
