@@ -9,7 +9,8 @@
 # This is the sole workflow that deploys to GitHub Pages.
 #
 # One-time repo setup (cannot be done with GITHUB_TOKEN):
-#   gh api -X POST repos/OWNER/REPO/pages -f build_type=workflow
+#   gh api -X POST repos/OWNER/REPO/pages \
+#     -f build_type=workflow -f 'source[branch]=main' -f 'source[path]=/'
 # After that, configure-pages only reads site metadata; it does not need
 # enablement (which requires a PAT/App with administration:write).
 name: Deploy Pages
