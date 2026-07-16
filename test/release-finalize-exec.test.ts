@@ -40,12 +40,22 @@ function writeStub(binDir: string, name: string, body: string): string {
 
 function ghHandler(argsExpression: string, statePath: string): string {
   return `const fs = require("node:fs");
+const path = require("node:path");
 const statePath = ${JSON.stringify(statePath)};
 const args = ${argsExpression};
 const read = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
 const write = (state) => fs.writeFileSync(statePath, JSON.stringify(state));
 
-if (args.join(" ").includes("release view")) {
+// On Windows the gh stub is a node.exe hardlink, so argv[0] is the resolved
+// absolute path of the "release" argument rather than the literal "release".
+// Match on its basename plus an exact subcommand check so dispatch stays precise
+// (not a loose substring that would also catch "release views" / "release
+// creates") on every platform.
+const command = args.length > 0 ? path.basename(args[0]) : "";
+const subcommand = args[1];
+const tag = args[2];
+
+if (command === "release" && subcommand === "view") {
   const state = read();
   if (!state.exists) {
     console.error("release not found");
@@ -55,8 +65,7 @@ if (args.join(" ").includes("release view")) {
   process.exit(0);
 }
 
-if (args.join(" ").includes("release create")) {
-  const tag = args[args.findIndex(a => a === "create") + 1];
+if (command === "release" && subcommand === "create") {
   write({
     exists: true,
     release: { tagName: tag, isDraft: false, isPrerelease: false, name: tag },
@@ -65,8 +74,7 @@ if (args.join(" ").includes("release create")) {
   process.exit(0);
 }
 
-if (args.join(" ").includes("release edit")) {
-  const tag = args[args.findIndex(a => a === "edit") + 1];
+if (command === "release" && subcommand === "edit") {
   const state = read();
   state.release = { tagName: tag, isDraft: false, isPrerelease: false, name: tag };
   write(state);
