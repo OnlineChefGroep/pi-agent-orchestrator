@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { logger } from "./logger.js";
 /**
  * hooks.ts — Enterprise Hook System for Subagent Lifecycle
@@ -166,7 +167,7 @@ export class HookRegistry {
       circuitBreakerThreshold?: number;
     },
   ): string {
-    const id = options?.id || `${event}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+    const id = options?.id || `${event}-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
     const priority = typeof options?.priority === "number"
       ? options.priority
       : PRIORITY_MAP[options?.priority ?? "normal"];
