@@ -231,7 +231,7 @@ export function parseBooleanOptional(val: unknown): boolean | undefined {
 /**
  * Parse a boolean with an explicit default for missing values.
  * null / undefined / empty string → defaultValue.
- * Throws on any other unparseable input (numbers, unrecognised strings, objects).
+ * Throws on any other unparsable input (numbers, unrecognised strings, objects).
  */
 export function parseBooleanWithDefault(val: unknown, defaultValue: boolean): boolean {
   return parseBooleanOptional(val) ?? defaultValue;

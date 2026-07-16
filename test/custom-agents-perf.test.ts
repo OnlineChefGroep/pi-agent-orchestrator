@@ -16,7 +16,7 @@ describe("Performance: loadCustomAgents", () => {
     const agentsDir = join(tmpDir, ".pi", "agents");
     mkdirSync(agentsDir, { recursive: true });
 
-    // Create 1000 agent files to make the benchmark measureable
+    // Create 1000 agent files to make the benchmark measurable
     for (let i = 0; i < 1000; i++) {
       writeFileSync(join(agentsDir, `agent-${i}.md`), `---
 display_name: Agent ${i}
