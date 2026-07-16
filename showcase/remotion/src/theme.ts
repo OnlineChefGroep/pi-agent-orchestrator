@@ -20,14 +20,6 @@ export const theme = {
   error: "#e0685f",
 } as const;
 
-export const fonts = {
-  mono: "\"JetBrains Mono\", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-  sans: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
-} as const;
-
-export const FONT_FAMILY_MONO = fonts.mono;
-export const FONT_FAMILY_SANS = fonts.sans;
-
 export const layout = {
   bannerWidth: 1280,
   bannerHeight: 640,
