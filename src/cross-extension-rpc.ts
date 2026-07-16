@@ -8,6 +8,8 @@
  *   success → { success: true, data?: T }
  *   error   → { success: false, error: string }
  */
+import { randomUUID } from "node:crypto";
+
 
 import { type AuditOutcome, recordAudit } from "./audit-logger.js";
 import { type ModelRegistry, resolveModel } from "./model-resolver.js";
@@ -252,7 +254,7 @@ function handleRpc<P extends { requestId: string }>(
 }
 
 function createRequestId(): string {
-  return `rpc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `rpc-${randomUUID()}`;
 }
 
 function requestRpc<T>(
