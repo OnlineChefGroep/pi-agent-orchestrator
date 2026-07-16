@@ -7,10 +7,23 @@ const LEVELS: Record<LogLevel, number> = {
   error: 40,
 };
 
+let cachedLevel: LogLevel | undefined | null = null;
+
+export function __test_resetLoggerCache(): void {
+  cachedLevel = null;
+}
+
 function currentLevel(): LogLevel | undefined {
+  if (cachedLevel !== null) return cachedLevel;
+
   const raw = process.env.PI_SUBAGENTS_LOG_LEVEL?.toLowerCase();
-  if (raw === "debug" || raw === "info" || raw === "warn" || raw === "error") return raw;
-  return process.stdout.isTTY || process.stderr.isTTY ? undefined : "warn";
+  if (raw === "debug" || raw === "info" || raw === "warn" || raw === "error") {
+    cachedLevel = raw;
+    return cachedLevel;
+  }
+
+  cachedLevel = process.stdout.isTTY || process.stderr.isTTY ? undefined : "warn";
+  return cachedLevel;
 }
 
 function shouldLog(level: LogLevel): boolean {
