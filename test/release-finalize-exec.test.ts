@@ -41,12 +41,7 @@ function writeStub(binDir: string, name: string, body: string): string {
 function ghHandler(argsExpression: string, statePath: string): string {
   return `const fs = require("node:fs");
 const statePath = ${JSON.stringify(statePath)};
-const rawArgs = ${argsExpression};
-// Node resolves the first positional token (the gh subcommand) to an absolute
-// script path in process.argv[1]. On Windows the gh stub is a hardlink to
-// node.exe, so the subcommand arrives as e.g. "D:\\\\...\\\\release" instead of
-// "release". Reduce it back to the bare subcommand so the matches below succeed.
-const args = rawArgs.length > 0 ? [require("node:path").basename(rawArgs[0]), ...rawArgs.slice(1)] : rawArgs;
+const args = ${argsExpression};
 const read = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
 const write = (state) => fs.writeFileSync(statePath, JSON.stringify(state));
 
@@ -61,7 +56,8 @@ if (args[0] === "release" && args[1] === "view") {
 }
 
 if (args[0] === "release" && args[1] === "create") {
-  const tag = args[2];
+  const tagIndex = args.indexOf("--title") !== -1 ? args.indexOf("--title") + 1 : 2;
+  const tag = args[tagIndex] || args[2];
   write({
     exists: true,
     release: { tagName: tag, isDraft: false, isPrerelease: false, name: tag },
