@@ -628,13 +628,12 @@ export class AgentManager {
     // Remove from queue if queued
     if (record.status === "queued") {
       this.queue = this.queue.filter(q => q.id !== id);
-      record.status = "stopped";
-      record.completedAt = Date.now();
-      return true;
+    } else if (record.status === "running") {
+      record.abortController?.abort();
+    } else {
+      return false;
     }
 
-    if (record.status !== "running") return false;
-    record.abortController?.abort();
     record.status = "stopped";
     record.completedAt = Date.now();
     return true;
