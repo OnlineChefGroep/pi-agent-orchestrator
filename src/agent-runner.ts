@@ -544,8 +544,12 @@ export async function runAgent(
       model: `${model.provider}/${model.id}`,
       quotas,
     });
-    if (normalizeHookResponse(hookResult).action === "block") {
-      throw new AgentRunnerError("Blocked by hook", "aborted", { hook: "subagent:start" });
+    const startDecision = normalizeHookResponse(hookResult);
+    if (startDecision.action === "block") {
+      throw new AgentRunnerError(startDecision.reason ?? "Blocked by hook", "aborted", {
+        hook: "subagent:start",
+        ...(startDecision.feedback !== undefined ? { feedback: startDecision.feedback } : {}),
+      });
     }
   }
 

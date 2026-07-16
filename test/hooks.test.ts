@@ -304,6 +304,15 @@ describe("composeHandlers", () => {
     const result = await composed({ event: "subagent:start", agentId: "a1" });
     expect(result).toBe("allow");
   });
+
+  it("returns modify when a handler modifies and none block", async () => {
+    const composed = composeHandlers(
+      async () => "modify" as const,
+      async () => "allow" as const,
+    );
+    const result = await composed({ event: "subagent:start", agentId: "a1" });
+    expect(result).toBe("modify");
+  });
 });
 
 describe("normalizeHookResponse", () => {

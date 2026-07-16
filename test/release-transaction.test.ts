@@ -123,4 +123,39 @@ describe("v0.18 release transaction", () => {
       "changed files must be exactly CHANGELOG.md, package-lock.json, package.json; received package.json",
     );
   });
+
+  it("allows 0.17.x maintenance bumps between sourceBaselines on any branch", () => {
+    const root = createReleaseSandbox();
+    const policy = JSON.parse(readFileSync(join(root, ".release-policy.json"), "utf8"));
+    const baselines = policy.sourceBaselines as string[];
+    expect(baselines.length).toBeGreaterThanOrEqual(2);
+
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    const lock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8"));
+    pkg.version = baselines[0];
+    lock.version = baselines[0];
+    lock.packages[""].version = baselines[0];
+    writeFileSync(join(root, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
+    writeFileSync(join(root, "package-lock.json"), `${JSON.stringify(lock, null, 2)}\n`);
+    git(root, "add", "package.json", "package-lock.json");
+    git(root, "commit", "-m", `chore: baseline ${baselines[0]}`);
+
+    pkg.version = baselines[1];
+    lock.version = baselines[1];
+    lock.packages[""].version = baselines[1];
+    writeFileSync(join(root, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
+    writeFileSync(join(root, "package-lock.json"), `${JSON.stringify(lock, null, 2)}\n`);
+    git(root, "add", "package.json", "package-lock.json");
+    git(root, "commit", "-m", `chore: maintenance bump to ${baselines[1]}`);
+
+    const maintenance = node(
+      root,
+      "scripts/verify-version-transition.mjs",
+      "HEAD^",
+      "HEAD",
+      "release/0.17.5-sweep",
+    );
+    expect(maintenance.status, maintenance.stderr).toBe(0);
+    expect(maintenance.stdout).toContain("Maintenance baseline transition verified");
+  });
 });

@@ -431,13 +431,14 @@ export function composeHandlers(
   ...handlers: HookHandler["fn"][]
 ): (payload: HookPayload) => Promise<HookResponse | undefined> {
   return async (payload) => {
+    let hasModify = false;
     for (const handler of handlers) {
       const result = await handler(payload);
       if (isBlockResponse(result)) {
         return typeof result === "object" ? result : "block";
       }
-      // "modify" continues to next handler
+      if (result === "modify") hasModify = true;
     }
-    return "allow";
+    return hasModify ? "modify" : "allow";
   };
 }

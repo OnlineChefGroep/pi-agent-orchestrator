@@ -629,15 +629,19 @@ export class AgentManager {
     // Remove from queue if queued
     if (record.status === "queued") {
       this.queue = this.queue.filter(q => q.id !== id);
-    } else if (record.status === "running") {
-      record.abortController?.abort();
-    } else {
-      return false;
+      record.status = "stopped";
+      record.completedAt = Date.now();
+      // Queued agents never start, so finalizeAgent/onComplete would not run.
+      try { this.onComplete?.(record); } catch { /* ignore completion side-effect errors */ }
+      return true;
     }
-
-    record.status = "stopped";
-    record.completedAt = Date.now();
-    return true;
+    if (record.status === "running") {
+      record.abortController?.abort();
+      record.status = "stopped";
+      record.completedAt = Date.now();
+      return true;
+    }
+    return false;
   }
 
   /** Callback invoked when a record is removed from the agent map (cleanup). */
@@ -716,17 +720,18 @@ export class AgentManager {
   /** Abort all running and queued agents immediately. */
   abortAll(): number {
     let count = 0;
-    // Clear queued agents first
+    // Clear queued agents first — they never reach finalizeAgent.
     for (const queued of this.queue) {
       const record = this.agents.get(queued.id);
-      if (record) {
+      if (record && record.status === "queued") {
         record.status = "stopped";
         record.completedAt = Date.now();
+        try { this.onComplete?.(record); } catch { /* ignore completion side-effect errors */ }
         count++;
       }
     }
     this.queue = [];
-    // Abort running agents
+    // Abort running agents (onComplete fires via finalizeAgent when the run settles)
     for (const record of this.agents.values()) {
       if (record.status === "running") {
         record.abortController?.abort();
