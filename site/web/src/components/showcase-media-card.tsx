@@ -4,15 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ShowcaseMedium } from "@/lib/content";
-
-function assetUrl(path: string): string {
-  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-  return `${base}${path}`;
-}
+import { siteAssetUrl } from "@/lib/site";
 
 async function assetExists(path: string): Promise<boolean> {
   try {
-    const response = await fetch(assetUrl(path), { method: "HEAD" });
+    const response = await fetch(siteAssetUrl(path), { method: "HEAD" });
     return response.ok;
   } catch {
     return false;
@@ -21,7 +17,7 @@ async function assetExists(path: string): Promise<boolean> {
 
 export function ShowcaseMediaCard({ item }: { item: ShowcaseMedium }) {
   const [available, setAvailable] = useState<boolean | null>(null);
-  const src = assetUrl(item.href);
+  const src = siteAssetUrl(item.href);
 
   useEffect(() => {
     let cancelled = false;

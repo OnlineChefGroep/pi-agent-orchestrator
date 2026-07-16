@@ -20,22 +20,11 @@ on:
     branches: [main]
     paths:
       - 'site/**'
-      - 'docs/images/dashboard_preview.gif'
-      - 'docs/images/dashboard_preview.mp4'
-      - 'docs/images/dashboard_preview.svg'
-      - 'docs/images/orchestrator_architecture.png'
-      - 'docs/architecture.md'
-      - 'docs/api-reference.md'
-      - 'docs/custom-agents.md'
-      - 'README.md'
-      - 'AGENTS.md'
-      - 'llms.txt'
-      - 'llms-full.txt'
-      - 'sitemap.md'
+      - 'docs/**'
+      - 'scripts/build-site.sh'
       - 'sitemap.xml'
       - 'robots.txt'
       - 'agent-permissions.json'
-      - 'scripts/build-site.sh'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
