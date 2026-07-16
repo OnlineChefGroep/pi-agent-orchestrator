@@ -136,7 +136,7 @@ const MAX_ARTIFACT_DESCRIPTION_LENGTH = 500;
  * to prevent V8 stack overflows. Also tracks total number of keys in the JSON
  * structure to prevent excessively large payloads.
  */
-function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS, maxDepth: number = MAX_JSON_DEPTH): unknown {
+export function safeJsonParse(input: string, maxKeys: number = MAX_JSON_KEYS, maxDepth: number = MAX_JSON_DEPTH): unknown {
   if (input.length > MAX_JSON_SIZE) {
     throw new Error(`JSON size ${input.length} exceeds maximum ${MAX_JSON_SIZE} bytes`);
   }
