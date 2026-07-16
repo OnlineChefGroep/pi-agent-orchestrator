@@ -120,6 +120,13 @@ export async function loadCustomAgents(cwd: string): Promise<Map<string, AgentCo
   await loadFromDir(projectDir, agents, "project");  // higher priority (overwrites)
   return agents;
 }
+/**
+ * Max number of agent files read concurrently. Bounds the number of in-flight
+ * file descriptors so large agent directories cannot exhaust OS limits (EMFILE)
+ * while still reading in parallel.
+ */
+const MAX_CONCURRENT_READS = 64;
+
 /** Load agent configs from a directory into the map. */
 async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source: "project" | "global"): Promise<void> {
   if (!existsSync(dir)) return;
@@ -132,13 +139,32 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
   } catch {
     return;
   }
-  const fileContents = await Promise.all(files.map(async (file) => {
-    try {
-      return { file, content: await readFile(join(dir, file), "utf-8") };
-    } catch {
-      return null;
-    }
-  }));
+
+  // Read files with bounded concurrency to avoid file-descriptor exhaustion on
+  // large agent directories. Order is preserved (files are processed in
+  // discovery order) so project/global override precedence stays deterministic.
+  type FileContent = { file: string; content: string };
+  const fileContents: (FileContent | null)[] = [];
+  for (let i = 0; i < files.length; i += MAX_CONCURRENT_READS) {
+    const batch = files.slice(i, i + MAX_CONCURRENT_READS);
+    const batchResults = await Promise.all(
+      batch.map(async (file): Promise<FileContent | null> => {
+        try {
+          return { file, content: await readFile(join(dir, file), "utf-8") };
+        } catch (err) {
+          // Surface the failure instead of silently dropping the agent, so a
+          // read error (e.g. EMFILE, permission denied) is observable.
+          const code =
+            typeof err === "object" && err !== null && "code" in err
+              ? String((err as { code: unknown }).code)
+              : "UNKNOWN";
+          emitTelemetry("agent:file-read-failed", { file, source, code });
+          return null;
+        }
+      }),
+    );
+    fileContents.push(...batchResults);
+  }
 
   for (const result of fileContents) {
     if (!result) continue;
