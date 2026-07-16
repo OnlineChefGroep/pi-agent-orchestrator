@@ -48,7 +48,7 @@ import {
 // ---------------------------------------------------------------------------
 // Symbol-based discovery keys.
 //
-// We re-use the names already advertised in `docs/api-reference.md` so this
+// We reuse the names already advertised in `docs/api-reference.md` so this
 // module is additive (not breaking) for consumers that already know those
 // symbols. We also add `pi-subagents:api` for the new typed surface.
 // ---------------------------------------------------------------------------

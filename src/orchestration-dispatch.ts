@@ -96,7 +96,9 @@ const PARALLEL_KEYWORDS = [
 const PLAN_KEYWORDS = [
   /\bplan\b/i,
   /\bdesign\b/i,
-  /\barchitect(?:ure|ing)?\b/i,
+  /\barchitecture\b/i,
+  /\barchitecting\b/i,
+  /\barchitect\b/i,
   /\bpropos(?:e|al)\b/i,
   /\boutlin(?:e|ing)\b/i,
 ];
