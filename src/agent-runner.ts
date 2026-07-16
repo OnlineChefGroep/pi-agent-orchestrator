@@ -129,8 +129,13 @@ export function getMaxEndHookRevisions(): number {
   return maxEndHookRevisions;
 }
 
+/** Clamp end-hook revision budget to a safe finite 0..10 range (NaN/Inf → 0). */
+export function clampMaxEndHookRevisions(n: number): number {
+  return Number.isFinite(n) ? Math.max(0, Math.min(10, Math.trunc(n))) : 0;
+}
+
 export function setMaxEndHookRevisions(n: number): void {
-  maxEndHookRevisions = Number.isFinite(n) ? Math.max(0, Math.min(10, Math.trunc(n))) : 0;
+  maxEndHookRevisions = clampMaxEndHookRevisions(n);
 }
 
 // ============================================================================
@@ -787,7 +792,9 @@ export async function runAgent(
     gatedResponseText = collector.getText().trim() || getLastAssistantText(session);
 
     if (options.hooks) {
-      const revisionBudget = options.maxEndHookRevisions ?? maxEndHookRevisions;
+      const revisionBudget = clampMaxEndHookRevisions(
+        options.maxEndHookRevisions ?? maxEndHookRevisions,
+      );
       let attempt = 1;
       const maxAttempts = revisionBudget + 1;
 

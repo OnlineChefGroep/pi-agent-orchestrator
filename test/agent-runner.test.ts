@@ -430,6 +430,27 @@ describe("subagent:end revision gate", () => {
     expect(session.prompt).toHaveBeenCalledTimes(1);
   });
 
+  it("treats NaN maxEndHookRevisions as fail-closed budget 0", async () => {
+    const { session } = createSession("DRAFT");
+    createAgentSession.mockResolvedValue({ session });
+    const hooks = new HookRegistry();
+    hooks.register("subagent:end", async () => "block");
+
+    await expect(
+      runAgent(ctx, "Explore", "go", {
+        pi,
+        hooks,
+        agentId: "agent-end-nan",
+        maxEndHookRevisions: Number.NaN,
+      }),
+    ).rejects.toMatchObject({
+      name: "AgentRunnerError",
+      code: "aborted",
+      context: expect.objectContaining({ hook: "subagent:end", attempt: 1, maxAttempts: 1 }),
+    });
+    expect(session.prompt).toHaveBeenCalledTimes(1);
+  });
+
   it("re-prompts once with feedback then allows", async () => {
     const { session } = createSession("DRAFT");
     createAgentSession.mockResolvedValue({ session });
