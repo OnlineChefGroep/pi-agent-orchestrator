@@ -6,6 +6,9 @@
   "scripts": {
     "studio": "remotion studio src/index.ts",
     "typecheck": "tsc --noEmit",
+    "lint": "node --check scripts/extract-promo-data.mjs && tsc --noEmit --pretty false",
+    "test": "npm run promo:data:check",
+    "verify": "npm run typecheck && npm run lint && npm test",
     "render": "remotion render src/index.ts PiAgentTerminal ../../docs/images/dashboard_preview.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --overwrite",
     "poster": "remotion still src/index.ts PiAgentTerminalPoster ../../docs/images/dashboard_preview.png --overwrite",
     "promo:data": "node scripts/extract-promo-data.mjs",
