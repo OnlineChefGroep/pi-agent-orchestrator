@@ -43,14 +43,14 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Verify committed promo data
+        run: npm --prefix showcase/remotion run promo:data:check
+
       - name: Render showcase suite
         shell: bash
         run: |
           set -o pipefail
           bash scripts/render-showcase-remotion.sh 2>&1 | tee remotion-render.log
-
-      - name: Verify generated promo data
-        run: npm --prefix showcase/remotion run promo:data:check
 
       - name: Upload rendered assets and log
         if: always()
