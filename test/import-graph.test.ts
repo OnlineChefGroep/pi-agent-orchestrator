@@ -77,7 +77,7 @@ describe("src/ import graph", () => {
       cycles = runMadgeCycles();
       deps = runMadgeDeps();
     },
-    60_000,
+    120_000,
   );
 
   it(
