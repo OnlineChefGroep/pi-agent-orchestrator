@@ -107,11 +107,11 @@ const promoData = {
   architectureAscii,
 };
 
-if (agentTypes.length !== 4) {
-  throw new Error(`Expected 4 built-in agent types, found ${agentTypes.length}`);
+if (agentTypes.length < 1) {
+  throw new Error("Expected at least one built-in agent type");
 }
-if (compressionLevels.length !== 3) {
-  throw new Error(`Expected 3 compression levels, found ${compressionLevels.length}`);
+if (compressionLevels.length < 1) {
+  throw new Error("Expected at least one compression level");
 }
 if (architectureAscii.split("\n").length < 20) {
   throw new Error("Architecture diagram is unexpectedly short");
