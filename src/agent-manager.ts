@@ -2,7 +2,7 @@ import { logger } from "./logger.js";
 /**
  * agent-manager.ts — Tracks agents, background execution, resume support.
  *
- * Background agents are subject to a configurable concurrency limit (default: 4).
+ * Background agents are subject to a configurable concurrency limit (default: 3).
  * Excess agents are queued and auto-started as running agents complete.
  * Foreground agents bypass the queue (they block the parent anyway).
  */
@@ -31,7 +31,8 @@ export type BudgetWarningType = "agents_at_80" | "turns_at_80" | "agents_at_90" 
 export type OnBudgetWarning = (type: BudgetWarningType, usage: { spawnedAgents: number; totalTurns: number }, limits: { maxAgents: number; maxTurns: number }) => void;
 
 /** Default max concurrent background agents. */
-const DEFAULT_MAX_CONCURRENT = 4;
+/** Fresh-install default: keep typical fan-out in the 1–3 agent range. */
+const DEFAULT_MAX_CONCURRENT = 3;
 
 export interface SessionLimits {
   maxAgentsPerSession?: number;
@@ -630,14 +631,17 @@ export class AgentManager {
       this.queue = this.queue.filter(q => q.id !== id);
       record.status = "stopped";
       record.completedAt = Date.now();
+      // Queued agents never start, so finalizeAgent/onComplete would not run.
+      try { this.onComplete?.(record); } catch { /* ignore completion side-effect errors */ }
       return true;
     }
-
-    if (record.status !== "running") return false;
-    record.abortController?.abort();
-    record.status = "stopped";
-    record.completedAt = Date.now();
-    return true;
+    if (record.status === "running") {
+      record.abortController?.abort();
+      record.status = "stopped";
+      record.completedAt = Date.now();
+      return true;
+    }
+    return false;
   }
 
   /** Callback invoked when a record is removed from the agent map (cleanup). */
@@ -716,17 +720,18 @@ export class AgentManager {
   /** Abort all running and queued agents immediately. */
   abortAll(): number {
     let count = 0;
-    // Clear queued agents first
+    // Clear queued agents first — they never reach finalizeAgent.
     for (const queued of this.queue) {
       const record = this.agents.get(queued.id);
-      if (record) {
+      if (record && record.status === "queued") {
         record.status = "stopped";
         record.completedAt = Date.now();
+        try { this.onComplete?.(record); } catch { /* ignore completion side-effect errors */ }
         count++;
       }
     }
     this.queue = [];
-    // Abort running agents
+    // Abort running agents (onComplete fires via finalizeAgent when the run settles)
     for (const record of this.agents.values()) {
       if (record.status === "running") {
         record.abortController?.abort();

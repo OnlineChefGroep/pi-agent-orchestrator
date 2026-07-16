@@ -2,7 +2,8 @@
  * custom-agents.ts — Load user-defined agents from project (.pi/agents/) and global ($PI_CODING_AGENT_DIR/agents/, default ~/.pi/agent/agents/) locations.
  */
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { BUILTIN_TOOL_NAMES, getDefaultAgentNames } from "./agent-types.js";
@@ -131,14 +132,18 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
   } catch {
     return;
   }
-  for (const file of files) {
-    const name = basename(file, ".md");
-    let content: string;
+  const fileContents = await Promise.all(files.map(async (file) => {
     try {
-      content = readFileSync(join(dir, file), "utf-8");
+      return { file, content: await readFile(join(dir, file), "utf-8") };
     } catch {
-      continue;
+      return null;
     }
+  }));
+
+  for (const result of fileContents) {
+    if (!result) continue;
+    const { file, content } = result;
+    const name = basename(file, ".md");
     const { frontmatter: fm, body } = parseFrontmatter<Record<string, unknown>>(content);
     const config: AgentConfig = {
       name,
@@ -205,7 +210,7 @@ async function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source
  * Parse a boolean from frontmatter that may be a native boolean OR a string.
  * Returns `undefined` for "no value" (null / undefined / empty string).
  * Returns the parsed boolean for: `true`, `false`, `"true"`, `"false"` (case-insensitive).
- * Throws on any other input (numbers, unrecognised strings, objects) —
+ * Throws on any other input (numbers, unrecognized strings, objects) —
  * YAML schema must be one of the accepted forms, otherwise it's a parse error
  * that the user should see at load time, not a silent fallback.
  */
@@ -226,7 +231,7 @@ export function parseBooleanOptional(val: unknown): boolean | undefined {
 /**
  * Parse a boolean with an explicit default for missing values.
  * null / undefined / empty string → defaultValue.
- * Throws on any other unparseable input (numbers, unrecognised strings, objects).
+ * Throws on any other unparsable input (numbers, unrecognized strings, objects).
  */
 export function parseBooleanWithDefault(val: unknown, defaultValue: boolean): boolean {
   return parseBooleanOptional(val) ?? defaultValue;

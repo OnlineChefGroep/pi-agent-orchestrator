@@ -71,7 +71,8 @@ vi.mock("../src/skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
 }));
 
-import { AgentRunnerError, getGraceTurns, globalCircuitBreaker, resumeAgent, runAgent, setGraceTurns } from "../src/agent-runner.js";
+import { AgentRunnerError, getGraceTurns, getMaxEndHookRevisions, globalCircuitBreaker, resumeAgent, runAgent, setGraceTurns, setMaxEndHookRevisions } from "../src/agent-runner.js";
+import { HookRegistry } from "../src/hooks.js";
 
 function createSession(finalText: string) {
   const listeners: Array<(event: any) => void> = [];
@@ -384,5 +385,135 @@ describe("ModelCircuitBreaker", () => {
 
     // Failures should be reset to 0
     expect(globalCircuitBreaker.getState().failures).toBe(0);
+  });
+});
+
+describe("subagent:end revision gate", () => {
+  afterEach(() => {
+    setMaxEndHookRevisions(0);
+  });
+
+  it("awaits end hook and continues when allow", async () => {
+    const { session } = createSession("OK");
+    createAgentSession.mockResolvedValue({ session });
+    const hooks = new HookRegistry();
+    const end = vi.fn(async () => "allow" as const);
+    hooks.register("subagent:end", end);
+
+    const result = await runAgent(ctx, "Explore", "go", { pi, hooks, agentId: "agent-end-1" });
+
+    expect(end).toHaveBeenCalledTimes(1);
+    expect(end.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        status: "completed",
+        responseText: "OK",
+        attempt: 1,
+        maxAttempts: 1,
+      }),
+    );
+    expect(session.prompt).toHaveBeenCalledTimes(1);
+    expect(result.responseText).toBe("OK");
+  });
+
+  it("fails closed on block when maxEndHookRevisions is 0", async () => {
+    const { session } = createSession("DRAFT");
+    createAgentSession.mockResolvedValue({ session });
+    const hooks = new HookRegistry();
+    hooks.register("subagent:end", async () => ({ action: "block", reason: "quality fail", feedback: "add tests" }));
+
+    await expect(runAgent(ctx, "Explore", "go", { pi, hooks, agentId: "agent-end-2" })).rejects.toMatchObject({
+      name: "AgentRunnerError",
+      code: "aborted",
+      message: "quality fail",
+      context: expect.objectContaining({ hook: "subagent:end", feedback: "add tests" }),
+    });
+    expect(session.prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats NaN maxEndHookRevisions as fail-closed budget 0", async () => {
+    const { session } = createSession("DRAFT");
+    createAgentSession.mockResolvedValue({ session });
+    const hooks = new HookRegistry();
+    hooks.register("subagent:end", async () => "block");
+
+    await expect(
+      runAgent(ctx, "Explore", "go", {
+        pi,
+        hooks,
+        agentId: "agent-end-nan",
+        maxEndHookRevisions: Number.NaN,
+      }),
+    ).rejects.toMatchObject({
+      name: "AgentRunnerError",
+      code: "aborted",
+      context: expect.objectContaining({ hook: "subagent:end", attempt: 1, maxAttempts: 1 }),
+    });
+    expect(session.prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-prompts once with feedback then allows", async () => {
+    const { session } = createSession("DRAFT");
+    createAgentSession.mockResolvedValue({ session });
+    let call = 0;
+    session.prompt = vi.fn(async (prompt: string) => {
+      call++;
+      session.messages.push({
+        role: "assistant",
+        content: [{ type: "text", text: call === 1 ? "DRAFT" : "REVISED" }],
+      });
+      if (call === 2) expect(prompt).toContain("add tests");
+    });
+
+    const hooks = new HookRegistry();
+    let endCalls = 0;
+    hooks.register("subagent:end", async () => {
+      endCalls++;
+      if (endCalls === 1) return { action: "block" as const, feedback: "add tests" };
+      return "allow";
+    });
+
+    const result = await runAgent(ctx, "Explore", "go", {
+      pi,
+      hooks,
+      agentId: "agent-end-3",
+      maxEndHookRevisions: 1,
+    });
+
+    expect(session.prompt).toHaveBeenCalledTimes(2);
+    expect(endCalls).toBe(2);
+    expect(result.responseText).toBe("REVISED");
+  });
+
+  it("stops after revision budget is exhausted", async () => {
+    const { session } = createSession("DRAFT");
+    createAgentSession.mockResolvedValue({ session });
+    session.prompt = vi.fn(async () => {
+      session.messages.push({
+        role: "assistant",
+        content: [{ type: "text", text: "still bad" }],
+      });
+    });
+
+    const hooks = new HookRegistry();
+    hooks.register("subagent:end", async () => "block");
+
+    await expect(
+      runAgent(ctx, "Explore", "go", { pi, hooks, agentId: "agent-end-4", maxEndHookRevisions: 1 }),
+    ).rejects.toMatchObject({
+      name: "AgentRunnerError",
+      code: "aborted",
+      context: expect.objectContaining({ hook: "subagent:end", attempt: 2, maxAttempts: 2 }),
+    });
+    expect(session.prompt).toHaveBeenCalledTimes(2);
+  });
+
+  it("get/setMaxEndHookRevisions clamps to 0..10", () => {
+    setMaxEndHookRevisions(99);
+    expect(getMaxEndHookRevisions()).toBe(10);
+    setMaxEndHookRevisions(-3);
+    expect(getMaxEndHookRevisions()).toBe(0);
+    setMaxEndHookRevisions(2);
+    expect(getMaxEndHookRevisions()).toBe(2);
+    setMaxEndHookRevisions(0);
   });
 });

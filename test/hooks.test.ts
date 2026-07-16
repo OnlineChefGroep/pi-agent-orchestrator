@@ -290,9 +290,53 @@ describe("composeHandlers", () => {
     expect(order).toEqual(["first"]); // second never runs
   });
 
+  it("preserves object-form block feedback", async () => {
+    const composed = composeHandlers(
+      async () => ({ action: "block" as const, feedback: "fix the tests" }),
+      async () => "allow" as const,
+    );
+    const result = await composed({ event: "subagent:end", agentId: "a1" });
+    expect(result).toEqual({ action: "block", feedback: "fix the tests" });
+  });
+
   it("returns allow when no handlers given", async () => {
     const composed = composeHandlers();
     const result = await composed({ event: "subagent:start", agentId: "a1" });
     expect(result).toBe("allow");
+  });
+
+  it("returns modify when a handler modifies and none block", async () => {
+    const composed = composeHandlers(
+      async () => "modify" as const,
+      async () => "allow" as const,
+    );
+    const result = await composed({ event: "subagent:start", agentId: "a1" });
+    expect(result).toBe("modify");
+  });
+});
+
+describe("normalizeHookResponse", () => {
+  it("normalizes string and object forms", async () => {
+    const { normalizeHookResponse, isBlockResponse } = await import("../src/hooks.js");
+    expect(normalizeHookResponse("allow")).toEqual({ action: "allow" });
+    expect(normalizeHookResponse("block")).toEqual({ action: "block" });
+    expect(normalizeHookResponse("modify")).toEqual({ action: "modify" });
+    expect(normalizeHookResponse({ action: "block", feedback: "retry", reason: "fail" })).toEqual({
+      action: "block",
+      feedback: "retry",
+      reason: "fail",
+    });
+    expect(isBlockResponse("block")).toBe(true);
+    expect(isBlockResponse({ action: "block" })).toBe(true);
+    expect(isBlockResponse("allow")).toBe(false);
+  });
+});
+
+describe("HookRegistry object-form block", () => {
+  it("short-circuits and returns object feedback from dispatch", async () => {
+    const registry = new HookRegistry();
+    registry.register("subagent:end", async () => ({ action: "block", feedback: "needs more detail" }));
+    const result = await registry.dispatch("subagent:end", "agent-1", { responseText: "draft" });
+    expect(result).toEqual({ action: "block", feedback: "needs more detail" });
   });
 });

@@ -106,6 +106,32 @@ describe("AgentManager — Bug 1 race condition (resultConsumed vs onComplete)",
 
     expect(onCompleteCalled).toBe(false);
   });
+
+  it("onComplete fires when a queued background agent is aborted", async () => {
+    const completed: string[] = [];
+    manager = new AgentManager((r) => {
+      completed.push(r.id);
+    });
+    manager.setMaxConcurrent(1);
+    // Never resolve the first runner so the second stays queued.
+    vi.mocked(runAgent).mockImplementation(() => new Promise(() => {}));
+
+    const runningId = manager.spawn(mockPi, mockCtx, "general-purpose", "run", {
+      description: "running",
+      isBackground: true,
+    });
+    const queuedId = manager.spawn(mockPi, mockCtx, "general-purpose", "queued", {
+      description: "queued",
+      isBackground: true,
+    });
+    expect(manager.getRecord(queuedId)!.status).toBe("queued");
+
+    expect(manager.abort(queuedId)).toBe(true);
+    expect(manager.getRecord(queuedId)!.status).toBe("stopped");
+    expect(completed).toEqual([queuedId]);
+
+    manager.abort(runningId);
+  });
 });
 
 describe("AgentManager — completion callbacks", () => {

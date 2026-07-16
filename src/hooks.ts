@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { logger } from "./logger.js";
 /**
  * hooks.ts — Enterprise Hook System for Subagent Lifecycle
@@ -39,8 +40,46 @@ export interface HookPayload {
   timestamp?: number;
 }
 
-/** Response from a blocking hook handler. */
-export type HookResponse = "allow" | "block" | "modify";
+/**
+ * Response from a blocking hook handler.
+ *
+ * String forms remain the primary contract. The object form is only for
+ * `block` so a quality-gate hook can return revision feedback without a
+ * side channel.
+ */
+export type HookResponse =
+  | "allow"
+  | "block"
+  | "modify"
+  | { action: "block"; reason?: string; feedback?: string };
+
+/** Normalized decision used by the runner and compose helpers. */
+export interface NormalizedHookDecision {
+  action: "allow" | "block" | "modify";
+  reason?: string;
+  feedback?: string;
+}
+
+/** True when a handler result is a blocking decision (string or object). */
+export function isBlockResponse(
+  result: HookResponse | undefined,
+): result is "block" | { action: "block"; reason?: string; feedback?: string } {
+  return result === "block" || (typeof result === "object" && result !== null && result.action === "block");
+}
+
+/** Collapse string/object hook results into a single decision shape. */
+export function normalizeHookResponse(result: HookResponse | undefined): NormalizedHookDecision {
+  if (result === "block") return { action: "block" };
+  if (result === "modify") return { action: "modify" };
+  if (typeof result === "object" && result !== null && result.action === "block") {
+    return {
+      action: "block",
+      ...(result.reason !== undefined ? { reason: result.reason } : {}),
+      ...(result.feedback !== undefined ? { feedback: result.feedback } : {}),
+    };
+  }
+  return { action: "allow" };
+}
 
 /** Hook priority: lower numbers run first. */
 export type HookPriority = "critical" | "high" | "normal" | "low" | "background";
@@ -166,7 +205,16 @@ export class HookRegistry {
       circuitBreakerThreshold?: number;
     },
   ): string {
-    const id = options?.id || `${event}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+    // `id` is the primary key for `metrics` and `handlerEventMap`; a collision would
+    // overwrite those entries and, after unregisterById(), leave a ghost handler that
+    // runHandlers() silently skips (metrics missing). Use a UUID suffix and, for
+    // auto-generated ids, regenerate on the vanishingly rare clash to guarantee uniqueness.
+    let id = options?.id;
+    if (!id) {
+      do {
+        id = `${event}-${Date.now().toString(36)}-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+      } while (this.metrics.has(id));
+    }
     const priority = typeof options?.priority === "number"
       ? options.priority
       : PRIORITY_MAP[options?.priority ?? "normal"];
@@ -314,7 +362,10 @@ export class HookRegistry {
 
       const result = await executeHandler(handler, payload, timeoutMs, metrics);
 
-      if (result === "block") return "block";
+      if (isBlockResponse(result)) {
+        // Preserve object-form feedback when present; collapse bare "block".
+        return typeof result === "object" ? result : "block";
+      }
       if (result === "modify") hasModify = true;
     }
 
@@ -380,11 +431,14 @@ export function composeHandlers(
   ...handlers: HookHandler["fn"][]
 ): (payload: HookPayload) => Promise<HookResponse | undefined> {
   return async (payload) => {
+    let hasModify = false;
     for (const handler of handlers) {
       const result = await handler(payload);
-      if (result === "block") return "block";
-      // "modify" continues to next handler
+      if (isBlockResponse(result)) {
+        return typeof result === "object" ? result : "block";
+      }
+      if (result === "modify") hasModify = true;
     }
-    return "allow";
+    return hasModify ? "modify" : "allow";
   };
 }

@@ -1,7 +1,8 @@
 {
-  "maxConcurrent": 4,
+  "maxConcurrent": 3,
   "defaultMaxTurns": 50,
   "graceTurns": 3,
+  "maxEndHookRevisions": 0,
   "defaultJoinMode": "smart",
   "schedulingEnabled": true,
   "tracingEnabled": true,

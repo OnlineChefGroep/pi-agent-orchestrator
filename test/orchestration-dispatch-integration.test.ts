@@ -251,10 +251,10 @@ describe("orchestration-dispatch integration — Agent tool end-to-end", () => {
     expect(computeDispatchHistogram().bySource.explicit - beforeHist.bySource.explicit).toBe(1);
   });
 
-  it("swarm mode → 3 members spawned, joined as a swarm, results aggregated", async () => {
+  it("swarm mode → 2 members spawned, joined as a swarm, results aggregated", async () => {
     setOrchestrationMode("swarm");
     const beforeHist = computeDispatchHistogram();
-    installRunAgentMock(["r1", "r2", "r3"]);
+    installRunAgentMock(["r1", "r2"]);
 
     const { ctx, manager, swarmJoin, piCtx } = buildToolContext();
     const tool = createAgentTool(ctx);
@@ -271,14 +271,13 @@ describe("orchestration-dispatch integration — Agent tool end-to-end", () => {
       piCtx,
     );
 
-    expect(manager.listAgents().length).toBe(3);
+    expect(manager.listAgents().length).toBe(2);
 
-    // Coordinator was actually driven: 1 swarm created, 3 agents added.
+    // Coordinator was actually driven: 1 swarm created, 2 agents added.
     expect(swarmJoin.createSwarm).toHaveBeenCalledTimes(1);
-    expect(swarmJoin.addAgentToSwarm).toHaveBeenCalledTimes(3);
+    expect(swarmJoin.addAgentToSwarm).toHaveBeenCalledTimes(2);
     expect(swarmJoin.addAgentToSwarm).toHaveBeenNthCalledWith(1, "swarm-it-1", expect.any(String), 0);
     expect(swarmJoin.addAgentToSwarm).toHaveBeenNthCalledWith(2, "swarm-it-1", expect.any(String), 0);
-    expect(swarmJoin.addAgentToSwarm).toHaveBeenNthCalledWith(3, "swarm-it-1", expect.any(String), 0);
 
     // Records carry the swarmId end-to-end.
     const records = manager.listAgents();
@@ -287,9 +286,8 @@ describe("orchestration-dispatch integration — Agent tool end-to-end", () => {
 
     const text = result.content[0].text as string;
     expect(text).toContain("Swarm completed");
-    expect(text).toContain("(1/3)");
-    expect(text).toContain("(2/3)");
-    expect(text).toContain("(3/3)");
+    expect(text).toContain("(1/2)");
+    expect(text).toContain("(2/2)");
     // Wiring coverage for /agents → Health check dispatch histogram.
     expect(computeDispatchHistogram().byKind.swarm - beforeHist.byKind.swarm).toBe(1);
     expect(computeDispatchHistogram().bySource.explicit - beforeHist.bySource.explicit).toBe(1);
@@ -384,9 +382,9 @@ describe("orchestration-dispatch integration — Agent tool end-to-end", () => {
       piCtx,
     );
 
-    expect(tally.countCalls()).toBe(3);
+    expect(tally.countCalls()).toBe(2);
     expect(swarmJoin.createSwarm).toHaveBeenCalledTimes(1);
-    expect(swarmJoin.addAgentToSwarm).toHaveBeenCalledTimes(3);
+    expect(swarmJoin.addAgentToSwarm).toHaveBeenCalledTimes(2);
     expect(result.content[0].text).toContain("Swarm completed");
     // Wiring coverage: auto→swarm decision must be recorded as auto-heuristic.
     expect(computeDispatchHistogram().byKind.swarm - beforeHist.byKind.swarm).toBe(1);
@@ -503,7 +501,7 @@ describe("orchestration-dispatch integration — Agent tool end-to-end", () => {
     // eventually resolve cleanly.
     setOrchestrationMode("swarm");
     const deferred = { resolvers: [] as Array<() => void> };
-    installRunAgentMock(["member-1", "member-2", "member-3"], { deferred });
+    installRunAgentMock(["member-1", "member-2"], { deferred });
 
     const { ctx, manager, swarmJoin, batchOrchestrator, piCtx } = buildToolContext();
     const tool = createAgentTool(ctx);
@@ -527,11 +525,10 @@ describe("orchestration-dispatch integration — Agent tool end-to-end", () => {
 
     // The dispatcher awaited `batchOrchestrator.flush()` BEFORE awaiting any
     // record.promise, so by now (records still parked) the swarm must exist
-    // and must contain all three agents. This is the real ordering proof.
+    // and must contain all default swarm members. This is the real ordering proof.
     expect(swarmJoin.createSwarm).toHaveBeenCalledTimes(1);
-    expect(swarmJoin.addAgentToSwarm).toHaveBeenCalledTimes(3);
+    expect(swarmJoin.addAgentToSwarm).toHaveBeenCalledTimes(2);
     expect(manager.listAgents().map((r) => r.swarmId)).toEqual([
-      "swarm-it-1",
       "swarm-it-1",
       "swarm-it-1",
     ]);

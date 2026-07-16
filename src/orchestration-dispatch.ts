@@ -96,7 +96,9 @@ const PARALLEL_KEYWORDS = [
 const PLAN_KEYWORDS = [
   /\bplan\b/i,
   /\bdesign\b/i,
-  /\barchitect(?:ure|ing)?\b/i,
+  /\barchitecture\b/i,
+  /\barchitecting\b/i,
+  /\barchitect\b/i,
   /\bpropos(?:e|al)\b/i,
   /\boutlin(?:e|ing)\b/i,
 ];
@@ -205,7 +207,8 @@ export function heuristicPickMode(a: PromptAnalysis): OrchestrationKind {
 
 // ---- Plan builders ----
 
-const SWARM_DEFAULT_SIZE = 3;
+/** Fresh-install swarm size: two members keeps concurrent work in the 1–3 band. */
+const SWARM_DEFAULT_SIZE = 2;
 
 function shortLabel(s: string, max = 5): string {
   const words = s.trim().split(/\s+/).filter(Boolean);
@@ -214,7 +217,7 @@ function shortLabel(s: string, max = 5): string {
 
 /**
  * Build a swarm plan: N copies of the same prompt with distinct descriptions.
- * Defaults to 3 parallel members; capped at 5 to avoid runaway fan-out.
+ * Defaults to 2 parallel members; capped at 5 to avoid runaway fan-out.
  */
 export function buildSwarmPlan(prompt: string, description: string, n = SWARM_DEFAULT_SIZE): SwarmAgentPlan[] {
   const size = Math.max(2, Math.min(5, n));

@@ -134,13 +134,13 @@ import { registerHook } from "@onlinechefgroep/pi-agent-orchestrator";
 
 const unsubscribe = registerHook("subagent:start", async (payload) => {
   console.log(`Execution spawn: ${payload.agentId}`);
-  return "allow"; // "allow" | "block" | "modify"
+  return "allow"; // "allow" | "block" | "modify" | { action: "block", feedback?: string }
 });
 ```
 
 **EVENT REGISTRY:**
 - `subagent:start` — Pre-execution interrupt
-- `subagent:end` — Post-execution interrupt
+- `subagent:end` — Post-execution quality gate. May return `"block"` or `{ action: "block", feedback }` to reject the output. With `maxEndHookRevisions > 0`, the runner re-prompts in the same session (bounded); with `0` (default) a block fails closed.
 - `subagent:error` — Uncaught fault interrupt
 - `subagent:spawn` — Sub-process fork interrupt
 - `subagent:steer` — Instruction injection interrupt
@@ -175,11 +175,12 @@ Extracts raw text primitive from message block structures.
 
 ```ts
 interface SubagentsSettings {
-  maxConcurrent?: number;              // Max concurrently running agents (default 4)
+  maxConcurrent?: number;              // Max concurrently running agents (default 3)
   maxAgentsPerSession?: number;         // Hard cap on total agents spawned per session
   maxTotalTurnsPerSession?: number;     // Hard cap on cumulative turns across the session
   defaultMaxTurns?: number;             // Max turns per agent (0 = unlimited)
   graceTurns?: number;                // Wrap-up turns before forced kill (default 5)
+  maxEndHookRevisions?: number;       // Revision turns after blocking subagent:end (default 0 = fail closed)
   defaultJoinMode?: JoinMode;          // Agent join topology (default: "smart")
   schedulingEnabled?: boolean;         // Master switch for cron scheduling (default: true)
   tracingEnabled?: boolean;           // Master switch for OpenTelemetry span emission in agent-runner (default: true). When false, every span helper in telemetry-otel.ts short-circuits to a shared no-op span.
@@ -191,7 +192,7 @@ interface SubagentsSettings {
   orchestrationMode?: "auto" | "single" | "swarm" | "crew";  // Execution topology (default: "single"; multi-agent modes are opt-in)
   dashboardRefreshInterval?: number;   // Dashboard refresh interval in ms (default: 750, min: 100, max: 60000)
   sessionMaxSpawns?: number;           // Guardrail: max agents spawned per session
-  sessionMaxTurns?: number;            // Guardrail: max cumulative turns per session
+  sessionMaxTurns?: number;            // Guardrail: max cumulative turns across the session
   promptCompressionLevel?: PromptCompressionLevel;  // "minimal" | "balanced" | "aggressive" (default: "balanced")
   debugCapture?: boolean;               // **OFF BY DEFAULT.** Master switch for the offline capture sink (default: false). Captures agent events, errors + stacks, schedule executions, RPC audit, and per-agent metrics to a local folder. See the `### DEBUG CAPTURE` section below.
   debugCapturePaths?: DebugCapturePathOverrides;  // Override the two capture roots (default: `<cwd>/.pi/subagent-debug` + `<agent-dir>/subagent-debug`). Absolute paths only; failed validation is silently dropped at enable-time (does not crash startup).

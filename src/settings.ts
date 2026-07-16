@@ -24,6 +24,11 @@ export interface SubagentsSettings {
   /** 0 is the explicit unlimited marker. */
   defaultMaxTurns?: number;
   graceTurns?: number;
+  /**
+   * Max revision turns after a blocking `subagent:end` hook.
+   * `0` (default) = fail closed on block with no revision attempt.
+   */
+  maxEndHookRevisions?: number;
   defaultJoinMode?: JoinMode;
   schedulingEnabled?: boolean;
   tracingEnabled?: boolean;
@@ -51,6 +56,7 @@ export interface SettingsAppliers {
   setSessionLimits: (limits: { maxAgentsPerSession?: number; maxTotalTurnsPerSession?: number }) => void;
   setDefaultMaxTurns: (value: number) => void;
   setGraceTurns: (value: number) => void;
+  setMaxEndHookRevisions: (value: number) => void;
   setDefaultJoinMode: (mode: JoinMode) => void;
   setSchedulingEnabled: (enabled: boolean) => void;
   setTracingEnabled: (enabled: boolean) => void;
@@ -73,6 +79,7 @@ export interface SettingsAppliers {
 export interface SettingsGetters {
   getDefaultMaxTurns: () => number | undefined;
   getGraceTurns: () => number;
+  getMaxEndHookRevisions: () => number;
   getDefaultJoinMode: () => JoinMode;
   isSchedulingEnabled: () => boolean;
   isTracingEnabled: () => boolean;
@@ -81,6 +88,7 @@ export interface SettingsGetters {
 export interface SettingsSetters {
   setDefaultMaxTurns: (value: number | undefined) => void;
   setGraceTurns: (value: number) => void;
+  setMaxEndHookRevisions: (value: number) => void;
   setDefaultJoinMode: (mode: JoinMode) => void;
   setSchedulingEnabled: (enabled: boolean) => void;
   setTracingEnabled: (enabled: boolean) => void;
@@ -109,6 +117,7 @@ const MAX_AGENTS_PER_SESSION_CEILING = 10_000;
 const MAX_TURNS_CEILING = 10_000;
 const MAX_TOTAL_TURNS_PER_SESSION_CEILING = 100_000;
 const GRACE_TURNS_CEILING = 1_000;
+const MAX_END_HOOK_REVISIONS_CEILING = 10;
 const SESSION_MAX_SPAWNS_CEILING = 10_000;
 const SESSION_MAX_TURNS_CEILING = 100_000;
 
@@ -159,6 +168,10 @@ function sanitize(raw: unknown): SubagentsSettings {
 
   const defaultMaxTurns = validateInt(source, "defaultMaxTurns", 0, MAX_TURNS_CEILING, -1);
   if (defaultMaxTurns >= 0) settings.defaultMaxTurns = defaultMaxTurns;
+
+  // 0 is a valid explicit value (no revisions / fail-closed on block).
+  const maxEndHookRevisions = validateInt(source, "maxEndHookRevisions", 0, MAX_END_HOOK_REVISIONS_CEILING, -1);
+  if (maxEndHookRevisions >= 0) settings.maxEndHookRevisions = maxEndHookRevisions;
 
   const defaultJoinMode = validateEnum(source, "defaultJoinMode", VALID_JOIN_MODES);
   if (defaultJoinMode) settings.defaultJoinMode = defaultJoinMode;
@@ -252,6 +265,9 @@ export function applySettings(settings: SubagentsSettings, appliers: SettingsApp
   }
   if (typeof settings.defaultMaxTurns === "number") appliers.setDefaultMaxTurns(settings.defaultMaxTurns);
   if (typeof settings.graceTurns === "number") appliers.setGraceTurns(settings.graceTurns);
+  if (typeof settings.maxEndHookRevisions === "number") {
+    appliers.setMaxEndHookRevisions(settings.maxEndHookRevisions);
+  }
   if (settings.defaultJoinMode) appliers.setDefaultJoinMode(settings.defaultJoinMode);
   if (typeof settings.schedulingEnabled === "boolean") appliers.setSchedulingEnabled(settings.schedulingEnabled);
   if (typeof settings.tracingEnabled === "boolean") appliers.setTracingEnabled(settings.tracingEnabled);

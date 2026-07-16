@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadReleasePolicy } from "./release-policy.mjs";
+import { compareVersions, loadReleasePolicy, parseStableVersion } from "./release-policy.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -22,12 +22,45 @@ function packageVersion(ref) {
   return pkg.version;
 }
 
+/**
+ * Allow 0.17.x maintenance bumps (e.g. 0.17.1 → 0.17.5) on any branch.
+ * Keeps the locked 0.18 release transaction as the only path onto 0.18.x.
+ */
+function isMaintenanceBaselineBump(baseVersion, headVersion, policy) {
+  const base = parseStableVersion(baseVersion);
+  const head = parseStableVersion(headVersion);
+  const initial = parseStableVersion(policy.initialRelease);
+  const [trainMajor, trainMinor] = String(policy.releaseTrain)
+    .split(".")
+    .map(Number);
+  // Maintenance stays on the pre-train line (0.17 while train is 0.18).
+  if (base.major !== head.major || base.minor !== head.minor) return false;
+  if (head.major !== trainMajor || head.minor !== trainMinor - 1) return false;
+  if (compareVersions(head, base) <= 0) return false;
+  if (compareVersions(head, initial) >= 0) return false;
+  if (!policy.sourceBaselines.includes(baseVersion)) return false;
+  // Head must itself become an approved baseline (or already be listed).
+  if (!policy.sourceBaselines.includes(headVersion)) {
+    fail(
+      `maintenance bump ${baseVersion} -> ${headVersion} requires ${headVersion} in sourceBaselines`,
+    );
+  }
+  return true;
+}
+
 async function verify(baseRef, headRef, branchName) {
   const policy = await loadReleasePolicy(ROOT);
   const baseVersion = packageVersion(baseRef);
   const headVersion = packageVersion(headRef);
   if (baseVersion === headVersion) {
     console.log(`No package version transition: ${headVersion}`);
+    return;
+  }
+
+  if (isMaintenanceBaselineBump(baseVersion, headVersion, policy)) {
+    console.log(
+      `Maintenance baseline transition verified: ${baseVersion} -> ${headVersion} on ${branchName}`,
+    );
     return;
   }
 

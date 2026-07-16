@@ -193,12 +193,12 @@ describe("heuristicPickMode", () => {
 });
 
 describe("buildSwarmPlan", () => {
-  it("returns N agents (default 3) with distinct descriptions", () => {
+  it("returns N agents (default 2) with distinct descriptions", () => {
     const plan = buildSwarmPlan("do the work", "Run benchmark");
-    expect(plan).toHaveLength(3);
+    expect(plan).toHaveLength(2);
     expect(plan[0].description).toContain("Run benchmark");
-    expect(plan[0].description).toContain("1/3");
-    expect(plan[2].description).toContain("3/3");
+    expect(plan[0].description).toContain("1/2");
+    expect(plan[1].description).toContain("2/2");
     for (const a of plan) {
       expect(a.prompt).toBe("do the work");
     }
@@ -279,7 +279,7 @@ describe("resolveOrchestrationMode", () => {
     });
     expect(d.kind).toBe("swarm");
     if (d.kind === "swarm") {
-      expect(d.agents).toHaveLength(3);
+      expect(d.agents).toHaveLength(2);
       expect(d.joinMode).toBe("swarm");
     }
   });

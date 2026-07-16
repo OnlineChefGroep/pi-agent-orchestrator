@@ -11,7 +11,7 @@
  * by re-invoking `madge` (via the CLI so we don't pull `madge` in as a
  * devDep just for this guard) and asserting the right invariants.
  *
- * Implementation note: we shell out to `npx --yes madge` rather than
+ * Implementation note: we shell out to `npx --yes madge@6.1.0` rather than
  * `import madge from "madge"` so:
  *
  *   1. No new devDep entry in `package.json`; the CLI download is cached
@@ -44,7 +44,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 function runMadgeCycles(): readonly (readonly string[])[] {
   const stdout = execFileSync(
     "npx",
-    ["--yes", "madge", "--circular", "--extensions", "ts", "--json", "src/"],
+    ["--yes", "madge@6.1.0", "--circular", "--extensions", "ts", "--json", "src/"],
     { encoding: "utf8", shell: platform() === "win32" },
   );
   return JSON.parse(stdout) as readonly (readonly string[])[];
@@ -54,7 +54,7 @@ function runMadgeCycles(): readonly (readonly string[])[] {
 function runMadgeDeps(): Readonly<Record<string, readonly string[]>> {
   const stdout = execFileSync(
     "npx",
-    ["--yes", "madge", "--extensions", "ts", "--json", "src/"],
+    ["--yes", "madge@6.1.0", "--extensions", "ts", "--json", "src/"],
     { encoding: "utf8", shell: platform() === "win32" },
   );
   return JSON.parse(stdout) as Readonly<Record<string, readonly string[]>>;
@@ -70,14 +70,14 @@ describe("src/ import graph", () => {
   // madge call fails (npx fetch error, tsconfig parse error), vitest surfaces
   // it as a setup error for this file rather than per-test failures.
   //
-  // 60s hook timeout: npx cold-start of `madge` plus two madge invocations
-  // (each parses the full src/ tree) can take 15-30s on a fresh CI runner.
+  // 120s hook timeout: npx cold-start of pinned `madge@6.1.0` plus two madge
+  // invocations can exceed 60s on fresh Windows CI runners (npm registry + path).
   beforeAll(
     () => {
       cycles = runMadgeCycles();
       deps = runMadgeDeps();
     },
-    60_000,
+    120_000,
   );
 
   it(

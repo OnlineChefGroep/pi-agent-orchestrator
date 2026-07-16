@@ -20,8 +20,10 @@ vi.mock("../src/agent-registry.js", () => ({
 vi.mock("../src/agent-runner.js", () => ({
   getDefaultMaxTurns: vi.fn().mockReturnValue(undefined),
   getGraceTurns: vi.fn().mockReturnValue(5),
+  getMaxEndHookRevisions: vi.fn().mockReturnValue(0),
   setDefaultMaxTurns: vi.fn(),
   setGraceTurns: vi.fn(),
+  setMaxEndHookRevisions: vi.fn(),
 }));
 vi.mock("../src/output-handler.js", () => ({
   showAgentsMenu: vi.fn(),

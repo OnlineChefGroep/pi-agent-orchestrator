@@ -35,7 +35,7 @@ import {
   setTracingEnabled,
   setUiStyle,
 } from "./agent-registry.js";
-import { setDefaultMaxTurns, setGraceTurns } from "./agent-runner.js";
+import { setDefaultMaxTurns, setGraceTurns, setMaxEndHookRevisions } from "./agent-runner.js";
 import { BatchOrchestrator } from "./batch-orchestrator.js";
 import { registerAgentsCommand } from "./commands/agents.js";
 import { registerHooksCommand } from "./commands/hooks.js";
@@ -578,6 +578,7 @@ export default async function (pi: ExtensionAPI) {
       setSessionLimits: (limits) => manager.setSessionLimits(limits),
       setDefaultMaxTurns,
       setGraceTurns,
+      setMaxEndHookRevisions,
       setDefaultJoinMode,
       setSchedulingEnabled,
       setTracingEnabled,

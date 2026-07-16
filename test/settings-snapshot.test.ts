@@ -52,6 +52,7 @@ function makeGetters(overrides: Partial<SettingsGetters> = {}): SettingsGetters 
   return {
     getDefaultMaxTurns: () => 25,
     getGraceTurns: () => 5,
+    getMaxEndHookRevisions: () => 0,
     getDefaultJoinMode: () => "smart",
     isSchedulingEnabled: () => true,
     isTracingEnabled: () => true,
@@ -150,17 +151,19 @@ describe("buildSettingsSnapshot — manager-owned fields", () => {
 // ── Getter-owned fields (the new SettingsGetters argument) ─────────────
 
 describe("buildSettingsSnapshot — getter-owned fields", () => {
-  it("pulls defaultMaxTurns, graceTurns, and defaultJoinMode from the getters", () => {
+  it("pulls defaultMaxTurns, graceTurns, maxEndHookRevisions, and defaultJoinMode from the getters", () => {
     const snapshot = buildSettingsSnapshot(
       asManager(makeManager()),
       makeGetters({
         getDefaultMaxTurns: () => 50,
         getGraceTurns: () => 7,
+        getMaxEndHookRevisions: () => 2,
         getDefaultJoinMode: () => "group",
       }),
     );
     expect(snapshot.defaultMaxTurns).toBe(50);
     expect(snapshot.graceTurns).toBe(7);
+    expect(snapshot.maxEndHookRevisions).toBe(2);
     expect(snapshot.defaultJoinMode).toBe("group");
   });
 
@@ -238,6 +241,7 @@ describe("buildSettingsSnapshot — call-count invariants", () => {
     const spy: SettingsGetters = {
       getDefaultMaxTurns: vi.fn(() => 25),
       getGraceTurns: vi.fn(() => 5),
+      getMaxEndHookRevisions: vi.fn(() => 0),
       getDefaultJoinMode: vi.fn(() => "smart"),
       isSchedulingEnabled: vi.fn(() => true),
       isTracingEnabled: vi.fn(() => true),
@@ -245,6 +249,7 @@ describe("buildSettingsSnapshot — call-count invariants", () => {
     buildSettingsSnapshot(asManager(makeManager()), spy);
     expect(spy.getDefaultMaxTurns).toHaveBeenCalledTimes(1);
     expect(spy.getGraceTurns).toHaveBeenCalledTimes(1);
+    expect(spy.getMaxEndHookRevisions).toHaveBeenCalledTimes(1);
     expect(spy.getDefaultJoinMode).toHaveBeenCalledTimes(1);
     expect(spy.isSchedulingEnabled).toHaveBeenCalledTimes(1);
     expect(spy.isTracingEnabled).toHaveBeenCalledTimes(1);
@@ -262,6 +267,7 @@ describe("buildSettingsSnapshot — snapshot shape", () => {
       "maxConcurrent",
       "defaultMaxTurns",
       "graceTurns",
+      "maxEndHookRevisions",
       "defaultJoinMode",
       "schedulingEnabled",
       "tracingEnabled",
