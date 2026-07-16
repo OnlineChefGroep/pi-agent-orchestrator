@@ -41,7 +41,13 @@ function writeStub(binDir: string, name: string, body: string): string {
 function ghHandler(argsExpression: string, statePath: string): string {
   return `const fs = require("node:fs");
 const statePath = ${JSON.stringify(statePath)};
-const args = ${argsExpression};
+const rawArgs = ${argsExpression};
+// Node resolves the first positional token (the gh subcommand) to an absolute
+// script path in process.argv[1]. On Windows the gh stub is a hardlink to
+// node.exe, so the subcommand arrives as e.g. "D:\\\\...\\\\release" instead of
+// "release". Reduce it back to the bare subcommand so the args[0] === "release"
+// guards below match on every platform.
+const args = rawArgs.length > 0 ? [require("node:path").basename(rawArgs[0]), ...rawArgs.slice(1)] : rawArgs;
 const read = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
 const write = (state) => fs.writeFileSync(statePath, JSON.stringify(state));
 
