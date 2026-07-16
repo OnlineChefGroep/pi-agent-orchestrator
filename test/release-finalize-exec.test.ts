@@ -41,7 +41,10 @@ function writeStub(binDir: string, name: string, body: string): string {
 function ghHandler(argsExpression: string, statePath: string): string {
   return `const fs = require("node:fs");
 const statePath = ${JSON.stringify(statePath)};
-const args = ${argsExpression};
+let args = ${argsExpression};
+if (args[0] && args[0] !== "release" && (args[0].endsWith("release") || args[0].endsWith("gh"))) {
+  args.shift();
+}
 const read = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
 const write = (state) => fs.writeFileSync(statePath, JSON.stringify(state));
 
