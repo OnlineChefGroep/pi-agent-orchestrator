@@ -124,7 +124,7 @@ jobs:
         run: |
           set -euo pipefail
           TARBALL="$(node -p "require('./release-artifact/release-manifest.json').tarballFile")"
-          npm publish "release-artifact/$TARBALL" --access public --provenance --ignore-scripts
+          npm publish "./release-artifact/${TARBALL}" --access public --provenance --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
