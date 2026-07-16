@@ -56,6 +56,11 @@ jobs:
         run: bash scripts/build-site.sh _site
       - name: Setup Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+        with:
+          # Auto-create/enable the Pages site if missing (Actions build type).
+          # Without this, configure-pages fails with 404 when Pages was never
+          # turned on in repo settings — which is exactly the public-site 404.
+          enablement: true
       - name: Upload artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
