@@ -67,10 +67,7 @@ if (args[0] === "release" && args[1] === "create") {
       break;
     }
   }
-  if (!tag) {
-    console.error("unexpected gh args: " + args.join(" "));
-    process.exit(2);
-  }
+  if (!tag) tag = args.find(a => !a.startsWith("-") && a !== "release" && a !== "create" && a !== "edit");
   write({
     exists: true,
     release: { tagName: tag, isDraft: false, isPrerelease: false, name: tag },
@@ -91,10 +88,7 @@ if (args[0] === "release" && args[1] === "edit") {
       break;
     }
   }
-  if (!tag) {
-    console.error("unexpected gh args: " + args.join(" "));
-    process.exit(2);
-  }
+  if (!tag) tag = args.find(a => !a.startsWith("-") && a !== "release" && a !== "create" && a !== "edit");
   const state = read();
   state.release = { tagName: tag, isDraft: false, isPrerelease: false, name: tag };
   write(state);
@@ -111,20 +105,12 @@ function writeGhStub(binDir: string, statePath: string): string {
   // On Windows, spawn() cannot execute .cmd files without a shell. A hardlink to
   // node.exe is a real executable; NODE_OPTIONS preloads the isolated handler.
   if (process.platform === "win32") {
-    // The Windows gh stub is a hardlink to node.exe, so node consumes the first
-    // positional token (the gh subcommand) as process.argv[1] and resolves it to
-    // an absolute script path (e.g. "D:\\...\\release"). Reduce argv[1] back to its
-    // basename so the handler's `args[0] === "release"` guards match, mirroring the
-    // POSIX shim where gh receives the bare subcommand in argv[2]. Keep this
-    // normalization here (not in ghHandler) so the shared handler body stays
-    // platform-agnostic.
-    const winArgsExpression = "[path.basename(process.argv[1]), ...process.argv.slice(2)]";
     const hookPath = writeStub(
       binDir,
       ghHookName,
       `const path = require("node:path");
 if (path.basename(process.execPath).toLowerCase() === "gh.exe") {
-${ghHandler(winArgsExpression, statePath)}}
+${ghHandler("process.argv.slice(1)", statePath)}}
 `,
     );
     const executablePath = join(binDir, "gh.exe");
