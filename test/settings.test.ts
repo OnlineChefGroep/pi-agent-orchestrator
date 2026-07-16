@@ -330,7 +330,7 @@ describe("settings persistence", () => {
     });
 
     it("warns to console.warn when an existing file is malformed", () => {
-      const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const spy = vi.spyOn(process.stderr, "write").mockImplementation(() => {});
       mkdirSync(join(projectDir, ".pi"), { recursive: true });
       writeFileSync(projectFile(), "not valid json {{{");
       try {
@@ -343,7 +343,7 @@ describe("settings persistence", () => {
     });
 
     it("does NOT warn when a file is simply missing", () => {
-      const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const spy = vi.spyOn(process.stderr, "write").mockImplementation(() => {});
       try {
         expect(loadSettings(projectDir)).toEqual({});
         expect(spy).not.toHaveBeenCalled();

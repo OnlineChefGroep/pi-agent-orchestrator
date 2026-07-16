@@ -39,7 +39,7 @@ describe("parseHandoff", () => {
   });
 
   it("returns null for malformed JSON and logs warning", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => {});
 
     const text = `\`\`\`json
 {
@@ -60,7 +60,7 @@ describe("parseHandoff", () => {
   });
 
   it("returns null when summary field is missing", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => {});
 
     const text = `\`\`\`json
 {
@@ -85,7 +85,7 @@ describe("parseHandoff", () => {
   });
 
   it("handles truncated JSON gracefully (returns null)", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => {});
 
     const text = `\`\`\`json
 {
@@ -165,7 +165,7 @@ describe("parseHandoff", () => {
   });
 
   it("returns null when type is not 'handoff'", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => {});
 
     const text = `\`\`\`json
 {

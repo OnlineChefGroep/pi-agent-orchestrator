@@ -9,9 +9,8 @@ describe("logger", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2024-01-01T12:00:00.000Z"));
 
-    vi.spyOn(console, "log").mockImplementation(() => {});
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   });
 
   afterEach(() => {
@@ -32,9 +31,8 @@ describe("logger", () => {
     logger.warn("warn message");
     logger.error("error message");
 
-    expect(console.log).not.toHaveBeenCalled();
-    expect(console.warn).toHaveBeenCalledTimes(1);
-    expect(console.error).toHaveBeenCalledTimes(1);
+    expect(process.stdout.write).not.toHaveBeenCalled();
+    expect(process.stderr.write).toHaveBeenCalledTimes(2);
   });
 
   it("should default to warn level for invalid configuration in non-interactive processes", () => {
@@ -45,9 +43,8 @@ describe("logger", () => {
     logger.warn("warn message");
     logger.error("error message");
 
-    expect(console.log).not.toHaveBeenCalled();
-    expect(console.warn).toHaveBeenCalledTimes(1);
-    expect(console.error).toHaveBeenCalledTimes(1);
+    expect(process.stdout.write).not.toHaveBeenCalled();
+    expect(process.stderr.write).toHaveBeenCalledTimes(2);
   });
 
   it("should stay silent by default in an interactive terminal", () => {
@@ -58,8 +55,8 @@ describe("logger", () => {
       logger.warn("warn message");
       logger.error("error message");
 
-      expect(console.warn).not.toHaveBeenCalled();
-      expect(console.error).not.toHaveBeenCalled();
+      expect(process.stdout.write).not.toHaveBeenCalled();
+      expect(process.stderr.write).not.toHaveBeenCalled();
     } finally {
       delete (process.stdout as { isTTY?: boolean }).isTTY;
     }
@@ -73,9 +70,8 @@ describe("logger", () => {
     logger.warn("warn message");
     logger.error("error message");
 
-    expect(console.log).toHaveBeenCalledTimes(2); // debug and info
-    expect(console.warn).toHaveBeenCalledTimes(1);
-    expect(console.error).toHaveBeenCalledTimes(1);
+    expect(process.stdout.write).toHaveBeenCalledTimes(2); // debug and info
+    expect(process.stderr.write).toHaveBeenCalledTimes(2);
   });
 
   it("should log info, warn, and error messages when set to info", () => {
@@ -86,9 +82,8 @@ describe("logger", () => {
     logger.warn("warn message");
     logger.error("error message");
 
-    expect(console.log).toHaveBeenCalledTimes(1); // info only
-    expect(console.warn).toHaveBeenCalledTimes(1);
-    expect(console.error).toHaveBeenCalledTimes(1);
+    expect(process.stdout.write).toHaveBeenCalledTimes(1); // info only
+    expect(process.stderr.write).toHaveBeenCalledTimes(2);
   });
 
   it("should log warn and error messages when set to warn explicitly", () => {
@@ -99,9 +94,8 @@ describe("logger", () => {
     logger.warn("warn message");
     logger.error("error message");
 
-    expect(console.log).not.toHaveBeenCalled();
-    expect(console.warn).toHaveBeenCalledTimes(1);
-    expect(console.error).toHaveBeenCalledTimes(1);
+    expect(process.stdout.write).not.toHaveBeenCalled();
+    expect(process.stderr.write).toHaveBeenCalledTimes(2);
   });
 
   it("should handle uppercase log level in PI_SUBAGENTS_LOG_LEVEL", () => {
@@ -109,7 +103,7 @@ describe("logger", () => {
 
     logger.debug("debug message");
 
-    expect(console.log).toHaveBeenCalledTimes(1);
+    expect(process.stdout.write).toHaveBeenCalledTimes(1);
   });
 
   it("should log only error messages when set to error", () => {
@@ -120,9 +114,8 @@ describe("logger", () => {
     logger.warn("warn message");
     logger.error("error message");
 
-    expect(console.log).not.toHaveBeenCalled();
-    expect(console.warn).not.toHaveBeenCalled();
-    expect(console.error).toHaveBeenCalledTimes(1);
+    expect(process.stdout.write).not.toHaveBeenCalled();
+    expect(process.stderr.write).toHaveBeenCalledTimes(1);
   });
 
   it("should format output as JSON with correct fields", () => {
@@ -130,9 +123,9 @@ describe("logger", () => {
 
     logger.info("test message", { extra1: "value1", extra2: 123 });
 
-    expect(console.log).toHaveBeenCalledTimes(1);
-    const logCall = vi.mocked(console.log).mock.calls[0][0];
-    const parsedLog = JSON.parse(logCall);
+    expect(process.stdout.write).toHaveBeenCalledTimes(1);
+    const logCall = vi.mocked(process.stdout.write).mock.calls[0][0] as string;
+    const parsedLog = JSON.parse(logCall.trim());
 
     expect(parsedLog).toEqual({
       ts: "2024-01-01T12:00:00.000Z",
@@ -149,9 +142,9 @@ describe("logger", () => {
 
     logger.info("test message");
 
-    expect(console.log).toHaveBeenCalledTimes(1);
-    const logCall = vi.mocked(console.log).mock.calls[0][0];
-    const parsedLog = JSON.parse(logCall);
+    expect(process.stdout.write).toHaveBeenCalledTimes(1);
+    const logCall = vi.mocked(process.stdout.write).mock.calls[0][0] as string;
+    const parsedLog = JSON.parse(logCall.trim());
 
     expect(parsedLog).toEqual({
       ts: "2024-01-01T12:00:00.000Z",

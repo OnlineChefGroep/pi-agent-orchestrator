@@ -118,8 +118,8 @@ describe("audit-logger", () => {
   // --- silent mode ---
 
   it("suppresses logger output when silent is true", () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => {});
+    const consoleWarnSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => {});
 
     configureAuditLogger({ silent: true });
     recordAudit(entry({ outcome: "success" }));

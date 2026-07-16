@@ -42,7 +42,7 @@ describe("Handoff v2 \u2014 typed artifacts", () => {
     });
 
     it("rejects a file artifact with empty path", () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => {});
       const text = `\`\`\`json
 {
   "type": "handoff",
@@ -76,7 +76,7 @@ describe("Handoff v2 \u2014 typed artifacts", () => {
     });
 
     it("rejects a branch artifact with empty branch name", () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => {});
       const text = `\`\`\`json
 {
   "type": "handoff",
@@ -109,7 +109,7 @@ describe("Handoff v2 \u2014 typed artifacts", () => {
     });
 
     it("rejects a url artifact with empty url", () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => {});
       const text = `\`\`\`json
 {
   "type": "handoff",
@@ -142,7 +142,7 @@ describe("Handoff v2 \u2014 typed artifacts", () => {
     });
 
     it("rejects a note artifact with missing value", () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => {});
       const text = `\`\`\`json
 {
   "type": "handoff",
@@ -217,7 +217,7 @@ describe("Handoff v2 \u2014 typed artifacts", () => {
     });
 
     it("rejects handoffs with completely unrecognised artifacts (no path/branch/url/title+value)", () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => {});
       const text = `\`\`\`json
 {
   "type": "handoff",

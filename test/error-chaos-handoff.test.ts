@@ -5,7 +5,7 @@ describe('Handoff - Error Chaos & Resilience', () => {
   let warnSpy: any;
 
   beforeEach(() => {
-    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => {});
   });
 
   it('should gracefully handle corrupted handoff JSON', () => {
