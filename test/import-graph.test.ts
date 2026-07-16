@@ -12,7 +12,7 @@
  * devDep just for this guard) and asserting the right invariants.
  *
  * Implementation note: we shell out to `npx --yes madge` rather than
- * `import madge from "madge"` so:
+ * `import madge from "madge@6.1.0"` so:
  *
  *   1. No new devDep entry in `package.json`; the CLI download is cached
  *      by npx after the first run and stays fast in CI.
@@ -44,7 +44,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 function runMadgeCycles(): readonly (readonly string[])[] {
   const stdout = execFileSync(
     "npx",
-    ["--yes", "madge", "--circular", "--extensions", "ts", "--json", "src/"],
+    ["--yes", "madge@6.1.0", "--circular", "--extensions", "ts", "--json", "src/"],
     { encoding: "utf8", shell: platform() === "win32" },
   );
   return JSON.parse(stdout) as readonly (readonly string[])[];
@@ -54,7 +54,7 @@ function runMadgeCycles(): readonly (readonly string[])[] {
 function runMadgeDeps(): Readonly<Record<string, readonly string[]>> {
   const stdout = execFileSync(
     "npx",
-    ["--yes", "madge", "--extensions", "ts", "--json", "src/"],
+    ["--yes", "madge@6.1.0", "--extensions", "ts", "--json", "src/"],
     { encoding: "utf8", shell: platform() === "win32" },
   );
   return JSON.parse(stdout) as Readonly<Record<string, readonly string[]>>;
