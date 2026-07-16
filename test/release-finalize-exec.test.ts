@@ -88,7 +88,15 @@ function writeGhStub(binDir: string, statePath: string): string {
       ghHookName,
       `const path = require("node:path");
 if (path.basename(process.execPath).toLowerCase() === "gh.exe") {
-${ghHandler("(() => { const raw = process.argv.slice(1); if (raw.length > 0) raw[0] = path.basename(raw[0]); return raw; })()", statePath)}}
+  const normalizedArgs = [];
+  for (const arg of process.argv.slice(1)) {
+    // skip the interpreter path, the script path, and "gh.exe" or "gh" if passed in argv
+    if (arg === process.execPath || path.basename(arg).toLowerCase() === "gh.exe" || path.basename(arg).toLowerCase() === "gh.cmd" || path.basename(arg).toLowerCase() === "gh") {
+        continue;
+    }
+    normalizedArgs.push(arg);
+  }
+${ghHandler("normalizedArgs", statePath)}}
 `,
     );
     const executablePath = join(binDir, "gh.exe");
