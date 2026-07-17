@@ -168,6 +168,13 @@ export async function showManualWizard(ctx: ExtensionCommandContext, targetDir: 
     "max",
   ]);
   if (!thinkingChoice) return;
+  if (thinkingChoice === "max") {
+    const ok = await ctx.ui.confirm(
+      "Thinking level: max",
+      "max requires a supporting model (GPT-5.6 / adaptive Claude). Unsupported models will error or fall back to a lower level. Continue?",
+    );
+    if (!ok) return;
+  }
 
   let thinkingLine = "";
   if (thinkingChoice !== "inherit") thinkingLine = `\nthinking: ${thinkingChoice}`;

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_DASHBOARD_KEYBINDINGS } from "../src/ui/dashboard-keybindings.js";
 import { DEFAULT_FOOTER_STATUS_CONFIG } from "../src/ui/footer-status-config.js";
 
@@ -43,7 +44,7 @@ function makeCtx(overrides: Partial<{
   selectChoices: string[];
   inputValues: string[];
   confirmValue: boolean;
-}> = {}) {
+}> = {}): ExtensionCommandContext {
   let selectIdx = 0;
   let inputIdx = 0;
 
@@ -65,19 +66,19 @@ function makeCtx(overrides: Partial<{
       }),
       notify: vi.fn(),
     },
-  };
+  } as ExtensionCommandContext;
 }
 
 describe("showManualWizard", () => {
   it("cancels when name is empty", async () => {
     const ctx = makeCtx({ inputValues: [] });
-    await showManualWizard(ctx as any, "/test/dir");
+    await showManualWizard(ctx, "/test/dir");
     expect(ctx.ui.select).not.toHaveBeenCalled();
   });
 
   it("cancels when description is empty", async () => {
     const ctx = makeCtx({ inputValues: ["agent1"] });
-    await showManualWizard(ctx as any, "/test/dir");
+    await showManualWizard(ctx, "/test/dir");
     expect(ctx.ui.select).not.toHaveBeenCalled();
   });
 
@@ -86,7 +87,7 @@ describe("showManualWizard", () => {
       inputValues: ["agent1", "My agent"],
       selectChoices: [undefined],
     });
-    await showManualWizard(ctx as any, "/test/dir");
+    await showManualWizard(ctx, "/test/dir");
     expect(ctx.ui.select).toHaveBeenCalled();
     // Should have called select but not written a file
   });
@@ -96,7 +97,7 @@ describe("showManualWizard", () => {
       inputValues: ["agent1", "My agent", "", undefined, "System prompt here"],
       selectChoices: ["all", "inherit (parent model)", "inherit"],
     });
-    await showManualWizard(ctx as any, "/test/dir");
+    await showManualWizard(ctx, "/test/dir");
 
     const { writeFileSync } = await import("node:fs");
     expect(writeFileSync).toHaveBeenCalledWith(
@@ -111,7 +112,7 @@ describe("showManualWizard", () => {
       inputValues: ["agent1", "Read-only agent", "", undefined, ""],
       selectChoices: ["none", "inherit (parent model)", "inherit"],
     });
-    await showManualWizard(ctx as any, "/test/dir");
+    await showManualWizard(ctx, "/test/dir");
 
     const { writeFileSync } = await import("node:fs");
     expect(writeFileSync).toHaveBeenCalledWith(
@@ -126,7 +127,7 @@ describe("showManualWizard", () => {
       inputValues: ["agent1", "Read-only agent", "", undefined, ""],
       selectChoices: ["read-only (read, bash, grep, find, ls)", "inherit (parent model)", "inherit"],
     });
-    await showManualWizard(ctx as any, "/test/dir");
+    await showManualWizard(ctx, "/test/dir");
 
     const { writeFileSync } = await import("node:fs");
     expect(writeFileSync).toHaveBeenCalledWith(
@@ -141,7 +142,7 @@ describe("showManualWizard", () => {
       inputValues: ["agent1", "Custom agent", "read, write, bash", "# My System Prompt"],
       selectChoices: ["custom...", "inherit (parent model)", "inherit"],
     });
-    await showManualWizard(ctx as any, "/test/dir");
+    await showManualWizard(ctx, "/test/dir");
 
     const { writeFileSync } = await import("node:fs");
     expect(writeFileSync).toHaveBeenCalledWith(
@@ -156,7 +157,7 @@ describe("showManualWizard", () => {
       inputValues: ["agent1", "Agent", "", undefined, ""],
       selectChoices: ["all", "haiku", "inherit"],
     });
-    await showManualWizard(ctx as any, "/test/dir");
+    await showManualWizard(ctx, "/test/dir");
 
     const { writeFileSync } = await import("node:fs");
     expect(writeFileSync).toHaveBeenCalledWith(
@@ -171,7 +172,7 @@ describe("showManualWizard", () => {
       inputValues: ["agent1", "Agent", "", undefined, ""],
       selectChoices: ["all", "inherit (parent model)", "xhigh"],
     });
-    await showManualWizard(ctx as any, "/test/dir");
+    await showManualWizard(ctx, "/test/dir");
 
     const { writeFileSync } = await import("node:fs");
     expect(writeFileSync).toHaveBeenCalledWith(
@@ -186,7 +187,7 @@ describe("showManualWizard", () => {
       inputValues: ["agent1", "Agent", "", undefined, ""],
       selectChoices: ["all", "inherit (parent model)", "max"],
     });
-    await showManualWizard(ctx as any, "/test/dir");
+    await showManualWizard(ctx, "/test/dir");
 
     const { writeFileSync } = await import("node:fs");
     expect(writeFileSync).toHaveBeenCalledWith(
@@ -201,7 +202,7 @@ describe("showManualWizard", () => {
       inputValues: ["agent1", "Agent", "", undefined, ""],
       selectChoices: ["all", "inherit (parent model)", "high"],
     });
-    await showManualWizard(ctx as any, "/test/dir");
+    await showManualWizard(ctx, "/test/dir");
 
     const { writeFileSync } = await import("node:fs");
     expect(writeFileSync).toHaveBeenCalledWith(
@@ -216,7 +217,7 @@ describe("showManualWizard", () => {
       inputValues: ["agent1", "Agent"],
       selectChoices: ["all", undefined],
     });
-    await showManualWizard(ctx as any, "/test/dir");
+    await showManualWizard(ctx, "/test/dir");
     // Should stop early — just verify wizard flow didn't crash
     expect(ctx.ui.select).toHaveBeenCalled();
   });
@@ -227,7 +228,7 @@ describe("showCreateWizard", () => {
     const ctx = makeCtx({ selectChoices: [undefined] });
     const pi = {} as any;
     const manager = {} as any;
-    await showCreateWizard(ctx as any, pi, manager);
+    await showCreateWizard(ctx, pi, manager);
     expect(ctx.ui.select).toHaveBeenCalled();
   });
 });
