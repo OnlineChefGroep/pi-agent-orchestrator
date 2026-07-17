@@ -477,7 +477,7 @@ Guidelines:
       ),
       thinking: Type.Optional(
         Type.String({
-          description: "Thinking level: off, minimal, low, medium, high, xhigh. Overrides agent default.",
+          description: "Thinking level: off, minimal, low, medium, high, xhigh, max. Overrides agent default. max requires a supporting model.",
         }),
       ),
       max_turns: Type.Optional(
