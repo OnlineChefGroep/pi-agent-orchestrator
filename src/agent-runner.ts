@@ -533,7 +533,12 @@ export async function runAgent(
     agentDir,
     sessionManager: SessionManager.inMemory(effectiveCwd),
     settingsManager: SettingsManager.create(effectiveCwd, agentDir),
-    modelRegistry: ctx.modelRegistry,
+    // Pi 0.80.8 replaced CreateAgentSessionOptions.modelRegistry with the async
+    // modelRuntime. Extensions only receive the synchronous ModelRegistry
+    // facade (ctx.modelRegistry), not the underlying ModelRuntime, so we let
+    // the SDK build its default runtime from the same agentDir (auth.json +
+    // models.json). The subagent shares the host agentDir, so credentials and
+    // the model catalog match, and `model` is passed explicitly above.
     model,
     tools: toolNames,
     resourceLoader: loader,
