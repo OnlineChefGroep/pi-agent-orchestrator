@@ -21,7 +21,7 @@ function label(record: AgentRecord): string {
  * Build a tree of AgentRecords using parentId relationships.
  * Returns root nodes and a children map for efficient traversal.
  */
-function buildTree(records: AgentRecord[]): {
+export function buildTree(records: AgentRecord[]): {
   roots: AgentRecord[];
   childrenMap: Map<string, AgentRecord[]>;
   nodeMap: Map<string, AgentRecord>;
