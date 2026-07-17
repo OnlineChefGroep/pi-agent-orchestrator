@@ -54,8 +54,8 @@
     "CODE_OF_CONDUCT.md"
   ],
   "peerDependencies": {
-    "@earendil-works/pi-ai": ">=0.80.6",
-    "@earendil-works/pi-coding-agent": ">=0.80.6"
+    "@earendil-works/pi-ai": ">=0.80.10",
+    "@earendil-works/pi-coding-agent": ">=0.80.10"
   },
   "peerDependenciesMeta": {
     "@onlinechef/context-mode": {
@@ -97,7 +97,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.2",
-    "@earendil-works/pi-agent-core": "^0.80.3",
+    "@earendil-works/pi-agent-core": "^0.80.10",
     "@types/node": "^26.1.0",
     "@types/proper-lockfile": "^4.1.4",
     "@vitest/coverage-v8": "^4.1.9",
