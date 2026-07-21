@@ -23,7 +23,11 @@ const ffprobeArgs = [
 const probe = spawnSync(
   "npm",
   ["--prefix", "showcase/remotion", "exec", "--", "remotion", "ffprobe", ...ffprobeArgs],
-  { encoding: "utf8" },
+  {
+    encoding: "utf8",
+    // Keep hung `npm exec`/FFprobe from blocking Remotion CI indefinitely.
+    timeout: 60_000,
+  },
 );
 
 if (probe.error) {

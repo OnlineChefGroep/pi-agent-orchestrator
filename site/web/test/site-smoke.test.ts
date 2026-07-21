@@ -7,6 +7,7 @@ import { docSourceIds, docSources } from "@/lib/doc-sources";
 import { CANONICAL_BASE_URL, canonicalUrl } from "@/lib/site";
 
 const pageShell = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const headersContract = readFileSync(new URL("../public/_headers", import.meta.url), "utf8");
 const agentPermissions = JSON.parse(
   readFileSync(new URL("../../../agent-permissions.json", import.meta.url), "utf8"),
 ) as {
@@ -58,5 +59,13 @@ describe("site constants", () => {
     expect(agentPermissions.metadata?.schema_version).toBe("1.0.0");
     expect(agentPermissions.strict).toBe(true);
     expect(agentPermissions.resource_rules?.length).toBeGreaterThan(0);
+  });
+
+  it("canonicalizes both agent-permissions aliases in Cloudflare headers", () => {
+    const canonical =
+      'Link: <https://orchestrator.chefgroep.online/.well-known/agent-permissions.json>; rel="canonical"';
+    expect(headersContract).toContain("/agent-permissions.json\n");
+    expect(headersContract).toContain("/.well-known/agent-permissions.json\n");
+    expect(headersContract.split(canonical)).toHaveLength(3);
   });
 });

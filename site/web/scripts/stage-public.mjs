@@ -14,13 +14,13 @@ const wellKnownDir = path.join(publicRoot, ".well-known");
 const requiredAssets = [
   "dashboard_preview.mp4",
   "dashboard_preview.gif",
+  "product_film.mp4",
 ];
 
 /** Showcase gallery — included when present (Remotion CI may generate these). */
 const optionalAssets = [
   "dashboard_preview.png",
   "dashboard_preview_programmatic.gif",
-  "product_film.mp4",
   "feature_tour.mp4",
   "architecture_overview.png",
   "promo_banner.png",
