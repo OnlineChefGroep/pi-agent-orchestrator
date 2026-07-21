@@ -268,7 +268,7 @@ describe("transactional release workflow", () => {
     expect(content).toMatch(/registry-url:\s*"https:\/\/registry\.npmjs\.org"/);
     expect(content).toContain("actions/upload-artifact@");
     expect(content).toContain("actions/download-artifact@");
-    expect(content).toContain('npm publish "./release-artifact/${TARBALL}"');
+    expect(content).toContain(`npm publish "./release-artifact/\${TARBALL}"`);
     expect(content).toContain("--access public --provenance --ignore-scripts");
     expect(content).toMatch(/NODE_AUTH_TOKEN:\s*\$\{\{\s*secrets\.NPM_TOKEN\s*\}\}/);
     expect(content).toContain("node scripts/write-release-manifest.mjs");
