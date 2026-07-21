@@ -185,3 +185,25 @@ See `docs/architecture.md` for the full module map and data-flow diagram.
 
 Ensure you run `npm run typecheck && npm run lint && npm test` before committing.
 Currently passing: **1875 tests** across **110 test files**, including performance benchmarks for render, snapshot, virtual scrolling, and spawn latency.
+
+## Cursor Cloud specific instructions
+
+This package is a **Pi host extension**, not a standalone app or server — there is no `dev`/`start`/`serve` process. The Cloud environment is repository-owned and deterministic.
+
+**Canonical files and commands** (do not rediscover these):
+
+| Purpose | File / command |
+| --- | --- |
+| Environment definition | `.cursor/environment.json` (`build.dockerfile` + `install`) |
+| Deterministic base image | `.cursor/Dockerfile` (`node:22.19.0-bookworm`, `ubuntu` user, git/sudo) |
+| Node source of truth | `.nvmrc` (kept in sync with the Dockerfile base and `package.json` `engines.node`) |
+| Install / update | `bash scripts/cursor-cloud-install.sh` (runs from `environment.json`) |
+| Full verification gate | `npm run verify:cloud` (Node-safe; runs `scripts/cursor-cloud-verify.sh` → `verify:cloud:internal`) |
+| Pi-host extension smoke | `bash scripts/cursor-cloud-smoke.sh` |
+| Reviewable artifacts | `bash scripts/cursor-cloud-artifacts.sh` |
+
+**Invariants:**
+
+- **Node is compliant by default.** In Cloud the `.cursor/Dockerfile` bakes Node `22.19.0` at `/usr/local/bin/node` (pinned by digest so the image is reproducible), so even bare shells resolve a compliant `node`. As defense-in-depth (and for local/non-Docker runs), `scripts/cursor-cloud-lib.sh` treats `.nvmrc` as a **minimum**: it accepts any ambient Node `>= .nvmrc`, and only installs the exact `.nvmrc` version via `nvm` when the ambient Node is missing or older. When bumping Node, change `.nvmrc` **and** the `.cursor/Dockerfile` `FROM` (tag + digest) together. Do not hardcode absolute NVM/exec-daemon paths.
+- **The Pi host loads the built extension.** The smoke test runs `pi --mode rpc --no-session -e ./dist/index.js` (credential-free) and asserts the host registered the extension's commands from `dist/index.js`. No model API key is required to prove loading.
+- **Artifacts must never modify tracked docs.** Generate the dashboard via `scripts/cursor-cloud-artifacts.sh` (writes to the Cursor artifact dir or `.cloud-artifacts/`). Do **not** use `npm run screenshots` for artifacts — that overwrites the tracked `docs/images/dashboard_preview.svg`. Artifact generation asserts a clean working tree.
