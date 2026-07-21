@@ -8,6 +8,7 @@ const webRoot = path.resolve(here, "..");
 const repoRoot = path.resolve(webRoot, "../..");
 const publicRoot = path.join(webRoot, "public");
 const assetsDir = path.join(publicRoot, "assets");
+const wellKnownDir = path.join(publicRoot, ".well-known");
 
 /** Copied before every dev/build; missing required files fail fast. */
 const requiredAssets = [
@@ -45,11 +46,14 @@ const rootSiteFiles = [
   "llms-full.txt",
   "sitemap.md",
   "AGENTS.md",
+  "agent-permissions.json",
 ];
 
 rmSync(assetsDir, { recursive: true, force: true });
 rmSync(path.join(publicRoot, "docs"), { recursive: true, force: true });
+rmSync(wellKnownDir, { recursive: true, force: true });
 mkdirSync(assetsDir, { recursive: true });
+mkdirSync(wellKnownDir, { recursive: true });
 
 function copyAsset(file, required) {
   const source = path.join(repoRoot, "docs/images", file);
@@ -77,6 +81,11 @@ for (const file of rootSiteFiles) {
   cpSync(source, path.join(publicRoot, file));
 }
 
+cpSync(
+  path.join(repoRoot, "agent-permissions.json"),
+  path.join(wellKnownDir, "agent-permissions.json"),
+);
+
 console.log(
-  `Staged ${requiredCount} required + ${optionalCount} optional showcase assets and ${rootSiteFiles.length} discovery files into ${publicRoot}`,
+  `Staged ${requiredCount} required + ${optionalCount} optional showcase assets, ${rootSiteFiles.length} discovery files, and the well-known permissions mirror into ${publicRoot}`,
 );
