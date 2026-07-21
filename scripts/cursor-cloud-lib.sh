@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Shared helpers for the Cursor Cloud environment scripts.
+#
+# Source this file; do not execute it directly. It provides deterministic Node
+# resolution (honouring .nvmrc / package.json engines), version reporting, and a
+# non-destructive artifact directory resolver. It never hides warnings globally
+# and fails early when the active Node version does not satisfy the engine range.
+#
+# shellcheck shell=bash
+
+# Repository root (directory containing this script's parent).
+CC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export CC_ROOT
+
+# Read the canonical Node version from .nvmrc (the repository source of truth).
+cc_required_node() {
+  tr -d ' \t\r\n' <"$CC_ROOT/.nvmrc"
+}
+
+# True when version $1 is >= version $2 (dot-separated, numeric).
+cc_ver_ge() {
+  [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]
+}
+
+# True when a `node` is on PATH and satisfies the required version.
+cc_node_ok() {
+  command -v node >/dev/null 2>&1 || return 1
+  local cur
+  cur="$(node -v 2>/dev/null | sed 's/^v//')"
+  [ -n "$cur" ] && cc_ver_ge "$cur" "$1"
+}
+
+# Ensure a compliant Node is on PATH. Prefer an already-compliant node; otherwise
+# use nvm (part of the standard Cursor base image) to install/use the .nvmrc
+# version and prepend its bin dir. Never relies on interactive `nvm use`.
+cc_ensure_node() {
+  local required
+  required="$(cc_required_node)"
+
+  if cc_node_ok "$required"; then
+    return 0
+  fi
+
+  local nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+  if [ -s "$nvm_dir/nvm.sh" ]; then
+    # nvm.sh is not clean under `set -eu`; relax while sourcing/using it.
+    set +eu
+    # shellcheck disable=SC1091
+    . "$nvm_dir/nvm.sh"
+    nvm install "$required" >/dev/null 2>&1 || nvm install >/dev/null 2>&1 || true
+    local bindir
+    bindir="$(nvm which "$required" 2>/dev/null | xargs -r dirname 2>/dev/null || true)"
+    set -eu
+    if [ -n "$bindir" ] && [ -x "$bindir/node" ]; then
+      PATH="$bindir:$PATH"
+      export PATH
+    fi
+  fi
+}
+
+# Fail early with a clear message when the active Node is incompatible.
+cc_assert_node() {
+  local required
+  required="$(cc_required_node)"
+  if ! cc_node_ok "$required"; then
+    local engines
+    engines="$(node -e "process.stdout.write(require('$CC_ROOT/package.json').engines.node)" 2>/dev/null || echo '>='"$required")"
+    {
+      echo "ERROR: incompatible Node version."
+      echo "  required : $required (package.json engines.node: $engines)"
+      echo "  active   : $(command -v node >/dev/null 2>&1 && node -v || echo 'none on PATH')"
+      echo "  fix      : install Node $required (e.g. 'nvm install' using .nvmrc) and retry."
+    } >&2
+    exit 1
+  fi
+}
+
+# Print the runtime versions relevant to this project to stdout.
+cc_print_versions() {
+  echo "timestamp   : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "os          : $(uname -srm)"
+  echo "node        : $(command -v node >/dev/null 2>&1 && node -v || echo 'none')"
+  echo "npm         : $(command -v npm >/dev/null 2>&1 && npm -v || echo 'none')"
+  echo "engines.node: $(node -e "process.stdout.write(require('$CC_ROOT/package.json').engines.node)" 2>/dev/null || echo 'unknown')"
+  echo ".nvmrc      : $(cc_required_node)"
+  local bin="$CC_ROOT/node_modules/.bin"
+  [ -x "$bin/tsc" ] && echo "typescript  : $("$bin/tsc" -v 2>/dev/null)"
+  [ -x "$bin/vitest" ] && echo "vitest      : $("$bin/vitest" -v 2>/dev/null | head -n1)"
+  [ -x "$bin/biome" ] && echo "biome       : $("$bin/biome" --version 2>/dev/null)"
+  if [ -f "$CC_ROOT/node_modules/@earendil-works/pi-coding-agent/package.json" ]; then
+    echo "pi-host     : $(node -p "require('$CC_ROOT/node_modules/@earendil-works/pi-coding-agent/package.json').version" 2>/dev/null)"
+  fi
+}
+
+# Resolve a writable artifact directory. Prefers Cursor's artifact dir, falls
+# back to a git-ignored local directory for non-Cursor environments.
+cc_artifact_dir() {
+  if [ -n "${CURSOR_ARTIFACTS_DIR:-}" ] && mkdir -p "$CURSOR_ARTIFACTS_DIR" 2>/dev/null; then
+    echo "$CURSOR_ARTIFACTS_DIR"
+    return 0
+  fi
+  if mkdir -p /opt/cursor/artifacts 2>/dev/null && [ -w /opt/cursor/artifacts ]; then
+    echo /opt/cursor/artifacts
+    return 0
+  fi
+  local d="$CC_ROOT/.cloud-artifacts"
+  mkdir -p "$d"
+  echo "$d"
+}
