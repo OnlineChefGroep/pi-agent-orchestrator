@@ -1,4 +1,5 @@
 name: Promote Verified Product Film
+# Promote verified video frames while removing the legacy empty AAC stream.
 
 on:
   push:
@@ -44,12 +45,12 @@ jobs:
               raise SystemExit('OutcomeScene is neither old nor already corrected')
           PY
 
-      - name: Download previously verified Remotion artifact
+      - name: Download verified Remotion artifact
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p .release-artifact
+          mkdir -p .release-artifact/unpacked
           curl --fail --location \
             --header "Authorization: Bearer ${GH_TOKEN}" \
             --header "Accept: application/vnd.github+json" \
@@ -58,15 +59,22 @@ jobs:
           unzip -q .release-artifact/showcase.zip -d .release-artifact/unpacked
           candidate="$(find .release-artifact/unpacked -type f -name product_film.mp4 -print -quit)"
           test -n "${candidate}"
-          mkdir -p docs/images
-          cp "${candidate}" docs/images/product_film.mp4
+          echo '8aa79db8f8136809c3a77433eff9f1940df250c33f5f7ea06c00d124d858ba38' > .release-artifact/expected.sha256
+          test "$(sha256sum "${candidate}" | cut -d' ' -f1)" = "$(cat .release-artifact/expected.sha256)"
+          printf '%s' "${candidate}" > .release-artifact/source-path
 
-      - name: Verify exact production asset
+      - name: Remove empty audio without re-encoding video
         shell: bash
         run: |
+          candidate="$(cat .release-artifact/source-path)"
+          mkdir -p docs/images
+          ffmpeg -hide_banner -loglevel error -y \
+            -i "${candidate}" \
+            -map 0:v:0 -c:v copy -an -movflags +faststart \
+            docs/images/product_film.mp4
           node scripts/verify-product-film.mjs docs/images/product_film.mp4
-          test "$(stat -c '%s' docs/images/product_film.mp4)" -eq 6083668
-          echo '8aa79db8f8136809c3a77433eff9f1940df250c33f5f7ea06c00d124d858ba38  docs/images/product_film.mp4' | sha256sum --check
+          test "$(stat -c '%s' docs/images/product_film.mp4)" -gt 1000000
+          sha256sum docs/images/product_film.mp4
 
       - name: Commit asset and remove one-shot workflow
         shell: bash
