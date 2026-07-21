@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 
 const [mediaPath = "docs/images/product_film.mp4"] = process.argv.slice(2);
 
