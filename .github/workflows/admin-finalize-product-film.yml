@@ -1,4 +1,5 @@
 name: Finalize Product Film Release
+# One-shot retry after verifier formatting correction.
 
 on:
   push:
