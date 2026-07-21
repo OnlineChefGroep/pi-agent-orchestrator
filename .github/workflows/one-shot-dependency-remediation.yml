@@ -128,27 +128,20 @@ jobs:
           cd "$install_dir"
           npm init --yes >/dev/null
           npm install --ignore-scripts "$package_path" >/dev/null
-          npm ls --all --json > dependency-tree.json
 
           node --input-type=module <<'NODE'
           import fs from "node:fs";
 
-          const tree = JSON.parse(fs.readFileSync("dependency-tree.json", "utf8"));
-          const forbidden = new Set([
-            "@earendil-works/pi-ai",
-            "@earendil-works/pi-coding-agent",
-          ]);
+          const forbiddenPaths = [
+            "node_modules/@earendil-works/pi-ai/package.json",
+            "node_modules/@earendil-works/pi-coding-agent/package.json",
+          ];
 
-          function visit(node) {
-            for (const [name, child] of Object.entries(node.dependencies ?? {})) {
-              if (forbidden.has(name)) {
-                throw new Error(`Clean consumer install unexpectedly includes ${name}`);
-              }
-              visit(child);
+          for (const path of forbiddenPaths) {
+            if (fs.existsSync(path)) {
+              throw new Error(`Clean consumer install unexpectedly includes ${path}`);
             }
           }
-
-          visit(tree);
           NODE
 
       - name: Commit generated dependency boundary fix
