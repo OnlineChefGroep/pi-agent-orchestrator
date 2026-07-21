@@ -63,9 +63,18 @@ describe("site constants", () => {
 
   it("canonicalizes both agent-permissions aliases in Cloudflare headers", () => {
     const canonical =
-      'Link: <https://orchestrator.chefgroep.online/.well-known/agent-permissions.json>; rel="canonical"';
-    expect(headersContract).toContain("/agent-permissions.json\n");
-    expect(headersContract).toContain("/.well-known/agent-permissions.json\n");
-    expect(headersContract.split(canonical)).toHaveLength(3);
+      "Link: <https://orchestrator.chefgroep.online/.well-known/agent-permissions.json>; rel=\"canonical\"";
+    for (const path of ["/agent-permissions.json", "/.well-known/agent-permissions.json"]) {
+      // Match path at the start of a headers block line (not as a suffix of another path).
+      const marker = `\n${path}\n`;
+      const padded = `\n${headersContract}`;
+      const blockStart = padded.indexOf(marker);
+      expect(blockStart).toBeGreaterThanOrEqual(0);
+      const contentStart = blockStart + 1; // skip the leading newline we padded
+      const nextBlock = padded.indexOf("\n/", contentStart + path.length);
+      const block = nextBlock === -1 ? padded.slice(contentStart) : padded.slice(contentStart, nextBlock);
+      expect(block.startsWith(`${path}\n`)).toBe(true);
+      expect(block).toContain(canonical);
+    }
   });
 });
