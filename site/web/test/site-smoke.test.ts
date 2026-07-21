@@ -28,4 +28,13 @@ describe("site constants", () => {
     expect(showcaseMedia.some((item) => item.featured)).toBe(true);
     expect(showcaseMedia.every((item) => item.href.startsWith("/assets/"))).toBe(true);
   });
+
+  it("features the operator-flow product film from the Remotion pipeline", () => {
+    expect(showcaseMedia.find((item) => item.id === "product-film")).toMatchObject({
+      href: "/assets/product_film.mp4",
+      kind: "video",
+      pipeline: "remotion",
+      featured: true,
+    });
+  });
 });
