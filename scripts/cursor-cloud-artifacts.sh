@@ -26,6 +26,17 @@ TABLE="$(mktemp)"
 trap 'rm -f "$TABLE"' EXIT
 overall=0
 
+# Snapshot the working tree BEFORE any generation runs, so the post-generation
+# guard below can detect drift. Capture content hashes, not just
+# `git status --porcelain`: a tracked file already modified before generation and
+# modified again by a step can keep the same porcelain entry (e.g. ` M file`),
+# hiding the content change. The porcelain listing still catches added/removed
+# files that a `git diff HEAD` of tracked content would miss.
+cc_tree_state() { git status --porcelain; }
+cc_tree_hash() { git diff HEAD --binary | shasum -a 256 | awk '{print $1}'; }
+before_tree="$(cc_tree_state)"
+before_hash="$(cc_tree_hash)"
+
 cc_strip_ansi() {
   sed -E 's/\x1b\[[0-9;?]*[a-zA-Z]//g'
 }
@@ -75,13 +86,10 @@ else
 fi
 
 # --- guard: verify no tracked-file drift from generation ------------------
-# Capture content hashes, not just `git status --porcelain`: a tracked file
-# already modified before generation and modified again by a step can have the
-# same porcelain entry (e.g. ` M file`) before and after, hiding the drift.
-before_tree="$(git status --porcelain)"
-before_hash="$(git diff HEAD --binary | shasum -a 256 | awk '{print $1}')"
-after_tree="$(git status --porcelain)"
-after_hash="$(git diff HEAD --binary | shasum -a 256 | awk '{print $1}')"
+# Compare the post-generation state against the pre-generation snapshot taken
+# above. Both the porcelain listing and the content hash must be unchanged.
+after_tree="$(cc_tree_state)"
+after_hash="$(cc_tree_hash)"
 if [ "$before_tree" != "$after_tree" ] || [ "$before_hash" != "$after_hash" ]; then
   echo "ERROR: artifact generation modified tracked/working files:" >&2
   diff <(printf '%s\n' "$before_tree") <(printf '%s\n' "$after_tree") >&2 || true

@@ -30,4 +30,10 @@ RUN id -u ubuntu >/dev/null 2>&1 || useradd -m -s /bin/bash ubuntu \
     && echo "ubuntu ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu \
     && chmod 0440 /etc/sudoers.d/ubuntu
 
+# This is a Cursor Cloud dev-workspace base image, not a long-running service, so
+# there is nothing to health-check; Cursor manages the container lifecycle.
+# Declare HEALTHCHECK NONE explicitly (satisfies Trivy DS-0026) to document that
+# the absence of a health check is intentional rather than an oversight.
+HEALTHCHECK NONE
+
 USER ubuntu
