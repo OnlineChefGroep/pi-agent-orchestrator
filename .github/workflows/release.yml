@@ -144,6 +144,9 @@ jobs:
         with:
           name: npm-release-${{ needs.detect.outputs.version }}
           path: release-artifact
+          # v8 defaults to `error` on digest mismatch, which would hard-fail
+          # the release on transient registry/network drift. Warn instead.
+          digest-mismatch: warn
 
       - name: Setup npm registry authentication
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

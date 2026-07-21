@@ -60,6 +60,11 @@ jobs:
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: _site
+          # build-site.sh writes .nojekyll and .well-known/agent-permissions.json
+          # to _site. v5 excludes dotfiles by default; without this the agent
+          # discovery endpoint would 404 in production and Jekyll would take
+          # over the Pages site.
+          include-hidden-files: true
 
   deploy:
     needs: build

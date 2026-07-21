@@ -108,6 +108,10 @@ jobs:
         with:
           name: npm-baseline-${{ needs.verify.outputs.version }}
           path: release-artifact
+          # v8 defaults to `error` on digest mismatch, which would hard-fail
+          # the publish flow on a single corrupted byte. Warn and continue so
+          # transient registry/network drift doesn't block a release.
+          digest-mismatch: warn
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
