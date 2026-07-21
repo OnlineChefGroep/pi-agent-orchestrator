@@ -1,0 +1,46 @@
+# Cloudflare Pages response metadata for machine-readable discovery files.
+/sitemap.xml
+  Content-Type: application/xml; charset=utf-8
+  Cache-Control: public, max-age=300, must-revalidate
+  Link: <https://orchestrator.chefgroep.online/sitemap.xml>; rel="canonical"
+
+/robots.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=300, must-revalidate
+  Link: <https://orchestrator.chefgroep.online/robots.txt>; rel="canonical"
+
+/llms.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=300, must-revalidate
+  Link: <https://orchestrator.chefgroep.online/>; rel="canonical"
+
+/llms-full.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=300, must-revalidate
+  Link: <https://orchestrator.chefgroep.online/>; rel="canonical"
+
+/sitemap.md
+  Content-Type: text/markdown; charset=utf-8
+  Cache-Control: public, max-age=300, must-revalidate
+  Link: <https://orchestrator.chefgroep.online/>; rel="canonical"
+
+/AGENTS.md
+  Content-Type: text/markdown; charset=utf-8
+  Cache-Control: public, max-age=300, must-revalidate
+  Link: <https://orchestrator.chefgroep.online/docs/agents>; rel="canonical"
+
+/agent-permissions.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=300, must-revalidate
+  Link: <https://orchestrator.chefgroep.online/.well-known/agent-permissions.json>; rel="canonical"
+
+/.well-known/agent-permissions.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=300, must-revalidate
+  Link: <https://orchestrator.chefgroep.online/.well-known/agent-permissions.json>; rel="canonical"
+
+https://pi-agent-orchestrator.pages.dev/*
+  X-Robots-Tag: noindex
+
+https://:version.pi-agent-orchestrator.pages.dev/*
+  X-Robots-Tag: noindex

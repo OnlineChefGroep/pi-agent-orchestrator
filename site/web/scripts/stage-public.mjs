@@ -8,11 +8,13 @@ const webRoot = path.resolve(here, "..");
 const repoRoot = path.resolve(webRoot, "../..");
 const publicRoot = path.join(webRoot, "public");
 const assetsDir = path.join(publicRoot, "assets");
+const wellKnownDir = path.join(publicRoot, ".well-known");
 
 /** Copied before every dev/build; missing required files fail fast. */
 const requiredAssets = [
   "dashboard_preview.mp4",
   "dashboard_preview.gif",
+  "product_film.mp4",
 ];
 
 /** Showcase gallery — included when present (Remotion CI may generate these). */
@@ -36,11 +38,22 @@ const optionalAssets = [
   "showcase_vhs.gif",
 ];
 
-const rootSiteFiles = ["sitemap.xml", "robots.txt"];
+/** Public crawler and agent-discovery surfaces copied verbatim from repository SSOTs. */
+const rootSiteFiles = [
+  "sitemap.xml",
+  "robots.txt",
+  "llms.txt",
+  "llms-full.txt",
+  "sitemap.md",
+  "AGENTS.md",
+  "agent-permissions.json",
+];
 
 rmSync(assetsDir, { recursive: true, force: true });
 rmSync(path.join(publicRoot, "docs"), { recursive: true, force: true });
+rmSync(wellKnownDir, { recursive: true, force: true });
 mkdirSync(assetsDir, { recursive: true });
+mkdirSync(wellKnownDir, { recursive: true });
 
 function copyAsset(file, required) {
   const source = path.join(repoRoot, "docs/images", file);
@@ -68,9 +81,11 @@ for (const file of rootSiteFiles) {
   cpSync(source, path.join(publicRoot, file));
 }
 
-// Drop legacy public markdown mirrors if they linger from older stage runs.
-rmSync(path.join(publicRoot, "sitemap.md"), { force: true });
+cpSync(
+  path.join(repoRoot, "agent-permissions.json"),
+  path.join(wellKnownDir, "agent-permissions.json"),
+);
 
 console.log(
-  `Staged ${requiredCount} required + ${optionalCount} optional showcase assets into ${publicRoot}`,
+  `Staged ${requiredCount} required + ${optionalCount} optional showcase assets, ${rootSiteFiles.length} discovery files, and the well-known permissions mirror into ${publicRoot}`,
 );

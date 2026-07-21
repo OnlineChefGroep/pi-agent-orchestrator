@@ -1,3 +1,4 @@
+---
 name: Remotion Showcase
 
 on:
@@ -6,16 +7,31 @@ on:
     paths:
       - 'showcase/remotion/**'
       - 'scripts/render-showcase-remotion.sh'
+      - 'scripts/verify-product-film.mjs'
       - 'scripts/showcase-live-demo.mjs'
+      - 'scripts/build-site.sh'
+      - 'site/web/index.html'
+      - 'site/web/package.json'
+      - 'site/web/package-lock.json'
+      - 'site/web/public/_headers'
+      - 'site/web/scripts/stage-public.mjs'
+      - 'site/web/src/lib/content.ts'
+      - 'site/web/test/site-smoke.test.ts'
       - 'src/ui/**'
       - 'README.md'
+      - 'AGENTS.md'
+      - 'agent-permissions.json'
+      - 'llms.txt'
+      - 'llms-full.txt'
+      - 'sitemap.md'
       - 'docs/architecture.md'
       - 'docs/prompt-compression.md'
+      - 'docs/site-hosting.md'
       - 'package.json'
       - '.github/workflows/remotion-showcase.yml'
   workflow_dispatch:
 
-permissions: {}
+permissions: { }
 
 concurrency:
   group: remotion-${{ github.event.pull_request.number || github.ref }}
@@ -50,7 +66,42 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          bash scripts/render-showcase-remotion.sh 2>&1 | tee remotion-render.log
+          bash scripts/render-showcase-remotion.sh 2>&1 |
+            tee remotion-render.log
+
+      - name: Verify product film contract
+        run: >-
+          node scripts/verify-product-film.mjs
+          docs/images/product_film.mp4
+
+      - name: Install site dependencies
+        run: npm ci --prefix site/web
+
+      - name: Verify site integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix site/web run lint
+          npm --prefix site/web test
+          npm --prefix site/web run build
+
+          for file in \
+            llms.txt \
+            llms-full.txt \
+            sitemap.md \
+            AGENTS.md \
+            agent-permissions.json \
+            .well-known/agent-permissions.json \
+            _headers; do
+            test -s "site/web/dist/$file"
+          done
+
+          cmp -s \
+            site/web/dist/agent-permissions.json \
+            site/web/dist/.well-known/agent-permissions.json
+          grep -q '^# Pi Agent Orchestrator' site/web/dist/llms.txt
+          grep -q 'Content-Type: text/plain; charset=utf-8' site/web/dist/_headers
+          node -e 'const fs=require("node:fs");const p=JSON.parse(fs.readFileSync("site/web/dist/agent-permissions.json","utf8"));if(p.metadata?.schema_version!=="1.0.0"||p.strict!==true||!Array.isArray(p.resource_rules))process.exit(1)'
 
       - name: Upload rendered assets and log
         if: always()
@@ -64,6 +115,7 @@ jobs:
             docs/images/promo_banner.png
             docs/images/social_preview.png
             docs/images/architecture_overview.png
+            docs/images/product_film.mp4
             docs/images/feature_tour.mp4
           if-no-files-found: error
           retention-days: 14
