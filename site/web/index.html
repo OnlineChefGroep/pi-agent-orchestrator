@@ -10,6 +10,8 @@
       content="A Pi extension for autonomous sub-agents, structured handoffs, swarms, schedules, prompt compression, and a responsive terminal dashboard."
     />
     <link rel="canonical" href="https://orchestrator.chefgroep.online/" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="LLM documentation index" />
+    <link rel="agent-permissions" href="/.well-known/agent-permissions.json" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Pi Agent Orchestrator" />
     <meta
@@ -20,6 +22,29 @@
     <meta property="og:image" content="https://orchestrator.chefgroep.online/assets/orchestrator_banner.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="theme-color" content="#0b0d10" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "name": "Pi Agent Orchestrator",
+            "headline": "Multi-agent orchestration for Pi",
+            "description": "A Pi extension for autonomous sub-agents, structured handoffs, swarms, schedules, prompt compression, and a responsive terminal dashboard.",
+            "url": "https://orchestrator.chefgroep.online/",
+            "dateModified": "2026-07-21"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "Pi Agent Orchestrator",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "Cross-platform",
+            "description": "Multi-agent orchestration extension for the Pi coding-agent host.",
+            "url": "https://orchestrator.chefgroep.online/"
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
