@@ -185,3 +185,12 @@ See `docs/architecture.md` for the full module map and data-flow diagram.
 
 Ensure you run `npm run typecheck && npm run lint && npm test` before committing.
 Currently passing: **1875 tests** across **110 test files**, including performance benchmarks for render, snapshot, virtual scrolling, and spawn latency.
+
+## Cursor Cloud specific instructions
+
+This package is a **Pi host extension**, not a standalone app or server — there is no `dev`/`start`/`serve` command and nothing to "run" on its own. "Running" it in this environment means the verification suite (`npm run typecheck`, `npm run lint`, `npm test`, `npm run build`) plus exercising the real UI renderers. Standard dev commands live in `README.md` (Development) and `package.json` scripts.
+
+- **Node version.** The VM default `node` (`/exec-daemon/node`) is `v22.14.0`, which is below the `>=22.19.0` in `engines`. This is advisory only (no `engine-strict`): `npm ci`, typecheck, lint, `npm test`, and `npm run build` all pass on it, emitting harmless `EBADENGINE` warnings. `nvm use` does **not** take effect because `/exec-daemon` is prepended to `PATH`; if you ever need a compliant version, a matching build exists via nvm at `~/.nvm/versions/node/v22.22.2/bin/node`.
+- **Exercising the dashboard.** `npm run screenshots` drives the actual `/agents` dashboard renderers (compiled `dist/`) with deterministic fixtures and rasterizes to SVG — the closest thing to "running the app" here. Note it **overwrites the tracked `docs/images/dashboard_preview.svg`**; `git checkout -- docs/images/dashboard_preview.svg` afterward if you did not intend to commit the regenerated file.
+- **Pre-existing lint findings.** On `main`, `npm run lint` reports two findings in test files (`test/release-verification.test.ts` `noTemplateCurlyInString`, `test/agent-wizards.test.ts` `organizeImports`). These are not caused by environment setup.
+- **Test suite** runs in ~75–90s across 110 files; a few worktree/release tests take 20–70s each. Do not treat a slow-but-progressing run as hung.
