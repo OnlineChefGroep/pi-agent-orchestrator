@@ -49,9 +49,11 @@ describe("site constants", () => {
     });
   });
 
-  it("advertises valid machine-readable discovery metadata", () => {
-    expect(pageShell).toContain('rel="alternate" type="text/plain" href="/llms.txt"');
-    expect(pageShell).toContain('rel="agent-permissions" href="/.well-known/agent-permissions.json"');
+  it("advertises valid base-aware machine-readable discovery metadata", () => {
+    expect(pageShell).toContain('rel="alternate" type="text/plain" href="%BASE_URL%llms.txt"');
+    expect(pageShell).toContain(
+      'rel="agent-permissions" href="%BASE_URL%.well-known/agent-permissions.json"',
+    );
     expect(pageShell).toContain('type="application/ld+json"');
     expect(agentPermissions.metadata?.schema_version).toBe("1.0.0");
     expect(agentPermissions.strict).toBe(true);
