@@ -26,6 +26,11 @@ jobs:
           ref: feat/remotion-product-film
           fetch-depth: 0
 
+      - name: Install FFmpeg tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
+
       - name: Make future motion timing frame-rate aware
         shell: bash
         run: |
@@ -75,7 +80,7 @@ jobs:
             docs/images/product_film.mp4
           test -s docs/images/product_film.mp4
           test "$(stat -c '%s' docs/images/product_film.mp4)" -gt 1000000
-          ffprobe -v error -show_streams -show_format docs/images/product_film.mp4
+          node scripts/verify-product-film.mjs docs/images/product_film.mp4
           sha256sum docs/images/product_film.mp4
 
       - name: Commit asset and remove one-shot workflow
