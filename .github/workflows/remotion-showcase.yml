@@ -9,15 +9,24 @@ on:
       - 'scripts/render-showcase-remotion.sh'
       - 'scripts/verify-product-film.mjs'
       - 'scripts/showcase-live-demo.mjs'
+      - 'scripts/build-site.sh'
+      - 'site/web/index.html'
       - 'site/web/package.json'
       - 'site/web/package-lock.json'
+      - 'site/web/public/_headers'
       - 'site/web/scripts/stage-public.mjs'
       - 'site/web/src/lib/content.ts'
       - 'site/web/test/site-smoke.test.ts'
       - 'src/ui/**'
       - 'README.md'
+      - 'AGENTS.md'
+      - 'agent-permissions.json'
+      - 'llms.txt'
+      - 'llms-full.txt'
+      - 'sitemap.md'
       - 'docs/architecture.md'
       - 'docs/prompt-compression.md'
+      - 'docs/site-hosting.md'
       - 'package.json'
       - '.github/workflows/remotion-showcase.yml'
   workflow_dispatch:
@@ -75,6 +84,24 @@ jobs:
           npm --prefix site/web run lint
           npm --prefix site/web test
           npm --prefix site/web run build
+
+          for file in \
+            llms.txt \
+            llms-full.txt \
+            sitemap.md \
+            AGENTS.md \
+            agent-permissions.json \
+            .well-known/agent-permissions.json \
+            _headers; do
+            test -s "site/web/dist/$file"
+          done
+
+          cmp -s \
+            site/web/dist/agent-permissions.json \
+            site/web/dist/.well-known/agent-permissions.json
+          grep -q '^# Pi Agent Orchestrator' site/web/dist/llms.txt
+          grep -q 'Content-Type: text/plain; charset=utf-8' site/web/dist/_headers
+          node -e 'const fs=require("node:fs");const p=JSON.parse(fs.readFileSync("site/web/dist/agent-permissions.json","utf8"));if(p.metadata?.schema_version!=="1.0.0"||p.strict!==true||!Array.isArray(p.resource_rules))process.exit(1)'
 
       - name: Upload rendered assets and log
         if: always()
