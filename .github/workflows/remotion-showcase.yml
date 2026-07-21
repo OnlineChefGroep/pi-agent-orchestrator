@@ -6,7 +6,13 @@ on:
     paths:
       - 'showcase/remotion/**'
       - 'scripts/render-showcase-remotion.sh'
+      - 'scripts/verify-product-film.mjs'
       - 'scripts/showcase-live-demo.mjs'
+      - 'site/web/package.json'
+      - 'site/web/package-lock.json'
+      - 'site/web/scripts/stage-public.mjs'
+      - 'site/web/src/lib/content.ts'
+      - 'site/web/test/site-smoke.test.ts'
       - 'src/ui/**'
       - 'README.md'
       - 'docs/architecture.md'
@@ -51,6 +57,20 @@ jobs:
         run: |
           set -o pipefail
           bash scripts/render-showcase-remotion.sh 2>&1 | tee remotion-render.log
+
+      - name: Verify product film contract
+        run: node scripts/verify-product-film.mjs docs/images/product_film.mp4
+
+      - name: Install site dependencies
+        run: npm ci --prefix site/web
+
+      - name: Verify site integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix site/web run lint
+          npm --prefix site/web test
+          npm --prefix site/web run build
 
       - name: Upload rendered assets and log
         if: always()
