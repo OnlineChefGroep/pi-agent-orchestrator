@@ -33,15 +33,32 @@ jobs:
           node-version: 22.19
           cache: npm
 
-      - name: Patch vulnerable transitive dependencies
-        shell: bash
+      - name: Add exact transitive overrides
         run: |
-          set -euo pipefail
           npm pkg set overrides.brace-expansion=5.0.7
           npm pkg set overrides.protobufjs=7.6.5
-          npm install --package-lock-only --ignore-scripts
-          npm ci --ignore-scripts
 
+      - name: Regenerate lockfile with npm
+        id: lockfile
+        shell: bash
+        run: |
+          set -o pipefail
+          npm install --package-lock-only --ignore-scripts 2>&1 | tee npm-remediation.log
+
+      - name: Upload npm remediation diagnostics
+        if: failure() && steps.lockfile.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-remediation-${{ github.run_id }}
+          path: npm-remediation.log
+          retention-days: 14
+
+      - name: Validate clean install
+        run: npm ci --ignore-scripts
+
+      - name: Validate vulnerable versions are absent
+        shell: bash
+        run: |
           node --input-type=module <<'NODE'
           import fs from "node:fs";
 
