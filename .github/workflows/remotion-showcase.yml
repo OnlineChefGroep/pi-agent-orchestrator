@@ -1,3 +1,4 @@
+---
 name: Remotion Showcase
 
 on:
@@ -21,7 +22,7 @@ on:
       - '.github/workflows/remotion-showcase.yml'
   workflow_dispatch:
 
-permissions: {}
+permissions: { }
 
 concurrency:
   group: remotion-${{ github.event.pull_request.number || github.ref }}
@@ -56,10 +57,13 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          bash scripts/render-showcase-remotion.sh 2>&1 | tee remotion-render.log
+          bash scripts/render-showcase-remotion.sh 2>&1 |
+            tee remotion-render.log
 
       - name: Verify product film contract
-        run: node scripts/verify-product-film.mjs docs/images/product_film.mp4
+        run: >-
+          node scripts/verify-product-film.mjs
+          docs/images/product_film.mp4
 
       - name: Install site dependencies
         run: npm ci --prefix site/web
