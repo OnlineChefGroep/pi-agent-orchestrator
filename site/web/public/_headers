@@ -1,4 +1,14 @@
 # Cloudflare Pages response metadata for machine-readable discovery files.
+/sitemap.xml
+  Content-Type: application/xml; charset=utf-8
+  Cache-Control: public, max-age=300, must-revalidate
+  Link: <https://orchestrator.chefgroep.online/sitemap.xml>; rel="canonical"
+
+/robots.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=300, must-revalidate
+  Link: <https://orchestrator.chefgroep.online/robots.txt>; rel="canonical"
+
 /llms.txt
   Content-Type: text/plain; charset=utf-8
   Cache-Control: public, max-age=300, must-revalidate
