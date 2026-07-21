@@ -19,6 +19,7 @@ const requiredAssets = [
 const optionalAssets = [
   "dashboard_preview.png",
   "dashboard_preview_programmatic.gif",
+  "product_film.mp4",
   "feature_tour.mp4",
   "architecture_overview.png",
   "promo_banner.png",
