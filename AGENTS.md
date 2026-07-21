@@ -188,9 +188,21 @@ Currently passing: **1875 tests** across **110 test files**, including performan
 
 ## Cursor Cloud specific instructions
 
-This package is a **Pi host extension**, not a standalone app or server — there is no `dev`/`start`/`serve` command and nothing to "run" on its own. "Running" it in this environment means the verification suite (`npm run typecheck`, `npm run lint`, `npm test`, `npm run build`) plus exercising the real UI renderers. Standard dev commands live in `README.md` (Development) and `package.json` scripts.
+This package is a **Pi host extension**, not a standalone app or server — there is no `dev`/`start`/`serve` process. The Cloud environment is repository-owned and deterministic.
 
-- **Node version.** The VM default `node` (`/exec-daemon/node`) is `v22.14.0`, which is below the `>=22.19.0` in `engines`. This is advisory only (no `engine-strict`): `npm ci`, typecheck, lint, `npm test`, and `npm run build` all pass on it, emitting harmless `EBADENGINE` warnings. `nvm use` does **not** take effect because `/exec-daemon` is prepended to `PATH`; if you ever need a compliant version, a matching build exists via nvm at `~/.nvm/versions/node/v22.22.2/bin/node`.
-- **Exercising the dashboard.** `npm run screenshots` drives the actual `/agents` dashboard renderers (compiled `dist/`) with deterministic fixtures and rasterizes to SVG — the closest thing to "running the app" here. Note it **overwrites the tracked `docs/images/dashboard_preview.svg`**; `git checkout -- docs/images/dashboard_preview.svg` afterward if you did not intend to commit the regenerated file.
-- **Pre-existing lint findings.** On `main`, `npm run lint` reports two findings in test files (`test/release-verification.test.ts` `noTemplateCurlyInString`, `test/agent-wizards.test.ts` `organizeImports`). These are not caused by environment setup.
-- **Test suite** runs in ~75–90s across 110 files; a few worktree/release tests take 20–70s each. Do not treat a slow-but-progressing run as hung.
+**Canonical files and commands** (do not rediscover these):
+
+| Purpose | File / command |
+| --- | --- |
+| Environment definition | `.cursor/environment.json` (base image + `install`) |
+| Node source of truth | `.nvmrc` (must satisfy `package.json` `engines.node`) |
+| Install / update | `bash scripts/cursor-cloud-install.sh` (runs from `environment.json`) |
+| Full verification gate | `npm run verify:cloud` (Node-safe entry: `bash scripts/cursor-cloud-verify.sh`) |
+| Pi-host extension smoke | `bash scripts/cursor-cloud-smoke.sh` |
+| Reviewable artifacts | `bash scripts/cursor-cloud-artifacts.sh` |
+
+**Invariants:**
+
+- **Node is resolved deterministically.** `scripts/cursor-cloud-lib.sh` ensures a Node matching `.nvmrc` is on `PATH` (via `nvm` when the base `node` is older) and fails early otherwise. Do not hardcode absolute NVM/exec-daemon paths; always invoke the `scripts/cursor-cloud-*.sh` entry points, which set up Node themselves.
+- **The Pi host loads the built extension.** The smoke test runs `pi --mode rpc --no-session -e ./dist/index.js` (credential-free) and asserts the host registered the extension's commands from `dist/index.js`. No model API key is required to prove loading.
+- **Artifacts must never modify tracked docs.** Generate the dashboard via `scripts/cursor-cloud-artifacts.sh` (writes to the Cursor artifact dir or `.cloud-artifacts/`). Do **not** use `npm run screenshots` for artifacts — that overwrites the tracked `docs/images/dashboard_preview.svg`. Artifact generation asserts a clean working tree.

@@ -145,6 +145,17 @@ npm run build
 npm run verify:package
 ```
 
+### Cursor Cloud
+
+The repository ships a deterministic [Cursor Cloud](https://cursor.com/docs/cloud-agent/setup)
+environment in `.cursor/environment.json`. It pins Node to `.nvmrc`, installs
+with `scripts/cursor-cloud-install.sh`, and exposes one canonical gate:
+
+```bash
+npm run verify:cloud   # typecheck + lint + test + build + verify:package + release policy
+npm run cloud:smoke    # load the built extension through the real Pi host (no API key)
+```
+
 ## License
 
 MIT © OnlineChefGroep
