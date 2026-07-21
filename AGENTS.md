@@ -194,8 +194,9 @@ This package is a **Pi host extension**, not a standalone app or server — ther
 
 | Purpose | File / command |
 | --- | --- |
-| Environment definition | `.cursor/environment.json` (base image + `install`) |
-| Node source of truth | `.nvmrc` (must satisfy `package.json` `engines.node`) |
+| Environment definition | `.cursor/environment.json` (`build.dockerfile` + `install`) |
+| Deterministic base image | `.cursor/Dockerfile` (`node:22.19.0-bookworm`, `ubuntu` user, git/sudo) |
+| Node source of truth | `.nvmrc` (kept in sync with the Dockerfile base and `package.json` `engines.node`) |
 | Install / update | `bash scripts/cursor-cloud-install.sh` (runs from `environment.json`) |
 | Full verification gate | `npm run verify:cloud` (Node-safe entry: `bash scripts/cursor-cloud-verify.sh`) |
 | Pi-host extension smoke | `bash scripts/cursor-cloud-smoke.sh` |
@@ -203,6 +204,6 @@ This package is a **Pi host extension**, not a standalone app or server — ther
 
 **Invariants:**
 
-- **Node is resolved deterministically.** `scripts/cursor-cloud-lib.sh` ensures a Node matching `.nvmrc` is on `PATH` (via `nvm` when the base `node` is older) and fails early otherwise. Do not hardcode absolute NVM/exec-daemon paths; always invoke the `scripts/cursor-cloud-*.sh` entry points, which set up Node themselves.
+- **Node is compliant by default.** In Cloud the `.cursor/Dockerfile` bakes Node `22.19.0` at `/usr/local/bin/node`, so even bare shells resolve a compliant `node`. As defense-in-depth (and for local/non-Docker runs), `scripts/cursor-cloud-lib.sh` re-resolves a Node matching `.nvmrc` (via `nvm` when the ambient `node` is older) and fails early otherwise. When bumping Node, change `.nvmrc` **and** the `.cursor/Dockerfile` `FROM` together. Do not hardcode absolute NVM/exec-daemon paths.
 - **The Pi host loads the built extension.** The smoke test runs `pi --mode rpc --no-session -e ./dist/index.js` (credential-free) and asserts the host registered the extension's commands from `dist/index.js`. No model API key is required to prove loading.
 - **Artifacts must never modify tracked docs.** Generate the dashboard via `scripts/cursor-cloud-artifacts.sh` (writes to the Cursor artifact dir or `.cloud-artifacts/`). Do **not** use `npm run screenshots` for artifacts — that overwrites the tracked `docs/images/dashboard_preview.svg`. Artifact generation asserts a clean working tree.
