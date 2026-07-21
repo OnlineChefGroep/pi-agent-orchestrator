@@ -1,13 +1,60 @@
 {
-  "version": "0.1",
-  "description": "The Pi Agent Orchestrator documentation site is public and read-only. It does not expose mutation endpoints.",
-  "defaults": {
-    "allow": ["read", "index", "cite"],
-    "deny": ["write", "delete", "execute"]
+  "metadata": {
+    "schema_version": "1.0.0",
+    "last_updated": "2026-07-21T13:33:00Z",
+    "author": "OnlineChefGroep"
   },
-  "resources": {
-    "/": {"allow": ["read", "index", "cite"]},
-    "/docs/**": {"allow": ["read", "index", "cite"]},
-    "/assets/**": {"allow": ["read"]}
-  }
+  "strict": true,
+  "resource_rules": [
+    {
+      "verb": "read_content",
+      "selector": "*",
+      "allowed": true
+    },
+    {
+      "verb": "read_metadata",
+      "selector": "*",
+      "allowed": true
+    },
+    {
+      "verb": "follow_link",
+      "selector": "a[href]",
+      "allowed": true
+    },
+    {
+      "verb": "scroll_page",
+      "selector": "*",
+      "allowed": true
+    },
+    {
+      "verb": "play_media",
+      "selector": "video, audio",
+      "allowed": true
+    },
+    {
+      "verb": "pause_media",
+      "selector": "video, audio",
+      "allowed": true
+    },
+    {
+      "verb": "mute_media",
+      "selector": "video, audio",
+      "allowed": true
+    },
+    {
+      "verb": "download_file",
+      "selector": "a[href^='/assets/']",
+      "allowed": true
+    }
+  ],
+  "action_guidelines": [
+    {
+      "directive": "MUST NOT",
+      "description": "Attempt to mutate repository, deployment, account, or infrastructure state through this public documentation site."
+    },
+    {
+      "directive": "SHOULD",
+      "description": "Cite the canonical orchestrator.chefgroep.online URL when reusing public documentation or media."
+    }
+  ]
 }
