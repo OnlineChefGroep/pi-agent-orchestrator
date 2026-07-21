@@ -1,35 +1,45 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 
 const [mediaPath = "docs/images/product_film.mp4"] = process.argv.slice(2);
+const absoluteMediaPath = resolve(mediaPath);
 
-if (!existsSync(mediaPath)) {
+if (!existsSync(absoluteMediaPath)) {
   throw new Error(`Product film not found: ${mediaPath}`);
 }
 
+const ffprobeArgs = [
+  "-v",
+  "error",
+  "-show_entries",
+  "stream=codec_type,codec_name,width,height,pix_fmt,r_frame_rate,duration,nb_frames",
+  "-of",
+  "json",
+  absoluteMediaPath,
+];
+
 const probe = spawnSync(
-  "ffprobe",
-  [
-    "-v",
-    "error",
-    "-show_entries",
-    "stream=codec_type,codec_name,width,height,pix_fmt,r_frame_rate,duration,nb_frames",
-    "-of",
-    "json",
-    mediaPath,
-  ],
+  "npm",
+  ["--prefix", "showcase/remotion", "exec", "--", "remotion", "ffprobe", ...ffprobeArgs],
   { encoding: "utf8" },
 );
 
 if (probe.error) {
-  throw new Error(`Unable to execute ffprobe: ${probe.error.message}`);
+  throw new Error(`Unable to execute Remotion FFprobe: ${probe.error.message}`);
 }
 if (probe.status !== 0) {
-  throw new Error(`ffprobe failed (${probe.status}): ${probe.stderr.trim()}`);
+  throw new Error(`Remotion FFprobe failed (${probe.status}): ${probe.stderr.trim()}`);
 }
 
-const metadata = JSON.parse(probe.stdout);
+const jsonStart = probe.stdout.indexOf("{");
+const jsonEnd = probe.stdout.lastIndexOf("}");
+if (jsonStart === -1 || jsonEnd < jsonStart) {
+  throw new Error(`Remotion FFprobe returned no JSON metadata: ${probe.stdout.trim()}`);
+}
+
+const metadata = JSON.parse(probe.stdout.slice(jsonStart, jsonEnd + 1));
 const streams = Array.isArray(metadata.streams) ? metadata.streams : [];
 const videoStreams = streams.filter((stream) => stream.codec_type === "video");
 const audioStreams = streams.filter((stream) => stream.codec_type === "audio");
