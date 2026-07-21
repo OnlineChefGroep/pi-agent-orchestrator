@@ -11,7 +11,7 @@
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { registerAgents } from "../dist/agent-types.js";
@@ -291,8 +291,10 @@ function toSvg(rows) {
 const svg = toSvg(lines);
 // Output path is overridable so Cloud artifact generation can render the real
 // dashboard without overwriting the tracked docs/images/dashboard_preview.svg.
+// `resolve` handles absolute paths on every platform (Linux, macOS, Windows)
+// and falls back to joining against REPO_ROOT for relative paths.
 const outPath = process.env.SCREENSHOT_OUT
-  ? (process.env.SCREENSHOT_OUT.startsWith("/") ? process.env.SCREENSHOT_OUT : join(REPO_ROOT, process.env.SCREENSHOT_OUT))
+  ? resolve(REPO_ROOT, process.env.SCREENSHOT_OUT)
   : join(REPO_ROOT, "docs", "images", "dashboard_preview.svg");
 mkdirSync(dirname(outPath), { recursive: true });
 writeFileSync(outPath, `${svg}\n`, "utf-8");

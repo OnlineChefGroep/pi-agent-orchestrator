@@ -43,9 +43,12 @@ process.stdin.on("end", () => {
     }
   }
 
+  // Require the command's source path to be exactly dist/index.js — no generic
+  // `index.js` fallback, which would let any unrelated loaded extension whose
+  // source happens to end in index.js satisfy the provenance check.
   const loadedFromDist = extensionCommands.filter((c) => {
     const p = c.sourceInfo?.path || c.path || "";
-    return /(^|\/)dist\/index\.js$/.test(p) || /(^|\/)index\.js$/.test(p);
+    return /(^|\/)dist\/index\.js$/.test(p);
   });
 
   const widgets = uiRequests.filter((r) => r.method === "setWidget").map((r) => r.widgetKey);

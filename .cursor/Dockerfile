@@ -5,7 +5,13 @@
 # shell — including bare interactive shells, not just the cursor-cloud-* scripts.
 # Debian-based per Cursor's computer-use requirement. Does not COPY the project;
 # Cursor manages the workspace checkout.
-FROM node:22.19.0-bookworm
+#
+# The base image is pinned by digest so rebuilds are reproducible: the digest
+# fixes the exact Debian snapshot and the apt package set that goes with it.
+# Apt packages are then installed from that frozen snapshot without further
+# version pins (bookworm stable; pinning individual versions would be brittle
+# across point releases and is unnecessary once the base digest is fixed).
+FROM node:22.19.0-bookworm@sha256:afff6d8c97964a438d2e6a9c96509367e45d8bf93f790ad561a1eaea926303d9
 
 # Tools Cursor Cloud expects: git (repo clone), sudo, curl, CA certs.
 RUN apt-get update \

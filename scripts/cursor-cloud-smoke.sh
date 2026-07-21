@@ -17,10 +17,10 @@ cd "$(dirname "$0")/.."
 cc_ensure_node
 cc_assert_node
 
-if [ ! -f dist/index.js ]; then
-  echo "== building extension (dist/index.js missing) =="
-  npm run build
-fi
+# Always rebuild. A stale dist/index.js left over from an earlier run would let
+# the smoke test pass against code that no longer compiles or registers.
+echo "== building extension =="
+npm run build
 
 PI_BIN="node_modules/.bin/pi"
 if [ ! -x "$PI_BIN" ]; then

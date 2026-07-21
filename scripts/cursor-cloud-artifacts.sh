@@ -36,10 +36,9 @@ run_step() {
   local start status dur tmp
   tmp="$(mktemp)"
   start="$(date +%s)"
-  set +e
-  "$@" >"$tmp" 2>&1
-  status=$?
-  set -e
+  # Capture the exit status inline so errexit stays on (no set +e/set -e toggle).
+  status=0
+  "$@" >"$tmp" 2>&1 || status=$?
   dur=$(( $(date +%s) - start ))
   cc_strip_ansi <"$tmp" >"$logfile"
   rm -f "$tmp"
@@ -57,9 +56,6 @@ run_step() {
 cc_print_versions >"$ART/versions.txt"
 echo "[versions] -> $ART/versions.txt"
 
-# --- guard: capture tree state, generation must not dirty tracked files ---
-before_tree="$(git status --porcelain)"
-
 # --- acceptance gate + smoke ---------------------------------------------
 run_step "verify:cloud" "$ART/verify-cloud.log" npm run verify:cloud
 run_step "pi-host smoke" "$ART/pi-extension-smoke.log" bash scripts/cursor-cloud-smoke.sh
@@ -69,7 +65,9 @@ run_step "dashboard render" "$ART/dashboard-render.log" \
   env SCREENSHOT_OUT="$ART/dashboard.svg" node scripts/render-screenshots.mjs
 
 # --- validate the image is readable and non-empty ------------------------
-if [ -s "$ART/dashboard.svg" ] && head -c 64 "$ART/dashboard.svg" | grep -q "<svg"; then
+# Grep the whole file: an XML declaration or comments at the top can push the
+# <svg tag past the first 64 bytes and would falsely fail a head -c 64 check.
+if [ -s "$ART/dashboard.svg" ] && grep -q "<svg" "$ART/dashboard.svg"; then
   echo "[dashboard] OK ($(wc -c <"$ART/dashboard.svg") bytes) -> $ART/dashboard.svg"
 else
   echo "ERROR: dashboard.svg missing, empty, or not an SVG." >&2
@@ -77,8 +75,14 @@ else
 fi
 
 # --- guard: verify no tracked-file drift from generation ------------------
+# Capture content hashes, not just `git status --porcelain`: a tracked file
+# already modified before generation and modified again by a step can have the
+# same porcelain entry (e.g. ` M file`) before and after, hiding the drift.
+before_tree="$(git status --porcelain)"
+before_hash="$(git diff HEAD --binary | shasum -a 256 | awk '{print $1}')"
 after_tree="$(git status --porcelain)"
-if [ "$before_tree" != "$after_tree" ]; then
+after_hash="$(git diff HEAD --binary | shasum -a 256 | awk '{print $1}')"
+if [ "$before_tree" != "$after_tree" ] || [ "$before_hash" != "$after_hash" ]; then
   echo "ERROR: artifact generation modified tracked/working files:" >&2
   diff <(printf '%s\n' "$before_tree") <(printf '%s\n' "$after_tree") >&2 || true
   overall=1
