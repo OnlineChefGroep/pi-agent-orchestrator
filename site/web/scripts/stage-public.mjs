@@ -37,7 +37,15 @@ const optionalAssets = [
   "showcase_vhs.gif",
 ];
 
-const rootSiteFiles = ["sitemap.xml", "robots.txt"];
+/** Public crawler and agent-discovery surfaces copied verbatim from repository SSOTs. */
+const rootSiteFiles = [
+  "sitemap.xml",
+  "robots.txt",
+  "llms.txt",
+  "llms-full.txt",
+  "sitemap.md",
+  "AGENTS.md",
+];
 
 rmSync(assetsDir, { recursive: true, force: true });
 rmSync(path.join(publicRoot, "docs"), { recursive: true, force: true });
@@ -69,9 +77,6 @@ for (const file of rootSiteFiles) {
   cpSync(source, path.join(publicRoot, file));
 }
 
-// Drop legacy public markdown mirrors if they linger from older stage runs.
-rmSync(path.join(publicRoot, "sitemap.md"), { force: true });
-
 console.log(
-  `Staged ${requiredCount} required + ${optionalCount} optional showcase assets into ${publicRoot}`,
+  `Staged ${requiredCount} required + ${optionalCount} optional showcase assets and ${rootSiteFiles.length} discovery files into ${publicRoot}`,
 );
