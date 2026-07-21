@@ -106,7 +106,7 @@ export const showcasePipelines: Array<{
   {
     id: "remotion",
     label: "Remotion",
-    summary: "Source-derived promo suite: terminal hero, feature tour, architecture stills, and social cards.",
+    summary: "Source-derived promo suite: product film, terminal hero, feature tour, architecture stills, and social cards.",
     command: "npm run showcase:remotion",
   },
   {
@@ -138,13 +138,21 @@ export const showcasePipelines: Array<{
 /** Paths are relative to /assets — optional files are hidden in the UI when absent. */
 export const showcaseMedia: ShowcaseMedium[] = [
   {
+    id: "product-film",
+    title: "Operator-flow product film",
+    description: "A 45-second narrative from one orchestration command through bounded parallel agents, live control, and a verified handoff.",
+    href: "/assets/product_film.mp4",
+    kind: "video",
+    pipeline: "remotion",
+    featured: true,
+  },
+  {
     id: "feature-tour",
     title: "Feature tour",
     description: "Animated tour of capabilities, agent types, and compression levels from repo metadata.",
     href: "/assets/feature_tour.mp4",
     kind: "video",
     pipeline: "remotion",
-    featured: true,
   },
   {
     id: "architecture-remotion",

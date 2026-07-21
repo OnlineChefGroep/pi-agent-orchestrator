@@ -1,10 +1,10 @@
-# Publish the project landing page (site/) to GitHub Pages.
+---
+# Publish the project landing page to the GitHub Pages mirror.
 # Target URL: https://onlinechefgroep.github.io/pi-agent-orchestrator/
 #
-# The site uses relative asset paths, so it works correctly under the
-# /pi-agent-orchestrator/ base path without a build step or path rewriting.
-# scripts/build-site.sh stages a self-contained directory of only the files
-# the published page references (landing page + linked docs + showcase assets).
+# scripts/build-site.sh uses SITE_BASE to produce a self-contained artifact for
+# the /pi-agent-orchestrator/ subpath, including the explicit agent-discovery
+# files staged by site/web/scripts/stage-public.mjs.
 #
 # This is the sole workflow that deploys to GitHub Pages.
 #
@@ -23,13 +23,17 @@ on:
       - 'docs/**'
       - 'scripts/build-site.sh'
       - 'sitemap.xml'
+      - 'sitemap.md'
       - 'robots.txt'
+      - 'llms.txt'
+      - 'llms-full.txt'
+      - 'AGENTS.md'
       - 'agent-permissions.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 # Deny by default; each job grants only what it needs.
-permissions: {}
+permissions: { }
 
 # Allow only one concurrent Pages deployment; do not cancel an in-flight run.
 concurrency:

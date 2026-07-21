@@ -9,7 +9,7 @@ Canonical product URL is a **subdomain of `chefgroep.online`**. Cloudflare Pages
 | `https://orchestrator.chefgroep.online` | **Canonical** product site (`chefgroep.online` zone) |
 | `https://onlinechefgroep.github.io/pi-agent-orchestrator/` | GitHub Pages mirror (Actions deploy; README/legacy links) |
 
-Internal only (not a public brand URL): the Cloudflare project default host `pi-agent-orchestrator.pages.dev` exists as the Pages origin behind the CNAME. Do not advertise it; point humans and agents at `orchestrator.chefgroep.online`.
+Internal only (not a public brand URL): the Cloudflare project default host `pi-agent-orchestrator.pages.dev` exists as the Pages origin behind the CNAME. Do not advertise it; point humans and agents at `orchestrator.chefgroep.online`. The Pages origin and branch-preview hosts receive `X-Robots-Tag: noindex` through `site/web/public/_headers`.
 
 GitHub Pages requires a one-time repo enablement (`build_type=workflow`). The Deploy Pages workflow only publishes from `main` and cannot flip that enablement bit with `GITHUB_TOKEN`.
 
@@ -21,9 +21,19 @@ Production deploys run from the `main` branch:
 2. Cloudflare: `wrangler pages deploy` via [`.github/workflows/cloudflare-pages.yml`](../.github/workflows/cloudflare-pages.yml)
 3. GitHub mirror: [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) (base path `/pi-agent-orchestrator/`)
 
-Showcase media is staged from `docs/images/` before the Vite build. Documentation markdown is **bundled into the SPA as HTML** — raw `.md` is not published on the public site. Agents read `docs/*.md`, `llms.txt`, and `AGENTS.md` from the installed `@onlinechefgroep/pi-agent-orchestrator` npm package.
+Showcase media is staged from `docs/images/` before the Vite build. Documentation markdown is bundled into the SPA as HTML. The build also publishes a deliberately small machine-readable surface verbatim: `llms.txt`, `llms-full.txt`, `sitemap.md`, `AGENTS.md`, `agent-permissions.json`, and `/.well-known/agent-permissions.json`. The remaining `docs/*.md` files stay package-owned and are not exposed as raw public files.
 
 **SPA routing:** Cloudflare Pages enables native SPA fallback when `404.html` is absent (canonical deploy, `SITE_BASE=/`). The GitHub mirror build (`SITE_BASE=/pi-agent-orchestrator/`) copies `index.html` → `404.html` because GitHub Pages has no equivalent. `_redirects` keeps **301-only** legacy `.md` redirects — never `/* /index.html 200` (Cloudflare turns those into 308 loops).
+
+## Agent and crawler contract
+
+- `site/web/scripts/stage-public.mjs` copies the repository SSOTs into the Vite public directory before every build.
+- `site/web/public/_headers` forces the correct text/Markdown/JSON content types, short revalidation caching, canonical `Link` headers, and deindexing for Pages origin hosts.
+- `agent-permissions.json` follows the LAS-WG 1.0.0 schema with `strict: true`; unspecified interactive actions are therefore denied by default.
+- `site/web/index.html` advertises the permissions file, the LLM index, and Schema.org JSON-LD.
+- CI must verify that every discovery file survives the production build and that both permissions copies are byte-identical.
+
+Cloudflare edge security must not return a different response solely because a request uses a citation-crawler user agent. Crawl preferences belong in `robots.txt`; bot/WAF rules should remain consistent with that policy.
 
 ## Custom domain
 

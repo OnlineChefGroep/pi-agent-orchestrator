@@ -49,9 +49,10 @@ The extension runs inside the Pi host process. It does not make outbound network
 
 The preview is rendered from the compiled dashboard, resource top view, and widget implementation. Remotion supplies the framing and encoding; the terminal content comes from the actual product renderers.
 
-[![Pi Agent Orchestrator terminal preview](https://raw.githubusercontent.com/OnlineChefGroep/pi-agent-orchestrator/main/docs/images/dashboard_preview.svg)](https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4)
+[![Pi Agent Orchestrator terminal preview](https://raw.githubusercontent.com/OnlineChefGroep/pi-agent-orchestrator/main/docs/images/dashboard_preview.svg)](https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/product_film.mp4)
 
-- [Watch the MP4 showcase](https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4)
+- [Watch the product film](https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/product_film.mp4) — the full Remotion-rendered showcase
+- [Watch the dashboard preview](https://onlinechefgroep.github.io/pi-agent-orchestrator/assets/dashboard_preview.mp4)
 - [Open the agent-readable project site](https://onlinechefgroep.github.io/pi-agent-orchestrator/)
 - [Read the Pi package documentation](https://pi.dev/docs/latest/packages)
 
@@ -143,6 +144,19 @@ npm run lint
 npm test
 npm run build
 npm run verify:package
+```
+
+### Cursor Cloud
+
+The repository ships a deterministic [Cursor Cloud](https://cursor.com/docs/cloud-agent/setup)
+environment in `.cursor/environment.json` + `.cursor/Dockerfile`. The Dockerfile
+pins Node to the `.nvmrc` version (`node:22.19.0-bookworm`) so bare shells use a
+compliant Node by default; it installs with `scripts/cursor-cloud-install.sh` and
+exposes one canonical gate:
+
+```bash
+npm run verify:cloud   # typecheck + lint + test + build + verify:package + release policy
+npm run cloud:smoke    # load the built extension through the real Pi host (no API key)
 ```
 
 ## License
