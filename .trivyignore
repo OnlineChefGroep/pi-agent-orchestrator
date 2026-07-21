@@ -1,0 +1,20 @@
+# Trivy vulnerability suppressions.
+#
+# The entries below are transitive CVEs that live entirely inside the
+# @earendil-works/pi-* host-platform peer-dependency subtree. Per AGENTS.md,
+# those host packages are never direct dependencies of this extension: they are
+# provided by the Pi host at runtime and are not part of this package's
+# published `files`. The affected versions are pinned inside the peer subtree
+# (marked `peer: true` in package-lock.json) and cannot be reliably replaced via
+# npm `overrides` without force-bumping the host platform packages themselves, so
+# they are suppressed here with justification rather than patched locally.
+
+# brace-expansion 5.0.6 (via @earendil-works/pi-coding-agent > minimatch):
+# DoS via exponential-time expansion. Reached only by the host toolchain, not
+# shipped by this extension.
+CVE-2026-13149
+
+# protobufjs 7.6.4 (via @earendil-works/pi-* > @google/genai):
+# DoS via infinite loop in .proto option parsing. Reached only by the host
+# platform's AI stack, not shipped by this extension.
+CVE-2026-59877
