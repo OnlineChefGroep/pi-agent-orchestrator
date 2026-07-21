@@ -1,5 +1,8 @@
 {
   "$schema": "https://www.cursor.com/schemas/environment.schema.json",
   "name": "pi-agent-orchestrator",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
   "install": "bash scripts/cursor-cloud-install.sh"
 }
