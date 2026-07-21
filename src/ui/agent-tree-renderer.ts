@@ -5,7 +5,7 @@
  * with status indicators, type labels, and optional Mermaid/JSON export hints.
  */
 
-import { buildAgentTreeText } from "../agent-tree.js";
+import { buildTree } from "../agent-tree.js";
 import type { AgentRecord } from "../types.js";
 import type { BoxChars, DashboardTheme } from "./theme.js";
 import { framedRow } from "./theme.js";
@@ -39,34 +39,9 @@ function statusSymbol(rec: AgentRecord): string {
 }
 
 /**
- * Build a single-pass array of tree lines from the pre-generated text tree.
- * Each line is colorized per-agent for display in the dashboard.
- */
-function colorizeTreeLine(
-  rawLine: string,
-  records: AgentRecord[],
-  th: DashboardTheme,
-): string {
-  // Find which agent this line belongs to by matching the id prefix
-  for (const rec of records) {
-    if (rawLine.includes(rec.id)) {
-      const sc = statusColor(rec, th);
-      const ss = statusSymbol(rec);
-      // Replace status bracket with colored version
-      return rawLine.replace(
-        `[${rec.status}]`,
-        `${th.reset}[${sc}${rec.status}${th.reset}]`,
-      ).replace(
-        `${rec.id}`,
-        `${sc}${ss} ${rec.id}${th.reset}`,
-      );
-    }
-  }
-  return rawLine;
-}
-
-/**
  * Render the execution tree inside the dashboard viewport.
+ * Uses an O(N) inline traversal to build colorized tree lines without
+ * redundant string allocation or slow N^2 line-matching lookups.
  *
  * @param innerW - Inner width of the dashboard frame
  * @param th - Dashboard theme colors
@@ -91,14 +66,32 @@ export function renderTreeView(
     return lines;
   }
 
-  // Build the raw text tree
-  const rawTree = buildAgentTreeText(records);
+  const { roots, childrenMap, nodeMap } = buildTree(records);
 
-  // Colorize each line
-  for (const line of rawTree.split("\n")) {
-    if (!line.trim()) continue;
-    const colorized = colorizeTreeLine(line, records, th);
-    lines.push(framedRow(`  ${colorized}`, innerW, th, box));
+  const renderNode = (nodeId: string, indent: string, isLast: boolean): void => {
+    const r = nodeMap.get(nodeId);
+    if (!r) return;
+
+    const branch = indent ? (isLast ? "\u2514\u2500 " : "\u251C\u2500 ") : "";
+
+    const sc = statusColor(r, th);
+    const ss = statusSymbol(r);
+
+    const colorizedId = `${sc}${ss} ${r.id}${th.reset}`;
+    const colorizedStatus = `${th.reset}[${sc}${r.status}${th.reset}]`;
+
+    const rawLine = `${indent}${branch}${colorizedId} (${r.type}) ${colorizedStatus}`;
+    lines.push(framedRow(`  ${rawLine}`, innerW, th, box));
+
+    const children = childrenMap.get(nodeId) || [];
+    for (let i = 0; i < children.length; i++) {
+      const cont = indent + (isLast ? "   " : "\u2502  ");
+      renderNode(children[i].id, cont, i === children.length - 1);
+    }
+  };
+
+  for (let i = 0; i < roots.length; i++) {
+    renderNode(roots[i].id, "", i === roots.length - 1);
   }
 
   return lines;
