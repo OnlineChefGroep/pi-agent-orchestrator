@@ -16,8 +16,9 @@
     "promo:banner": "remotion still src/index.ts PromoBanner ../../docs/images/promo_banner.png --overwrite",
     "promo:social": "remotion still src/index.ts PromoSocialCard ../../docs/images/social_preview.png --overwrite",
     "promo:architecture": "remotion still src/index.ts ArchitectureDiagram ../../docs/images/architecture_overview.png --overwrite",
+    "promo:film": "remotion render src/index.ts ProductFilm ../../docs/images/product_film.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --overwrite",
     "promo:tour": "remotion render src/index.ts FeatureTour ../../docs/images/feature_tour.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --overwrite",
-    "promo:all": "npm run promo:data && npm run promo:banner && npm run promo:social && npm run promo:architecture && npm run promo:tour"
+    "promo:all": "npm run promo:data && npm run promo:banner && npm run promo:social && npm run promo:architecture && npm run promo:film && npm run promo:tour"
   },
   "dependencies": {
     "@remotion/cli": "4.0.487",
