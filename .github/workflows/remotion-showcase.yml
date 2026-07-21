@@ -64,6 +64,7 @@ jobs:
             docs/images/promo_banner.png
             docs/images/social_preview.png
             docs/images/architecture_overview.png
+            docs/images/product_film.mp4
             docs/images/feature_tour.mp4
           if-no-files-found: error
           retention-days: 14
