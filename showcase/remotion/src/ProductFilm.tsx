@@ -386,8 +386,9 @@ const ControlScene = () => {
 
 const OutcomeScene = ({version, repository}: {version: string; repository: string}) => {
   const frame = useCurrentFrame();
+  const {fps} = useVideoConfig();
   const verified = frame > 94;
-  const cta = spring({frame: frame - 170, fps: 30, config: {damping: 18, stiffness: 100}});
+  const cta = spring({frame: frame - 170, fps, config: {damping: 18, stiffness: 100}});
 
   return (
     <Scene duration={productFilmTiming.outcome}>
