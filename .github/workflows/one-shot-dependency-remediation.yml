@@ -57,23 +57,34 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Validate vulnerable versions are absent
+        id: validate
         shell: bash
         run: |
           node --input-type=module <<'NODE'
           import fs from "node:fs";
 
           const lock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
-          const packages = Object.values(lock.packages ?? {});
-          const vulnerable = packages.filter((pkg) =>
+          const vulnerable = Object.entries(lock.packages ?? {}).filter(([, pkg]) =>
             pkg && (
               pkg.version === "5.0.6" && pkg.resolved?.includes("brace-expansion") ||
               pkg.version === "7.6.4" && pkg.resolved?.includes("protobufjs")
             )
           );
           if (vulnerable.length > 0) {
-            throw new Error(`Vulnerable lockfile entries remain: ${JSON.stringify(vulnerable)}`);
+            console.error(JSON.stringify(vulnerable, null, 2));
+            throw new Error("Vulnerable lockfile entries remain");
           }
           NODE
+
+      - name: Upload generated dependency state
+        if: failure() && steps.validate.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-dependency-state-${{ github.run_id }}
+          path: |
+            package.json
+            package-lock.json
+          retention-days: 14
 
       - name: Commit generated lockfile remediation
         shell: bash
