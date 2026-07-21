@@ -1,8 +1,18 @@
 name: Deploy Cloudflare Pages
 
-# Runs independently from normal CI: once daily or on explicit manual dispatch.
+# Deploy immediately for production-site changes, with a daily reconciliation run and manual fallback.
 # Required GitHub Environment secrets: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - 'scripts/build-site.sh'
+      - 'sitemap.xml'
+      - 'robots.txt'
+      - 'agent-permissions.json'
+      - '.github/workflows/cloudflare-pages.yml'
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
