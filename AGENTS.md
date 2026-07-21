@@ -198,7 +198,7 @@ This package is a **Pi host extension**, not a standalone app or server — ther
 | Deterministic base image | `.cursor/Dockerfile` (`node:22.19.0-bookworm`, `ubuntu` user, git/sudo) |
 | Node source of truth | `.nvmrc` (kept in sync with the Dockerfile base and `package.json` `engines.node`) |
 | Install / update | `bash scripts/cursor-cloud-install.sh` (runs from `environment.json`) |
-| Full verification gate | `npm run verify:cloud` (Node-safe entry: `bash scripts/cursor-cloud-verify.sh`) |
+| Full verification gate | `npm run verify:cloud` (Node-safe; runs `scripts/cursor-cloud-verify.sh` → `verify:cloud:internal`) |
 | Pi-host extension smoke | `bash scripts/cursor-cloud-smoke.sh` |
 | Reviewable artifacts | `bash scripts/cursor-cloud-artifacts.sh` |
 
