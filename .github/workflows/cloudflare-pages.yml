@@ -13,7 +13,11 @@ on:
       - 'docs/**'
       - 'scripts/build-site.sh'
       - 'sitemap.xml'
+      - 'sitemap.md'
       - 'robots.txt'
+      - 'llms.txt'
+      - 'llms-full.txt'
+      - 'AGENTS.md'
       - 'agent-permissions.json'
       - '.github/workflows/cloudflare-pages.yml'
   schedule:
