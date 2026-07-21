@@ -1,8 +1,19 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
-import { CANONICAL_BASE_URL, canonicalUrl } from "@/lib/site";
 import { docLinks, showcaseMedia, showcasePipelines } from "@/lib/content";
 import { docSourceIds, docSources } from "@/lib/doc-sources";
+import { CANONICAL_BASE_URL, canonicalUrl } from "@/lib/site";
+
+const pageShell = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const agentPermissions = JSON.parse(
+  readFileSync(new URL("../../../agent-permissions.json", import.meta.url), "utf8"),
+) as {
+  metadata?: { schema_version?: string };
+  strict?: boolean;
+  resource_rules?: unknown[];
+};
 
 describe("site constants", () => {
   it("uses the orchestrator canonical base URL", () => {
@@ -36,5 +47,14 @@ describe("site constants", () => {
       pipeline: "remotion",
       featured: true,
     });
+  });
+
+  it("advertises valid machine-readable discovery metadata", () => {
+    expect(pageShell).toContain('rel="alternate" type="text/plain" href="/llms.txt"');
+    expect(pageShell).toContain('rel="agent-permissions" href="/.well-known/agent-permissions.json"');
+    expect(pageShell).toContain('type="application/ld+json"');
+    expect(agentPermissions.metadata?.schema_version).toBe("1.0.0");
+    expect(agentPermissions.strict).toBe(true);
+    expect(agentPermissions.resource_rules?.length).toBeGreaterThan(0);
   });
 });
