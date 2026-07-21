@@ -9,6 +9,9 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
+const packageVersion = JSON.parse(
+  fs.readFileSync(path.join(root, 'package.json'), 'utf8')
+).version
 
 // Fail fast with a clear message if build artifacts are missing. Without this
 // the dynamic import errors look like cryptic "Cannot find module" stack traces.
@@ -73,7 +76,7 @@ function mockAgents (frame) {
   return [
     { id: 'a1', type: 'Explore', description: 'Trace RPC + swarm health handlers', status: 'running', swarmId: 'swarm-alpha', joinMode: 'swarm', toolUses: 14, startedAt: t - 50_000, spawnedAt: t - 50_000 },
     { id: 'a2', type: 'Explore', description: 'Scan test/ coverage gaps', status: 'running', swarmId: 'swarm-alpha', joinMode: 'swarm', toolUses: 9, startedAt: t - 35_000, spawnedAt: t - 35_000 },
-    { id: 'a3', type: 'Plan', description: 'v0.11.0 release checklist', status: 'running', toolUses: 6, startedAt: t - 22_000, spawnedAt: t - 22_000 },
+    { id: 'a3', type: 'Plan', description: `Verify v${packageVersion} release artifact`, status: 'running', toolUses: 6, startedAt: t - 22_000, spawnedAt: t - 22_000 },
     { id: 'a4', type: 'general-purpose', description: 'Virtual scroll + heatmap polish', status: 'queued', toolUses: 0, startedAt: t, spawnedAt: t },
     { id: 'a5', type: 'Analysis', description: 'Benchmark fastTruncate', status: 'completed', toolUses: 22, startedAt: t - 100_000, completedAt: t - 12_000, spawnedAt: t - 100_000 },
     { id: 'a6', type: 'Plan', description: 'Schedule bounds audit', status: 'error', error: 'rate limited', toolUses: 2, startedAt: t - 70_000, completedAt: t - 65_000, spawnedAt: t - 70_000 }

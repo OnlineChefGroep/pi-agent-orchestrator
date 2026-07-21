@@ -10,6 +10,9 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
+const packageVersion = JSON.parse(
+  fs.readFileSync(path.join(root, 'package.json'), 'utf8')
+).version
 
 // Use the platform temp directory instead of hardcoding /tmp (works on Windows
 // and macOS sandbox where /tmp may not be writable).
@@ -79,7 +82,7 @@ function mockAgents (frame) {
   const base = [
     { id: 'agent-explore-1', type: 'Explore', description: 'Map src/ and trace RPC handlers', status: 'running', swarmId: 'swarm-alpha', joinMode: 'swarm', toolUses: 12 + (frame % 3), startedAt: t - 45_000, spawnedAt: t - 45_000 },
     { id: 'agent-explore-2', type: 'Explore', description: 'Scan test/ for coverage gaps', status: 'running', swarmId: 'swarm-alpha', joinMode: 'swarm', toolUses: 8, startedAt: t - 30_000, spawnedAt: t - 30_000 },
-    { id: 'agent-plan-1', type: 'Plan', description: 'Draft v0.11.0 release checklist', status: 'running', toolUses: 5 + (frame % 2), startedAt: t - 20_000, spawnedAt: t - 20_000 },
+    { id: 'agent-plan-1', type: 'Plan', description: `Verify v${packageVersion} release artifact`, status: 'running', toolUses: 5 + (frame % 2), startedAt: t - 20_000, spawnedAt: t - 20_000 },
     { id: 'agent-gp-1', type: 'general-purpose', description: 'Implement virtual scroll hints', status: 'queued', toolUses: 0, startedAt: t, spawnedAt: t },
     { id: 'agent-gp-2', type: 'general-purpose', description: 'Wire swarmHealth RPC audit', status: 'queued', toolUses: 0, startedAt: t, spawnedAt: t },
     { id: 'agent-analysis-1', type: 'Analysis', description: 'Benchmark fastTruncate paths', status: 'completed', toolUses: 24, startedAt: t - 120_000, completedAt: t - 15_000, spawnedAt: t - 120_000 },

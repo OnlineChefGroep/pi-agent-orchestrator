@@ -13,6 +13,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_DIR="$ROOT/docs/images"
 SCENES_SCRIPT="$ROOT/scripts/showcase-tmux-scenes.mjs"
+PACKAGE_VERSION="$(node -p "require('$ROOT/package.json').version")"
 # shellcheck source=scripts/lib/showcase-agg.sh
 source "$ROOT/scripts/lib/showcase-agg.sh"
 
@@ -157,7 +158,7 @@ if $HAS_DRAWTEXT; then
 
 	# Title card + scene labels (timing windows in INPUT seconds)
 	VFILTER+=",drawtext=fontfile='${FONT_BOLD}':text='Pi Agent Orchestrator':fontsize=72:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2-40:enable='between(t,0.5,3.5)':alpha='if(between(t,0.5,1.2),(t-0.5)/0.7,if(between(t,2.8,3.5),1-(t-2.8)/0.7,1))'"
-	VFILTER+=",drawtext=fontfile='${FONT_REG}':text='v0.11.0 — Sub-agents, Swarms & Live Dashboard':fontsize=36:fontcolor=0xcccccc:x=(w-text_w)/2:y=(h-text_h)/2+30:enable='between(t,0.8,3.5)':alpha='if(between(t,0.8,1.5),(t-0.8)/0.7,if(between(t,2.8,3.5),1-(t-2.8)/0.7,1))'"
+	VFILTER+=",drawtext=fontfile='${FONT_REG}':text='v${PACKAGE_VERSION} | Agents, Swarms, Schedules, Handoffs':fontsize=36:fontcolor=0xcccccc:x=(w-text_w)/2:y=(h-text_h)/2+30:enable='between(t,0.8,3.5)':alpha='if(between(t,0.8,1.5),(t-0.8)/0.7,if(between(t,2.8,3.5),1-(t-2.8)/0.7,1))'"
 	VFILTER+=",drawtext=fontfile='${FONT_REG}':text='Dashboard':fontsize=32:fontcolor=0x9ece6a:x=40:y=20:enable='between(t,5,18)':alpha='if(between(t,5,5.7),(t-5)/0.7,if(between(t,17.3,18),1-(t-17.3)/0.7,1))'"
 	VFILTER+=",drawtext=fontfile='${FONT_REG}':text='Help':fontsize=32:fontcolor=0xe0af68:x=40:y=20:enable='between(t,19,25)':alpha='if(between(t,19,19.7),(t-19)/0.7,if(between(t,24.3,25),1-(t-24.3)/0.7,1))'"
 	VFILTER+=",drawtext=fontfile='${FONT_REG}':text='Top View':fontsize=32:fontcolor=0x7aa2f7:x=40:y=20:enable='between(t,26,42)':alpha='if(between(t,26,26.7),(t-26)/0.7,if(between(t,41.3,42),1-(t-41.3)/0.7,1))'"
