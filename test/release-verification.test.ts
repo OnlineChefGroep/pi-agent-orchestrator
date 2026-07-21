@@ -268,6 +268,7 @@ describe("transactional release workflow", () => {
     expect(content).toMatch(/registry-url:\s*"https:\/\/registry\.npmjs\.org"/);
     expect(content).toContain("actions/upload-artifact@");
     expect(content).toContain("actions/download-artifact@");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: intentionally matching string
     expect(content).toContain('npm publish "./release-artifact/${TARBALL}"');
     expect(content).toContain("--access public --provenance --ignore-scripts");
     expect(content).toMatch(/NODE_AUTH_TOKEN:\s*\$\{\{\s*secrets\.NPM_TOKEN\s*\}\}/);
