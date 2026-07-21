@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## v0.17.6 (2026-07-21)
+
+Maintenance release for the current Pi host and public showcase.
+
+### Added
+
+- Maximum thinking-level controls in the agent wizard and spawn tool.
+- Source-derived product film and a discoverable public showcase gallery.
+- Deterministic Cursor Cloud build, smoke-test, and artifact workflows.
+
+### Changed
+
+- Agent-tree rendering now traverses the tree in linear time and correctly
+  handles IDs where one ID prefixes another.
+- Pi host development packages target `0.80.10`.
+- GitHub Actions use current pinned releases while release artifact digest
+  mismatches remain fatal.
+- Programmatic, live, tmux, and Remotion media report the current package
+  version and current agent workflows.
+
+### Fixed
+
+- Pi host packages remain optional peers and do not leak into extension
+  installations.
+- GitHub Pages retains `.nojekyll` and agent discovery metadata in uploads.
+
 ## v0.17.5 (2026-07-16)
 
 Hardening sweep on the 0.17 line. The transactional 0.18 release train remains

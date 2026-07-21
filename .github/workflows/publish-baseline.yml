@@ -1,12 +1,12 @@
 name: Publish maintenance baseline
 
-# Publishes an approved pre-train baseline already landed on main (e.g. 0.17.5).
+# Publishes an approved pre-train baseline already landed on main (e.g. 0.17.6).
 # The locked 0.18 transactional publisher remains separate — see release.yml.
 on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: "Type the exact baseline version to publish (e.g. 0.17.5)"
+        description: "Type the exact baseline version to publish (e.g. 0.17.6)"
         required: true
         type: string
 
@@ -19,7 +19,7 @@ concurrency:
 jobs:
   verify:
     name: Verify and build baseline artifact
-    if: github.ref == 'refs/heads/main' && inputs.confirm == '0.17.5'
+    if: github.ref == 'refs/heads/main' && inputs.confirm == '0.17.6'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:

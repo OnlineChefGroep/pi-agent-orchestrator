@@ -140,7 +140,7 @@ describe("0.18 release policy", () => {
     const policy = JSON.parse(readRoot(".release-policy.json"));
     expect(policy.releaseTrain).toBe("0.18");
     expect(policy.initialRelease).toBe("0.18.0");
-    expect(policy.sourceBaselines).toEqual(["0.17.1", "0.17.5"]);
+    expect(policy.sourceBaselines).toEqual(["0.17.1", "0.17.5", "0.17.6"]);
     expect(policy.allowPrerelease).toBe(false);
     expect(policy.blockedNextMinor).toBe("0.19.0");
     expect(policy.releaseCommitTitle).toBe("chore(release): v0.18.0");
@@ -166,8 +166,8 @@ describe("0.18 release policy", () => {
     expect(publish.stderr).toContain("outside the locked 0.18.x release train");
   });
 
-  it("accepts maintenance baseline publish policy for 0.17.5", () => {
-    const baseline = runReleasePolicy("baseline", "0.17.5");
+  it("accepts maintenance baseline publish policy for 0.17.6", () => {
+    const baseline = runReleasePolicy("baseline", "0.17.6");
     expect(baseline.status, baseline.stderr).toBe(0);
     expect(baseline.stdout).toContain("Maintenance baseline accepted");
     const blocked = runReleasePolicy("baseline", "0.18.0");
@@ -178,7 +178,7 @@ describe("0.18 release policy", () => {
     expect(fileExists(".github/workflows/publish-baseline.yml")).toBe(true);
     const content = readRoot(".github/workflows/publish-baseline.yml");
     expect(content).toContain("workflow_dispatch:");
-    expect(content).toContain("inputs.confirm == '0.17.5'");
+    expect(content).toContain("inputs.confirm == '0.17.6'");
     expect(content).toContain("node scripts/release-policy.mjs baseline");
     expect(content).toContain("npm publish");
   });
