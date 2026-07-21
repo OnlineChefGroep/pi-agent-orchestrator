@@ -1,0 +1,105 @@
+name: Finalize Product Film Release
+
+on:
+  push:
+    branches: [feat/remotion-product-film]
+    paths:
+      - '.github/workflows/admin-finalize-product-film.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-product-film-release
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: feat/remotion-product-film
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.19
+          cache: npm
+
+      - name: Fix frame-rate drift
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('showcase/remotion/src/ProductFilm.tsx')
+          source = path.read_text()
+          old = '''const OutcomeScene = ({version, repository}: {version: string; repository: string}) => {
+            const frame = useCurrentFrame();
+            const verified = frame > 94;
+            const cta = spring({frame: frame - 170, fps: 30, config: {damping: 18, stiffness: 100}});'''
+          new = '''const OutcomeScene = ({version, repository}: {version: string; repository: string}) => {
+            const frame = useCurrentFrame();
+            const {fps} = useVideoConfig();
+            const verified = frame > 94;
+            const cta = spring({frame: frame - 170, fps, config: {damping: 18, stiffness: 100}});'''
+          if old not in source:
+              raise SystemExit('Expected OutcomeScene source was not found')
+          path.write_text(source.replace(old, new, 1))
+          PY
+
+      - name: Refresh vulnerable transitive dependencies
+        shell: bash
+        run: |
+          npm update brace-expansion protobufjs --package-lock-only --ignore-scripts --no-audit --no-fund
+          node - <<'NODE'
+          const lock = require('./package-lock.json');
+          const packages = lock.packages ?? {};
+          const versions = Object.entries(packages)
+            .filter(([path]) => path.endsWith('/brace-expansion') || path.endsWith('/protobufjs'))
+            .map(([path, value]) => `${path}: ${value.version}`);
+          console.log(versions.join('\n'));
+          if (versions.some((entry) => entry.endsWith(': 5.0.6') || entry.endsWith(': 7.6.4'))) {
+            throw new Error('Vulnerable transitive dependency remains in package-lock.json');
+          }
+          NODE
+
+      - name: Install and validate repository
+        shell: bash
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm run lint
+          npm test
+          npm run build
+          npm run verify:package
+
+      - name: Render product film
+        shell: bash
+        run: |
+          npm --prefix showcase/remotion install --no-audit --no-fund --ignore-scripts
+          node showcase/remotion/scripts/extract-promo-data.mjs
+          npm --prefix showcase/remotion run verify
+          npm --prefix showcase/remotion run promo:film
+          test -s docs/images/product_film.mp4
+          test "$(stat -c '%s' docs/images/product_film.mp4)" -gt 1000000
+          sha256sum docs/images/product_film.mp4
+
+      - name: Commit final release assets
+        shell: bash
+        run: |
+          rm .github/workflows/admin-finalize-product-film.yml
+          git config user.name 'OnlineChef Release Bot'
+          git config user.email 'release-bot@users.noreply.github.com'
+          git add showcase/remotion/src/ProductFilm.tsx package-lock.json docs/images/product_film.mp4
+          git add -u .github/workflows/admin-finalize-product-film.yml
+          if git diff --cached --quiet; then
+            echo 'No release changes to commit'
+            exit 1
+          fi
+          git commit -m 'fix(showcase): finalize product film release'
+          git push origin HEAD:feat/remotion-product-film
