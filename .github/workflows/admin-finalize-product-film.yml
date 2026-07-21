@@ -1,0 +1,86 @@
+name: Finalize Product Film Release
+
+on:
+  push:
+    branches: [feat/remotion-product-film]
+    paths:
+      - '.github/workflows/admin-finalize-product-film.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-product-film-release
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout latest release branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: feat/remotion-product-film
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.19
+          cache: npm
+
+      - name: Make motion timing frame-rate aware
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('showcase/remotion/src/ProductFilm.tsx')
+          source = path.read_text()
+          if 'fps: 30' not in source:
+              if 'const {fps} = useVideoConfig();' not in source:
+                  raise SystemExit('OutcomeScene is neither old nor already corrected')
+          else:
+              anchor = 'const OutcomeScene = ({version, repository}: {version: string; repository: string}) => {\n  const frame = useCurrentFrame();\n'
+              replacement = anchor + '  const {fps} = useVideoConfig();\n'
+              if anchor not in source:
+                  raise SystemExit('OutcomeScene anchor was not found')
+              source = source.replace(anchor, replacement, 1)
+              source = source.replace('fps: 30', 'fps', 1)
+              path.write_text(source)
+          PY
+
+      - name: Install and validate source
+        shell: bash
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm run lint
+          npm --prefix showcase/remotion install --ignore-scripts --no-audit --no-fund
+          node showcase/remotion/scripts/extract-promo-data.mjs
+          npm --prefix showcase/remotion run verify
+
+      - name: Render and verify production film
+        shell: bash
+        run: |
+          npm --prefix showcase/remotion run promo:film
+          node scripts/verify-product-film.mjs docs/images/product_film.mp4
+          test -s docs/images/product_film.mp4
+          test "$(stat -c '%s' docs/images/product_film.mp4)" -gt 1000000
+          sha256sum docs/images/product_film.mp4
+
+      - name: Commit release asset and remove one-shot workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm .github/workflows/admin-finalize-product-film.yml
+          git config user.name 'OnlineChef Release Bot'
+          git config user.email 'release-bot@users.noreply.github.com'
+          git add showcase/remotion/src/ProductFilm.tsx docs/images/product_film.mp4
+          git add -u .github/workflows/admin-finalize-product-film.yml
+          git commit -m 'fix(showcase): finalize and publish product film asset'
+          git fetch origin feat/remotion-product-film
+          git rebase origin/feat/remotion-product-film
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:feat/remotion-product-film
