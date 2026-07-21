@@ -1,8 +1,25 @@
+---
 name: Deploy Cloudflare Pages
 
-# Runs independently from normal CI: once daily or on explicit manual dispatch.
-# Required GitHub Environment secrets: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
+# Deploy immediately for production-site changes, with a daily reconciliation
+# run and manual fallback.
+# Required environment secrets: CLOUDFLARE_API_TOKEN and
+# CLOUDFLARE_ACCOUNT_ID.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - 'scripts/build-site.sh'
+      - 'sitemap.xml'
+      - 'sitemap.md'
+      - 'robots.txt'
+      - 'llms.txt'
+      - 'llms-full.txt'
+      - 'AGENTS.md'
+      - 'agent-permissions.json'
+      - '.github/workflows/cloudflare-pages.yml'
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
@@ -12,7 +29,7 @@ permissions:
 
 concurrency:
   group: cloudflare-pages-production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -20,8 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: cloudflare-pages
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -40,4 +58,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy _site --project-name=pi-agent-orchestrator --branch=main
+          command: >-
+            pages deploy _site
+            --project-name=pi-agent-orchestrator
+            --branch=main

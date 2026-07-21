@@ -29,6 +29,7 @@ render poster
 render promo:banner
 render promo:social
 render promo:architecture
+render promo:film
 render promo:tour
 
 cat <<SUMMARY
@@ -38,5 +39,6 @@ Remotion assets rendered:
   - $OUT_DIR/promo_banner.png
   - $OUT_DIR/social_preview.png
   - $OUT_DIR/architecture_overview.png
+  - $OUT_DIR/product_film.mp4
   - $OUT_DIR/feature_tour.mp4
 SUMMARY

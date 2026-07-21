@@ -2,8 +2,9 @@
 # Assemble the publish directory for orchestrator.chefgroep.online (and GH mirror).
 #
 # Primary surface: Vite + React SPA in site/web/. Documentation markdown is bundled
-# into the SPA as HTML — raw .md is NOT published on the public site. Agents read
-# docs/*.md from the installed npm package instead.
+# into the SPA as HTML. A small, explicit set of root discovery files is also
+# published verbatim for crawlers and coding agents: llms*.txt, sitemap.md,
+# AGENTS.md, and agent-permissions.json.
 #
 # Usage: scripts/build-site.sh [output_dir]   (default: ./_site)
 # Env:   SITE_BASE — Vite base path (default /). Set to /pi-agent-orchestrator/
@@ -57,11 +58,6 @@ touch "$OUT/.nojekyll"
 if [ "$SITE_BASE" != "/" ]; then
   cp "$OUT/index.html" "$OUT/404.html"
 fi
-
-# Crawler + agent-permissions only — no raw markdown on the public site.
-mkdir -p "$OUT/.well-known"
-cp "$ROOT/agent-permissions.json" "$OUT/agent-permissions.json"
-cp "$ROOT/agent-permissions.json" "$OUT/.well-known/agent-permissions.json"
 
 echo "✓ Site staged. Contents:"
 ( cd "$OUT" && find . -type f -printf '%P\t%s bytes\n' | sort )

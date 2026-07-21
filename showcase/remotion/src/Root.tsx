@@ -2,6 +2,7 @@ import {Composition, Still} from "remotion";
 import {ArchitectureDiagram} from "./ArchitectureDiagram.js";
 import {FeatureTour} from "./FeatureTour.js";
 import {PiTerminalShowcase} from "./PiTerminalShowcase.js";
+import {ProductFilm, productFilmDuration} from "./ProductFilm.js";
 import {PromoBanner, PromoSocialCard} from "./PromoBanner.js";
 import {
   calculateFeatureTourMetadata,
@@ -48,6 +49,15 @@ export const RemotionRoot = () => {
         component={ArchitectureDiagram}
         width={layout.videoWidth}
         height={layout.videoHeight}
+      />
+      <Composition
+        id="ProductFilm"
+        component={ProductFilm}
+        durationInFrames={productFilmDuration}
+        fps={layout.fps}
+        width={layout.videoWidth}
+        height={layout.videoHeight}
+        defaultProps={{dataFile: "promo-data.json"}}
       />
       <Composition
         id="FeatureTour"
