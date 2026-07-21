@@ -1,0 +1,68 @@
+name: One-shot dependency remediation
+
+on:
+  push:
+    branches:
+      - security/patch-transitive-cves-2026-07-21
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-dependency-remediation
+  cancel-in-progress: false
+
+jobs:
+  remediate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout remediation branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: security/patch-transitive-cves-2026-07-21
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.19
+          cache: npm
+
+      - name: Patch vulnerable transitive dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pkg set overrides.brace-expansion=5.0.7
+          npm pkg set overrides.protobufjs=7.6.5
+          npm install --package-lock-only --ignore-scripts
+          npm ci --ignore-scripts
+
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const lock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+          const packages = Object.values(lock.packages ?? {});
+          const vulnerable = packages.filter((pkg) =>
+            pkg && (
+              pkg.version === "5.0.6" && pkg.resolved?.includes("brace-expansion") ||
+              pkg.version === "7.6.4" && pkg.resolved?.includes("protobufjs")
+            )
+          );
+          if (vulnerable.length > 0) {
+            throw new Error(`Vulnerable lockfile entries remain: ${JSON.stringify(vulnerable)}`);
+          }
+          NODE
+
+      - name: Commit generated lockfile remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/one-shot-dependency-remediation.yml
+          git add package.json package-lock.json
+          git diff --cached --check
+          git commit -m "fix(deps): patch vulnerable transitive dependencies"
+          git push origin HEAD:security/patch-transitive-cves-2026-07-21
