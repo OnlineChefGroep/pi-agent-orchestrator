@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Host baseline bumped to `@earendil-works/pi-*` **0.81.1** (peers `>=0.81.1`).
+  Adopts expanded compaction usage fields, resilient summarization retry
+  telemetry, and `excludeTools` at subagent session create.
+
+### Added
+
+- `CompactionSnapshot` / `lastCompaction` populated from upstream Pi
+  `compaction_end` (tokensBefore/After, reduction%, usage, aborted, willRetry)
+  — #325 Phase A (#325).
+- Lifetime usage folds successful compaction summarization `usage` (Pi 0.81+).
+- Thinking level allowlist validation (`parseThinkingLevel` + Agent tool
+  `Type.Union` literals including `max`).
+- Telemetry event `subagent:summarization_retry` for Pi 0.81.1 resilient
+  compaction retries.
+
 ### Fixed
 
 - Agent tool-call lifecycle hardening (#327): stable spawn-time completion
@@ -10,6 +27,8 @@
 - Compaction public API / docs truth (#325): typed `compaction:*` hook payloads
   match runtime `{ reason }` / `{ reason, tokensBefore }`; document that local
   `src/compaction.ts` pruning is not on the live subagent path.
+- Troubleshooting no longer equates `compactionCount` with local pruning /
+  `DEFAULT_KEEP_TURNS`.
 
 ## v0.17.5 (2026-07-16)
 
