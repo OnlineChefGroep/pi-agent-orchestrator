@@ -153,10 +153,8 @@ describe("createGetResultTool", () => {
     ctx.manager.getRecord.mockReturnValue(record);
     const tool = createGetResultTool(ctx);
     const result = await tool.execute("call-1", { agent_id: "agent-1", wait: true }, undefined as any, undefined as any, ctx);
-    // After awaiting, the record.resultConsumed should be set
     expect(record.resultConsumed).toBe(true);
     expect(ctx.cancelNudge).toHaveBeenCalled();
-    // The record still shows running so the response reflects that
     expect(result.content[0].text).toMatch(/Agent is still running/);
   });
 
@@ -237,6 +235,119 @@ describe("createGetResultTool", () => {
 
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
     expect(record.resultConsumed).toBe(false);
+    expect(ctx.sendIndividualNudge).toHaveBeenCalledWith(record);
+
+    resolveAgent();
+  });
+
+  it("keeps notifications suppressed while another concurrent waiter remains active", async () => {
+    const ctx = makeCtx();
+    let resolveAgent!: () => void;
+    const promise = new Promise<void>(resolve => {
+      resolveAgent = resolve;
+    });
+    const record = {
+      id: "agent-1",
+      type: "Explore",
+      description: "Concurrent wait",
+      status: "running",
+      toolUses: 1,
+      startedAt: Date.now() - 5000,
+      promise,
+      result: undefined as string | undefined,
+      completedAt: undefined as number | undefined,
+      lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 },
+      compactionCount: 0,
+      resultConsumed: false,
+    };
+    ctx.manager.getRecord.mockReturnValue(record);
+    const tool = createGetResultTool(ctx);
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+
+    const firstWait = tool.execute(
+      "call-1",
+      { agent_id: "agent-1", wait: true },
+      firstController.signal,
+      undefined as any,
+      ctx,
+    );
+    const secondWait = tool.execute(
+      "call-2",
+      { agent_id: "agent-1", wait: true },
+      secondController.signal,
+      undefined as any,
+      ctx,
+    );
+
+    firstController.abort();
+    await expect(firstWait).rejects.toMatchObject({ name: "AbortError" });
+    expect(record.resultConsumed).toBe(true);
+    expect(ctx.sendIndividualNudge).not.toHaveBeenCalled();
+
+    record.status = "completed";
+    record.result = "done";
+    record.completedAt = Date.now();
+    resolveAgent();
+
+    const result = await secondWait;
+    expect(result.content[0].text).toMatch(/done/);
+    expect(record.resultConsumed).toBe(true);
+    expect(ctx.sendIndividualNudge).not.toHaveBeenCalled();
+  });
+
+  it("recovers exactly one terminal nudge when every concurrent waiter aborts", async () => {
+    const ctx = makeCtx();
+    let resolveAgent!: () => void;
+    const promise = new Promise<void>(resolve => {
+      resolveAgent = resolve;
+    });
+    const record = {
+      id: "agent-1",
+      type: "Explore",
+      description: "Concurrent terminal race",
+      status: "running",
+      toolUses: 1,
+      startedAt: Date.now() - 5000,
+      promise,
+      result: undefined as string | undefined,
+      completedAt: undefined as number | undefined,
+      lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 },
+      compactionCount: 0,
+      resultConsumed: false,
+    };
+    ctx.manager.getRecord.mockReturnValue(record);
+    const tool = createGetResultTool(ctx);
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+
+    const firstWait = tool.execute(
+      "call-1",
+      { agent_id: "agent-1", wait: true },
+      firstController.signal,
+      undefined as any,
+      ctx,
+    );
+    const secondWait = tool.execute(
+      "call-2",
+      { agent_id: "agent-1", wait: true },
+      secondController.signal,
+      undefined as any,
+      ctx,
+    );
+
+    record.status = "completed";
+    record.result = "done";
+    record.completedAt = Date.now();
+    firstController.abort();
+    secondController.abort();
+
+    await Promise.all([
+      expect(firstWait).rejects.toMatchObject({ name: "AbortError" }),
+      expect(secondWait).rejects.toMatchObject({ name: "AbortError" }),
+    ]);
+    expect(record.resultConsumed).toBe(false);
+    expect(ctx.sendIndividualNudge).toHaveBeenCalledTimes(1);
     expect(ctx.sendIndividualNudge).toHaveBeenCalledWith(record);
 
     resolveAgent();
