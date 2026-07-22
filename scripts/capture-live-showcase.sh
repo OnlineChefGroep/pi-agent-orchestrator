@@ -23,8 +23,9 @@ command -v asciinema >/dev/null || {
 export TERM=xterm-256color
 export COLORTERM=truecolor
 export FORCE_COLOR=3
+unset NO_COLOR
 
-# Non-interactive record (~20s demo); force terminal size for crisp agg output
+# Non-interactive complete tour; force terminal size for crisp agg output
 asciinema rec --overwrite \
 	--cols 110 --rows 32 \
 	--command "node $ROOT/scripts/showcase-live-demo.mjs --auto" \
