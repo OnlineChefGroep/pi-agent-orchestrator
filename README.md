@@ -123,6 +123,7 @@ Default orchestration mode is `single`; multi-agent modes are opt-in.
 ## Documentation
 
 - [Architecture](docs/architecture.md) — module map and data flow.
+- [Tool calling and execution contract](docs/tool-calling.md) — schemas, lifecycle ordering, cancellation, steering, concurrency, result ownership, telemetry, and test invariants.
 - [API reference](docs/api-reference.md) — tools, settings, handoffs, and scheduler.
 - [Custom agents](docs/custom-agents.md) — frontmatter schema and examples.
 - [Prompt compression](docs/prompt-compression.md) — exact scope and impact.
