@@ -133,7 +133,9 @@ describe("createGetResultTool", () => {
 
   it("execute handles wait for running agent (sets resultConsumed and awaits promise)", async () => {
     const ctx = makeCtx();
-    const promise = new Promise<void>(resolve => { resolve(); });
+    const promise = new Promise<void>(resolve => {
+      resolve();
+    });
     const record = {
       id: "agent-1",
       type: "Explore",
@@ -156,6 +158,88 @@ describe("createGetResultTool", () => {
     expect(ctx.cancelNudge).toHaveBeenCalled();
     // The record still shows running so the response reflects that
     expect(result.content[0].text).toMatch(/Agent is still running/);
+  });
+
+  it("allows Esc/tool abort to interrupt wait without consuming the future result", async () => {
+    const ctx = makeCtx();
+    let resolveAgent!: () => void;
+    const promise = new Promise<void>(resolve => {
+      resolveAgent = resolve;
+    });
+    const record = {
+      id: "agent-1",
+      type: "Explore",
+      description: "Long research",
+      status: "running",
+      toolUses: 1,
+      startedAt: Date.now() - 5000,
+      promise,
+      lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 },
+      compactionCount: 0,
+      resultConsumed: false,
+    };
+    ctx.manager.getRecord.mockReturnValue(record);
+    const tool = createGetResultTool(ctx);
+    const controller = new AbortController();
+
+    const pending = tool.execute(
+      "call-1",
+      { agent_id: "agent-1", wait: true },
+      controller.signal,
+      undefined as any,
+      ctx,
+    );
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(record.resultConsumed).toBe(false);
+    expect(ctx.cancelNudge).toHaveBeenCalledWith("agent-1");
+    expect(ctx.sendIndividualNudge).not.toHaveBeenCalled();
+
+    resolveAgent();
+  });
+
+  it("restores the completion notification when abort wins a terminal-state race", async () => {
+    const ctx = makeCtx();
+    let resolveAgent!: () => void;
+    const promise = new Promise<void>(resolve => {
+      resolveAgent = resolve;
+    });
+    const record = {
+      id: "agent-1",
+      type: "Explore",
+      description: "Long research",
+      status: "running",
+      toolUses: 1,
+      startedAt: Date.now() - 5000,
+      promise,
+      result: undefined as string | undefined,
+      completedAt: undefined as number | undefined,
+      lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 },
+      compactionCount: 0,
+      resultConsumed: false,
+    };
+    ctx.manager.getRecord.mockReturnValue(record);
+    const tool = createGetResultTool(ctx);
+    const controller = new AbortController();
+
+    const pending = tool.execute(
+      "call-1",
+      { agent_id: "agent-1", wait: true },
+      controller.signal,
+      undefined as any,
+      ctx,
+    );
+    record.status = "completed";
+    record.result = "done";
+    record.completedAt = Date.now();
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(record.resultConsumed).toBe(false);
+    expect(ctx.sendIndividualNudge).toHaveBeenCalledWith(record);
+
+    resolveAgent();
   });
 
   it("execute includes verbose conversation when requested", async () => {
