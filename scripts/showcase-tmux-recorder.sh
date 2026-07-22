@@ -41,7 +41,8 @@ for tool in tmux node asciinema agg ffmpeg; do
 	fi
 done
 
-if ! command -v pi >/dev/null 2>&1; then
+PI_BIN="$(command -v pi || true)"
+if [[ -z "$PI_BIN" ]]; then
 	echo "skip tmux showcase: pi CLI not found on PATH" >&2
 	exit 0
 fi
@@ -80,7 +81,7 @@ sleep 2
 
 # ── Launch pi CLI ──
 echo "Launching pi CLI..."
-tmux send-keys -t "$SESSION" "pi -e ./src/index.ts" Enter
+tmux send-keys -t "$SESSION" "$PI_BIN --no-session -e ./dist/index.js" Enter
 sleep 5
 
 # Verify pi started
