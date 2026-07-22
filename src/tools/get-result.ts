@@ -6,6 +6,58 @@ import { formatDuration, getDisplayName } from "../ui/agent-format.js";
 import { getSessionContextPercent } from "../usage.js";
 import type { ToolContext } from "./context.js";
 
+function createAbortError(signal: AbortSignal): Error {
+  const reason = signal.reason;
+  if (reason instanceof Error && reason.name === "AbortError") return reason;
+
+  const message =
+    reason instanceof Error
+      ? reason.message
+      : typeof reason === "string"
+        ? reason
+        : "get_subagent_result wait aborted";
+  return new DOMException(message, "AbortError");
+}
+
+function isAbortError(error: unknown): error is Error {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+async function waitForPromiseOrAbort(promise: Promise<unknown>, signal?: AbortSignal): Promise<void> {
+  if (!signal) {
+    await promise;
+    return;
+  }
+
+  if (signal.aborted) throw createAbortError(signal);
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    const settle = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback();
+    };
+    const onAbort = () => settle(() => reject(createAbortError(signal)));
+
+    signal.addEventListener("abort", onAbort, { once: true });
+
+    // Close the race between the initial aborted check and listener registration.
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+
+    promise.then(
+      () => settle(resolve),
+      error => settle(() => reject(error)),
+    );
+  });
+}
+
 export function createGetResultTool(ctx: ToolContext) {
   return defineTool({
     name: "get_subagent_result",
@@ -18,7 +70,7 @@ export function createGetResultTool(ctx: ToolContext) {
       }),
       wait: Type.Optional(
         Type.Boolean({
-          description: "If true, wait for the agent to complete before returning. Default: false.",
+          description: "If true, wait for the agent to complete before returning. Press Esc to cancel the wait. Default: false.",
         }),
       ),
       verbose: Type.Optional(
@@ -27,7 +79,7 @@ export function createGetResultTool(ctx: ToolContext) {
         }),
       ),
     }),
-    execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
+    execute: async (_toolCallId, params, signal, _onUpdate, _ctx) => {
       const record = ctx.manager.getRecord(params.agent_id);
       if (!record) {
         return textResult(`Agent not found: "${params.agent_id}". It may have been cleaned up.`);
@@ -39,9 +91,26 @@ export function createGetResultTool(ctx: ToolContext) {
       // (attached earlier at spawn time) and always runs before this await resumes.
       // Setting the flag here prevents a redundant follow-up notification.
       if (params.wait && record.status === "running" && record.promise) {
+        const wasResultConsumed = record.resultConsumed;
         record.resultConsumed = true;
         ctx.cancelNudge(params.agent_id);
-        await record.promise;
+
+        try {
+          await waitForPromiseOrAbort(record.promise, signal);
+        } catch (error) {
+          if (signal?.aborted && isAbortError(error)) {
+            // Esc cancels only this blocking wait, not the background agent or its eventual result.
+            // Restore notification eligibility so steering can continue without losing completion output.
+            record.resultConsumed = wasResultConsumed;
+
+            // If completion won the record-state race while the abort won the wait race,
+            // onComplete already skipped its notification because resultConsumed was true.
+            if (!wasResultConsumed && record.status !== "running" && record.status !== "queued") {
+              ctx.sendIndividualNudge(record);
+            }
+          }
+          throw error;
+        }
       }
 
       const displayName = getDisplayName(record.type);
@@ -60,7 +129,7 @@ export function createGetResultTool(ctx: ToolContext) {
         `Description: ${record.description}\n\n`;
 
       if (record.status === "running") {
-        output += "Agent is still running. Use wait: true or check back later.";
+        output += "Agent is still running. Use wait: true (Esc to cancel) or check back later.";
       } else if (record.status === "error") {
         output += `Error: ${record.error}`;
       } else {
