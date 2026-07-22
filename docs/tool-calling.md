@@ -1,231 +1,233 @@
 # Tool Calling and Tool Execution Contract
 
 > **Status:** Normative implementation reference for `@onlinechefgroep/pi-agent-orchestrator`.
-> **Applies to:** the supported Pi host (`@earendil-works/pi-coding-agent >= 0.80.10`) and this repository's `Agent`, `get_subagent_result`, and `steer_subagent` tools.
-> **Audience:** extension authors, orchestrator maintainers, agent-profile authors, reviewers, and operators debugging a blocked or unresponsive run.
+> **Host baseline:** `@earendil-works/pi-coding-agent >= 0.80.10`.
+> **Scope:** Pi tool definitions, execution, cancellation, updates, steering, subagent orchestration, result ownership, telemetry, and failure handling.
 
-This document defines what a tool call is, how Pi turns model output into an execution, how cancellation and steering interact with a running tool, and which concurrency invariants the orchestrator must preserve. It is the canonical reference for tool-call behavior in this repository.
+This document defines both the required tool-calling contract and the current conformance state of this repository. Required behavior is not presented as implemented when a known deviation still exists.
 
 ## Conformance status
 
-This document separates the required contract from known implementation deviations. Current status:
-
-- `get_subagent_result(wait:true)` conforms to the cancellable-wait and concurrent-result-ownership contract after #324.
-- Single-agent foreground `Agent` execution propagates the parent tool signal into the child session.
-- Foreground crew/swarm dispatch has open lifecycle gaps tracked in #327: it does not yet propagate the parent signal to every member, it can read `AgentRecord.promise` before queued or worktree-starting records initialize it, and the `Agent` tool does not yet enforce its documented sequential execution policy at runtime.
-
-Where current behavior differs from the required contract, this document says so explicitly rather than presenting the target behavior as already implemented.
-
----
-
-## 1. Executive contract
-
-A tool call is not a function call made directly by the model. It is a structured request emitted in an assistant message. Pi owns the execution boundary:
-
-1. The model emits one or more `toolCall` content blocks.
-2. Pi resolves each tool by name.
-3. Raw arguments may pass through `prepareArguments`.
-4. Pi validates the resulting arguments against the tool's TypeBox schema.
-5. Pre-execution hooks may inspect, mutate, block, or reject the call.
-6. Pi invokes `execute(toolCallId, params, signal, onUpdate, ctx)`.
-7. The tool may publish partial UI updates through `onUpdate`.
-8. The tool either returns an `AgentToolResult` or throws.
-9. Post-execution hooks may replace result fields.
-10. Pi emits a `toolResult` message back into the model-visible transcript.
-11. The agent either begins another model turn, consumes steering, processes a follow-up, or stops.
-
-The critical rules are:
-
-- `toolCallId` is the correlation key for one execution; agent IDs and session IDs are different identifiers.
-- `params` are schema-validated before `execute` begins.
-- `signal` is the cancellation contract. Long-running tools must honor it at every blocking boundary.
-- `onUpdate` is for partial presentation and progress; it is not the final model-visible result.
-- Returning a result means success. Throwing means tool failure.
-- Esc cancels the current parent operation. It does not automatically mean “stop every background agent”.
-- Steering is queued until the current assistant turn finishes its active tool calls. A non-cooperative tool cannot be interrupted by steering alone.
-- Parallel tool calls share process state. Mutable shared state must be synchronized explicitly.
-- Background result delivery is an ownership protocol: exactly one path should consume or notify a terminal result.
+| Area | Current status |
+| --- | --- |
+| Pi tool-call preflight, validation, hooks, updates, and transcript ordering | Implemented by the supported Pi host |
+| `get_subagent_result(wait:true)` for a running agent | Cancellable and concurrency-safe after #324 |
+| `get_subagent_result(wait:true)` for a queued agent | Current implementation returns an immediate queued snapshot; stable queued completion promises are tracked in #327 |
+| Single-agent foreground `Agent` cancellation | Parent tool signal propagates to the child session |
+| Foreground crew/swarm cancellation | Known gap #327: parent abort does not reliably stop every member |
+| Foreground crew/swarm completion waiting | Known gap #327: queued or worktree-starting records can expose no initialized `AgentRecord.promise` yet |
+| Multiple model-emitted `Agent` calls in one assistant message | Known gap #327: the description says foreground calls are sequential, but the tool does not yet declare `executionMode: "sequential"` |
 
 ---
 
-## 2. Vocabulary and identifiers
+## 1. What a tool call is
 
-The terms below are deliberately distinct.
+A tool call is a structured request emitted by a model inside an assistant message. The model does not invoke JavaScript directly. Pi owns the execution boundary.
 
-| Term | Meaning | Typical identifier |
+```text
+model output
+  └─ assistant content block: toolCall(name, id, arguments)
+       └─ Pi resolution and validation
+            └─ extension hooks
+                 └─ tool.execute(...)
+                      └─ zero or more partial updates
+                           └─ final result or thrown error
+                                └─ toolResult message in transcript
+```
+
+The distinction matters operationally:
+
+- a model can request an unknown tool;
+- arguments can fail schema validation;
+- a hook can block the call before `execute` runs;
+- cancellation can be active before execution begins;
+- an execution can throw after partial updates;
+- the final model-visible result is produced by Pi, not written directly into the transcript by the tool.
+
+### 1.1 Required vocabulary
+
+| Term | Meaning | Identity |
 | --- | --- | --- |
-| Tool definition | Registered executable capability with schema, description, renderers, and `execute` | tool name, for example `Agent` |
-| Tool call | Structured model request inside an assistant message | `toolCallId` |
-| Tool execution | Runtime invocation of the resolved tool | same `toolCallId` |
-| Tool update | Partial result emitted while execution is still active | same `toolCallId` |
-| Tool result | Final content/details returned or synthesized after failure | same `toolCallId` |
-| Agent record | Orchestrator-owned lifecycle state for a subagent | `agentId` |
-| Agent session | Pi conversation/runtime instance used by a subagent | session identity internal to Pi |
-| Parent turn | The host agent turn that issued the orchestration tool call | host session turn index |
-| Background promise | Promise representing eventual subagent completion | stored on `AgentRecord.promise` |
-| Steering message | User-like message injected before the subagent's next model request | no tool-call identity |
-| Follow-up message | Message processed after the agent would otherwise become idle | no tool-call identity |
-| Correlation ID | Stable observability identifier shared across agent/turn/tool spans | `AgentRecord.correlationId` |
+| Tool definition | Registered capability with schema and `execute` | tool name |
+| Tool call | Structured model request | `toolCallId` |
+| Tool execution | Runtime invocation corresponding to a call | same `toolCallId` |
+| Tool update | Partial result while execution remains active | same `toolCallId` |
+| Tool result | Final success or error payload | same `toolCallId` |
+| Agent record | Orchestrator lifecycle record | `agentId` |
+| Agent session | Nested Pi runtime used by a subagent | session identity |
+| Correlation ID | Telemetry identity across an agent lifetime | `correlationId` |
+| Steering message | Message inserted before a later model request | queue entry, not a tool call |
+| Follow-up message | Message delivered after the agent would otherwise stop | queue entry, not a tool call |
 
-Do not use `toolCallId`, `agentId`, and `correlationId` interchangeably:
+`toolCallId`, `agentId`, and `correlationId` are not interchangeable:
 
-- `toolCallId` correlates one model-requested tool execution.
-- `agentId` addresses one orchestrated subagent record.
-- `correlationId` groups telemetry across the lifetime of an agent, including resume operations.
+- `toolCallId` identifies one model-requested execution;
+- `agentId` identifies one orchestrated subagent record;
+- `correlationId` joins spans and events across that agent's lifetime, including resume operations.
 
 ---
 
-## 3. Runtime layers
+## 2. Runtime layers
 
 Tool calling crosses four layers.
 
 ```text
 Provider / model
-  emits AssistantMessage.content[type=toolCall]
+  emits structured tool-call blocks
         │
         ▼
 Pi agent loop
-  resolution → preparation → validation → execution → result message
+  resolve → prepare → validate → schedule → execute → finalize
         │
         ▼
 Pi coding-agent extension runtime
-  extension context, pre/post hooks, custom rendering, host cancellation
+  ExtensionContext, hooks, rendering, host cancellation
         │
         ▼
 pi-agent-orchestrator
-  AgentManager, AgentRecord, background queues, notifications, steering,
-  result ownership, swarms/groups, telemetry, output transcripts
+  AgentManager, nested sessions, queues, steering, notifications,
+  result ownership, groups, swarms, telemetry, output transcripts
 ```
 
-### 3.1 Provider layer
+### 2.1 Provider layer
 
-The provider produces structured tool-call blocks. Provider output is untrusted input. A syntactically valid block can still reference an unknown tool, contain invalid arguments, or be incomplete because model output hit a token limit.
+Provider output is untrusted input. A syntactically valid tool-call block can still:
 
-### 3.2 Pi agent loop
+- reference an unavailable tool;
+- contain the wrong argument shape;
+- violate semantic cross-field constraints;
+- be incomplete because generation ended early;
+- request several tools that Pi will schedule concurrently.
 
-Pi is responsible for:
+### 2.2 Pi agent loop
 
-- resolving the named tool;
-- compatibility preparation;
-- schema validation;
+Pi owns:
+
+- tool lookup;
+- optional compatibility preparation;
+- TypeBox validation;
 - sequential or parallel scheduling;
-- propagating the abort signal;
-- converting thrown exceptions into error tool results;
-- emitting lifecycle events;
-- appending ordered tool-result messages to the transcript.
+- abort-signal propagation;
+- partial update events;
+- exception-to-error-result conversion;
+- pre-tool and post-tool interception;
+- deterministic tool-result transcript ordering.
 
-### 3.3 Extension runtime
+### 2.3 Extension runtime
 
-The coding-agent extension layer adds:
+The coding-agent extension layer provides:
 
-- `ExtensionContext` as the fifth `execute` argument;
-- custom call/result renderers;
+- the fifth `execute` argument, `ExtensionContext`;
 - `tool_call` and `tool_result` interception;
-- session UI and input APIs;
-- host mode and trust information;
-- access to the current host abort signal.
+- custom call/result renderers;
+- host UI, mode, model, working-directory, session, and trust context;
+- access to the current host abort operation.
 
-### 3.4 Orchestrator layer
+### 2.4 Orchestrator layer
 
-The orchestrator adds a second lifecycle around subagents:
+The orchestrator adds a second lifecycle around nested agents:
 
-- an `Agent` tool execution creates an `AgentRecord`;
-- the manager may queue or start the record;
-- a nested `AgentSession` executes its own model/tool loop;
-- result retrieval and completion notifications coordinate ownership;
-- `steer_subagent` injects messages into that nested session;
-- the parent tool can finish while the background record continues.
+- `Agent` creates or resumes an `AgentRecord`;
+- `AgentManager` starts it immediately or queues it;
+- a nested `AgentSession` runs its own model/tool loop;
+- `steer_subagent` injects a future-turn message;
+- `get_subagent_result` inspects or consumes the record;
+- completion can be delivered by explicit retrieval or automatic notification.
 
-This distinction explains the original blocking-wait failure mode: the parent was stuck inside one tool execution while the background subagent was healthy and still running.
+This second lifecycle explains the original bug: the parent tool call could be blocked while the nested background agent itself remained healthy.
 
 ---
 
-## 4. Canonical Pi tool lifecycle
-
-For each model-emitted tool call, the effective lifecycle is:
+## 3. Canonical Pi lifecycle
 
 ```mermaid
 sequenceDiagram
     participant M as Model
-    participant L as Pi agent loop
-    participant H as Pre-tool hooks
+    participant L as Pi loop
+    participant H1 as Pre-tool hooks
     participant T as Tool.execute
-    participant P as Post-tool hooks
+    participant H2 as Post-tool hooks
     participant C as Conversation
 
-    M->>L: assistant toolCall(name, id, raw arguments)
-    L->>L: emit tool_execution_start
+    M->>L: toolCall(name, id, raw arguments)
+    L->>L: tool_execution_start
     L->>L: resolve tool
-    L->>L: prepareArguments(raw arguments)
+    L->>L: prepareArguments
     L->>L: schema validation
-    L->>H: tool_call / beforeToolCall
-    alt blocked, invalid, unknown, or already aborted
-        H-->>L: immediate error outcome
+    L->>H1: tool_call / beforeToolCall
+    alt invalid, unknown, blocked, truncated, or aborted
+        H1-->>L: immediate error outcome
     else allowed
         L->>T: execute(id, params, signal, onUpdate, ctx)
-        loop zero or more updates
+        loop partial progress
             T-->>L: onUpdate(partialResult)
-            L->>L: emit tool_execution_update
+            L->>L: tool_execution_update
         end
-        alt execute returns
+        alt returned
             T-->>L: AgentToolResult
-        else execute throws
+        else threw
             T-->>L: exception
             L->>L: synthesize error result
         end
-        L->>P: tool_result / afterToolCall
-        P-->>L: optional field replacements
+        L->>H2: tool_result / afterToolCall
+        H2-->>L: optional field replacements
     end
-    L->>L: emit tool_execution_end
+    L->>L: tool_execution_end
     L->>C: append toolResult message
 ```
 
-### 4.1 Lifecycle event meanings
+### 3.1 Event meanings
 
-| Event | Meaning | Stable fields |
+| Event | Meaning | Important fields |
 | --- | --- | --- |
-| `tool_execution_start` | Pi recognized a call and began preflight | `toolCallId`, `toolName`, raw `args` |
-| `tool_call` | Extension pre-execution interception | `toolCallId`, `toolName`, validated/mutable `input` |
-| `tool_execution_update` | Tool emitted a partial result | `toolCallId`, `toolName`, `partialResult` |
-| `tool_result` | Extension post-execution interception | final `content`, `details`, `isError`, optional `usage` |
-| `tool_execution_end` | Finalized execution outcome is available | `toolCallId`, `toolName`, `result`, `isError` |
-| tool-result message | Model-visible transcript artifact | tool call ID, tool name, final content |
+| `tool_execution_start` | Pi recognized a call and started preflight | `toolCallId`, `toolName`, raw `args` |
+| `tool_call` | Extension pre-execution interception | `toolCallId`, `toolName`, input |
+| `tool_execution_update` | Partial result emitted | `toolCallId`, `toolName`, partial result |
+| `tool_result` | Extension post-execution interception | content, details, usage, `isError` |
+| `tool_execution_end` | Finalized outcome available | result and `isError` |
+| Transcript `toolResult` | Durable model-visible result | call ID, tool name, content |
 
-`tool_execution_start` does not prove that `execute` ran. Unknown tools, invalid arguments, blocked calls, an already-aborted signal, and truncated model output can all produce immediate error outcomes.
+`tool_execution_start` does not prove that `execute` ran. Unknown tools, invalid input, blocked calls, pre-aborted calls, and truncated provider output can finish as immediate error outcomes.
 
-### 4.2 Tool-call preflight
+### 3.2 Preflight order
 
-Preflight is intentionally separate from execution:
+Pi performs the following logical sequence:
 
-1. Look up tool by name.
-2. Apply `prepareArguments` if configured.
-3. Validate against the schema.
-4. Run pre-tool interception.
+1. Resolve the tool by exact name.
+2. Apply `prepareArguments` when present.
+3. Validate against the TypeBox schema.
+4. Run extension pre-tool interception.
 5. Check cancellation.
-6. Either create a prepared execution or an immediate error outcome.
+6. Execute or create an immediate error outcome.
 
-A `prepareArguments` function is a compatibility shim, not a general parser. It runs before validation and must return the canonical schema shape. Deprecated aliases should not remain in the public schema merely to support old callers.
+`prepareArguments` is a compatibility shim. It should normalize legacy input into the canonical schema, not become an unrestricted parser.
 
-### 4.3 Tool errors
+### 3.3 Hook authority
 
-Tool code must throw on failure:
+Pre-tool hooks can block a call or replace its input. Post-tool hooks can replace content, details, usage, and error state.
 
-```ts
-throw new Error("Agent record no longer exists");
-```
+Consequences:
 
-Do not return an ordinary text result that merely says “Error” unless the condition is an expected domain response rather than execution failure. Pi uses thrown failures to set `isError` and to construct the corresponding error tool result.
+- validation is not authorization;
+- hook code is privileged policy code;
+- a pre-hook that mutates validated input must preserve the schema invariant itself;
+- post-hook field replacements are replacements, not implied deep merges;
+- forensic tooling should record both original and effective values where possible.
 
 ---
 
-## 5. Tool definition contract
+## 4. Tool definition contract
 
-A Pi coding-agent extension tool has this conceptual shape:
+The supported Pi extension contract is conceptually:
 
 ```ts
 import type { Static, TSchema } from "@sinclair/typebox";
 
-interface ToolDefinition<TParams extends TSchema, TDetails, TState> {
+interface ToolDefinition<
+  TParams extends TSchema,
+  TDetails = unknown,
+  TState = unknown,
+> {
   name: string;
   label: string;
   description: string;
@@ -248,98 +250,102 @@ interface ToolDefinition<TParams extends TSchema, TDetails, TState> {
 }
 ```
 
-`TParams` is the TypeBox schema type. `Static<TParams>` is the validated runtime argument shape. Treating the schema object itself as the runtime parameter type is incorrect and causes copied tool definitions to fail type-checking.
+`TParams` is the schema type. `Static<TParams>` is the validated runtime value type. Treating `TParams` itself as the runtime argument shape is incorrect.
 
-### 5.1 `name`
+### 4.1 `name`
 
-The exact model-facing tool identifier. It is part of the protocol. Renaming it is a breaking change for prompts, transcripts, hooks, and any integrations that invoke it by name.
+The model-facing protocol identifier. Renaming it breaks prompts, transcripts, hooks, and integrations that address the tool by name.
 
-Repository names are:
+Repository tool names:
 
 - `Agent`
 - `get_subagent_result`
 - `steer_subagent`
 
-### 5.2 `label`
+### 4.2 `label`
 
-Human-readable UI text. It may change without changing the invocation protocol.
+Human-readable UI text. It is presentation, not protocol identity.
 
-### 5.3 `description`
+### 4.3 `description`
 
-Model-facing behavioral contract. It must state:
+The model-facing behavioral contract. It should state:
 
 - the operation;
-- important preconditions;
-- whether it waits or returns immediately;
-- cancellation behavior;
+- preconditions;
+- blocking versus background behavior;
+- cancellation scope;
 - incompatible parameter combinations;
-- what the model should do with the result.
+- required next steps and returned identifiers.
 
-Descriptions are execution policy, not decoration. Ambiguous descriptions produce invalid call sequences even when implementation code is correct.
+Descriptions affect execution quality. They are not decorative copy.
 
-### 5.4 `parameters`
+### 4.4 `parameters`
 
-The TypeBox schema is the validation boundary. Prefer:
+The TypeBox schema is the structural validation boundary. Prefer:
 
-- narrow enumerations over arbitrary strings where the value set is closed;
-- explicit optional fields;
-- minimum/maximum constraints for counts;
-- descriptions that explain defaults and incompatibilities;
+- closed enums over arbitrary strings where possible;
+- explicit optionality;
+- numeric ranges;
+- precise defaults;
+- documented incompatibilities;
 - no hidden coercion after validation.
 
-Cross-field constraints that TypeBox cannot express must be enforced at the start of `execute` before side effects occur.
+Cross-field semantic rules must be checked before side effects. Examples include `schedule` versus `resume`, or `estimate_only` versus spawning.
 
-### 5.5 `executionMode`
+### 4.5 `executionMode`
 
-Pi defaults to parallel tool execution. A tool may opt into `sequential` when it mutates shared process or filesystem state that cannot safely be concurrent.
+Pi defaults a multi-call assistant message to parallel execution. A tool can declare `sequential` when ordering or mutual exclusion is required.
 
-Setting one tool in a batch to `sequential` causes the batch to use sequential execution. Do not set this merely because the operation is long-running. Use it when correctness requires ordering or mutual exclusion.
+A single sequential tool in a batch causes the batch to execute sequentially. Long duration alone is not a reason to choose sequential mode; shared-state correctness is.
 
-The current `Agent` tool description tells models that foreground calls are sequential, but the registered tool does not yet set `executionMode: "sequential"`; runtime enforcement is tracked in #327.
+The current `Agent` description says foreground calls execute sequentially, but the registered tool does not yet set `executionMode: "sequential"`. Runtime alignment is tracked in #327.
 
-### 5.6 Renderers
+### 4.6 Renderers
 
-`renderCall` and `renderResult` are presentation only. They must not become hidden lifecycle logic. An execution must remain correct in TUI, RPC, JSON, and print modes where rendering behavior differs or is absent.
+`renderCall` and `renderResult` are optional presentation. Correctness must not depend on TUI rendering because RPC, JSON, print, and non-interactive modes can render differently or not at all.
 
 ---
 
-## 6. The five `execute` arguments
+## 5. The five `execute` arguments
 
-### 6.1 `toolCallId`
+### 5.1 `toolCallId`
 
-Properties:
+Use `toolCallId` for per-invocation state and correlation.
 
-- unique for the model-emitted call;
-- stable for call rendering, updates, result rendering, events, and transcript correlation;
-- not a subagent ID;
-- suitable as a map key for per-call transient state;
-- unsuitable as a persistent identity across retries or resume operations.
-
-Use it for:
+Valid uses:
 
 - progress maps;
+- renderer state;
+- partial-update deduplication;
 - event correlation;
-- deduplicating updates from the same invocation;
-- associating a background record with the originating parent call.
+- associating an `AgentRecord` with the parent call that created it.
 
-The orchestrator stores the originating tool-call ID on background records as `record.toolCallId` for grouping and UI correlation.
+Invalid uses:
 
-### 6.2 `params`
+- persistent identity across retries;
+- replacing `agentId`;
+- grouping an entire resumed agent lifetime.
 
-`params` have already passed schema validation. The tool may still need semantic validation, for example:
+The orchestrator stores the originating call ID on background records for grouping and UI correlation.
 
-- `schedule` cannot be combined with `resume`;
-- `schedule` cannot inherit a parent context that will not exist at fire time;
-- `estimate_only` must not spawn or resume;
-- a target `agent_id` must still exist and be in the expected state.
+### 5.2 `params`
 
-Validate all semantic invariants before creating files, sessions, branches, timers, or background agents.
+`params` have passed structural validation, but the tool must still validate domain state:
 
-### 6.3 `signal`
+- target record exists;
+- target status permits the operation;
+- flags are semantically compatible;
+- budgets and depth limits permit spawning;
+- filesystem or project state permits worktree isolation;
+- authorization and trust policy permit the side effect.
 
-The signal represents cancellation of the current tool execution/agent operation. It can already be aborted when `execute` starts.
+Run these checks before creating sessions, worktrees, timers, files, branches, or remote mutations.
 
-Minimum contract for every blocking tool:
+### 5.3 `signal`
+
+`signal` is the cancellation contract for the current tool execution. It may already be aborted when execution starts.
+
+Minimum entry check:
 
 ```ts
 if (signal?.aborted) {
@@ -349,63 +355,63 @@ if (signal?.aborted) {
 }
 ```
 
-Then pass or bridge the signal through every nested blocking operation:
+Pass or bridge it through every blocking operation:
 
 ```ts
 await fetch(url, { signal });
 await pi.exec("command", args, { signal });
-await waitForPromiseOrAbort(record.promise, signal);
+await waitForPromiseOrAbort(promise, signal);
 ```
 
-The signal does not cancel arbitrary JavaScript promises automatically. Code such as this is non-cancellable:
+An arbitrary Promise does not become cancellable merely because `execute` received a signal.
 
 ```ts
+// Non-cancellable unless the underlying promise observes the signal.
 await record.promise;
 ```
 
-It must explicitly race the promise with the signal and remove the abort listener after either side settles.
+### 5.4 `onUpdate`
 
-### 6.4 `onUpdate`
+`onUpdate` emits partial `AgentToolResult` values while execution remains active.
 
-`onUpdate` streams partial `AgentToolResult` values while execution is active.
+Suitable data:
 
-Use it for:
-
+- elapsed time;
 - progress counters;
 - active tool names;
-- streamed output previews;
-- elapsed time;
-- partial structured details used by the renderer.
+- bounded output previews;
+- token/turn statistics;
+- renderer-specific structured details.
 
 Properties:
 
-- updates are UI/runtime events, not final transcript results;
-- updates after the tool promise settles are ignored;
-- update callbacks may be called many times;
-- update payloads should be bounded and cheap to render;
-- final correctness cannot depend on the UI receiving every update.
+- updates are not final transcript results;
+- updates can arrive many times;
+- updates can be dropped or coalesced by presentation layers;
+- updates after settlement are ignored;
+- final correctness cannot depend on every update being rendered.
 
-The foreground `Agent` path uses `onUpdate` to show tool count, active activity, duration, token usage, and spinner state. Background execution returns immediately and moves observability to the persistent widget and completion notifications.
+Foreground `Agent` execution uses updates for spinner, activity, tool count, turns, and token usage. Background execution returns control and moves observability to persistent widget state and completion notifications.
 
-### 6.5 `ctx`
+### 5.5 `ctx`
 
-`ExtensionContext` exposes the current mode, working directory, model, session manager, UI APIs, active signal, trust state, and host control methods.
+`ExtensionContext` exposes execution context such as:
 
-Important distinctions:
+- working directory;
+- host mode;
+- current model;
+- session manager;
+- UI APIs;
+- trust state;
+- host abort controls.
 
-- the explicit `signal` argument belongs to this tool execution;
-- `ctx.signal` is the host's current streaming signal and should normally represent the same active operation;
-- `ctx.abort()` aborts the current host operation;
-- `ctx.ui` may not support terminal-only interaction outside TUI mode;
-- project trust must be checked before project-local executable resources are treated as trusted.
-
-Do not retain `ctx` indefinitely as if it were a global singleton. Session switches and reloads can replace the active context.
+The explicit `signal` belongs to this tool invocation. `ctx.abort()` aborts the current host operation. Do not retain a context indefinitely as a process-global singleton; session switches and reloads can replace it.
 
 ---
 
-## 7. Tool result contract
+## 6. Result and error contract
 
-A final result has these fields:
+A final result conceptually contains:
 
 ```ts
 interface AgentToolResult<TDetails> {
@@ -417,107 +423,101 @@ interface AgentToolResult<TDetails> {
 }
 ```
 
-### 7.1 `content`
+### 6.1 `content`
 
-The model-visible result. Keep it:
+`content` is model-visible. It must be:
 
-- complete enough for the next reasoning step;
-- explicit about identifiers the model needs later;
+- sufficient for the next reasoning step;
+- explicit about follow-up identifiers;
 - bounded when raw output is large;
-- free of UI-only decoration;
-- accurate about terminal versus still-running state.
+- accurate about queued, running, and terminal state;
+- free of UI-only decoration.
 
-For a background spawn, `content` must return the `agentId` immediately because future `get_subagent_result` and `steer_subagent` calls depend on it.
+A background spawn must return the `agentId` because later result and steering calls depend on it.
 
-### 7.2 `details`
+### 6.2 `details`
 
-Structured UI/logging payload. It may contain richer state than `content`, including:
+`details` is structured UI and observability data. It can include status, duration, tokens, activity, validation state, renderer tags, and agent identity.
 
-- status;
-- duration;
-- tokens;
-- activity;
-- validation state;
-- agent ID;
-- renderer tags.
+The model should not require custom `details` to understand the operation. The durable model-facing protocol is `content`.
 
-`details` should not be required for the model to understand the result because custom details are not the durable protocol between the tool and the model.
+### 6.3 `usage`
 
-### 7.3 `usage`
+Use `usage` for resources generated by the tool itself, such as nested model work. It is separate from the parent model request's usage.
 
-Usage generated by the tool itself, such as a nested model invocation. It is separate from the main model request's usage accounting.
+### 6.4 `terminate`
 
-### 7.4 `terminate`
+`terminate` is an early-stop hint. Pi only ends a parallel tool batch early when every finalized result in that batch requests termination. One tool cannot silently discard sibling calls.
 
-This is an early-stop hint for the current tool batch. Pi only terminates early when every finalized result in the batch sets `terminate: true`. A single terminating tool cannot silently discard sibling calls.
+### 6.5 Throw versus normal result
 
-### 7.5 Post-tool overrides
+Throw for execution failure:
 
-Post-tool hooks replace fields; they do not deep-merge nested `content`, `details`, or `usage`. A hook that returns replacement content owns the entire content array.
+```ts
+throw new Error("Agent record no longer exists");
+```
+
+Return normally for expected domain-state responses when the tool contract defines them as valid outcomes.
+
+Do not return success-shaped text that merely contains the word `Error` for a genuine execution failure. Pi needs the thrown path to mark `isError` correctly.
 
 ---
 
-## 8. Parallel and sequential calls
+## 7. Parallel and sequential execution
 
-### 8.1 Default behavior
+### 7.1 Parallel ordering
 
-The Pi agent loop defaults to parallel execution unless the loop is configured sequentially or any call in the batch targets a tool whose `executionMode` is `sequential`.
+When Pi executes a tool batch in parallel:
 
-Parallel mode has deliberately mixed ordering:
-
-1. Calls are discovered in assistant-message source order.
-2. `tool_execution_start` and preflight happen in source order.
-3. Allowed executions run concurrently.
+1. Calls are discovered in assistant-message order.
+2. Start/preflight events occur in source order.
+3. Allowed executions overlap.
 4. Partial updates arrive in runtime order.
-5. `tool_execution_end` arrives in completion order.
+5. end events arrive in completion order.
 6. Final tool-result messages are appended in original source order.
 
-This gives the model a deterministic transcript while preserving runtime concurrency.
+This preserves a deterministic transcript without discarding concurrency.
 
-### 8.2 Consequences
+Never infer completion order from transcript order. Never correlate concurrent calls by tool name alone; use `toolCallId`.
 
-Never infer transcript order from completion time. Never infer completion order from the order of final tool-result messages.
+### 7.2 Shared-state hazards
 
-Do not correlate concurrent work by tool name alone. Multiple calls to the same tool can overlap; use `toolCallId`.
+Typical races:
 
-### 8.3 Shared-state hazards
-
-Common races include:
-
-- two calls updating one boolean ownership flag;
-- two file mutations using read-modify-write without a lock;
-- one cancellation restoring state captured before another call changed it;
-- a completion callback publishing while a waiter is about to consume the same result;
-- stale partial updates overwriting a newer renderer state;
-- two calls removing the same event listener or timer.
+- two calls mutate one boolean ownership flag;
+- two calls perform file read-modify-write without a lock;
+- cancellation restores state captured before another caller changed it;
+- completion publishes while a waiter is claiming the same result;
+- a stale update overwrites newer renderer state;
+- two calls remove the same listener or timer.
 
 Use one of:
 
-- a per-call map keyed by `toolCallId`;
+- per-call state keyed by `toolCallId`;
 - a per-resource coordinator with reference counts;
-- a queue/mutex for mutation;
-- immutable snapshots plus compare-and-swap semantics;
+- a mutex or serialized queue;
+- immutable snapshots with compare-and-swap semantics;
 - idempotent publication with a delivery token.
 
-A shared boolean is rarely sufficient when multiple callers can claim the same resource concurrently.
+A shared boolean is generally insufficient when several callers can claim the same resource.
 
 ---
 
-## 9. Cancellation semantics
+## 8. Cancellation contract
 
-Cancellation has scopes. Treating all aborts as equivalent creates lost results and accidental agent termination.
+Cancellation has scope. A wait cancellation, parent-tool cancellation, and subagent termination are different operations.
 
-| Operation | Cancellation target | Background subagent continues? |
+| Operation | Intended cancellation target | Current behavior |
 | --- | --- | --- |
-| Esc during single foreground `Agent` call | parent tool and foreground subagent session | No; the parent signal is wired to the child record/session |
-| Esc during foreground crew/swarm `Agent` call | intended target: parent wait and every member | **Known gap #327:** current members do not reliably receive the parent signal and may continue |
-| Esc during `get_subagent_result(wait:true)` | only the blocking wait | Yes |
-| `/agents` terminate / manager `abort(agentId)` | selected subagent | No |
-| Turn/tool quota exceeded inside subagent | subagent session | No |
-| Steering message | no cancellation by itself | Yes; message is consumed at the next steering drain point |
-| Parent agent abort propagated to child spawn | child record/session | No when the spawn path actually carries the signal |
+| Esc during single foreground `Agent` | parent tool and child session | Signal propagates to child |
+| Esc during foreground crew/swarm `Agent` | parent tool and every foreground member | Known gap #327: members may continue |
+| Esc during running-agent `get_subagent_result(wait:true)` | only that blocking wait | Implemented after #324; agent continues |
+| `get_subagent_result(wait:true)` on queued record | wait until eventual terminal state | Known gap #327: returns queued snapshot immediately |
+| `/agents` terminate or manager abort | selected agent | Agent is stopped; queued record is removed from queue |
+| Turn/tool quota abort | nested agent session | Agent stops fail-closed |
+| Steering | no cancellation | Message waits for the next drain point |
 
-### 9.1 Cancellable-promise pattern
+### 8.1 Cancellable Promise pattern
 
 ```ts
 async function waitForPromiseOrAbort<T>(
@@ -540,6 +540,8 @@ async function waitForPromiseOrAbort<T>(
     const onAbort = () => finish(() => reject(abortError(signal)));
 
     signal.addEventListener("abort", onAbort, { once: true });
+
+    // Close the race between the first check and listener registration.
     if (signal.aborted) return onAbort();
 
     promise.then(
@@ -552,254 +554,268 @@ async function waitForPromiseOrAbort<T>(
 
 Required properties:
 
-- check already-aborted signals;
-- close the race between check and listener registration;
-- use a once-only listener;
-- remove the listener when either side settles;
+- fail immediately for an already-aborted signal;
+- close the check/listener race;
+- register once;
+- remove the listener after either side settles;
 - preserve `AbortError` identity;
-- do not cancel the underlying operation unless that is the intended scope.
+- cancel the underlying operation only when that scope is intended.
 
-### 9.2 Cleanup
+### 8.2 Cleanup
 
 Every long-lived execution must clean up in `finally`:
 
-- signal listeners;
+- abort listeners;
 - session subscriptions;
-- intervals/timeouts;
-- active OTel spans;
-- file stream subscriptions;
-- heartbeat/message polling;
-- temporary ownership state.
+- intervals and timeouts;
+- OTel spans;
+- file streams;
+- polling loops;
+- temporary ownership state;
+- temporary worktrees when the lifecycle owns them.
 
-Cancellation is a normal control path, not an exceptional excuse to skip cleanup.
+Cancellation is a normal control path. It is not permission to skip cleanup.
 
-### 9.3 Catching aborts
+### 8.3 Abort propagation
 
-Do not turn an abort into a successful text result unless the tool's public contract explicitly defines cancellation as a normal result. Usually the correct behavior is to rethrow `AbortError` so Pi finalizes the tool as cancelled/error and releases the parent turn.
+For parent-child execution, attach the parent signal before the child can start meaningful work and handle an already-aborted parent. Detach the listener when the child becomes terminal.
+
+Background work that should outlive the spawning tool must not accidentally retain a parent-tool signal whose lifecycle has ended.
 
 ---
 
-## 10. Steering, follow-ups, and why a running tool can block them
+## 9. Steering and follow-ups
 
-Pi has two message queues:
+Pi maintains two distinct future-message paths:
 
-- steering: injected after the current assistant turn finishes its tool calls and before the next model request;
-- follow-up: injected after the agent would otherwise stop.
+- steering is delivered after the current assistant turn finishes its active tool calls and before the next model request;
+- follow-up is delivered after the agent would otherwise become idle.
 
-### 10.1 Steering is not an interrupt signal
+### 9.1 Steering is not an interrupt
 
-`session.steer(message)` queues a message. It does not preempt arbitrary JavaScript in an active tool. The current assistant turn's tool calls finish first.
-
-Therefore:
+`session.steer(message)` queues a message. It does not preempt arbitrary JavaScript inside a running tool.
 
 ```text
-model emits long-running tool call
-        │
-        ├── user queues steering
-        │
-        ├── tool continues until return/throw/abort
-        │
-        └── steering reaches model before next model request
+active tool execution
+  ├─ steering message is queued
+  ├─ tool continues until return, throw, or abort
+  └─ steering reaches the model before the next model request
 ```
 
-For responsive control, long-running tools must either:
+Responsive control requires at least one of:
 
-- honor the abort signal;
-- split work into bounded chunks;
-- expose a separate domain-level control channel;
-- run the long operation in the background and return control to the parent.
+- abort-aware blocking operations;
+- bounded chunks with checkpoints;
+- a domain-level control channel;
+- background execution that returns the parent loop immediately.
 
-### 10.2 `steer_subagent`
+### 9.2 Parent steering versus subagent steering
 
-The orchestrator tool:
+Typing while the parent Pi session is active targets the parent queue. Calling `steer_subagent` targets a nested subagent session. They are separate queues.
+
+### 9.3 `steer_subagent` behavior
+
+The orchestrator:
 
 1. resolves `agent_id`;
-2. rejects non-running records;
-3. queues the message in `pendingSteers` if the nested session is not initialized yet;
+2. rejects missing or non-running records;
+3. stores the message in `pendingSteers` when the session is not ready;
 4. otherwise calls `session.steer(message)`;
-5. emits the orchestrator steering event;
-6. reports current token/tool/context state.
+5. emits a steering lifecycle event;
+6. returns after queueing, not after the agent acts on it.
 
-When a session is created, `AgentManager` flushes all `pendingSteers` into it.
-
-### 10.3 Parent steering versus subagent steering
-
-Typing while the parent Pi session is streaming affects the parent queue. Calling `steer_subagent` targets a nested subagent session. These are independent queues and must not be conflated in UI or documentation.
+`AgentManager` flushes `pendingSteers` when the nested session is created.
 
 ---
 
-## 11. Orchestrator tool contracts
+## 10. Orchestrator tools
 
-### 11.1 `Agent`
+### 10.1 `Agent`
 
-Purpose: create, resume, estimate, or schedule an autonomous subagent.
-
-Execution branches:
+`Agent` can estimate, schedule, resume, dispatch coordinated members, spawn in the background, or run one foreground child.
 
 ```mermaid
 flowchart TD
-    A[Agent tool call] --> B{estimate_only?}
+    A[Agent call] --> B{estimate_only?}
     B -- yes --> C[return estimate]
     B -- no --> D{schedule?}
-    D -- yes --> E[register scheduled job]
+    D -- yes --> E[register job]
     D -- no --> F{resume?}
-    F -- yes --> G[resume existing session with parent signal]
-    F -- no --> H{orchestration dispatch}
-    H -- swarm/crew --> I[fan out members]
-    H -- single --> J{run_in_background?}
-    J -- yes --> K[spawn or queue record; return agentId]
-    J -- no --> L[spawnAndWait; stream onUpdate; return terminal result]
+    F -- yes --> G[resume session]
+    F -- no --> H{dispatch mode}
+    H -- crew/swarm --> I[fan out members]
+    H -- single --> J{background?}
+    J -- yes --> K[spawn or queue; return agentId]
+    J -- no --> L[spawnAndWait; stream updates]
 ```
 
-Single-agent foreground behavior:
+#### Single foreground execution
+
+Current behavior:
 
 - bypasses the background concurrency queue;
-- passes the parent tool signal into the child record/session;
-- streams partial activity through `onUpdate`;
-- blocks the parent tool call until the record promise settles;
-- Esc aborts the foreground child.
+- passes the parent signal to the child record/session;
+- streams activity through `onUpdate`;
+- blocks until the child record becomes terminal;
+- Esc stops the child.
 
-Coordinated foreground behavior currently:
+#### Background execution
 
-- spawns crew/swarm members as background records so group/swarm join coordination can reuse the background pipeline;
-- flushes the batch coordinator before aggregating member results;
-- directly reads optional `record.promise` values and waits with `Promise.allSettled`;
-- does not pass the parent tool signal into each member.
-
-Those last two points are known conformance failures tracked in #327. A queued or worktree-starting record can still have no promise when aggregation begins, and Esc cannot reliably cancel the foreground fan-out. The required behavior is a stable completion promise from spawn time plus parent-signal propagation to all foreground members.
-
-Background behavior:
+Current behavior:
 
 - creates a record and returns immediately;
-- may start or enter `queued` state;
+- record may be `running` or `queued`;
 - returns the agent ID and optional output-file path;
-- updates the widget independently of the parent turn;
-- publishes a completion notification unless a result consumer already claimed it.
+- widget state continues independently;
+- completion notification is sent unless explicit result ownership suppresses it.
 
-The default orchestration mode is `single`. Coordination modes may fan one tool call out into multiple background records.
+#### Coordinated foreground crew/swarm execution
 
-### 11.2 `get_subagent_result`
+Current implementation reuses background-member infrastructure for coordination. It spawns members, flushes group/swarm registration, then aggregates their record promises.
 
-Purpose: inspect or consume a background agent result.
+Known #327 deviations:
 
-Modes:
+- the parent signal is not reliably propagated to each member;
+- a queued or worktree-starting record can still have `promise === undefined` when aggregation reads it;
+- casting an optional promise does not initialize it, and `Promise.allSettled` treats an actual `undefined` value as already fulfilled;
+- therefore a foreground aggregate can finish early or remain non-cancellable.
 
-- `wait:false` or omitted: immediate snapshot;
-- `wait:true`: block until the record promise settles;
-- `verbose:true`: append serialized conversation and tool-call history.
+Required fix:
 
-Cancellation contract:
+- assign one stable completion promise before `spawn()` returns;
+- settle it exactly once for completion, error, stop, queued abort, and startup failure;
+- propagate the parent signal to every foreground member;
+- abort the full fan-out on parent Esc;
+- keep background fan-out independent after the spawning tool returns.
 
-- Esc cancels only this wait;
-- the subagent continues;
-- a cancelled wait must not permanently consume the eventual result;
-- notification eligibility must be restored if all waiters cancel;
+### 10.2 `get_subagent_result`
+
+Purpose: inspect or consume a background record.
+
+#### Current modes
+
+| Parameters and record state | Current behavior |
+| --- | --- |
+| `wait` omitted or false | Immediate snapshot |
+| `wait:true`, record `running`, and promise initialized | Abort-aware wait until the promise settles |
+| `wait:true`, record `queued` | Immediate queued snapshot; does not wait today |
+| `verbose:true` | Adds serialized conversation and tool-call history when a session exists |
+
+The queued behavior is a known #327 gap. Once records expose a stable completion promise from spawn time, `wait:true` should wait for both queued and running records.
+
+#### Running-agent cancellation contract
+
+- Esc cancels only the result wait;
+- the background agent continues;
+- cancelling the wait does not permanently consume the future result;
 - if another waiter remains active, notification suppression remains active;
-- if any waiter observes promise settlement, the result is considered consumed;
-- a terminal abort race may recover one, and only one, completion notification.
+- if any waiter observes settlement, the result remains consumed;
+- when all waiters abort during a terminal race, one notification is recovered.
 
-#### Concurrent waiter state machine
+#### Concurrent waiter state
 
 ```mermaid
 stateDiagram-v2
     [*] --> NoWaiters
-    NoWaiters --> Waiting: first wait starts\nsnapshot initial consumed state\nsuppress nudge
-    Waiting --> Waiting: additional wait starts\nincrement active count
-    Waiting --> Waiting: one wait aborts\nother waiters remain
-    Waiting --> Consumed: promise settles for any waiter
-    Waiting --> Restored: final waiter aborts\nno waiter observed settlement
-    Consumed --> [*]: final waiter exits\nkeep resultConsumed=true
-    Restored --> [*]: restore initial state\nrecover terminal nudge once if required
+    NoWaiters --> Waiting: first running wait starts
+    Waiting --> Waiting: additional waiter starts
+    Waiting --> Waiting: one waiter aborts, others remain
+    Waiting --> Consumed: any waiter observes settlement
+    Waiting --> Restored: final waiter aborts without settlement
+    Consumed --> [*]: keep consumed state
+    Restored --> [*]: restore prior state and recover one nudge if required
 ```
 
-The implementation uses shared per-record coordination rather than restoring a boolean captured independently by each invocation. This is required because Pi can execute tool calls concurrently.
+The implementation uses shared per-record coordination. Independent boolean snapshots are unsafe because one cancelled waiter could re-enable notification while another waiter is still consuming the result.
 
-### 11.3 `steer_subagent`
-
-Purpose: inject an instruction into a running subagent session.
+### 10.3 `steer_subagent`
 
 Contract:
 
-- target record must exist and be `running`;
-- pre-session messages are queued;
-- initialized sessions receive `session.steer`;
-- delivery occurs after the current subagent tool batch;
-- it does not cancel the current tool;
-- it returns once the steering message has been queued, not once the agent has acted on it.
+- target must exist and be `running`;
+- a pre-session message is queued;
+- an initialized session receives `session.steer`;
+- delivery occurs after the active nested tool batch;
+- steering does not cancel that tool;
+- the call returns after the message is queued.
 
 ---
 
-## 12. Result ownership and notifications
+## 11. Result ownership and notifications
 
 Background completion can reach the parent through two paths:
 
-1. pull: `get_subagent_result` retrieves the result;
-2. push: completion sends a follow-up notification.
+- pull: explicit `get_subagent_result`;
+- push: automatic completion follow-up.
 
-The invariant is:
+Required invariant:
 
-> A terminal result may be observed by multiple explicit callers, but automatic completion publication must occur at most once and must not be lost when every blocking caller cancels.
+> Explicit retrieval may have several callers, but automatic completion publication occurs at most once and is not lost when every blocking caller cancels.
 
-### 12.1 `resultConsumed`
+### 11.1 `resultConsumed`
 
-`AgentRecord.resultConsumed` suppresses automatic completion publication when a caller already owns the result.
+`AgentRecord.resultConsumed` suppresses automatic publication when an explicit caller owns the result.
 
-It is not a complete concurrency primitive by itself. During blocking waits, the implementation additionally coordinates active waiters per record so one cancelled caller cannot restore notification eligibility while another caller still intends to consume the result.
+It is not sufficient as a standalone concurrency primitive. Blocking retrieval also needs shared waiter coordination so that:
 
-### 12.2 Completion ordering
+- the first waiter claims ownership before awaiting;
+- additional waiters increment shared state;
+- one cancellation cannot restore ownership prematurely;
+- the final cancellation restores the state that existed before the first waiter;
+- a terminal notification suppressed during the race can be recovered once.
 
-The manager's promise chain updates the record and invokes completion side effects before an awaiting tool resumes. A blocking result tool therefore marks ownership before awaiting. Otherwise completion can publish a nudge and the waiter can immediately return the same result, producing duplicate delivery.
+### 11.2 Completion ordering
 
-### 12.3 Terminal abort race
+The manager's completion chain updates the record and runs completion side effects before an awaiting result tool resumes. Ownership must therefore be claimed before awaiting, or both pull and push can deliver the same result.
 
-A cancellation and agent completion can occur in the same event-loop window:
+### 11.3 Terminal abort race
 
 ```text
 waiter marks result consumed
 agent becomes terminal
-completion callback suppresses nudge
-wait abort wins Promise race
+completion callback suppresses notification
+wait abort wins its race
 ```
 
-If every waiter cancelled and no waiter observed settlement, the final waiter must restore the previous ownership state and re-schedule the suppressed terminal nudge exactly once.
+When no waiter observed settlement and every waiter cancelled, restore prior ownership and schedule exactly one terminal notification.
 
 ---
 
-## 13. Agent and tool state machines
+## 12. State machines
 
-### 13.1 Agent record lifecycle
+### 12.1 Agent record lifecycle
 
 ```mermaid
 stateDiagram-v2
     [*] --> queued: background spawn at capacity
     [*] --> running: foreground or capacity available
-    queued --> running: queue drained
+    queued --> running: queue drains
     queued --> stopped: operator abort
     running --> completed: normal completion
-    running --> steered: soft turn limit then wrapped up
-    running --> aborted: hard turn limit/quota abort
-    running --> stopped: operator/parent abort
-    running --> error: uncaught execution failure
+    running --> steered: soft turn limit and wrap-up
+    running --> aborted: hard quota or turn abort
+    running --> stopped: operator or parent abort
+    running --> error: uncaught failure
     completed --> running: resume
     steered --> running: resume
-    aborted --> running: resume if session retained
-    stopped --> running: resume if session retained
-    error --> running: resume if session retained
+    aborted --> running: resume when session retained
+    stopped --> running: resume when session retained
+    error --> running: resume when session retained
 ```
 
-### 13.2 Tool execution lifecycle
+### 12.2 Tool execution lifecycle
 
 ```mermaid
 stateDiagram-v2
     [*] --> recognized
-    recognized --> immediateError: unknown/invalid/blocked/aborted
+    recognized --> immediateError: unknown, invalid, blocked, truncated, or aborted
     recognized --> prepared: resolved and validated
     prepared --> executing
     executing --> executing: partial update
     executing --> returned
     executing --> threw
-    returned --> finalized: post-tool hooks
-    threw --> finalized: synthesized error result + post-tool hooks
+    returned --> finalized: post-tool interception
+    threw --> finalized: synthesized error plus interception
     immediateError --> finalized
     finalized --> transcript
     transcript --> [*]
@@ -807,122 +823,114 @@ stateDiagram-v2
 
 ---
 
-## 14. Telemetry and observability
+## 13. Telemetry and observability
 
-The runner observes nested session events and maintains:
+The nested runner tracks or emits:
 
 - turn count;
 - tool-call count;
-- tokens in/out/cache write;
 - active tool names;
-- latency to first token;
+- token input/output/cache write;
+- time to first token;
 - compaction count;
-- agent/turn/tool OTel spans;
+- agent, turn, and tool spans;
 - one stable correlation ID per agent record.
 
-### 14.1 Counting tool calls
+### 13.1 Counting caveat
 
-The runtime increments quota accounting on `tool_execution_start`. The manager increments the user-facing `record.toolUses` count on tool activity `end`. These values can temporarily differ while calls are active and can differ in error/preflight edge cases. Do not use them as transactional proof that a side effect occurred.
+Quota accounting can increment at `tool_execution_start`, while user-facing `record.toolUses` increments on tool activity end. Counts can differ temporarily and can differ around failed preflight or interrupted execution.
 
-### 14.2 Span correlation
+A tool count is not transactional proof that a side effect committed.
+
+### 13.2 Correlation
 
 Use:
 
-- `correlation.id` to query all spans for one agent lifetime;
-- `agentId` to join telemetry to dashboard state;
-- `toolCallId` to identify one specific execution within the transcript/event stream.
+- `toolCallId` for one execution;
+- `agentId` for dashboard and lifecycle state;
+- `correlationId` for an agent's complete telemetry lifetime.
 
-### 14.3 Verbose conversation export
+### 13.3 Verbose result export
 
-`get_subagent_result(verbose:true)` serializes:
-
-- user messages;
-- assistant text;
-- tool names from assistant tool-call blocks;
-- truncated tool-result content.
-
-It is an operator-oriented view, not a lossless event log. Use debug capture or OTel for complete forensic correlation.
+`get_subagent_result(verbose:true)` is an operator-oriented summary containing user/assistant text, tool names, and bounded tool-result content. It is not a lossless event log. Use debug capture or OTel for complete forensics.
 
 ---
 
-## 15. Security and capability boundaries
+## 14. Security and capability boundaries
 
-### 15.1 Tool availability is authority
+### 14.1 Tool availability is authority
 
-A model can only request tools active in its session. The orchestrator filters tools through:
+A model can only request tools active in its session. The orchestrator filters child capabilities through:
 
-1. agent profile base tool set;
-2. parent permission intersection;
-3. partition membership;
-4. explicit denylist;
-5. extension inheritance policy.
+- agent-profile base tools;
+- parent permission intersection;
+- partition membership;
+- explicit deny lists;
+- extension inheritance policy.
 
-The orchestration tools `Agent`, `get_subagent_result`, and `steer_subagent` are excluded from ordinary subagent inheritance to prevent uncontrolled recursive orchestration. Explicit recursive capabilities must remain bounded by task budgets and level limits.
+The orchestration tools are excluded from ordinary child inheritance to prevent uncontrolled recursive orchestration. Explicit recursion must remain bounded by task budgets and level limits.
 
-### 15.2 Argument validation is not authorization
+### 14.2 Validation is not authorization
 
-A valid schema says the input has the expected shape. It does not prove that the caller may perform the operation. Authorization and trust checks still belong before side effects.
+A valid schema proves shape, not permission. Authorization, project trust, tenancy, partition, and side-effect policy remain separate gates.
 
-### 15.3 Hooks
+### 14.3 Isolation controls
 
-Pre-tool hooks can block or mutate input. Input mutation is not revalidated afterward in the extension interception layer, so hook authors must preserve the schema invariant themselves.
+`isolated:true` restricts extension and MCP capability inheritance. `isolation:"worktree"` isolates filesystem edits in a temporary git worktree. These controls are distinct and can be combined.
 
-Post-tool hooks can rewrite content, details, usage, and error state. Treat post-tool hooks as privileged policy code: they can change what the model sees and whether the call is considered successful.
+### 14.4 Output handling
 
-### 15.4 Isolation
-
-`isolated:true` removes extension/MCP capabilities from a child. `isolation:"worktree"` isolates filesystem edits in a temporary git worktree. These are different controls and may be combined.
+Tool output may contain untrusted repository text, command output, remote content, or another model's response. Do not treat returned text as privileged instructions. Preserve provenance and bound transcript size.
 
 ---
 
-## 16. Implementation invariants
-
-Changes to tool execution must preserve all invariants below. Items linked to #327 are required invariants with a known current conformance gap in foreground crew/swarm execution.
+## 15. Normative invariants
 
 ### Protocol
 
-1. Tool names are stable protocol identifiers.
-2. All model-visible inputs have a schema.
-3. Semantic cross-field validation precedes side effects.
-4. Final results contain every identifier required for subsequent calls.
-5. Execution failures throw; domain-state responses return normally.
+- **1.** Tool names are stable protocol identifiers.
+- **2.** Every model-visible input has a schema.
+- **3.** Semantic validation precedes side effects.
+- **4.** Final content exposes every identifier required for follow-up calls.
+- **5.** Execution failures throw; expected domain responses return normally.
 
 ### Cancellation
 
-6. Every blocking boundary is abort-aware. **Foreground crew/swarm gap: #327.**
-7. Already-aborted signals fail immediately.
-8. Event listeners are removed after settlement.
-9. Cancellation scope is explicit: wait, parent tool, or subagent.
-10. A cancelled result wait never cancels the background agent.
-11. `AbortError` is not swallowed accidentally.
+- **6.** Every blocking boundary is abort-aware. Foreground crew/swarm is a known #327 gap.
+- **7.** Already-aborted signals fail immediately.
+- **8.** Abort listeners are removed after settlement.
+- **9.** Cancellation scope is explicit: wait, parent tool, or agent.
+- **10.** Cancelling a result wait never cancels the background agent.
+- **11.** `AbortError` is not accidentally converted into success.
 
 ### Concurrency
 
-12. Concurrent calls correlate by `toolCallId`, not tool name.
-13. Shared ownership uses reference-counted/coordinated state, not independent boolean snapshots.
-14. File/process mutations are serialized or made idempotent.
-15. Partial updates cannot mutate final correctness state.
-16. Final transcript ordering remains deterministic.
+- **12.** Concurrent calls correlate by `toolCallId`, not tool name.
+- **13.** Shared ownership uses coordinated state, not independent boolean snapshots.
+- **14.** Shared file or process mutations are serialized or idempotent.
+- **15.** Partial updates cannot determine final correctness.
+- **16.** Final transcript order remains deterministic.
 
 ### Delivery
 
-17. Explicit consumption suppresses automatic duplicate publication.
-18. Cancellation cannot permanently lose an unconsumed result.
-19. Terminal abort races recover publication at most once.
-20. Notification timers are cancellable and re-check ownership at send time.
+- **17.** Explicit consumption suppresses duplicate automatic publication.
+- **18.** Cancellation cannot permanently lose an unconsumed result.
+- **19.** Terminal abort races recover publication at most once.
+- **20.** Notification timers re-check ownership at send time.
 
 ### Lifecycle
 
-21. Subscriptions, timers, spans, streams, and worktrees are cleaned up.
-22. Foreground child abort follows parent abort. **Foreground crew/swarm gap: #327.**
-23. Background child lifetime is independent after the spawn tool returns.
-24. Steering is queued until the active tool batch finishes.
-25. Tool quotas and turn quotas fail closed.
-26. Every spawned record exposes one stable completion promise before `spawn()` returns. **Queued/worktree-start gap: #327.**
+- **21.** Subscriptions, timers, spans, streams, and worktrees are cleaned up.
+- **22.** Every foreground child follows parent abort. Crew/swarm is a known #327 gap.
+- **23.** Background child lifetime is independent after the spawning tool returns.
+- **24.** Steering is queued until the active tool batch finishes.
+- **25.** Agent, turn, and tool quotas fail closed.
+- **26.** Every spawned record exposes one stable completion promise before `spawn()` returns. Queued/worktree-starting records are a known #327 gap.
+- **27.** `get_subagent_result(wait:true)` waits across queued and running states once invariant 26 is implemented. Current queued behavior is an immediate snapshot.
 
 ---
 
-## 17. Authoring pattern
+## 16. Authoring template
 
 ```ts
 import { defineTool } from "@earendil-works/pi-coding-agent";
@@ -949,7 +957,10 @@ export const exampleTool = defineTool({
       details: { toolCallId, phase: "starting" },
     });
 
-    const result = await runCancellableOperation(params.resource_id, signal);
+    const result = await runCancellableOperation(
+      params.resource_id,
+      signal,
+    );
 
     return {
       content: [{ type: "text", text: result.summary }],
@@ -967,114 +978,121 @@ export const exampleTool = defineTool({
 Review questions:
 
 - Can any `await` remain pending after Esc?
-- Does cancellation stop the correct scope?
-- Can two calls target the same resource?
-- Is every listener/timer/subscription cleaned up?
-- Can a partial update arrive after completion?
-- Is a thrown failure distinguishable from a normal domain result?
-- Does the returned content expose required follow-up IDs?
-- Are renderers optional rather than correctness-critical?
+- Does cancellation stop exactly the intended scope?
+- Can two calls target the same mutable resource?
+- Is every listener, timer, stream, and subscription cleaned up?
+- Can a partial update arrive after settlement?
+- Is failure distinguishable from a normal domain result?
+- Does final content expose required follow-up IDs?
+- Does correctness survive non-TUI modes?
 
 ---
 
-## 18. Test matrix
+## 17. Test matrix
 
-Every non-trivial tool should cover the applicable rows.
-
-| Category | Required cases |
+| Category | Required coverage |
 | --- | --- |
 | Schema | valid input, missing required input, invalid enum/range, compatibility preparation |
-| Semantic validation | incompatible flags, missing target, wrong target state, no side effects on rejection |
-| Success | normal return, structured details, correct identifiers |
-| Failure | synchronous throw, asynchronous rejection, post-hook failure |
-| Cancellation | pre-aborted signal, abort during first wait, abort during nested operation, listener cleanup |
-| Updates | zero updates, multiple updates, no updates accepted after settlement |
-| Parallelism | two calls to different resources, two calls to same resource, completion in reverse order |
-| Ownership | explicit result consumption, notification suppression, all waiters cancelled, mixed abort/complete |
-| Race | terminal state before promise settle, promise settle before record mutation, abort and completion same tick |
-| Lifecycle | queued, running, completed, error, stopped, resumed |
-| Rendering | partial, final, expanded, no details, non-TUI mode |
-| Telemetry | start/end pairs, dangling-span cleanup, stable correlation ID |
+| Semantic validation | incompatible flags, missing target, wrong status, no side effects on rejection |
+| Success | normal return, structured details, required identifiers |
+| Failure | synchronous throw, async rejection, post-hook failure |
+| Cancellation | pre-aborted signal, abort during wait, nested abort, listener cleanup |
+| Updates | no update, several updates, no accepted update after settlement |
+| Parallelism | different resources, same resource, reverse completion order |
+| Ownership | explicit consumption, notification suppression, all waiters cancelled, mixed abort/completion |
+| Lifecycle | queued, starting, running, completed, error, stopped, resumed |
+| Rendering | partial, final, expanded, absent details, non-TUI mode |
+| Telemetry | balanced start/end, span cleanup, stable correlation ID |
 
-### 18.1 Concurrent result-wait regression
-
-At minimum:
+### 17.1 Concurrent result-wait regression
 
 ```text
 waiter A starts → waiter B starts → A aborts
-expected: resultConsumed remains true while B is active
+expected: ownership remains claimed while B is active
 agent completes → B returns result
-expected: no automatic duplicate nudge
+expected: no automatic duplicate notification
 ```
-
-And:
 
 ```text
 waiter A starts → waiter B starts → record becomes terminal
 A aborts → B aborts
-expected: initial ownership restored and exactly one nudge recovered
+expected: prior ownership restored and exactly one notification recovered
 ```
 
-### 18.2 Foreground fan-out regression
+### 17.2 Queued result-wait regression
 
 Required by #327:
 
 ```text
-crew/swarm foreground call starts → at least one member is queued or worktree-starting
-expected: parent remains pending until every member reaches a terminal state
+agent is queued → get_subagent_result(wait:true) starts
+expected after stable-promise fix: call remains pending
+queue drains → agent runs → agent completes
+expected: call returns the terminal result
+```
+
+### 17.3 Foreground fan-out regression
+
+Required by #327:
+
+```text
+foreground crew/swarm starts → one member is queued or worktree-starting
+expected: parent stays pending until every member is terminal
 ```
 
 ```text
-crew/swarm foreground call starts → Esc aborts parent tool
-expected: every foreground member is stopped, the parent rejects with AbortError,
-and no completion promise remains unsettled
+foreground crew/swarm starts → parent Esc
+expected: all foreground members stop, parent rejects with AbortError,
+and every completion promise settles exactly once
 ```
 
 ---
 
-## 19. Troubleshooting matrix
+## 18. Troubleshooting
 
-| Symptom | Likely cause | Evidence | Corrective action |
-| --- | --- | --- | --- |
-| Esc appears ignored during a tool | tool is awaiting a promise that does not observe `signal` | tool row remains active; no `tool_execution_end` | race/pass the signal and rethrow `AbortError` |
-| Esc is ignored during foreground crew/swarm | current #327 conformance gap | multiple member records remain running after parent Esc | use background dispatch or terminate members until #327 lands |
-| Steering says queued but nothing changes | active subagent tool has not completed | active tool visible in widget/trace | make tool cancellable/chunked or terminate it |
-| Parent is blocked while background agent runs | parent called `get_subagent_result(wait:true)` or foreground `Agent` | active parent tool row plus running agent | Esc cancels result waits; prefer non-blocking poll when immediate result is unnecessary |
-| Foreground crew/swarm reports completion while a member is queued | optional `record.promise` was read before initialization (#327) | aggregate contains missing/empty member output while record status is queued/running | require a stable promise from spawn time |
-| Result appears twice | completion nudge raced explicit consumption | one tool result plus one follow-up notification | claim ownership before awaiting; coordinate concurrent waiters |
-| Result disappears after cancelled wait | cancellation left `resultConsumed=true` | terminal record, no nudge, caller received AbortError | restore prior ownership when final waiter aborts |
-| Duplicate nudge after one of two waits aborts | each waiter restored one shared boolean independently | overlapping toolCallIds for same agentId | use shared active-waiter state |
-| Tool count exceeds expected side effects | count increments on lifecycle events, including failed preflight depending on metric | OTel/event log | inspect `isError` and result; do not treat count as commit proof |
-| Partial UI freezes but process continues | renderer/update problem, not execution | events/OTel continue | keep correctness independent of `onUpdate`; inspect renderer invalidation |
-| Background agent cannot be steered | record is queued/terminal or session absent | record status | steer only running records; pre-session running messages use `pendingSteers` |
-| Child unexpectedly stops with parent | foreground spawn inherited parent abort signal | parent Esc/abort timestamp | use background execution when lifetime must outlive parent tool call |
+| Symptom | Likely cause | Corrective action |
+| --- | --- | --- |
+| Esc appears ignored | Blocking operation does not observe `signal` | Pass or race the signal and preserve `AbortError` |
+| Esc ignored during foreground crew/swarm | Known #327 gap | Use background dispatch or terminate members until fixed |
+| `wait:true` returns immediately for queued agent | Current queued behavior; no stable promise yet | Track #327; use completion notification or poll until running |
+| Steering is queued but nothing changes | Active tool has not finished | Abort/chunk the tool or wait for its drain point |
+| Crew/swarm reports completion while member is queued | Optional promise read before initialization | Implement stable spawn-time completion promise (#327) |
+| Result appears twice | Pull consumption raced push notification | Claim ownership before waiting and coordinate callers |
+| Result disappears after cancelled wait | Ownership remained consumed | Restore prior ownership when final waiter cancels |
+| One of two cancelled waits causes duplicate notification | Independent boolean restoration | Use shared active-waiter state |
+| Tool count exceeds committed side effects | Lifecycle count is not transaction count | Inspect final `isError`, result, and domain audit evidence |
+| UI progress freezes while execution continues | Update/render issue | Keep correctness independent of `onUpdate` |
+| Background agent cannot be steered | Record queued, terminal, or missing | Steer only a running record; pre-session running messages use `pendingSteers` |
+| Child stops with parent unexpectedly | Child inherited parent cancellation | Use background lifetime when the child must outlive the tool call |
 
 ---
 
-## 20. Source map
+## 19. Source map
 
-| Concern | Primary implementation |
+| Concern | Primary source |
 | --- | --- |
-| Agent tool schema and branch selection | `src/tools/agent.ts` |
+| Agent schema and execution branches | `src/tools/agent.ts` |
 | Result wait, cancellation, and ownership | `src/tools/get-result.ts` |
-| Steering tool | `src/tools/steer.ts` |
-| Agent records, promises, queues, abort controllers | `src/agent-manager.ts` |
-| Nested Pi session, tool events, quotas, spans | `src/agent-runner.ts` |
-| Completion notification suppression/recovery | `src/index.ts` |
-| Shared result helpers/render details | `src/tool-result-helpers.ts` |
+| Steering | `src/tools/steer.ts` |
+| Records, queues, promises, abort controllers | `src/agent-manager.ts` |
+| Nested Pi session and tool events | `src/agent-runner.ts` |
+| Completion notifications | `src/index.ts` |
+| Result formatting | `src/tool-result-helpers.ts` |
 | Lifecycle types | `src/types.ts` |
-| Tool regressions | `test/tools-agent.test.ts`, `test/tools-get-result.test.ts`, `test/tools-steer.test.ts`, `test/orchestration-dispatch-integration.test.ts` |
-| Known foreground fan-out lifecycle gap | GitHub issue `#327` |
+| Result-wait tests | `test/tools-get-result.test.ts` |
+| Agent tool tests | `test/tools-agent.test.ts` |
+| Coordinated dispatch tests | `test/orchestration-dispatch-integration.test.ts` |
+| Foreground lifecycle hardening | GitHub issue `#327` |
 | Upstream low-level tool contract | Pi `packages/agent/src/types.ts` and `packages/agent/src/agent-loop.ts` |
-| Upstream extension tool contract | Pi `packages/coding-agent/src/core/extensions/types.ts` |
+| Upstream extension contract | Pi `packages/coding-agent/src/core/extensions/types.ts` |
 
-When upgrading the Pi peer dependency, diff the upstream tool types and agent loop before changing the minimum supported version. In particular, verify:
+When upgrading the Pi peer dependency, diff the upstream types and agent loop before raising the minimum supported version. Re-verify:
 
 - `ToolDefinition.execute` arguments;
-- default tool execution mode;
-- lifecycle event ordering;
-- pre/post hook merge semantics;
+- `Static<TParams>` inference;
+- default execution mode;
+- preflight and event ordering;
+- hook replacement semantics;
 - abort propagation;
 - update acceptance after settlement;
-- steering and follow-up drain points;
-- early-termination semantics.
+- steering/follow-up drain points;
+- early termination semantics.
