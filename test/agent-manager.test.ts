@@ -604,4 +604,27 @@ describe("AgentManager — stable spawn-time completion promises (#327)", () => 
     expect(record.status).toBe("stopped");
     expect(runAgent).not.toHaveBeenCalled();
   });
+
+  it("dispose settles queued completion gates so waitForAll does not hang", async () => {
+    manager = new AgentManager();
+    manager.setMaxConcurrent(1);
+    vi.mocked(runAgent).mockImplementation(() => new Promise(() => {}));
+
+    const runningId = manager.spawn(mockPi, mockCtx, "general-purpose", "run", {
+      description: "running",
+      isBackground: true,
+    });
+    const queuedId = manager.spawn(mockPi, mockCtx, "general-purpose", "queued", {
+      description: "queued",
+      isBackground: true,
+    });
+    const queuedPromise = manager.getRecord(queuedId)!.promise!;
+
+    const waitForAll = manager.waitForAll();
+    manager.dispose();
+
+    await expect(queuedPromise).resolves.toBe("");
+    await expect(waitForAll).resolves.toBeUndefined();
+    expect((manager as any).completionGates.size).toBe(0);
+  });
 });

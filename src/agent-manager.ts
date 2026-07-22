@@ -856,12 +856,29 @@ export class AgentManager {
 
   dispose() {
     clearInterval(this.cleanupInterval);
-    // Clear queue
+    // Settle queued agents — they never reach finalizeAgent and would otherwise
+    // leave spawn-time completion gates pending for waitForAll()/get-result callers.
+    for (const queued of this.queue) {
+      const record = this.agents.get(queued.id);
+      if (record?.status === "queued") {
+        record.status = "stopped";
+        record.completedAt = Date.now();
+        this.resolveCompletion(queued.id, "");
+      }
+    }
     this.queue = [];
-    for (const record of this.agents.values()) {
+    for (const [id, record] of this.agents) {
+      if (record.status === "running") {
+        record.abortController?.abort();
+        record.status = "stopped";
+        record.completedAt = Date.now();
+        this.resolveCompletion(id, record.result ?? "");
+      }
       record.session?.dispose();
     }
     this.agents.clear();
+    this.lastTurnCounts.clear();
+    this.completionGates.clear();
     // Prune any orphaned git worktrees (crash recovery)
     try { pruneWorktrees(process.cwd()); } catch (err) { logger.warn("Failed to prune worktrees", { error: err instanceof Error ? err.message : String(err) }); }
   }
