@@ -40,7 +40,7 @@ Use `pi install`; running `npm install` alone does not register the package reso
 | Parallel orchestration | Background groups, swarms, structured handoffs, and controlled concurrency |
 | Safe isolation | Permission inheritance, partition filtering, budgets, depth limits, and optional git worktrees |
 | Operator control | Interactive `/agents` dashboard, live status, steering, termination, schedules, and performance views |
-| Ready-made workflows | A progressive-disclosure orchestration skill and audit, plan, and implementation prompt templates |
+| Ready-made workflows | Progressive-disclosure orchestration and Pi TypeScript engineering skills plus audit, plan, and implementation prompt templates |
 | Local execution | No hosted control plane, no package-owned telemetry backend, and no package-owned data service |
 
 The extension runs inside the Pi host process. It does not make outbound network calls of its own and does not store user data on a hosted service.
@@ -82,13 +82,14 @@ Useful controls:
 
 The Pi footer can expose live running and queued counts through the `subagents` status slot.
 
-## Packaged Orchestra workflows
+## Packaged skills and Orchestra workflows
 
-The npm package includes one skill and three prompt templates. Pi loads only the skill description into the system prompt; the full workflow is read on demand.
+The npm package includes two skills and three prompt templates. Pi loads only each skill description into the system prompt; the full workflow is read on demand.
 
 | Command | Use |
 | --- | --- |
 | `/skill:pi-orchestra` | Load the complete evidence-first orchestration operating model |
+| `/skill:pi-typescript-extension-engineering` | Engineer and review strict TypeScript across Pi tools, sessions, TUI, persistence, tests, and package boundaries |
 | `/orchestra-audit [scope]` | Run three parallel read-only audits and synthesize ranked findings |
 | `/orchestra-plan <goal>` | Gather evidence in parallel and produce a mechanically verifiable plan |
 | `/orchestra-implement <goal>` | Discover, plan, implement in one isolated writer, and independently verify |
@@ -130,6 +131,7 @@ Default orchestration mode is `single`; multi-agent modes are opt-in.
 - [Performance](docs/PERFORMANCE.md) — render budgets and benchmarks.
 - [Troubleshooting](docs/troubleshooting.md) — common operator fixes.
 - [Orchestra skill](skills/pi-orchestra/SKILL.md) — evidence-first multi-agent operating model.
+- [Pi TypeScript extension engineering skill](skills/pi-typescript-extension-engineering/SKILL.md) — strict host-compatible TypeScript for extensions and SDK orchestration.
 - [AGENTS.md](AGENTS.md) — repository invariants for contributors and coding agents.
 - [CHANGELOG.md](CHANGELOG.md) — release history.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution workflow.
