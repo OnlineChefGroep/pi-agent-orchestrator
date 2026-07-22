@@ -111,7 +111,7 @@ async function updateConfig(cwd: string, relativePath: string): Promise<void> {
   // Lexical gate: reject traversal (`../../.ssh/config`) and absolute escapes
   // before any target I/O.
   const lexical = relative(root, absolutePath);
-  if (lexical === "" || lexical.startsWith("..") || isAbsolute(lexical)) {
+  if (lexical.startsWith("..") || isAbsolute(lexical)) {
     throw new Error(`Refusing to mutate path outside project root: ${relativePath}`);
   }
 
