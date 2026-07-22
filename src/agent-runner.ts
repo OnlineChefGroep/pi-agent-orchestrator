@@ -956,6 +956,8 @@ export async function resumeAgent(
   session: AgentSession,
   prompt: string,
   options: {
+    agentId?: string;
+    hooks?: HookRegistry;
     onToolActivity?: (activity: ToolActivity) => void;
     onAssistantUsage?: (usage: { input: number; output: number; cacheWrite: number }) => void;
     onCompaction?: (info: { reason: "manual" | "threshold" | "overflow"; tokensBefore: number }) => void;
@@ -966,8 +968,9 @@ export async function resumeAgent(
 ): Promise<string> {
   const collector = collectResponseText(session);
   const cleanupAbort = forwardAbortSignal(session, options.signal);
+  const agentId = options.agentId ?? "unknown";
 
-  const unsubEvents = (options.onToolActivity || options.onAssistantUsage || options.onCompaction)
+  const unsubEvents = (options.onToolActivity || options.onAssistantUsage || options.onCompaction || options.hooks)
     ? session.subscribe((event: AgentSessionEvent) => {
         if (event.type === "tool_execution_start") options.onToolActivity?.({ type: "start", toolName: event.toolName });
         if (event.type === "tool_execution_end") options.onToolActivity?.({ type: "end", toolName: event.toolName });
@@ -976,8 +979,21 @@ export async function resumeAgent(
           const u = msg.usage;
           if (u) options.onAssistantUsage?.({ input: u.input ?? 0, output: u.output ?? 0, cacheWrite: u.cacheWrite ?? 0 });
         }
+        if (event.type === "compaction_start") {
+          options.hooks
+            ?.dispatch("compaction:start", agentId, { reason: event.reason })
+            .catch((err) => {
+              logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
+            });
+        }
         if (event.type === "compaction_end" && !event.aborted) {
-          options.onCompaction?.({ reason: event.reason, tokensBefore: event.result?.tokensBefore ?? 0 });
+          const tokensBefore = event.result?.tokensBefore ?? 0;
+          options.onCompaction?.({ reason: event.reason, tokensBefore });
+          options.hooks
+            ?.dispatch("compaction:end", agentId, { reason: event.reason, tokensBefore })
+            .catch((err) => {
+              logger.debug(`Hook dispatch error: ${err instanceof Error ? err.message : String(err)}`);
+            });
         }
       })
     : () => {};

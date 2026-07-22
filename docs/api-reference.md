@@ -850,7 +850,7 @@ Event bus emission standards for external monitoring.
 - **`subagents:started`** — Execution unblocked.
 - **`subagents:completed`** — Clean termination.
 - **`subagents:failed`** — Unclean fault.
-- **`subagents:compacted`** — Buffer compaction cycle execution.
+- **`subagents:compacted`** — Upstream Pi compaction observed (`reason`, `tokensBefore`, `compactionCount` on the agent record).
 - **`subagents:record`** — Persistent memory write.
 
 ### // SECURITY CONSTRAINTS

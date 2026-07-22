@@ -627,4 +627,68 @@ describe("AgentManager — stable spawn-time completion promises (#327)", () => 
     await expect(waitForAll).resolves.toBeUndefined();
     expect((manager as any).completionGates.size).toBe(0);
   });
+
+  it("abortAll settles dequeued-but-not-running agents stuck in startAgent setup", async () => {
+    const { createWorktree } = await import("../src/worktree.js");
+    let resolveWorktree!: (value: { path: string; branch: string }) => void;
+    vi.mocked(createWorktree).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveWorktree = resolve;
+        }),
+    );
+    vi.mocked(runAgent).mockClear();
+
+    manager = new AgentManager();
+    const id = manager.spawn(mockPi, mockCtx, "general-purpose", "test", {
+      description: "mid-setup",
+      isolation: "worktree",
+      isBackground: true,
+    });
+    const record = manager.getRecord(id)!;
+    const promise = record.promise!;
+
+    // Dequeued into startAgent, still status "queued", no longer in this.queue.
+    expect(record.status).toBe("queued");
+    expect((manager as any).queue).toEqual([]);
+
+    expect(manager.abortAll()).toBe(1);
+    expect(record.status).toBe("stopped");
+    await expect(promise).resolves.toBe("");
+
+    resolveWorktree({ path: "/tmp/wt", branch: "agent-test" });
+    await Promise.resolve();
+    expect(runAgent).not.toHaveBeenCalled();
+  });
+
+  it("dispose settles dequeued-but-not-running agents stuck in startAgent setup", async () => {
+    const { createWorktree } = await import("../src/worktree.js");
+    let resolveWorktree!: (value: { path: string; branch: string }) => void;
+    vi.mocked(createWorktree).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveWorktree = resolve;
+        }),
+    );
+    vi.mocked(runAgent).mockClear();
+
+    manager = new AgentManager();
+    const id = manager.spawn(mockPi, mockCtx, "general-purpose", "test", {
+      description: "mid-setup",
+      isolation: "worktree",
+      isBackground: true,
+    });
+    const record = manager.getRecord(id)!;
+    const promise = record.promise!;
+
+    expect(record.status).toBe("queued");
+    expect((manager as any).queue).toEqual([]);
+
+    manager.dispose();
+    await expect(promise).resolves.toBe("");
+
+    resolveWorktree({ path: "/tmp/wt", branch: "agent-test" });
+    await Promise.resolve();
+    expect(runAgent).not.toHaveBeenCalled();
+  });
 });
