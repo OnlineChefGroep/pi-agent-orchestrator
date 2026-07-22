@@ -495,6 +495,28 @@ describe("duration quota (regression: must not crash the host)", () => {
     expect(session.abort).not.toHaveBeenCalled();
     expect(result.responseText).toBe("done");
   });
+
+  it("returns gracefully even when the quota abort makes session.prompt() reject", async () => {
+    // Reproduces Greptile's finding: session.abort() rejects the active
+    // prompt with an AbortError. runAgent must swallow that and still resolve
+    // with { aborted, timedOut } instead of throwing.
+    const { session, listeners } = createSession("");
+    (session.prompt as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      for (const l of listeners) l({ type: "turn_start" } as AgentSessionEvent);
+      // Simulate the host rejecting prompt() because we called abort().
+      throw new DOMException("The user aborted a request", "AbortError");
+    });
+    createAgentSession.mockResolvedValue({ session });
+
+    const result = await runAgent(ctx, "Explore", "do work", {
+      pi,
+      quotas: { maxDurationMs: -1 },
+    });
+
+    expect(result.aborted).toBe(true);
+    expect(result.timedOut).toBe(true);
+    expect(session.abort).toHaveBeenCalled();
+  });
 });
 
 describe("ModelCircuitBreaker", () => {

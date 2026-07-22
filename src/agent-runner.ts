@@ -23,6 +23,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { isAbortError } from "./abort-wait.js";
 import { getPromptCompressionLevel } from "./agent-registry.js";
 import {
   runAdversarialValidation,
@@ -664,7 +665,9 @@ export async function runAgent(
 
   let currentMessageText = "";
   const unsubTurns = session.subscribe((event: AgentSessionEvent) => {
-    // Quota checks
+    // Quota checks — guard re-entry: once timed out, stop re-aborting on
+    // every subsequent event (session.abort() can emit synchronously).
+    if (timedOut) return;
     if (checkDurationQuota()) {
       const elapsedMs = performance.now() - startTime;
       logger.warn(`Duration quota exceeded`, {
@@ -860,6 +863,13 @@ export async function runAgent(
       }
     }
   } catch (err) {
+    // A duration-quota (or token/tool) abort makes the active session.prompt()
+    // reject with an AbortError. That is the *expected* outcome of our own
+    // graceful abort — swallow it so runAgent resolves with { aborted, timedOut }
+    // instead of throwing and masking the timeout as an error.
+    if ((timedOut || aborted) && isAbortError(err)) {
+      // fall through to the graceful return path below
+    } else {
     // End agent span with error status
     const errDuration = performance.now() - startTime;
     endAgentSpan(agentSpan, {
@@ -881,6 +891,7 @@ export async function runAgent(
         logger.debug(`Hook dispatch error: ${err2 instanceof Error ? err2.message : String(err2)}`);
       });
     throw err;
+    }
   } finally {
     unsubTurns();
     collector.unsubscribe();

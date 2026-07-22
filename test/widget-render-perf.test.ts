@@ -137,6 +137,24 @@ describe("Benchmark: renderAgentWidget — pure render throughput", () => {
     renderAgentWidget = mod.renderAgentWidget;
   });
 
+  it("never exceeds MAX_WIDGET_LINES (12) when finished + running overflow the viewport", () => {
+    // Regression guard: the finished cap must respect viewport budget so a
+    // flood of finished agents never pushes running rows out of view.
+    const agents = [
+      ...buildAgentList(40, { running: 0, queued: 0, finished: 100 }),
+      ...buildAgentList(20, { running: 100, queued: 0, finished: 0 }),
+    ];
+    const lines = renderAgentWidget({
+      agents,
+      agentActivity: new Map(),
+      frame: 0,
+      shouldShowFinished: () => true,
+      theme: testTheme as any,
+      tui: testTui as any,
+    });
+    expect(lines.length).toBeLessThanOrEqual(12);
+  });
+
   it(`renders ${SMALL} agents (mixed) under 1.0ms`, () => {
     const agents = buildAgentList(SMALL, { running: 40, queued: 20, finished: 40 });
 
