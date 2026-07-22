@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AgentRecord } from "../src/types.js";
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
   defineTool: (def: any) => def,
@@ -32,6 +33,33 @@ vi.mock("../src/usage.js", () => ({
 }));
 
 import { createGetResultTool } from "../src/tools/get-result.js";
+
+function makeRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {
+  return {
+    id: "agent-1",
+    type: "Explore",
+    description: "Test",
+    status: "running",
+    toolUses: 0,
+    spawnedAt: Date.now() - 5000,
+    startedAt: Date.now() - 5000,
+    lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
+    compactionCount: 0,
+    currentLevel: 0,
+    totalSpawned: 0,
+    ...overrides,
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 describe("createGetResultTool", () => {
   const makeCtx = (overrides: any = {}) => ({
@@ -72,87 +100,62 @@ describe("createGetResultTool", () => {
     const ctx = makeCtx();
     ctx.manager.getRecord.mockReturnValue(undefined);
     const tool = createGetResultTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "missing" }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute("call-1", { agent_id: "missing" }, undefined, undefined, ctx);
     expect(result.content[0].text).toMatch(/Agent not found/);
   });
 
   it("execute returns running status for active agent", async () => {
     const ctx = makeCtx();
-    ctx.manager.getRecord.mockReturnValue({
-      id: "agent-1",
-      type: "Explore",
-      description: "Test",
-      status: "running",
-      toolUses: 2,
-      startedAt: Date.now() - 5000,
-      lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
-      compactionCount: 0,
-    });
+    ctx.manager.getRecord.mockReturnValue(makeRecord({ toolUses: 2 }));
     const tool = createGetResultTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "agent-1" }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute("call-1", { agent_id: "agent-1" }, undefined, undefined, ctx);
     expect(result.content[0].text).toMatch(/Agent is still running/);
   });
 
   it("execute returns result for completed agent", async () => {
     const ctx = makeCtx();
-    ctx.manager.getRecord.mockReturnValue({
-      id: "agent-1",
-      type: "Explore",
-      description: "Test",
-      status: "completed",
-      toolUses: 3,
-      startedAt: Date.now() - 10000,
-      completedAt: Date.now(),
-      result: "Task finished successfully",
-      lifetimeUsage: { input: 1000, output: 500, cacheWrite: 0 },
-      compactionCount: 0,
-    });
+    ctx.manager.getRecord.mockReturnValue(
+      makeRecord({
+        status: "completed",
+        toolUses: 3,
+        completedAt: Date.now(),
+        result: "Task finished successfully",
+        lifetimeUsage: { input: 1000, output: 500, cacheWrite: 0 },
+      }),
+    );
     const tool = createGetResultTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "agent-1" }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute("call-1", { agent_id: "agent-1" }, undefined, undefined, ctx);
     expect(result.content[0].text).toMatch(/Task finished successfully/);
   });
 
   it("execute returns error for errored agent", async () => {
     const ctx = makeCtx();
-    ctx.manager.getRecord.mockReturnValue({
-      id: "agent-1",
-      type: "Explore",
-      description: "Test",
-      status: "error",
-      error: "Something crashed",
-      toolUses: 1,
-      startedAt: Date.now() - 5000,
-      completedAt: Date.now(),
-      lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
-      compactionCount: 0,
-    });
+    ctx.manager.getRecord.mockReturnValue(
+      makeRecord({
+        status: "error",
+        error: "Something crashed",
+        toolUses: 1,
+        completedAt: Date.now(),
+      }),
+    );
     const tool = createGetResultTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "agent-1" }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute("call-1", { agent_id: "agent-1" }, undefined, undefined, ctx);
     expect(result.content[0].text).toMatch(/Something crashed/);
   });
 
   it("execute handles wait for running agent (sets resultConsumed and awaits promise)", async () => {
     const ctx = makeCtx();
-    const promise = new Promise<void>(resolve => {
-      resolve();
-    });
-    const record = {
-      id: "agent-1",
-      type: "Explore",
-      description: "Test",
-      status: "running",
+    const record = makeRecord({
       toolUses: 1,
-      startedAt: Date.now() - 5000,
       completedAt: Date.now(),
       result: "done",
-      promise,
+      promise: Promise.resolve("done"),
       lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 },
-      compactionCount: 0,
       resultConsumed: false,
-    };
+    });
     ctx.manager.getRecord.mockReturnValue(record);
     const tool = createGetResultTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "agent-1", wait: true }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute("call-1", { agent_id: "agent-1", wait: true }, undefined, undefined, ctx);
     expect(record.resultConsumed).toBe(true);
     expect(ctx.cancelNudge).toHaveBeenCalled();
     expect(result.content[0].text).toMatch(/Agent is still running/);
@@ -160,22 +163,14 @@ describe("createGetResultTool", () => {
 
   it("allows Esc/tool abort to interrupt wait without consuming the future result", async () => {
     const ctx = makeCtx();
-    let resolveAgent!: () => void;
-    const promise = new Promise<void>(resolve => {
-      resolveAgent = resolve;
-    });
-    const record = {
-      id: "agent-1",
-      type: "Explore",
+    const agent = deferred<string>();
+    const record: AgentRecord = makeRecord({
       description: "Long research",
-      status: "running",
       toolUses: 1,
-      startedAt: Date.now() - 5000,
-      promise,
+      promise: agent.promise,
       lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 },
-      compactionCount: 0,
       resultConsumed: false,
-    };
+    });
     ctx.manager.getRecord.mockReturnValue(record);
     const tool = createGetResultTool(ctx);
     const controller = new AbortController();
@@ -184,7 +179,7 @@ describe("createGetResultTool", () => {
       "call-1",
       { agent_id: "agent-1", wait: true },
       controller.signal,
-      undefined as any,
+      undefined,
       ctx,
     );
     controller.abort();
@@ -194,29 +189,19 @@ describe("createGetResultTool", () => {
     expect(ctx.cancelNudge).toHaveBeenCalledWith("agent-1");
     expect(ctx.sendIndividualNudge).not.toHaveBeenCalled();
 
-    resolveAgent();
+    agent.resolve("done");
   });
 
   it("restores the completion notification when abort wins a terminal-state race", async () => {
     const ctx = makeCtx();
-    let resolveAgent!: () => void;
-    const promise = new Promise<void>(resolve => {
-      resolveAgent = resolve;
-    });
-    const record = {
-      id: "agent-1",
-      type: "Explore",
+    const agent = deferred<string>();
+    const record: AgentRecord = makeRecord({
       description: "Long research",
-      status: "running",
       toolUses: 1,
-      startedAt: Date.now() - 5000,
-      promise,
-      result: undefined as string | undefined,
-      completedAt: undefined as number | undefined,
+      promise: agent.promise,
       lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 },
-      compactionCount: 0,
       resultConsumed: false,
-    };
+    });
     ctx.manager.getRecord.mockReturnValue(record);
     const tool = createGetResultTool(ctx);
     const controller = new AbortController();
@@ -225,7 +210,7 @@ describe("createGetResultTool", () => {
       "call-1",
       { agent_id: "agent-1", wait: true },
       controller.signal,
-      undefined as any,
+      undefined,
       ctx,
     );
     record.status = "completed";
@@ -237,29 +222,19 @@ describe("createGetResultTool", () => {
     expect(record.resultConsumed).toBe(false);
     expect(ctx.sendIndividualNudge).toHaveBeenCalledWith(record);
 
-    resolveAgent();
+    agent.resolve("done");
   });
 
   it("keeps notifications suppressed while another concurrent waiter remains active", async () => {
     const ctx = makeCtx();
-    let resolveAgent!: () => void;
-    const promise = new Promise<void>(resolve => {
-      resolveAgent = resolve;
-    });
-    const record = {
-      id: "agent-1",
-      type: "Explore",
+    const agent = deferred<string>();
+    const record: AgentRecord = makeRecord({
       description: "Concurrent wait",
-      status: "running",
       toolUses: 1,
-      startedAt: Date.now() - 5000,
-      promise,
-      result: undefined as string | undefined,
-      completedAt: undefined as number | undefined,
+      promise: agent.promise,
       lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 },
-      compactionCount: 0,
       resultConsumed: false,
-    };
+    });
     ctx.manager.getRecord.mockReturnValue(record);
     const tool = createGetResultTool(ctx);
     const firstController = new AbortController();
@@ -269,14 +244,14 @@ describe("createGetResultTool", () => {
       "call-1",
       { agent_id: "agent-1", wait: true },
       firstController.signal,
-      undefined as any,
+      undefined,
       ctx,
     );
     const secondWait = tool.execute(
       "call-2",
       { agent_id: "agent-1", wait: true },
       secondController.signal,
-      undefined as any,
+      undefined,
       ctx,
     );
 
@@ -288,7 +263,7 @@ describe("createGetResultTool", () => {
     record.status = "completed";
     record.result = "done";
     record.completedAt = Date.now();
-    resolveAgent();
+    agent.resolve("done");
 
     const result = await secondWait;
     expect(result.content[0].text).toMatch(/done/);
@@ -298,24 +273,14 @@ describe("createGetResultTool", () => {
 
   it("recovers exactly one terminal nudge when every concurrent waiter aborts", async () => {
     const ctx = makeCtx();
-    let resolveAgent!: () => void;
-    const promise = new Promise<void>(resolve => {
-      resolveAgent = resolve;
-    });
-    const record = {
-      id: "agent-1",
-      type: "Explore",
+    const agent = deferred<string>();
+    const record: AgentRecord = makeRecord({
       description: "Concurrent terminal race",
-      status: "running",
       toolUses: 1,
-      startedAt: Date.now() - 5000,
-      promise,
-      result: undefined as string | undefined,
-      completedAt: undefined as number | undefined,
+      promise: agent.promise,
       lifetimeUsage: { input: 100, output: 50, cacheWrite: 0 },
-      compactionCount: 0,
       resultConsumed: false,
-    };
+    });
     ctx.manager.getRecord.mockReturnValue(record);
     const tool = createGetResultTool(ctx);
     const firstController = new AbortController();
@@ -325,14 +290,14 @@ describe("createGetResultTool", () => {
       "call-1",
       { agent_id: "agent-1", wait: true },
       firstController.signal,
-      undefined as any,
+      undefined,
       ctx,
     );
     const secondWait = tool.execute(
       "call-2",
       { agent_id: "agent-1", wait: true },
       secondController.signal,
-      undefined as any,
+      undefined,
       ctx,
     );
 
@@ -350,29 +315,25 @@ describe("createGetResultTool", () => {
     expect(ctx.sendIndividualNudge).toHaveBeenCalledTimes(1);
     expect(ctx.sendIndividualNudge).toHaveBeenCalledWith(record);
 
-    resolveAgent();
+    agent.resolve("done");
   });
 
   it("execute includes verbose conversation when requested", async () => {
-    const getAgentConversation = await import("../src/agent-runner.js");
-    (getAgentConversation.getAgentConversation as any).mockReturnValue("turn1\nturn2");
+    const agentRunner = await import("../src/agent-runner.js");
+    vi.mocked(agentRunner.getAgentConversation).mockReturnValue("turn1\nturn2");
 
     const ctx = makeCtx();
-    ctx.manager.getRecord.mockReturnValue({
-      id: "agent-1",
-      type: "Explore",
-      description: "Test",
-      status: "completed",
-      toolUses: 1,
-      startedAt: Date.now() - 5000,
-      completedAt: Date.now(),
-      result: "done",
-      session: { id: "sess-1" },
-      lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
-      compactionCount: 0,
-    });
+    ctx.manager.getRecord.mockReturnValue(
+      makeRecord({
+        status: "completed",
+        toolUses: 1,
+        completedAt: Date.now(),
+        result: "done",
+        session: { id: "sess-1" } as AgentRecord["session"],
+      }),
+    );
     const tool = createGetResultTool(ctx);
-    const result = await tool.execute("call-1", { agent_id: "agent-1", verbose: true }, undefined as any, undefined as any, ctx);
+    const result = await tool.execute("call-1", { agent_id: "agent-1", verbose: true }, undefined, undefined, ctx);
     expect(result.content[0].text).toMatch(/turn1/);
   });
 });
