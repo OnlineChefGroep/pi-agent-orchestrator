@@ -1,5 +1,6 @@
 export const REQUIRED_RESOURCE_FILES = Object.freeze([
   "skills/pi-orchestra/SKILL.md",
+  "skills/pi-typescript-extension-engineering/SKILL.md",
   "prompts/orchestra-audit.md",
   "prompts/orchestra-plan.md",
   "prompts/orchestra-implement.md",
