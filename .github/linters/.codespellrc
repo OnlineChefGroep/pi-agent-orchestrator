@@ -13,6 +13,6 @@
 # sources where whole-file skip is inappropriate.
 check-hidden =
 # showcase.json is a regenerated terminal capture; width-truncated status tokens
-# (e.g. "runnin…") are product UI output, not prose misspellings.
+# from the TUI are product UI output, not prose misspellings.
 skip = *package-lock.json,*go.mod,*go.sum,*.log,.git,*CHANGELOG.md,*showcase.json
 ignore-words-list = acceptabel,actieve,afterAll,als,alle,architectuur,beforeAll,beter,checkt,doen,extreem,implementors,methode,Methode,Nd,openen,tabel,te,Wil
