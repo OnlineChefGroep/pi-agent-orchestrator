@@ -76,7 +76,7 @@ import {
   clearDispatchHistory,
   computeDispatchHistogram,
 } from "../src/dispatch-history.js";
-import { createAgentTool, type AgentToolParams } from "../src/tools/agent.js";
+import { type AgentToolParams, createAgentTool } from "../src/tools/agent.js";
 import type { ToolContext } from "../src/tools/context.js";
 
 // ---- Test harness ----
