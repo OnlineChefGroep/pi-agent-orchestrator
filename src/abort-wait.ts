@@ -17,27 +17,36 @@ export function createAbortError(signal: AbortSignal, fallbackMessage = "Operati
   return new DOMException(message, "AbortError");
 }
 
-export function isAbortError(error: unknown): error is Error {
-  return error instanceof Error && error.name === "AbortError";
+/**
+ * Recognize AbortError-shaped values, including DOMException from createAbortError().
+ * Do not require `instanceof Error` — some hosts expose AbortError DOMExceptions
+ * that fail that check, which would make Esc-cancel look like a settled result.
+ */
+export function isAbortError(error: unknown): error is { name: "AbortError" } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
 }
 
 /**
  * Await `promise`, or reject with AbortError when `signal` aborts first.
  * Already-aborted signals reject immediately without racing the promise.
+ * Preserves the resolved value of `promise`.
  */
-export async function waitForPromiseOrAbort(
-  promise: Promise<unknown>,
+export async function waitForPromiseOrAbort<T>(
+  promise: Promise<T>,
   signal?: AbortSignal,
   fallbackMessage = "Operation aborted",
-): Promise<void> {
+): Promise<T> {
   if (!signal) {
-    await promise;
-    return;
+    return await promise;
   }
 
   if (signal.aborted) throw createAbortError(signal, fallbackMessage);
 
-  await new Promise<void>((resolve, reject) => {
+  return await new Promise<T>((resolve, reject) => {
     let settled = false;
 
     const cleanup = () => signal.removeEventListener("abort", onAbort);
@@ -58,7 +67,7 @@ export async function waitForPromiseOrAbort(
     }
 
     promise.then(
-      () => settle(resolve),
+      value => settle(() => resolve(value)),
       error => settle(() => reject(error)),
     );
   });

@@ -2,7 +2,7 @@ import type { Model, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type AgentToolResult, defineTool, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { createAbortError } from "../abort-wait.js";
+import { waitForPromiseOrAbort } from "../abort-wait.js";
 import type { AgentManager } from "../agent-manager.js";
 import { buildTypeListText, getDefaultJoinMode, getOrchestrationMode, isSchedulingEnabled, reloadCustomAgents } from "../agent-registry.js";
 import { getDefaultMaxTurns, normalizeMaxTurns } from "../agent-runner.js";
@@ -356,39 +356,18 @@ async function runOrchestratedDispatch(
     }
   };
 
+  // Race member settlement against parent Esc. On abort, stop every member and
+  // reject the parent tool immediately; member promises settle via abort paths.
   let settled: PromiseSettledResult<string>[];
-  if (!args.signal) {
-    settled = await Promise.allSettled(memberPromises);
-  } else if (args.signal.aborted) {
+  try {
+    settled = await waitForPromiseOrAbort(
+      Promise.allSettled(memberPromises),
+      args.signal,
+      "Agent orchestration aborted",
+    );
+  } catch (error) {
     abortMembers();
-    throw createAbortError(args.signal, "Agent orchestration aborted");
-  } else {
-    settled = await new Promise<PromiseSettledResult<string>[]>((resolve, reject) => {
-      let done = false;
-      const cleanup = () => args.signal!.removeEventListener("abort", onAbort);
-      const onAbort = () => {
-        if (done) return;
-        done = true;
-        cleanup();
-        abortMembers();
-        // Reject the parent tool immediately. Member completion promises settle
-        // via abortController → runAgent (or the queued abort gate).
-        reject(createAbortError(args.signal!, "Agent orchestration aborted"));
-      };
-
-      args.signal!.addEventListener("abort", onAbort, { once: true });
-      if (args.signal!.aborted) {
-        onAbort();
-        return;
-      }
-
-      void Promise.allSettled(memberPromises).then((results) => {
-        if (done) return;
-        done = true;
-        cleanup();
-        resolve(results);
-      });
-    });
+    throw error;
   }
 
   const aggregate = formatOrchestratedAggregate(args, dispatch, spawned, records, settled);

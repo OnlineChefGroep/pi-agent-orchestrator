@@ -71,14 +71,19 @@ vi.mock("../src/skill-loader.js", () => ({
   preloadSkills: vi.fn(() => []),
 }));
 
+import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { AgentRunnerError, getGraceTurns, getMaxEndHookRevisions, globalCircuitBreaker, resumeAgent, runAgent, setGraceTurns, setMaxEndHookRevisions } from "../src/agent-runner.js";
 import { HookRegistry } from "../src/hooks.js";
 
-function createSession(finalText: string) {
-  const listeners: Array<(event: any) => void> = [];
+function createSession(finalText: string): {
+  session: AgentSession;
+  listeners: Array<(event: AgentSessionEvent) => void>;
+} {
+  const listeners: Array<(event: AgentSessionEvent) => void> = [];
+  // Typed fixture (no `as any`): only the AgentSession surface resumeAgent/runAgent touch.
   const session = {
-    messages: [] as any[],
-    subscribe: vi.fn((listener: (event: any) => void) => {
+    messages: [] as AgentSession["messages"],
+    subscribe: vi.fn((listener: (event: AgentSessionEvent) => void) => {
       listeners.push(listener);
       return () => {};
     }),
@@ -86,7 +91,7 @@ function createSession(finalText: string) {
       session.messages.push({
         role: "assistant",
         content: [{ type: "text", text: finalText }],
-      });
+      } as AgentSession["messages"][number]);
     }),
     abort: vi.fn(),
     steer: vi.fn(),
@@ -94,7 +99,7 @@ function createSession(finalText: string) {
     setActiveToolsByName: vi.fn(),
     setSessionName: vi.fn(),
     bindExtensions: vi.fn(async () => {}),
-  };
+  } as unknown as AgentSession;
   return { session, listeners };
 }
 
@@ -183,7 +188,7 @@ describe("agent-runner final output capture", () => {
   it("resumeAgent also falls back to the final assistant message text", async () => {
     const { session } = createSession("RESUMED");
 
-    const result = await resumeAgent(session as any, "Continue");
+    const result = await resumeAgent(session, "Continue");
 
     expect(result).toBe("RESUMED");
   });
@@ -285,7 +290,7 @@ describe("agent-runner usage callback wiring", () => {
       session.messages.push({ role: "assistant", content: [{ type: "text", text: "RESUMED" }] });
     });
 
-    await resumeAgent(session as any, "continue", {
+    await resumeAgent(session, "continue", {
       onAssistantUsage: (u) => seen.push(u),
     });
 
@@ -387,7 +392,7 @@ describe("agent-runner usage callback wiring", () => {
       session.messages.push({ role: "assistant", content: [{ type: "text", text: "RESUMED" }] });
     });
 
-    await resumeAgent(session as any, "continue", {
+    await resumeAgent(session, "continue", {
       agentId: "agent-resume",
       hooks,
     });
