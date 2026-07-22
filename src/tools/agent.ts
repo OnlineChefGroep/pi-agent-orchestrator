@@ -579,11 +579,14 @@ Guidelines:
     // ---- Execute ----
 
     execute: async (toolCallId, params, signal, onUpdate, piCtx) => {
-      const { pi, manager, widget, agentActivity, batchOrchestrator, scheduler } = ctx;
+      const { pi, manager, widget, topWidget, agentActivity, batchOrchestrator, scheduler } = ctx;
 
       // Ensure we have UI context for widget rendering
-      const uiCtx = piCtx && typeof piCtx.ui === 'object' ? (piCtx.ui as UICtx) : undefined;
-      if (uiCtx) widget.setUICtx(uiCtx);
+      const uiCtx = piCtx && typeof piCtx.ui === "object" ? (piCtx.ui as UICtx) : undefined;
+      if (uiCtx) {
+        widget.setUICtx(uiCtx);
+        topWidget.setUICtx(uiCtx);
+      }
 
       // Reload custom agents so new .pi/agents/*.md files are picked up without restart
       await reloadCustomAgents();
@@ -921,10 +924,12 @@ Guidelines:
 
       clearInterval(spinnerInterval);
 
-      // Clean up foreground agent from widget
+      // Clean up foreground agent from widgets
       if (fgId) {
         agentActivity.delete(fgId);
         widget.markFinished(fgId);
+        topWidget.markFinished(fgId);
+        topWidget.update();
       }
 
       // Get final token count

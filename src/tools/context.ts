@@ -5,6 +5,7 @@ import type { HookRegistry } from "../hooks.js";
 import type { SubagentScheduler } from "../schedule.js";
 import type { SwarmCoordinator } from "../swarm-join.js";
 import type { AgentRecord } from "../types.js";
+import type { AgentTopWidget } from "../ui/agent-top-widget.js";
 import type { AgentActivity } from "../ui/agent-ui-types.js";
 import type { AgentWidget } from "../ui/agent-widget.js";
 
@@ -12,6 +13,7 @@ export interface ToolContext {
   pi: ExtensionAPI;
   manager: AgentManager;
   widget: AgentWidget;
+  topWidget: AgentTopWidget;
   agentActivity: Map<string, AgentActivity>;
   batchOrchestrator: BatchOrchestrator;
   scheduler: SubagentScheduler;

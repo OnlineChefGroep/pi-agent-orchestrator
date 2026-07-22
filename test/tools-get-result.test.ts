@@ -72,6 +72,7 @@ describe("createGetResultTool", () => {
       getSessionMaxTurns: vi.fn().mockReturnValue(0),
     },
     widget: { setUICtx: vi.fn(), ensureTimer: vi.fn(), debouncedUpdate: vi.fn(), markFinished: vi.fn() },
+    topWidget: { setUICtx: vi.fn(), ensureTimer: vi.fn(), update: vi.fn(), markFinished: vi.fn(), forceRefresh: vi.fn() },
     agentActivity: new Map(),
     batchOrchestrator: {} as any,
     scheduler: {} as any,

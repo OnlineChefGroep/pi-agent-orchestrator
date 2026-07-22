@@ -122,6 +122,13 @@ function buildToolContext() {
     markFinished: vi.fn(),
     setUICtx: vi.fn(),
   } as any;
+  const topWidget = {
+    ensureTimer: vi.fn(),
+    update: vi.fn(),
+    markFinished: vi.fn(),
+    setUICtx: vi.fn(),
+    forceRefresh: vi.fn(),
+  } as any;
   const agentActivity = new Map<string, any>();
   const batchOrchestrator = new BatchOrchestrator({
     manager,
@@ -144,6 +151,7 @@ function buildToolContext() {
     pi,
     manager,
     widget,
+    topWidget,
     agentActivity,
     batchOrchestrator,
     scheduler,

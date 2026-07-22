@@ -41,6 +41,7 @@ describe("createSteerTool", () => {
       getMaxConcurrent: vi.fn().mockReturnValue(4),
     },
     widget: { setUICtx: vi.fn(), ensureTimer: vi.fn(), debouncedUpdate: vi.fn() },
+    topWidget: { setUICtx: vi.fn(), ensureTimer: vi.fn(), update: vi.fn(), markFinished: vi.fn(), forceRefresh: vi.fn() },
     agentActivity: new Map(),
     batchOrchestrator: {} as any,
     scheduler: {} as any,

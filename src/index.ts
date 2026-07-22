@@ -19,6 +19,7 @@ import {
   isDebugCaptureEnabled,
   isSchedulingEnabled,
   reloadCustomAgents,
+  setAgentTopRefreshHandler,
   setAnimationStyle,
   setDashboardKeybindings,
   setDashboardRefreshInterval,
@@ -30,6 +31,7 @@ import {
   setPromptCompressionLevel,
   setSchedulingEnabled,
   setShowActivityStream,
+  setShowAgentTopWidget,
   setShowTokenUsage,
   setShowTurnProgress,
   setTracingEnabled,
@@ -66,6 +68,7 @@ import { createAgentTool } from "./tools/agent.js";
 import { createGetResultTool } from "./tools/get-result.js";
 import { createSteerTool } from "./tools/steer.js";
 import { type AgentRecord, type NotificationDetails } from "./types.js";
+import { AgentTopWidget } from "./ui/agent-top-widget.js";
 import type { AgentActivity, UICtx } from "./ui/agent-ui-types.js";
 import { AgentWidget } from "./ui/agent-widget.js";
 import { setSpinnerStyle } from "./ui/animation.js";
@@ -126,20 +129,26 @@ export default async function (pi: ExtensionAPI) {
   function sendIndividualNudge(record: AgentRecord) {
     agentActivity.delete(record.id);
     widget.markFinished(record.id);
+    topWidget.markFinished(record.id);
     scheduleNudge(record.id, () => emitIndividualNudge(record));
     widget.update();
+    topWidget.update();
   }
 
   // ---- Group join manager ----
   const groupJoin = new GroupJoinManager(
     (records, partial) => {
-      for (const r of records) { agentActivity.delete(r.id); widget.markFinished(r.id); }
+      for (const r of records) {
+        agentActivity.delete(r.id);
+        widget.markFinished(r.id);
+        topWidget.markFinished(r.id);
+      }
 
       const groupKey = `group:${records.map(r => r.id).join(",")}`;
       scheduleNudge(groupKey, () => {
         // Re-check at send time
         const unconsumed = records.filter(r => !r.resultConsumed);
-        if (unconsumed.length === 0) { widget.update(); return; }
+        if (unconsumed.length === 0) { widget.update(); topWidget.update(); return; }
 
         const notifications = unconsumed.map(r => formatTaskNotification(r, 300)).join('\n\n');
         const label = partial
@@ -160,6 +169,7 @@ export default async function (pi: ExtensionAPI) {
         }, { deliverAs: "followUp", triggerTurn: true });
       });
       widget.update();
+      topWidget.update();
     },
     30_000,
   );
@@ -169,12 +179,16 @@ export default async function (pi: ExtensionAPI) {
   // for the rich AgentDashboard.
   const swarmJoin = new SwarmCoordinator(
     (records, partial, swarmId) => {
-      for (const r of records) { agentActivity.delete(r.id); widget.markFinished(r.id); }
+      for (const r of records) {
+        agentActivity.delete(r.id);
+        widget.markFinished(r.id);
+        topWidget.markFinished(r.id);
+      }
 
       const swarmKey = `swarm:${swarmId}`;
       scheduleNudge(swarmKey, () => {
         const unconsumed = records.filter(r => !r.resultConsumed);
-        if (unconsumed.length === 0) { widget.update(); return; }
+        if (unconsumed.length === 0) { widget.update(); topWidget.update(); return; }
 
         const notifications = unconsumed.map(r => formatTaskNotification(r, 300)).join('\n\n');
         const label = partial
@@ -195,6 +209,7 @@ export default async function (pi: ExtensionAPI) {
         }, { deliverAs: "followUp", triggerTurn: true });
       });
       widget.update();
+      topWidget.update();
     },
     30_000,
   );
@@ -251,7 +266,9 @@ export default async function (pi: ExtensionAPI) {
     if (record.resultConsumed) {
       agentActivity.delete(record.id);
       widget.markFinished(record.id);
+      topWidget.markFinished(record.id);
       widget.update();
+      topWidget.update();
       return;
     }
 
@@ -259,6 +276,7 @@ export default async function (pi: ExtensionAPI) {
     // don't send an individual nudge — batch orchestrator will pick it up retroactively.
     if (batchOrchestrator.isPendingBatchFinalization(record.id)) {
       widget.update();
+      topWidget.update();
       return;
     }
 
@@ -270,6 +288,7 @@ export default async function (pi: ExtensionAPI) {
     }
     // 'held' or 'delivered' for either → notification handled by the respective coordinator
     widget.update();
+    topWidget.update();
   }, undefined, (record) => {
     // Emit started event when agent transitions to running (including from queue)
     pi.events.emit("subagents:started", {
@@ -507,6 +526,8 @@ export default async function (pi: ExtensionAPI) {
     clearSubagentsApi();
     clearWidgetMetrics();
     widget.dispose();
+    topWidget.dispose();
+    setAgentTopRefreshHandler(undefined);
     scheduler.stop();
     manager.abortAll();
     for (const timer of pendingNudges.values()) clearTimeout(timer);
@@ -521,15 +542,24 @@ export default async function (pi: ExtensionAPI) {
     if (scheduleUnsub) scheduleUnsub();
   });
 
-  // Live widget: show running agents above editor
+  // Live widgets above the editor: agent tree + persistent AGENT TOP strip
   const widget = new AgentWidget(manager, agentActivity);
+  const topWidget = new AgentTopWidget(manager, agentActivity);
+  setAgentTopRefreshHandler(() => topWidget.forceRefresh());
+
+  function refreshLiveWidgets(): void {
+    widget.update();
+    topWidget.update();
+  }
 
   function bindWidgetUiCtx(ctx: ExtensionContext | undefined) {
     const uiCtx = ctx && typeof ctx.ui === "object" ? (ctx.ui as UICtx) : undefined;
     if (!uiCtx) return;
     widget.setUICtx(uiCtx);
+    topWidget.setUICtx(uiCtx);
     widget.ensureTimer();
-    widget.update();
+    topWidget.ensureTimer();
+    refreshLiveWidgets();
   }
 
   setWidgetMetrics({
@@ -547,7 +577,7 @@ export default async function (pi: ExtensionAPI) {
     groupJoin,
     swarmJoin,
     onAgentHandled: sendIndividualNudge,
-    onWidgetUpdate: () => widget.update(),
+    onWidgetUpdate: () => refreshLiveWidgets(),
   });
 
   // Track tool calls per turn so we only age the widget once per turn boundary,
@@ -560,6 +590,7 @@ export default async function (pi: ExtensionAPI) {
     currentTurnToolCount++;
     if (currentTurnToolCount === 1) {
       widget.onTurnStart();
+      topWidget.onTurnStart();
     }
   });
 
@@ -590,6 +621,7 @@ export default async function (pi: ExtensionAPI) {
       setShowActivityStream,
       setShowTokenUsage,
       setShowTurnProgress,
+      setShowAgentTopWidget,
       setOrchestrationMode,
       setDashboardRefreshInterval,
       setSessionMaxSpawns: (n) => manager.setSessionMaxSpawns(n),
@@ -605,7 +637,7 @@ export default async function (pi: ExtensionAPI) {
 
   // ---- Tool context — shared dependency bag for extracted tool modules ----
   const toolCtx = {
-    pi, manager, widget, agentActivity, batchOrchestrator, scheduler, swarmJoin, hookRegistry,
+    pi, manager, widget, topWidget, agentActivity, batchOrchestrator, scheduler, swarmJoin, hookRegistry,
     sendIndividualNudge, cancelNudge, scheduleNudge,
   };
 
