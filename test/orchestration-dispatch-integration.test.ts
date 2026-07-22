@@ -76,7 +76,7 @@ import {
   clearDispatchHistory,
   computeDispatchHistogram,
 } from "../src/dispatch-history.js";
-import { createAgentTool } from "../src/tools/agent.js";
+import { createAgentTool, type AgentToolParams } from "../src/tools/agent.js";
 import type { ToolContext } from "../src/tools/context.js";
 
 // ---- Test harness ----
@@ -570,13 +570,14 @@ describe("orchestration-dispatch integration — Agent tool end-to-end", () => {
     const tool = createAgentTool(ctx);
     const controller = new AbortController();
 
+    const params: AgentToolParams = {
+      subagent_type: "general-purpose",
+      prompt: "do benchmark",
+      description: "benchmark",
+    };
     const executePromise = tool.execute!(
       "call-id",
-      {
-        subagent_type: "general-purpose",
-        prompt: "do benchmark",
-        description: "benchmark",
-      } as any,
+      params,
       controller.signal,
       undefined,
       piCtx,
