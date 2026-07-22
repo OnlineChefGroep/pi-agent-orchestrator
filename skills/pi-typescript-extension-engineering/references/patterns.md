@@ -26,14 +26,14 @@ Prefer this over a large entry file that owns persistence, orchestration, render
 
 ## 2. Version-aligned TypeBox import
 
-Use exactly one TypeBox family based on the installed Pi host ABI.
+Use exactly one TypeBox family based on the installed Pi host ABI. Agent Orchestra pins `@sinclair/typebox` (see `package.json`); match that unless you are deliberately migrating.
 
 ```ts
-// Current Pi releases after the TypeBox 1.x migration:
-import { Type } from "typebox";
+// Agent Orchestra and other @sinclair/typebox pins:
+import { Type } from "@sinclair/typebox";
 
-// Older pinned repositories may still require:
-// import { Type } from "@sinclair/typebox";
+// Newer Pi releases after the TypeBox 1.x migration may instead use:
+// import { Type } from "typebox";
 ```
 
 A TypeBox migration changes runtime schema objects, package metadata, lockfiles, tests, and provider validation behavior. Treat it as a compatibility change, not a cleanup edit.
@@ -47,7 +47,7 @@ import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
 } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import { Type } from "@sinclair/typebox";
 
 export const inspectLogsTool = defineTool({
   name: "inspect_logs",
@@ -60,7 +60,7 @@ export const inspectLogsTool = defineTool({
       Type.Integer({ minimum: 1, maximum: 5_000, description: "Requested tail length." }),
     ),
   }),
-  async execute(_toolCallId, params, signal, onUpdate) {
+  async execute(_toolCallId, params, signal, onUpdate, _ctx) {
     if (signal?.aborted) {
       return {
         content: [{ type: "text", text: "Log inspection cancelled before execution." }],
@@ -101,28 +101,44 @@ The domain function `readServiceLogs` should accept the same abort signal and st
 
 ```ts
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
-import { readFile, writeFile } from "node:fs/promises";
-import { isAbsolute, relative, resolve } from "node:path";
+import { readFile, realpath, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
 async function updateConfig(cwd: string, relativePath: string): Promise<void> {
-  const absolutePath = resolve(cwd, relativePath.replace(/^@/, ""));
+  const root = await realpath(cwd);
+  const absolutePath = resolve(root, relativePath.replace(/^@/, ""));
 
-  // Tool arguments are untrusted: reject traversal (`../../.ssh/config`) or
-  // absolute paths that resolve outside the project root before touching disk.
-  const containedPath = relative(cwd, absolutePath);
-  if (containedPath === "" || containedPath.startsWith("..") || isAbsolute(containedPath)) {
+  // Lexical gate: reject traversal (`../../.ssh/config`) and absolute escapes
+  // before any target I/O.
+  const lexical = relative(root, absolutePath);
+  if (lexical === "" || lexical.startsWith("..") || isAbsolute(lexical)) {
     throw new Error(`Refusing to mutate path outside project root: ${relativePath}`);
   }
 
-  await withFileMutationQueue(absolutePath, async () => {
-    const current = await readFile(absolutePath, "utf8");
+  // Symlink hardening: resolve the real path (or nearest existing ancestor)
+  // so a link under cwd cannot escape the project root.
+  let resolvedTarget: string;
+  try {
+    resolvedTarget = await realpath(absolutePath);
+  } catch {
+    const parent = await realpath(dirname(absolutePath));
+    resolvedTarget = resolve(parent, basename(absolutePath));
+  }
+
+  const contained = relative(root, resolvedTarget);
+  if (contained.startsWith("..") || isAbsolute(contained)) {
+    throw new Error(`Refusing to mutate path outside project root: ${relativePath}`);
+  }
+
+  await withFileMutationQueue(resolvedTarget, async () => {
+    const current = await readFile(resolvedTarget, "utf8");
     const next = transformConfig(current);
-    await writeFile(absolutePath, next, "utf8");
+    await writeFile(resolvedTarget, next, "utf8");
   });
 }
 ```
 
-Enforce project containment before mutating: the queue serializes writes but does not stop a resolved path from escaping `cwd`. Also do not read outside the queue and write inside it. Another tool could mutate the same file between those operations.
+Enforce project containment with both a lexical check and `realpath()` before mutating: the queue serializes writes but does not stop a symlink under `cwd` from escaping. Also do not read outside the queue and write inside it. Another tool could mutate the same file between those operations.
 
 ## 5. One session per delegated cwd
 
@@ -158,6 +174,8 @@ Do not create every subagent against the parent process cwd. That breaks worktre
 ## 6. Steering and abort flow
 
 ```ts
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
 export async function redirectRunningAgent(
   session: AgentSession,
   message: string,
@@ -250,18 +268,21 @@ export function makeAgentRecord(
 ): AgentRecord {
   return {
     id: "agent-test",
-    name: "Test Agent",
+    type: "Explore",
+    description: "Test agent",
     status: "queued",
     toolUses: 0,
+    spawnedAt: Date.now(),
+    lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
     compactionCount: 0,
-    pendingSteers: [],
-    createdAt: Date.now(),
+    currentLevel: 0,
+    totalSpawned: 0,
     ...overrides,
   };
 }
 ```
 
-Keep the base fixture complete. A `Partial<T>` override is acceptable because the factory returns a complete `T`; casting an incomplete object to `T` is not.
+Keep the base fixture complete and aligned with `AgentRecord` in `src/types.ts`. A `Partial<T>` override is acceptable because the factory returns a complete `T`; casting an incomplete object to `T` is not.
 
 ## 10. Exhaustive state handling
 
@@ -274,10 +295,14 @@ export function statusLabel(status: AgentStatus): string {
       return "Running";
     case "completed":
       return "Completed";
-    case "failed":
-      return "Failed";
-    case "cancelled":
-      return "Cancelled";
+    case "steered":
+      return "Steered";
+    case "aborted":
+      return "Aborted";
+    case "stopped":
+      return "Stopped";
+    case "error":
+      return "Error";
     default: {
       const unreachable: never = status;
       return unreachable;

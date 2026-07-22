@@ -69,6 +69,15 @@ for (const resourcePath of REQUIRED_RESOURCE_FILES) {
       "Orchestra skill frontmatter name is invalid",
     );
   }
+
+  if (resourcePath === "skills/pi-typescript-extension-engineering/SKILL.md") {
+    assert(
+      /(?:^|\r?\n)name:\s*pi-typescript-extension-engineering\s*(?:\r?\n|$)/.test(
+        frontmatterBody,
+      ),
+      "TypeScript extension engineering skill frontmatter name is invalid",
+    );
+  }
 }
 
 const preview = packageJson.pi?.video;

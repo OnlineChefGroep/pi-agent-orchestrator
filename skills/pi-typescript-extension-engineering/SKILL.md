@@ -67,7 +67,7 @@ For `pi-agent-orchestrator`, preserve its three-way boundary:
 
 Use TypeBox schemas as the runtime contract for every agent-callable tool.
 
-- Match the TypeBox package to the installed Pi host ABI. Newer Pi releases use `typebox`; older pinned integrations may still use `@sinclair/typebox`. Do not mix both in one package without a deliberate migration.
+- Match the TypeBox package to the installed Pi host ABI. Agent Orchestra pins `@sinclair/typebox` (see `package.json`); newer Pi releases may use `typebox`. Do not mix both in one package without a deliberate migration.
 - Prefer closed, explicit object schemas with descriptions on fields that influence agent behavior.
 - Use finite enums for actions and modes; use the Pi AI `StringEnum` helper where provider compatibility requires it.
 - Add a `prepareArguments` compatibility adapter only for a known previous argument shape. Keep it small and covered by tests.
@@ -179,6 +179,7 @@ When working in `OnlineChefGroep/pi-agent-orchestrator`, preserve these invarian
 - Node.js must satisfy the repository's exact minimum, currently `>=22.19.0`.
 - TypeScript is strict, emits declarations, targets ESM, and resolves with `moduleResolution: "bundler"`.
 - Biome is the only linter; formatting is disabled; strings use double quotes.
+- Schema imports use the pinned `@sinclair/typebox` family from `package.json`, not the newer bare `typebox` package, unless an explicit migration is underway.
 - Tests use Vitest and live in `test/`.
 - Settings persist to `.pi/subagent-settings.json` and must be surfaced through the settings snapshot/menu and API documentation.
 - Built-in agent changes update defaults, focused tests, and the README.
