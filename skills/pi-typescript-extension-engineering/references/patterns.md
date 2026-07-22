@@ -102,10 +102,17 @@ The domain function `readServiceLogs` should accept the same abort signal and st
 ```ts
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 
 async function updateConfig(cwd: string, relativePath: string): Promise<void> {
   const absolutePath = resolve(cwd, relativePath.replace(/^@/, ""));
+
+  // Tool arguments are untrusted: reject traversal (`../../.ssh/config`) or
+  // absolute paths that resolve outside the project root before touching disk.
+  const containedPath = relative(cwd, absolutePath);
+  if (containedPath === "" || containedPath.startsWith("..") || isAbsolute(containedPath)) {
+    throw new Error(`Refusing to mutate path outside project root: ${relativePath}`);
+  }
 
   await withFileMutationQueue(absolutePath, async () => {
     const current = await readFile(absolutePath, "utf8");
@@ -115,7 +122,7 @@ async function updateConfig(cwd: string, relativePath: string): Promise<void> {
 }
 ```
 
-Do not read outside the queue and write inside it. Another tool could mutate the same file between those operations.
+Enforce project containment before mutating: the queue serializes writes but does not stop a resolved path from escaping `cwd`. Also do not read outside the queue and write inside it. Another tool could mutate the same file between those operations.
 
 ## 5. One session per delegated cwd
 
@@ -186,7 +193,10 @@ await runtime.newSession();
 
 unsubscribe();
 session = runtime.session;
-await session.bindExtensions(extensionsResult.runtime);
+// bindExtensions takes ExtensionBindings, not the ExtensionRuntime object.
+await session.bindExtensions({
+  onError: (err) => reportExtensionError(err),
+});
 unsubscribe = session.subscribe(handleEvent);
 ```
 
