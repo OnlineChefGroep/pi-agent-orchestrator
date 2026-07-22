@@ -329,12 +329,23 @@ Every long-lived resource needs one clear owner.
 ```ts
 export class SessionResources {
   readonly #disposers = new Set<() => void | Promise<void>>();
+  #disposePromise: Promise<void> | undefined;
 
   add(dispose: () => void | Promise<void>): void {
+    if (this.#disposePromise) {
+      throw new Error("Cannot register a resource after disposal started.");
+    }
     this.#disposers.add(dispose);
   }
 
-  async dispose(): Promise<void> {
+  dispose(): Promise<void> {
+    if (!this.#disposePromise) {
+      this.#disposePromise = this.#disposeAll();
+    }
+    return this.#disposePromise;
+  }
+
+  async #disposeAll(): Promise<void> {
     const errors: unknown[] = [];
     for (const dispose of [...this.#disposers].reverse()) {
       try {
