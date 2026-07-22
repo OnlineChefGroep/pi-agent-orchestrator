@@ -173,9 +173,14 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
   const width = Math.max(20, options.tui.terminal.columns);
   const truncate = (line: string): string => fastTruncate(line, width);
 
-  const finishedLines = finished.slice(0, 100).map((agent) =>
-    truncate(`${theme.fg("dim", tree)} ${renderFinishedLine(agent, options.agentActivity.get(agent.id), theme)}`),
-  );
+  // Single-pass cap (P3): avoid .slice().map() intermediate arrays on the hot render path.
+  const finishedLines: string[] = [];
+  for (const agent of finished) {
+    if (finishedLines.length >= 100) break;
+    finishedLines.push(
+      truncate(`${theme.fg("dim", tree)} ${renderFinishedLine(agent, options.agentActivity.get(agent.id), theme)}`),
+    );
+  }
 
   const queuedByType = new Map<string, { name: string; count: number; firstId: string }>();
   for (const agent of queued) {
@@ -203,7 +208,8 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
   if (queuedLines.length > 50) queuedLines.length = 50;
 
   const runningLines: string[][] = [];
-  for (const agent of running.slice(0, 50)) {
+  for (const agent of running) {
+    if (runningLines.length >= 50) break;
     const name = getDisplayName(agent.type);
     const modeLabel = getPromptModeLabel(agent.type);
     const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
