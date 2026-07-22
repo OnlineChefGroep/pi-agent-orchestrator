@@ -244,6 +244,10 @@ export class AgentManager {
         reject(reason);
       };
     });
+    // Callers may spawn-and-forget (or only inspect listAgents). Attach a
+    // rejection handler so startup failures do not become unhandledRejections
+    // while still rejecting for any later awaiter of record.promise.
+    void gate.promise.catch(() => {});
     this.completionGates.set(id, gate);
     return gate.promise;
   }
