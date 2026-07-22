@@ -445,6 +445,27 @@ export function setupSessionCallbacks(
 }
 
 /**
+ * Params accepted by the Agent tool `execute` path.
+ * Mirrors the `Type.Object` schema in {@link createAgentTool} (`schedule` is only
+ * present in the LLM schema when scheduling is enabled, but remains optional here).
+ */
+export type AgentToolParams = {
+  prompt: string;
+  description: string;
+  subagent_type: string;
+  model?: string;
+  thinking?: string;
+  max_turns?: number;
+  run_in_background?: boolean;
+  resume?: string;
+  isolated?: boolean;
+  inherit_context?: boolean;
+  estimate_only?: boolean;
+  isolation?: "worktree";
+  schedule?: string;
+};
+
+/**
  * Register and return the "Agent" tool used to launch and control autonomous subagents.
  *
  * The returned tool exposes parameters to configure agent type, prompt, model, thinking level, max turns, background/foreground execution, resuming, isolation, scheduling (when enabled), and estimate-only queries; it renders calls/results with a custom TUI presentation and implements execution paths for estimates, scheduling, resuming, background spawning (with output-file streaming and batching), and foreground streaming with progress updates.
