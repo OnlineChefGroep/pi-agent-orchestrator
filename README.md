@@ -94,6 +94,12 @@ The npm package includes two skills and three prompt templates. Pi loads only ea
 | `/orchestra-plan <goal>` | Gather evidence in parallel and produce a mechanically verifiable plan |
 | `/orchestra-implement <goal>` | Discover, plan, implement in one isolated writer, and independently verify |
 
+Install only the TypeScript skill into Cursor, Codex, Claude Code, or another Agent Skills-compatible client:
+
+```bash
+npx skills add https://github.com/OnlineChefGroep/pi-agent-orchestrator --skill pi-typescript-extension-engineering
+```
+
 The templates deliberately avoid automatic merge, publish, tag, or deploy actions unless those actions are explicitly part of the request.
 
 ## Built-in agent types
