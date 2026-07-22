@@ -173,7 +173,11 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
   const width = Math.max(20, options.tui.terminal.columns);
   const truncate = (line: string): string => fastTruncate(line, width);
 
-  const finishedLines = finished.slice(0, 100).map((agent) =>
+  // Cap finished lines to available viewport space: MAX_WIDGET_LINES minus
+  // header, queued budget (≈10), and running budget (≈6) ≈ MAX_WIDGET_LINES - 16
+  // We keep at least 2 finished lines visible for context.
+  const maxFinishedVisible = Math.max(2, MAX_WIDGET_LINES - Math.min(queued.length, 10) - Math.min(running.length, 6) - 1);
+  const finishedLines = finished.slice(0, maxFinishedVisible).map((agent) =>
     truncate(`${theme.fg("dim", tree)} ${renderFinishedLine(agent, options.agentActivity.get(agent.id), theme)}`),
   );
 

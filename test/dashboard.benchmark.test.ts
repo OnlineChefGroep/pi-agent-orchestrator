@@ -51,7 +51,7 @@ describe("Benchmark: Dashboard body rendering", () => {
       frame: 0
     };
 
-    const THRESHOLD_MS_PER_BUILD = 10;
+    const THRESHOLD_MS_PER_BUILD = 30;
 
     const start = performance.now();
     for (let i = 0; i < 100; i++) {

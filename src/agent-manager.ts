@@ -511,10 +511,16 @@ export class AgentManager {
         },
       });
     })
-      .then(({ responseText, session, aborted, steered, validationResults, validated }) => {
+      .then(({ responseText, session, aborted, timedOut, steered, validationResults, validated }) => {
         record.result = responseText;
         record.session = session;
         const status = aborted ? "aborted" : steered ? "steered" : "completed";
+
+        // Surface a quota-timeout cause so the UI/dashboard can show *why* the
+        // agent was aborted, instead of a bare "aborted" with no explanation.
+        if (timedOut) {
+          record.error = "Duration quota exceeded";
+        }
 
         // Store validation results on the record
         if (validationResults) {
