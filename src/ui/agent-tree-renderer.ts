@@ -40,8 +40,8 @@ function statusSymbol(rec: AgentRecord): string {
 
 /**
  * Render the execution tree inside the dashboard viewport.
- * Uses an O(N) inline traversal to build colorized tree lines without
- * redundant string allocation or slow N^2 line-matching lookups.
+ * Uses an O(N + output size) inline traversal to build colorized tree lines
+ * without redundant string allocation or slow N^2 line-matching lookups.
  *
  * @param innerW - Inner width of the dashboard frame
  * @param th - Dashboard theme colors
