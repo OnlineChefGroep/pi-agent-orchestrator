@@ -1,10 +1,14 @@
 /**
- * compaction.ts — Dual-phase conversation compaction.
+ * compaction.ts — Local tool-output pruning helpers.
  *
- * Phase 1 (prune): Remove tool outputs older than N turns to free context
- * window without losing conversation structure.
- * Phase 2 (summary): Rely on the upstream LLM to summarize (handled by
- * pi-coding-agent's built-in compaction).
+ * Runtime truth (#325): subagent sessions compact via Pi's upstream
+ * `AgentSession` auto-compaction only. `runAgent` / `AgentManager` do not call
+ * `pruneOldToolOutputs()` or `shouldCompact()`. These helpers remain for unit
+ * tests, benchmarks, and a possible future dual-phase path.
+ *
+ * Historical dual-phase design (not wired today):
+ * Phase 1 (prune): remove tool outputs older than N turns.
+ * Phase 2 (summary): upstream LLM summary compaction (Pi built-in).
  */
 
 /** Default number of conversation turns to keep fully intact during pruning. */

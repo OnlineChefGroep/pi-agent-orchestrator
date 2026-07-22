@@ -181,7 +181,17 @@ function installRunAgentMock(
     if (opts.deferred) {
       await new Promise<void>((resolve) => {
         opts.deferred!.resolvers.push(resolve);
+        const signal = runOpts.signal as AbortSignal | undefined;
+        if (!signal) return;
+        if (signal.aborted) {
+          resolve();
+          return;
+        }
+        signal.addEventListener("abort", () => resolve(), { once: true });
       });
+      if (runOpts.signal?.aborted) {
+        return makeResult(text, { aborted: true });
+      }
     }
     return makeResult(text);
   });
@@ -542,5 +552,48 @@ describe("orchestration-dispatch integration — Agent tool end-to-end", () => {
     await expect(executePromise).resolves.toBeDefined();
 
     await batchOrchestrator.dispose();
+  });
+
+  it("declares sequential executionMode so multi-Agent assistant batches stay ordered", () => {
+    const { ctx } = buildToolContext();
+    const tool = createAgentTool(ctx);
+    expect((tool as { executionMode?: string }).executionMode).toBe("sequential");
+  });
+
+  it("Esc during foreground swarm aborts every member and rejects with AbortError", async () => {
+    setOrchestrationMode("swarm");
+    const deferred = { resolvers: [] as Array<() => void> };
+    installRunAgentMock(["member-1", "member-2"], { deferred });
+
+    const { ctx, manager, piCtx } = buildToolContext();
+    manager.setMaxConcurrent(1);
+    const tool = createAgentTool(ctx);
+    const controller = new AbortController();
+
+    const executePromise = tool.execute!(
+      "call-id",
+      {
+        subagent_type: "general-purpose",
+        prompt: "do benchmark",
+        description: "benchmark",
+      } as any,
+      controller.signal,
+      undefined,
+      piCtx,
+    );
+
+    // Let fan-out + flush start and park on member promises.
+    await new Promise((r) => setTimeout(r, 20));
+    const records = manager.listAgents();
+    expect(records.length).toBe(2);
+    expect(records.some((r) => r.status === "queued")).toBe(true);
+
+    controller.abort();
+    await expect(executePromise).rejects.toMatchObject({ name: "AbortError" });
+
+    for (const record of records) {
+      await expect(record.promise).resolves.toBeDefined();
+      expect(["stopped", "aborted", "completed", "error"]).toContain(record.status);
+    }
   });
 });

@@ -12,11 +12,11 @@ This document defines both the required tool-calling contract and the current co
 | --- | --- |
 | Pi tool-call preflight, validation, hooks, updates, and transcript ordering | Implemented by the supported Pi host |
 | `get_subagent_result(wait:true)` for a running agent | Cancellable and concurrency-safe after #324 |
-| `get_subagent_result(wait:true)` for a queued agent | Current implementation returns an immediate queued snapshot; stable queued completion promises are tracked in #327 |
+| `get_subagent_result(wait:true)` for a queued agent | Waits on the spawn-time completion promise after #327 |
 | Single-agent foreground `Agent` cancellation | Parent tool signal propagates to the child session |
-| Foreground crew/swarm cancellation | Known gap #327: parent abort does not reliably stop every member |
-| Foreground crew/swarm completion waiting | Known gap #327: queued or worktree-starting records can expose no initialized `AgentRecord.promise` yet |
-| Multiple model-emitted `Agent` calls in one assistant message | Known gap #327: the description says foreground calls are sequential, but the tool does not yet declare `executionMode: "sequential"` |
+| Foreground crew/swarm cancellation | Parent abort stops every member and rejects with `AbortError` after #327 |
+| Foreground crew/swarm completion waiting | Every member exposes a stable spawn-time completion promise after #327 |
+| Multiple model-emitted `Agent` calls in one assistant message | `Agent` declares `executionMode: "sequential"` after #327 |
 
 ---
 
@@ -298,7 +298,7 @@ Pi defaults a multi-call assistant message to parallel execution. A tool can dec
 
 A single sequential tool in a batch causes the batch to execute sequentially. Long duration alone is not a reason to choose sequential mode; shared-state correctness is.
 
-The current `Agent` description says foreground calls execute sequentially, but the registered tool does not yet set `executionMode: "sequential"`. Runtime alignment is tracked in #327.
+The `Agent` tool declares `executionMode: "sequential"` so multiple model-emitted `Agent` calls in one assistant message follow the documented foreground ordering.
 
 ### 4.6 Renderers
 
@@ -510,9 +510,9 @@ Cancellation has scope. A wait cancellation, parent-tool cancellation, and subag
 | Operation | Intended cancellation target | Current behavior |
 | --- | --- | --- |
 | Esc during single foreground `Agent` | parent tool and child session | Signal propagates to child |
-| Esc during foreground crew/swarm `Agent` | parent tool and every foreground member | Known gap #327: members may continue |
+| Esc during foreground crew/swarm `Agent` | parent tool and every foreground member | Implemented after #327; members stop and parent rejects with `AbortError` |
 | Esc during running-agent `get_subagent_result(wait:true)` | only that blocking wait | Implemented after #324; agent continues |
-| `get_subagent_result(wait:true)` on queued record | wait until eventual terminal state | Known gap #327: returns queued snapshot immediately |
+| `get_subagent_result(wait:true)` on queued record | wait until eventual terminal state | Implemented after #327 |
 | `/agents` terminate or manager abort | selected agent | Agent is stopped; queued record is removed from queue |
 | Turn/tool quota abort | nested agent session | Agent stops fail-closed |
 | Steering | no cancellation | Message waits for the next drain point |
@@ -673,14 +673,7 @@ Current behavior:
 
 Current implementation reuses background-member infrastructure for coordination. It spawns members, flushes group/swarm registration, then aggregates their record promises.
 
-Known #327 deviations:
-
-- the parent signal is not reliably propagated to each member;
-- a queued or worktree-starting record can still have `promise === undefined` when aggregation reads it;
-- casting an optional promise does not initialize it, and `Promise.allSettled` treats an actual `undefined` value as already fulfilled;
-- therefore a foreground aggregate can finish early or remain non-cancellable.
-
-Required fix:
+Required behavior (implemented by #327):
 
 - assign one stable completion promise before `spawn()` returns;
 - settle it exactly once for completion, error, stop, queued abort, and startup failure;
@@ -697,11 +690,10 @@ Purpose: inspect or consume a background record.
 | Parameters and record state | Current behavior |
 | --- | --- |
 | `wait` omitted or false | Immediate snapshot |
-| `wait:true`, record `running`, and promise initialized | Abort-aware wait until the promise settles |
-| `wait:true`, record `queued` | Immediate queued snapshot; does not wait today |
+| `wait:true`, record `running` or `queued`, and promise initialized | Abort-aware wait until the promise settles |
 | `verbose:true` | Adds serialized conversation and tool-call history when a session exists |
 
-The queued behavior is a known #327 gap. Once records expose a stable completion promise from spawn time, `wait:true` should wait for both queued and running records.
+`wait:true` waits for both queued and running records once the spawn-time completion promise exists.
 
 #### Running-agent cancellation contract
 
@@ -896,7 +888,7 @@ Tool output may contain untrusted repository text, command output, remote conten
 
 ### Cancellation
 
-- **6.** Every blocking boundary is abort-aware. Foreground crew/swarm is a known #327 gap.
+- **6.** Every blocking boundary is abort-aware, including foreground crew/swarm.
 - **7.** Already-aborted signals fail immediately.
 - **8.** Abort listeners are removed after settlement.
 - **9.** Cancellation scope is explicit: wait, parent tool, or agent.
@@ -921,12 +913,12 @@ Tool output may contain untrusted repository text, command output, remote conten
 ### Lifecycle
 
 - **21.** Subscriptions, timers, spans, streams, and worktrees are cleaned up.
-- **22.** Every foreground child follows parent abort. Crew/swarm is a known #327 gap.
+- **22.** Every foreground child follows parent abort, including crew/swarm fan-out.
 - **23.** Background child lifetime is independent after the spawning tool returns.
 - **24.** Steering is queued until the active tool batch finishes.
 - **25.** Agent, turn, and tool quotas fail closed.
-- **26.** Every spawned record exposes one stable completion promise before `spawn()` returns. Queued/worktree-starting records are a known #327 gap.
-- **27.** `get_subagent_result(wait:true)` waits across queued and running states once invariant 26 is implemented. Current queued behavior is an immediate snapshot.
+- **26.** Every spawned record exposes one stable completion promise before `spawn()` returns.
+- **27.** `get_subagent_result(wait:true)` waits across queued and running states.
 
 ---
 
@@ -1052,10 +1044,10 @@ and every completion promise settles exactly once
 | Symptom | Likely cause | Corrective action |
 | --- | --- | --- |
 | Esc appears ignored | Blocking operation does not observe `signal` | Pass or race the signal and preserve `AbortError` |
-| Esc ignored during foreground crew/swarm | Known #327 gap | Use background dispatch or terminate members until fixed |
-| `wait:true` returns immediately for queued agent | Current queued behavior; no stable promise yet | Track #327; use completion notification or poll until running |
+| Esc ignored during foreground crew/swarm | Parent signal not wired to members | Ensure foreground fan-out passes `signal` into each spawn |
+| `wait:true` returns immediately for queued agent | Missing spawn-time completion promise | Await `record.promise` for queued and running waits |
 | Steering is queued but nothing changes | Active tool has not finished | Abort/chunk the tool or wait for its drain point |
-| Crew/swarm reports completion while member is queued | Optional promise read before initialization | Implement stable spawn-time completion promise (#327) |
+| Crew/swarm reports completion while member is queued | Optional promise read before initialization | Use the stable spawn-time completion promise |
 | Result appears twice | Pull consumption raced push notification | Claim ownership before waiting and coordinate callers |
 | Result disappears after cancelled wait | Ownership remained consumed | Restore prior ownership when final waiter cancels |
 | One of two cancelled waits causes duplicate notification | Independent boolean restoration | Use shared active-waiter state |

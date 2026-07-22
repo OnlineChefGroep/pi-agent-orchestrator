@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Agent tool-call lifecycle hardening (#327): stable spawn-time completion
+  promises, cancellable foreground crew/swarm waits, queued
+  `get_subagent_result(wait:true)`, and `Agent` `executionMode: "sequential"`.
+- Compaction public API / docs truth (#325): typed `compaction:*` hook payloads
+  match runtime `{ reason }` / `{ reason, tokensBefore }`; document that local
+  `src/compaction.ts` pruning is not on the live subagent path.
+
 ## v0.17.5 (2026-07-16)
 
 Hardening sweep on the 0.17 line. The transactional 0.18 release train remains

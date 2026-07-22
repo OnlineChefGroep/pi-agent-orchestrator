@@ -336,4 +336,35 @@ describe("createGetResultTool", () => {
     const result = await tool.execute("call-1", { agent_id: "agent-1", verbose: true }, undefined, undefined, ctx);
     expect(result.content[0].text).toMatch(/turn1/);
   });
+
+  it("wait:true stays pending for a queued agent until its completion promise settles", async () => {
+    const ctx = makeCtx();
+    const agent = deferred<string>();
+    const record = makeRecord({
+      status: "queued",
+      toolUses: 0,
+      promise: agent.promise,
+      resultConsumed: false,
+    });
+    ctx.manager.getRecord.mockReturnValue(record);
+    const tool = createGetResultTool(ctx);
+
+    const pending = tool.execute("call-1", { agent_id: "agent-1", wait: true }, undefined, undefined, ctx);
+
+    let done = false;
+    void pending.then(() => {
+      done = true;
+    });
+    await Promise.resolve();
+    expect(done).toBe(false);
+
+    record.status = "completed";
+    record.result = "queued-done";
+    record.completedAt = Date.now();
+    agent.resolve("queued-done");
+
+    const result = await pending;
+    expect(result.content[0].text).toMatch(/queued-done/);
+    expect(record.resultConsumed).toBe(true);
+  });
 });

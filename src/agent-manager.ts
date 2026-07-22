@@ -90,6 +90,13 @@ interface SpawnOptions {
   correlationId?: string;
 }
 
+interface CompletionGate {
+  promise: Promise<string>;
+  resolve: (value: string) => void;
+  reject: (reason?: unknown) => void;
+  settled: boolean;
+}
+
 export class AgentManager {
   private agents = new Map<string, AgentRecord>();
   private cleanupInterval: ReturnType<typeof setInterval>;
@@ -109,6 +116,11 @@ export class AgentManager {
   private queue: { id: string; args: SpawnArgs }[] = [];
   /** Number of currently running background agents. */
   private runningBackground = 0;
+  /**
+   * Spawn-time completion gates. Every record gets one promise before `spawn()`
+   * returns; start/abort/startup-failure paths settle it exactly once.
+   */
+  private completionGates = new Map<string, CompletionGate>();
 
   /** Cleanup TTL: completed agents older than this are pruned periodically. */
   private cleanupTtlMs: number;
@@ -211,9 +223,43 @@ export class AgentManager {
     return activeAgentStorage.getStore();
   }
 
+  private createCompletionGate(id: string): Promise<string> {
+    const gate: CompletionGate = {
+      promise: undefined as unknown as Promise<string>,
+      resolve: () => {},
+      reject: () => {},
+      settled: false,
+    };
+    gate.promise = new Promise<string>((resolve, reject) => {
+      gate.resolve = (value) => {
+        if (gate.settled) return;
+        gate.settled = true;
+        this.completionGates.delete(id);
+        resolve(value);
+      };
+      gate.reject = (reason) => {
+        if (gate.settled) return;
+        gate.settled = true;
+        this.completionGates.delete(id);
+        reject(reason);
+      };
+    });
+    this.completionGates.set(id, gate);
+    return gate.promise;
+  }
+
+  private resolveCompletion(id: string, value: string): void {
+    this.completionGates.get(id)?.resolve(value);
+  }
+
+  private rejectCompletion(id: string, reason: unknown): void {
+    this.completionGates.get(id)?.reject(reason);
+  }
+
   /**
    * Spawn an agent and return its ID immediately (for background use).
    * If the concurrency limit is reached, the agent is queued.
+   * Every returned record exposes a stable completion promise immediately.
    */
   spawn(
     pi: ExtensionAPI,
@@ -269,6 +315,7 @@ export class AgentManager {
     // fall back to a fresh one so the record is never missing one.
     const correlationId = options.correlationId ?? generateCorrelationId();
     const abortController = new AbortController();
+    const completionPromise = this.createCompletionGate(id);
     const record: AgentRecord = {
       id,
       type,
@@ -278,6 +325,7 @@ export class AgentManager {
       spawnedAt: Date.now(),
       startedAt: Date.now(),
       abortController,
+      promise: completionPromise,
       lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
       compactionCount: 0,
       invocation: Object.keys(childInvocation).length > 0 ? childInvocation : undefined,
@@ -312,10 +360,11 @@ export class AgentManager {
 
     // startAgent is async (worktree creation is non-blocking) — catch
     // late startup failures and clean up the record.
-    this.startAgent(id, record, args).catch((_err) => {
+    this.startAgent(id, record, args).catch((err) => {
       // Clean up orphaned record on startup failure (e.g. worktree creation).
       // Decrement usage counter so failed spawns don't consume the session budget.
       this.sessionUsage.spawnedAgents--;
+      this.rejectCompletion(id, err instanceof Error ? err : new Error(String(err)));
       // Use removeRecord to clean up map, lastTurnCounts, session, and notify onRecordRemoved.
       this.removeRecord(id, record);
     });
@@ -324,6 +373,34 @@ export class AgentManager {
 
   /** Actually start an agent (called immediately or from queue drain). */
   private async startAgent(id: string, record: AgentRecord, { pi, ctx, type, prompt, options }: SpawnArgs) {
+    // Wire parent abort before any await so Esc during worktree setup is observed.
+    let detachParentSignal: (() => void) | undefined;
+    if (options.signal) {
+      const onParentAbort = () => this.abort(id);
+      if (options.signal.aborted) {
+        onParentAbort();
+      } else {
+        options.signal.addEventListener("abort", onParentAbort, { once: true });
+        detachParentSignal = () => options.signal!.removeEventListener("abort", onParentAbort);
+      }
+    }
+    const detach = () => {
+      detachParentSignal?.();
+      detachParentSignal = undefined;
+    };
+
+    const abandonStartup = (result = ""): void => {
+      detach();
+      if (record.worktree) {
+        try {
+          cleanupWorktree(ctx.cwd, record.worktree, options.description);
+        } catch {
+          /* ignore cleanup errors */
+        }
+      }
+      this.resolveCompletion(id, result);
+    };
+
     // Worktree isolation: try to create a temporary git worktree. Strict —
     // fail loud if not possible (no silent fallback to main tree). Done
     // BEFORE state mutation so a throw doesn't leave the record half-running.
@@ -332,6 +409,7 @@ export class AgentManager {
     if (options.isolation === "worktree") {
       const wt = await createWorktree(ctx.cwd, id);
       if (!wt) {
+        detach();
         throw new Error(
           'Cannot run with isolation: "worktree" — not a git repo, no commits yet, or `git worktree add` failed. ' +
           'Initialize git and commit at least once, or omit `isolation`.',
@@ -339,6 +417,16 @@ export class AgentManager {
       }
       record.worktree = wt;
       worktreeCwd = wt.path;
+    }
+
+    // Abort may have won during worktree setup (status stopped / signal aborted).
+    if (record.status === "stopped" || options.signal?.aborted || record.abortController?.signal.aborted) {
+      if (record.status !== "stopped") {
+        record.status = "stopped";
+        record.completedAt ??= Date.now();
+      }
+      abandonStartup();
+      return;
     }
 
     record.status = "running";
@@ -354,15 +442,6 @@ export class AgentManager {
 
     // Resolve partitions from child record for partitioned state
     const childPartitions = record.invocation?.partitions;
-
-    // Wire parent abort signal to stop the subagent when the parent is interrupted
-    let detachParentSignal: (() => void) | undefined;
-    if (options.signal) {
-      const onParentAbort = () => this.abort(id);
-      options.signal.addEventListener("abort", onParentAbort, { once: true });
-      detachParentSignal = () => options.signal!.removeEventListener("abort", onParentAbort);
-    }
-    const detach = () => { detachParentSignal?.(); detachParentSignal = undefined; };
 
     const promise = activeAgentStorage.run(id, () => {
       return runAgent(ctx, type, prompt, {
@@ -466,7 +545,10 @@ export class AgentManager {
         return "";
       });
 
-    record.promise = promise;
+    void promise.then(
+      (text) => this.resolveCompletion(id, text),
+      (err) => this.rejectCompletion(id, err),
+    );
   }
 
   /**
@@ -532,10 +614,15 @@ export class AgentManager {
         // Late failure (e.g. strict worktree-isolation) — clean up counters,
         // surface on the record so the user/agent can see it via /agents, then keep draining.
         this.sessionUsage.spawnedAgents--;
-        this.runningBackground--;
+        // runningBackground is only incremented after successful startup; do not
+        // decrement it when startAgent throws before that point.
+        if (record.status === "running") {
+          this.runningBackground--;
+        }
         record.status = "error";
         record.error = err instanceof Error ? err.message : String(err);
         record.completedAt = Date.now();
+        this.rejectCompletion(next.id, err instanceof Error ? err : new Error(String(err)));
         this.onComplete?.(record);
       });
     }
@@ -626,12 +713,13 @@ export class AgentManager {
     const record = this.agents.get(id);
     if (!record) return false;
 
-    // Remove from queue if queued
+    // Remove from queue if queued (including mid-startAgent worktree setup).
     if (record.status === "queued") {
       this.queue = this.queue.filter(q => q.id !== id);
       record.status = "stopped";
       record.completedAt = Date.now();
       // Queued agents never start, so finalizeAgent/onComplete would not run.
+      this.resolveCompletion(id, "");
       try { this.onComplete?.(record); } catch { /* ignore completion side-effect errors */ }
       return true;
     }
@@ -639,6 +727,8 @@ export class AgentManager {
       record.abortController?.abort();
       record.status = "stopped";
       record.completedAt = Date.now();
+      // If runAgent has not been wired yet (worktree setup), the startAgent
+      // abandon path settles the gate. Once the run promise exists, it settles.
       return true;
     }
     return false;
@@ -653,6 +743,7 @@ export class AgentManager {
     record.session = undefined;
     this.agents.delete(id);
     this.lastTurnCounts.delete(id);
+    this.completionGates.delete(id);
     // Notify external observers (e.g. index.ts) so they can purge agentActivity
     this.onRecordRemoved?.(id);
   }
@@ -726,6 +817,7 @@ export class AgentManager {
       if (record && record.status === "queued") {
         record.status = "stopped";
         record.completedAt = Date.now();
+        this.resolveCompletion(queued.id, "");
         try { this.onComplete?.(record); } catch { /* ignore completion side-effect errors */ }
         count++;
       }
