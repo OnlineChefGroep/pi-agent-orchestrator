@@ -64,8 +64,8 @@ try {
   process.exit(1)
 }
 
-const WIDTH = 110
-const HEIGHT = 34
+const WIDTH = 140
+const HEIGHT = 36
 const CSI = '\u001b['
 const CLEAR = `${CSI}2J${CSI}H`
 

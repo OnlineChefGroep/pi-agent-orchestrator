@@ -46,10 +46,24 @@ render_gif "$TMP_DIR/showcase-top.cast" "$OUT_DIR/showcase_top_view.gif"
 render_gif "$TMP_DIR/showcase-widget.cast" "$OUT_DIR/showcase_widget.gif"
 render_gif "$TMP_DIR/showcase.cast" "$OUT_DIR/dashboard_preview_programmatic.gif"
 
-# Fallback hero when Remotion not run
-if [[ ! -f "$OUT_DIR/dashboard_preview.mp4" ]] || [[ "${FORCE_PROGRAMMATIC_HERO:-}" == "1" ]]; then
+# Hero MP4 is Remotion-only. Programmatic GIF is the CI fallback poster/asset —
+# never silently replace dashboard_preview.mp4 with the low-bitrate GIF encode.
+if [[ "${FORCE_PROGRAMMATIC_HERO:-}" == "1" ]]; then
 	cp "$OUT_DIR/dashboard_preview_programmatic.gif" "$OUT_DIR/dashboard_preview.gif"
 	agg_cast_to_mp4 "$OUT_DIR/dashboard_preview_programmatic.gif" "$OUT_DIR/dashboard_preview.mp4" 18
+	echo "FORCE_PROGRAMMATIC_HERO=1: wrote programmatic dashboard_preview.mp4"
+elif [[ ! -f "$OUT_DIR/dashboard_preview.mp4" ]]; then
+	cp "$OUT_DIR/dashboard_preview_programmatic.gif" "$OUT_DIR/dashboard_preview.gif"
+	echo "Error: Remotion hero missing at $OUT_DIR/dashboard_preview.mp4" >&2
+	echo "Render with: npm run showcase:remotion (or npm --prefix showcase/remotion run render)" >&2
+	echo "Copied programmatic GIF poster only; refusing to overwrite hero MP4 from GIF." >&2
+	exit 1
+else
+	# Keep a GIF poster in sync for README/site without touching the Remotion MP4.
+	if [[ ! -f "$OUT_DIR/dashboard_preview.gif" ]]; then
+		cp "$OUT_DIR/dashboard_preview_programmatic.gif" "$OUT_DIR/dashboard_preview.gif"
+	fi
+	echo "Kept existing Remotion hero MP4; programmatic GIF is dashboard_preview_programmatic.gif"
 fi
 
 echo "Done (fidelity=$FIDELITY). Assets in $OUT_DIR"

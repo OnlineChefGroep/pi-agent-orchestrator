@@ -106,19 +106,21 @@ export const showcasePipelines: Array<{
   {
     id: "remotion",
     label: "Remotion",
-    summary: "Source-derived promo suite: product film, feature tour, architecture stills, and social cards (framed terminal hero when re-rendered).",
+    summary:
+      "Hero terminal encode from the real live-demo capture, plus product film, feature tour, architecture stills, and social cards.",
     command: "npm run showcase:remotion",
   },
   {
     id: "programmatic",
     label: "Programmatic",
-    summary: "CI-safe casts from compiled dashboard, top, and widget renderers — supplies the committed dashboard_preview hero today.",
+    summary:
+      "CI-safe GIF casts from compiled dashboard, top, and widget renderers. Fallback gallery assets only — not the hero MP4.",
     command: "npm run showcase:ci",
   },
   {
     id: "tmux",
     label: "Tmux",
-    summary: "Full scripted ~37s terminal session from the live-demo tour, compressed to MP4.",
+    summary: "Full scripted terminal session from the live-demo tour, compressed to MP4.",
     command: "npm run showcase:tmux",
   },
   {
@@ -130,7 +132,7 @@ export const showcasePipelines: Array<{
   {
     id: "vhs",
     label: "VHS",
-    summary: "Declarative Charmbracelet tape for stylized install-and-agents recordings.",
+    summary: "Legacy Charmbracelet tape for stylized install-and-agents recordings (may lag current TUI).",
     command: "npm run showcase:vhs",
   },
 ];
@@ -182,7 +184,7 @@ export const showcaseMedia: ShowcaseMedium[] = [
     id: "tmux-session",
     title: "Tmux session recording",
     description:
-      "Single ~37s deterministic run of the compiled dashboard tour (list, help, top, widget, swarm, perf, schedules, settings, handoff) without title overlays.",
+      "Deterministic run of the compiled dashboard tour (list, help, top, widget, swarm, perf, tree, detail, schedules) without fake marketing panels.",
     href: "/assets/showcase_tmux.mp4",
     kind: "video",
     pipeline: "tmux",
@@ -229,8 +231,8 @@ export const showcaseMedia: ShowcaseMedium[] = [
   },
   {
     id: "vhs-tape",
-    title: "VHS install tape",
-    description: "Declarative terminal recording of build + agents flow.",
+    title: "VHS install tape (legacy)",
+    description: "Legacy Charmbracelet tape of an older install-and-agents flow. Kept for archival reference, not current TUI fidelity.",
     href: "/assets/showcase_vhs.mp4",
     kind: "video",
     pipeline: "vhs",

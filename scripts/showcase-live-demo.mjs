@@ -27,8 +27,11 @@ if (!fs.existsSync(distTheme)) {
 let getThemeColors, getBoxChars, framedRow, plainTheme, activeTheme
 let buildDashboardBodyLines, renderDashboardHeader, renderDashboardFooter
 let renderDashboardHelp, renderDashboardPerf, renderSwarmSection
+let renderDashboardDetailPanel
 let getAgentTopEntries, renderTopTable, sortEntries
 let renderAgentWidget
+let renderTreeView, renderTreeFooter
+let renderSchedulesSection
 try {
   ({
     getThemeColors,
@@ -43,14 +46,20 @@ try {
     renderDashboardFooter,
     renderDashboardHelp,
     renderDashboardPerf,
-    renderSwarmSection
+    renderSwarmSection,
+    renderDashboardDetailPanel
   } = await import(path.join(root, 'dist/ui/dashboard/index.js')));
   ({
     getAgentTopEntries,
     renderTopTable,
     sortEntries
   } = await import(path.join(root, 'dist/ui/agent-top-renderer.js')));
-  ({ renderAgentWidget } = await import(path.join(root, 'dist/ui/agent-widget-renderer.js')))
+  ({ renderAgentWidget } = await import(path.join(root, 'dist/ui/agent-widget-renderer.js')));
+  ({
+    renderTreeView,
+    renderTreeFooter
+  } = await import(path.join(root, 'dist/ui/agent-tree-renderer.js')));
+  ({ renderSchedulesSection } = await import(path.join(root, 'dist/ui/dashboard/schedules-section.js')))
 } catch (err) {
   console.error(
     'Error: failed to import dist/ui/* renderers.\n' +
@@ -60,8 +69,8 @@ try {
   process.exit(1)
 }
 
-const WIDTH = 110
-const HEIGHT = 32
+const WIDTH = 140
+const HEIGHT = 36
 const CSI = '\u001b['
 const CLEAR = `${CSI}2J${CSI}H`
 const AUTO = process.argv.includes('--auto')
@@ -77,10 +86,10 @@ function sleep (ms) {
 function mockAgents (frame) {
   const t = Date.now() - frame * 350
   return [
-    { id: 'a1', type: 'Explore', description: 'Trace RPC + swarm health handlers', status: 'running', swarmId: 'swarm-alpha', joinMode: 'swarm', toolUses: 14, startedAt: t - 50_000, spawnedAt: t - 50_000 },
-    { id: 'a2', type: 'Explore', description: 'Scan test/ coverage gaps', status: 'running', swarmId: 'swarm-alpha', joinMode: 'swarm', toolUses: 9, startedAt: t - 35_000, spawnedAt: t - 35_000 },
-    { id: 'a3', type: 'Plan', description: `Verify v${packageVersion} release artifact`, status: 'running', toolUses: 6, startedAt: t - 22_000, spawnedAt: t - 22_000 },
-    { id: 'a4', type: 'general-purpose', description: 'Virtual scroll + heatmap polish', status: 'queued', toolUses: 0, startedAt: t, spawnedAt: t },
+    { id: 'a1', type: 'Explore', description: 'Trace RPC + swarm health', status: 'running', swarmId: 'swarm-alpha', joinMode: 'swarm', toolUses: 14, startedAt: t - 50_000, spawnedAt: t - 50_000 },
+    { id: 'a2', parentId: 'a1', type: 'Explore', description: 'Scan test/ coverage gaps', status: 'running', swarmId: 'swarm-alpha', joinMode: 'swarm', toolUses: 9, startedAt: t - 35_000, spawnedAt: t - 35_000 },
+    { id: 'a3', parentId: 'a1', type: 'Plan', description: `Verify v${packageVersion} release`, status: 'running', toolUses: 6, startedAt: t - 22_000, spawnedAt: t - 22_000 },
+    { id: 'a4', type: 'general-purpose', description: 'Virtual scroll polish', status: 'queued', toolUses: 0, startedAt: t, spawnedAt: t },
     { id: 'a5', type: 'Analysis', description: 'Benchmark fastTruncate', status: 'completed', toolUses: 22, startedAt: t - 100_000, completedAt: t - 12_000, spawnedAt: t - 100_000 },
     { id: 'a6', type: 'Plan', description: 'Schedule bounds audit', status: 'error', error: 'rate limited', toolUses: 2, startedAt: t - 70_000, completedAt: t - 65_000, spawnedAt: t - 70_000 }
   ].map((a, i) => ({
@@ -115,6 +124,57 @@ function mockActivity (agents, frame) {
   return map
 }
 
+function mockScheduler () {
+  const now = Date.now()
+  const jobs = [
+    {
+      id: 'job-dep',
+      name: 'dependency-audit',
+      description: 'Weekly dependency audit',
+      schedule: '0 8 * * 1',
+      scheduleType: 'cron',
+      subagent_type: 'Explore',
+      prompt: 'audit deps',
+      enabled: true,
+      createdAt: new Date(now - 86_400_000 * 14).toISOString(),
+      runCount: 12,
+      nextRun: new Date(now + 86_400_000 * 6).toISOString()
+    },
+    {
+      id: 'job-nightly',
+      name: 'nightly-regression',
+      description: 'Nightly regression lane',
+      schedule: '0 2 * * *',
+      scheduleType: 'cron',
+      subagent_type: 'general-purpose',
+      prompt: 'run regression',
+      enabled: true,
+      createdAt: new Date(now - 86_400_000 * 30).toISOString(),
+      runCount: 28,
+      nextRun: new Date(now + 3 * 3_600_000).toISOString()
+    },
+    {
+      id: 'job-release',
+      name: 'release-readiness',
+      description: 'Release readiness sweep',
+      schedule: 'every 6h',
+      scheduleType: 'interval',
+      intervalMs: 6 * 3_600_000,
+      subagent_type: 'Plan',
+      prompt: 'check release',
+      enabled: true,
+      createdAt: new Date(now - 86_400_000 * 7).toISOString(),
+      runCount: 40,
+      nextRun: new Date(now + 54 * 60_000).toISOString()
+    }
+  ]
+  return {
+    isActive: () => true,
+    list: () => jobs,
+    getNextRun: (id) => jobs.find(j => j.id === id)?.nextRun
+  }
+}
+
 function state (agents, activity, frame, selectedIndex) {
   return { agents, selectedIndex, selectedIds: new Set(), frame, agentActivity: activity }
 }
@@ -130,6 +190,21 @@ function padLines (lines) {
   return rows
 }
 
+function withViewport (headerLines, overlayLines, activity, hint, selectedIndex = 0) {
+  const agents = mockAgents(0)
+  const st = state(agents, activity, 0, selectedIndex)
+  const innerW = WIDTH - 4
+  const vh = 18
+  const lines = [...headerLines]
+  const visible = overlayLines.slice(0, vh)
+  for (const line of visible) lines.push(line)
+  for (let i = visible.length; i < vh; i++) lines.push(framedRow('', innerW, th, box))
+  lines.push(...renderDashboardDetailPanel(WIDTH, th, box, st))
+  lines.push(...renderDashboardFooter(WIDTH, th, box, activity))
+  if (hint) lines.push(framedRow(` ${th.dim}› ${hint}${th.reset}`, innerW, th, box))
+  return padLines(lines)
+}
+
 function renderList (frame, sel, hint) {
   const agents = mockAgents(frame)
   const activity = mockActivity(agents, frame)
@@ -140,6 +215,7 @@ function renderList (frame, sel, hint) {
   const vh = 16
   for (const line of body.lines.slice(0, vh)) lines.push(framedRow(line, innerW, th, box))
   for (let i = Math.min(vh, body.lines.length); i < vh; i++) lines.push(framedRow('', innerW, th, box))
+  lines.push(...renderDashboardDetailPanel(WIDTH, th, box, st))
   lines.push(...renderDashboardFooter(WIDTH, th, box, activity))
   if (hint) lines.push(framedRow(` ${th.dim}› ${hint}${th.reset}`, innerW, th, box))
   return padLines(lines)
@@ -153,6 +229,7 @@ function renderTop (frame, sortKey, hint) {
   const lines = renderDashboardHeader(WIDTH, th, box, st)
   lines.push(...renderTopTable(entries, sortKey, false, 0, 10, th, WIDTH, 't: back to list'))
   const innerW = WIDTH - 4
+  lines.push(...renderDashboardDetailPanel(WIDTH, th, box, st))
   lines.push(...renderDashboardFooter(WIDTH, th, box, activity))
   if (hint) lines.push(framedRow(` ${th.dim}› ${hint}${th.reset}`, innerW, th, box))
   return padLines(lines)
@@ -162,11 +239,8 @@ function renderHelp (frame) {
   const agents = mockAgents(frame)
   const activity = mockActivity(agents, frame)
   const st = state(agents, activity, frame, 1)
-  const innerW = WIDTH - 4
   const lines = renderDashboardHeader(WIDTH, th, box, st)
-  lines.push(...renderDashboardHelp(innerW, th, box))
-  lines.push(...renderDashboardFooter(WIDTH, th, box, activity))
-  return padLines(lines)
+  return withViewport(lines, renderDashboardHelp(WIDTH - 4, th, box), activity, null, 1)
 }
 
 function renderWidgetScreen (frame, hint) {
@@ -190,21 +264,20 @@ function renderSwarmScreen (frame) {
   const agents = mockAgents(frame)
   const activity = mockActivity(agents, frame)
   const st = state(agents, activity, frame, 0)
-  const innerW = WIDTH - 4
   const lines = renderDashboardHeader(WIDTH, th, box, st)
-  lines.push(...renderSwarmSection(innerW, th, box, st, new Map()))
-  lines.push(...renderDashboardFooter(WIDTH, th, box, activity))
-  lines.push(framedRow(` ${th.dim}› swarm-alpha · live join/leave · bounded concurrency${th.reset}`, innerW, th, box))
-  return padLines(lines)
+  const overlay = [
+    ...renderSwarmSection(WIDTH - 4, th, box, st, new Map()),
+    framedRow(` ${th.dim}› swarm-alpha · live join/leave · bounded concurrency${th.reset}`, WIDTH - 4, th, box)
+  ]
+  return withViewport(lines, overlay, activity, null, 0)
 }
 
 function renderPerfScreen (frame) {
   const agents = mockAgents(frame)
   const activity = mockActivity(agents, frame)
   const st = state(agents, activity, frame, 0)
-  const innerW = WIDTH - 4
   const lines = renderDashboardHeader(WIDTH, th, box, st)
-  lines.push(...renderDashboardPerf(innerW, th, box, {
+  const overlay = renderDashboardPerf(WIDTH - 4, th, box, {
     lastMs: 0.31,
     meanMs: 0.27,
     minMs: 0.19,
@@ -221,41 +294,46 @@ function renderPerfScreen (frame) {
     rendersPerSecond: 3.2,
     rendersPerMinute: 192,
     elapsedMs: 19_400
-  }))
-  return padLines(lines)
+  })
+  return withViewport(lines, overlay, activity, null, 0)
 }
 
-function renderFeaturePanel (title, subtitle, rows) {
+function renderTreeScreen (frame) {
+  const agents = mockAgents(frame)
+  const activity = mockActivity(agents, frame)
+  const st = state(agents, activity, frame, 0)
   const innerW = WIDTH - 4
-  const lines = [
-    framedRow('', innerW, th, box),
-    framedRow(` ${th.title}◈ ${title}${th.reset}`, innerW, th, box),
-    framedRow(` ${th.muted}${subtitle}${th.reset}`, innerW, th, box),
-    framedRow('', innerW, th, box),
-    ...rows.map(([label, value, status = '']) =>
-      framedRow(
-        `  ${th.highlight}${label.padEnd(24)}${th.reset}${value}${status ? `  ${th.success}${status}${th.reset}` : ''}`,
-        innerW,
-        th,
-        box
-      )
-    ),
-    framedRow('', innerW, th, box)
+  const lines = renderDashboardHeader(WIDTH, th, box, st)
+  const overlay = [
+    ...renderTreeView(innerW, th, box, agents),
+    ...renderTreeFooter(innerW, th, box)
   ]
+  return withViewport(lines, overlay, activity, 'TREE · parent→child hierarchy', 0)
+}
+
+function renderDetailScreen (frame, sel) {
+  const agents = mockAgents(frame)
+  const activity = mockActivity(agents, frame)
+  const st = state(agents, activity, frame, sel)
+  const innerW = WIDTH - 4
+  const lines = renderDashboardHeader(WIDTH, th, box, st)
+  const body = buildDashboardBodyLines(innerW, th, box, st)
+  const vh = 10
+  for (const line of body.lines.slice(0, vh)) lines.push(framedRow(line, innerW, th, box))
+  for (let i = Math.min(vh, body.lines.length); i < vh; i++) lines.push(framedRow('', innerW, th, box))
+  lines.push(...renderDashboardDetailPanel(WIDTH, th, box, st))
+  lines.push(...renderDashboardFooter(WIDTH, th, box, activity))
+  lines.push(framedRow(` ${th.dim}› DETAIL · selected agent ${sel + 1}${th.reset}`, innerW, th, box))
   return padLines(lines)
 }
 
-function renderTitle () {
-  return renderFeaturePanel(
-    `Pi Agent Orchestrator v${packageVersion}`,
-    'Deterministic terminal scenario rendered by the current compiled extension',
-    [
-      ['Agent lifecycle', 'spawn · queue · steer · stop · inspect', 'READY'],
-      ['Coordination', 'groups · swarms · schedules · handoffs', 'READY'],
-      ['Observability', 'dashboard · top · widget · render metrics', 'LIVE'],
-      ['Safety', 'permission inheritance · bounded turns', 'ENFORCED']
-    ]
-  )
+function renderSchedulesScreen (frame) {
+  const agents = mockAgents(frame)
+  const activity = mockActivity(agents, frame)
+  const st = state(agents, activity, frame, 0)
+  const lines = renderDashboardHeader(WIDTH, th, box, st)
+  const overlay = renderSchedulesSection(WIDTH - 4, th, box, mockScheduler())
+  return withViewport(lines, overlay, activity, 'SCHEDULES · persistent recurring jobs', 0)
 }
 
 async function show (lines, ms = 400) {
@@ -265,52 +343,26 @@ async function show (lines, ms = 400) {
 
 async function runAuto () {
   process.stdout.write(CLEAR)
-  await show(renderTitle(), 2200)
-  await show(renderList(0, 0, 'DASHBOARD · j/k navigate · live activity and budgets'), 1800)
+  // Real TUI from frame 0 — no fake title card.
+  await show(renderList(0, 0, 'DASHBOARD · j/k navigate · live activity and budgets'), 1600)
   for (let i = 1; i <= 4; i++) {
-    await show(renderList(i, i, `DASHBOARD · selected agent ${i + 1}`), 650)
+    await show(renderList(i, i, `DASHBOARD · selected agent ${i + 1}`), 550)
   }
-  await show(renderHelp(2), 2600)
-  await show(renderTop(5, 'tokens', 'TOP · sorted by tokens'), 2200)
-  await show(renderTop(8, 'lastSeen', 'TOP · sorted by last seen'), 2200)
-  await show(renderTop(10, 'toolUses', 'TOP · sorted by tool uses'), 2200)
-  await show(renderWidgetScreen(12, 'WIDGET · compact live agents above editor'), 1800)
+  await show(renderHelp(2), 2200)
+  await show(renderTop(5, 'tokens', 'TOP · sorted by tokens'), 1800)
+  await show(renderTop(8, 'lastSeen', 'TOP · sorted by last seen'), 1800)
+  await show(renderTop(10, 'toolUses', 'TOP · sorted by tool uses'), 1800)
+  await show(renderWidgetScreen(12, 'WIDGET · compact live agents above editor'), 1600)
   for (let f = 13; f < 18; f++) {
-    await show(renderWidgetScreen(f, 'WIDGET · activity and token heat update in place'), 350)
+    await show(renderWidgetScreen(f, 'WIDGET · activity and token heat update in place'), 320)
   }
-  await show(renderSwarmScreen(20), 3000)
-  await show(renderPerfScreen(22), 3000)
-  await show(renderFeaturePanel(
-    'Schedules',
-    'Persistent recurring work with daemon-safe execution',
-    [
-      ['dependency-audit', '0 8 * * 1 · Explore · next 6d', 'ENABLED'],
-      ['nightly-regression', '0 2 * * * · general-purpose · next 3h', 'ENABLED'],
-      ['release-readiness', 'every 6h · Plan · next 54m', 'ENABLED']
-    ]
-  ), 2800)
-  await show(renderFeaturePanel(
-    'Settings',
-    'Runtime controls persisted in .pi/subagent-settings.json',
-    [
-      ['maxConcurrent', '3 agents'],
-      ['orchestrationMode', 'single · crew/swarm opt-in'],
-      ['promptCompressionLevel', 'balanced'],
-      ['animationStyle', 'orchestrator'],
-      ['maxEndHookRevisions', '0 · fail closed']
-    ]
-  ), 2800)
-  await show(renderFeaturePanel(
-    'Structured handoff',
-    'Machine-readable completion with evidence and remaining work',
-    [
-      ['status', 'completed', 'VERIFIED'],
-      ['summary', 'release artifact built and inspected'],
-      ['artifacts', 'test report · package manifest · media'],
-      ['next', 'review → merge → publish']
-    ]
-  ), 3000)
-  await show(renderTitle(), 1800)
+  await show(renderSwarmScreen(20), 2400)
+  await show(renderPerfScreen(22), 2400)
+  await show(renderTreeScreen(24), 2600)
+  await show(renderDetailScreen(26, 0), 2200)
+  await show(renderDetailScreen(27, 2), 2000)
+  await show(renderSchedulesScreen(28), 2600)
+  await show(renderList(30, 0, 'DASHBOARD · closing frame · compiled TUI renderers'), 1800)
   process.stdout.write(`${CSI}0m`)
 }
 

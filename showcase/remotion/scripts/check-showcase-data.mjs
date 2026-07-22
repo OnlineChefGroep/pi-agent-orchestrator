@@ -21,8 +21,8 @@ const requireField = (key, predicate, message) => {
 };
 
 requireField("version", (v) => v === 1, "version must be 1");
-requireField("cols", (v) => v === 110, "cols must be 110");
-requireField("rows", (v) => v === 32, "rows must be 32");
+requireField("cols", (v) => v === 140, "cols must be 140");
+requireField("rows", (v) => v === 36, "rows must be 36");
 requireField(
   "source",
   (v) => v === "scripts/showcase-live-demo.mjs --auto",
@@ -35,8 +35,8 @@ requireField(
 );
 requireField(
   "durationSeconds",
-  (v) => typeof v === "number" && v >= 30 && v <= 45,
-  `durationSeconds must cover the ~37s live-demo tour (30–45); got ${data.durationSeconds}`,
+  (v) => typeof v === "number" && v >= 28 && v <= 50,
+  `durationSeconds must cover the live-demo tour (28–50); got ${data.durationSeconds}`,
 );
 requireField(
   "generatedAt",
@@ -45,8 +45,8 @@ requireField(
 );
 requireField(
   "frames",
-  (v) => Array.isArray(v) && v.length >= 15,
-  `frames must include the expanded tour (>=15); got ${data.frames?.length ?? 0}`,
+  (v) => Array.isArray(v) && v.length >= 18,
+  `frames must include the expanded tour (>=18); got ${data.frames?.length ?? 0}`,
 );
 
 if (Array.isArray(data.frames)) {

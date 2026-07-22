@@ -27,7 +27,7 @@ const normalizeScreen = (value) => {
 
   const lines = withoutTerminalControl.split("\n");
   while (lines.length > 0 && lines.at(-1)?.trim() === "") lines.pop();
-  return `${lines.slice(0, 32).join("\n")}\u001b[0m`;
+  return `${lines.slice(0, 36).join("\n")}\u001b[0m`;
 };
 
 const elapsed = () => Number(((performance.now() - start) / 1000).toFixed(3));
@@ -92,8 +92,8 @@ try {
 const durationSeconds = Math.max(16, Number((frames.at(-1).t + 1.4).toFixed(3)));
 const payload = {
   version: 1,
-  cols: 110,
-  rows: 32,
+  cols: 140,
+  rows: 36,
   durationSeconds,
   generatedAt: new Date().toISOString(),
   source: "scripts/showcase-live-demo.mjs --auto",

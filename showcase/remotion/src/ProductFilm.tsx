@@ -313,13 +313,14 @@ const ParallelScene = ({agents}: {agents: Array<{Type: string; Mode: string; "Us
 
 const ControlScene = () => {
   const frame = useCurrentFrame();
-  const selected = Math.min(3, Math.floor(frame / 58) % 4);
-
-  const rows = [
-    ["Explore", "running", "architecture + risk map"],
-    ["Plan", "done", "mechanically verifiable sequence"],
-    ["Analysis", "done", "test and performance evidence"],
-    ["general-purpose", "running", "isolated implementation"],
+  const highlight = Math.min(5, Math.floor(frame / 48) % 6);
+  const controls = [
+    ["j / k", "navigate the agent list"],
+    ["Space", "multi-select for batch steer/stop"],
+    ["t", "resource top view"],
+    ["y", "execution tree"],
+    ["z", "daemon schedules"],
+    ["/perf", "render metrics"],
   ] as const;
 
   return (
@@ -327,55 +328,38 @@ const ControlScene = () => {
       <FilmFrame
         eyebrow="03 / Operator control"
         title="Observe, steer, stop, and inspect from the live TUI."
-        subtitle="The agent fleet stays visible while work is in motion — including schedules, resource use, and performance views."
+        subtitle="The real /agents dashboard keeps the fleet visible while work is in motion — list, tree, schedules, and performance views."
       >
         <Panel style={{height: "100%", overflow: "hidden"}}>
-          <TerminalHeader title="pi — /agents" right={<Badge tone="accent">RUNNING 2 · DONE 2</Badge>} />
-          <div style={{padding: "24px 28px", fontFamily: jetBrainsMonoFamily}}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "56px 230px 140px 1fr 130px",
-                gap: 14,
-                padding: "0 18px 14px",
-                color: theme.muted,
-                fontSize: 14,
-              }}
-            >
-              <div>ID</div><div>TYPE</div><div>STATE</div><div>TASK</div><div>CONTROL</div>
+          <TerminalHeader title="pi — /agents" right={<Badge tone="accent">live TUI</Badge>} />
+          <div style={{padding: "28px 32px", fontFamily: jetBrainsMonoFamily}}>
+            <div style={{color: theme.muted, fontSize: 16, marginBottom: 18}}>
+              Operator keys from the compiled dashboard (not a mocked table)
             </div>
-            <div style={{display: "grid", gap: 10}}>
-              {rows.map(([type, state, task], index) => {
-                const active = index === selected;
+            <div style={{display: "grid", gap: 12}}>
+              {controls.map(([key, label], index) => {
+                const active = index === highlight;
                 return (
                   <div
-                    key={type}
+                    key={key}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "56px 230px 140px 1fr 130px",
-                      gap: 14,
+                      gridTemplateColumns: "140px 1fr",
+                      gap: 18,
                       alignItems: "center",
-                      minHeight: 70,
+                      minHeight: 56,
                       padding: "0 18px",
-                      borderRadius: 12,
+                      borderRadius: 10,
                       border: `1px solid ${active ? `${theme.accent}77` : theme.line}`,
                       background: active ? "rgba(112,169,255,0.10)" : "rgba(18,21,26,0.56)",
-                      fontSize: 17,
+                      fontSize: 18,
                     }}
                   >
-                    <div style={{color: theme.muted}}>{String(index + 1).padStart(2, "0")}</div>
-                    <div style={{color: active ? theme.text : theme.muted}}>{type}</div>
-                    <div style={{color: state === "done" ? theme.ok : theme.accent}}>{state}</div>
-                    <div>{task}</div>
-                    <div style={{color: active ? theme.warn : theme.muted}}>{active ? "selected" : "—"}</div>
+                    <div style={{color: active ? theme.accent : theme.text, fontWeight: 700}}>{key}</div>
+                    <div style={{color: active ? theme.text : theme.muted}}>{label}</div>
                   </div>
                 );
               })}
-            </div>
-            <div style={{display: "flex", gap: 10, marginTop: 22, flexWrap: "wrap"}}>
-              {["j/k navigate", "Space select", "t resources", "z schedules", "Shift+K terminate", "/perf metrics"].map(
-                (control) => <Badge key={control}>{control}</Badge>,
-              )}
             </div>
           </div>
         </Panel>

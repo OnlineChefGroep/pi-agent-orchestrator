@@ -25,10 +25,9 @@ export function ShowcasePage() {
         </Badge>
         <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">Terminal media gallery</h1>
         <p className="max-w-3xl text-lg text-muted-foreground">
-          Real dashboard captures — not mockups. Remotion composes the product film, feature tours, and
-          promo stills from repository metadata; the committed dashboard hero is the programmatic cast
-          until a Remotion terminal encode is republished. Tmux, live, and VHS cover CI and editorial
-          workflows.
+          Real dashboard captures — not mockups. The hero is a Remotion encode of the compiled TUI
+          capture; programmatic GIFs stay as CI fallbacks. Remotion also builds the product film,
+          feature tour, and promo stills. Tmux, live, and a legacy VHS tape cover the rest.
         </p>
       </div>
 
@@ -38,10 +37,11 @@ export function ShowcasePage() {
         <div className="flex flex-col gap-2">
           <h2 className="text-3xl font-semibold tracking-tight">Hero terminal capture</h2>
           <p className="max-w-2xl text-muted-foreground">
-            Frames come from the compiled dashboard implementation via the programmatic cast pipeline.
-            Refresh with <code className="rounded bg-secondary px-1.5 py-0.5 text-sm">npm run showcase:ci</code>
-            {" "}(or <code className="rounded bg-secondary px-1.5 py-0.5 text-sm">npm run showcase:remotion</code>
-            {" "}when publishing a framed Remotion hero).
+            Frames come from <code className="rounded bg-secondary px-1.5 py-0.5 text-sm">scripts/showcase-live-demo.mjs</code>
+            {" "}via Remotion. Refresh with{" "}
+            <code className="rounded bg-secondary px-1.5 py-0.5 text-sm">npm run showcase:remotion</code>
+            . Programmatic GIFs use{" "}
+            <code className="rounded bg-secondary px-1.5 py-0.5 text-sm">npm run showcase:ci</code>.
           </p>
         </div>
         <TerminalShowcase />
