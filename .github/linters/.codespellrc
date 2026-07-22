@@ -12,5 +12,7 @@
 # +Ns/Nm/Nh/Nd relative-time tokens (Nd reads as "And"/"2nd" to codespell) in scanned
 # sources where whole-file skip is inappropriate.
 check-hidden =
-skip = *package-lock.json,*go.mod,*go.sum,*.log,.git,*CHANGELOG.md
+# showcase.json is a regenerated terminal capture; width-truncated status tokens
+# (e.g. "runnin…") are product UI output, not prose misspellings.
+skip = *package-lock.json,*go.mod,*go.sum,*.log,.git,*CHANGELOG.md,*showcase.json
 ignore-words-list = acceptabel,actieve,afterAll,als,alle,architectuur,beforeAll,beter,checkt,doen,extreem,implementors,methode,Methode,Nd,openen,tabel,te,Wil
