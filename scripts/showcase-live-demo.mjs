@@ -25,7 +25,8 @@ if (!fs.existsSync(distTheme)) {
 }
 
 let getThemeColors, getBoxChars, framedRow, plainTheme, activeTheme
-let buildDashboardBodyLines, renderDashboardHeader, renderDashboardFooter, renderDashboardHelp
+let buildDashboardBodyLines, renderDashboardHeader, renderDashboardFooter
+let renderDashboardHelp, renderDashboardPerf, renderSwarmSection
 let getAgentTopEntries, renderTopTable, sortEntries
 let renderAgentWidget
 try {
@@ -40,7 +41,9 @@ try {
     buildDashboardBodyLines,
     renderDashboardHeader,
     renderDashboardFooter,
-    renderDashboardHelp
+    renderDashboardHelp,
+    renderDashboardPerf,
+    renderSwarmSection
   } = await import(path.join(root, 'dist/ui/dashboard/index.js')));
   ({
     getAgentTopEntries,
@@ -183,6 +186,78 @@ function renderWidgetScreen (frame, hint) {
   return padLines(lines)
 }
 
+function renderSwarmScreen (frame) {
+  const agents = mockAgents(frame)
+  const activity = mockActivity(agents, frame)
+  const st = state(agents, activity, frame, 0)
+  const innerW = WIDTH - 4
+  const lines = renderDashboardHeader(WIDTH, th, box, st)
+  lines.push(...renderSwarmSection(innerW, th, box, st, new Map()))
+  lines.push(...renderDashboardFooter(WIDTH, th, box, activity))
+  lines.push(framedRow(` ${th.dim}› swarm-alpha · live join/leave · bounded concurrency${th.reset}`, innerW, th, box))
+  return padLines(lines)
+}
+
+function renderPerfScreen (frame) {
+  const agents = mockAgents(frame)
+  const activity = mockActivity(agents, frame)
+  const st = state(agents, activity, frame, 0)
+  const innerW = WIDTH - 4
+  const lines = renderDashboardHeader(WIDTH, th, box, st)
+  lines.push(...renderDashboardPerf(innerW, th, box, {
+    lastMs: 0.31,
+    meanMs: 0.27,
+    minMs: 0.19,
+    maxMs: 0.68,
+    requestedRenderCount: 184,
+    renderCount: 62,
+    skippedRenderCount: 122,
+    requestToActualRatio: 2.97,
+    activeAgentCount: agents.length,
+    activeAgentMean: 5.8,
+    activeAgentMin: 4,
+    activeAgentMax: 8,
+    timeToFirstVisibleMs: 12.4,
+    rendersPerSecond: 3.2,
+    rendersPerMinute: 192,
+    elapsedMs: 19_400
+  }))
+  return padLines(lines)
+}
+
+function renderFeaturePanel (title, subtitle, rows) {
+  const innerW = WIDTH - 4
+  const lines = [
+    framedRow('', innerW, th, box),
+    framedRow(` ${th.title}◈ ${title}${th.reset}`, innerW, th, box),
+    framedRow(` ${th.muted}${subtitle}${th.reset}`, innerW, th, box),
+    framedRow('', innerW, th, box),
+    ...rows.map(([label, value, status = '']) =>
+      framedRow(
+        `  ${th.highlight}${label.padEnd(24)}${th.reset}${value}${status ? `  ${th.success}${status}${th.reset}` : ''}`,
+        innerW,
+        th,
+        box
+      )
+    ),
+    framedRow('', innerW, th, box)
+  ]
+  return padLines(lines)
+}
+
+function renderTitle () {
+  return renderFeaturePanel(
+    `Pi Agent Orchestrator v${packageVersion}`,
+    'Deterministic terminal scenario rendered by the current compiled extension',
+    [
+      ['Agent lifecycle', 'spawn · queue · steer · stop · inspect', 'READY'],
+      ['Coordination', 'groups · swarms · schedules · handoffs', 'READY'],
+      ['Observability', 'dashboard · top · widget · render metrics', 'LIVE'],
+      ['Safety', 'permission inheritance · bounded turns', 'ENFORCED']
+    ]
+  )
+}
+
 async function show (lines, ms = 400) {
   process.stdout.write(`${CLEAR + lines.join('\r\n')}\r\n`)
   if (AUTO) await sleep(ms)
@@ -190,20 +265,52 @@ async function show (lines, ms = 400) {
 
 async function runAuto () {
   process.stdout.write(CLEAR)
-  await show(renderList(0, 0, 'j/k navigate agents'), 900)
+  await show(renderTitle(), 2200)
+  await show(renderList(0, 0, 'DASHBOARD · j/k navigate · live activity and budgets'), 1800)
   for (let i = 1; i <= 4; i++) {
-    await show(renderList(i, i, `j — select agent ${i + 1}`), 550)
+    await show(renderList(i, i, `DASHBOARD · selected agent ${i + 1}`), 650)
   }
-  await show(renderHelp(2), 1200)
-  await show(renderList(4, 2, 't — switch to TOP view'), 700)
-  await show(renderTop(5, 'tokens', 't — sort by tokens (toggle asc)'), 1000)
-  await show(renderTop(8, 'lastSeen', 'l — sort by last seen'), 1000)
-  await show(renderList(10, 1, 't — back to dashboard list'), 800)
-  await show(renderWidgetScreen(12, 'widget heatmap — live agents above editor'), 1400)
+  await show(renderHelp(2), 2600)
+  await show(renderTop(5, 'tokens', 'TOP · sorted by tokens'), 2200)
+  await show(renderTop(8, 'lastSeen', 'TOP · sorted by last seen'), 2200)
+  await show(renderTop(10, 'toolUses', 'TOP · sorted by tool uses'), 2200)
+  await show(renderWidgetScreen(12, 'WIDGET · compact live agents above editor'), 1800)
   for (let f = 13; f < 18; f++) {
-    await show(renderWidgetScreen(f, ''), 280)
+    await show(renderWidgetScreen(f, 'WIDGET · activity and token heat update in place'), 350)
   }
-  await show(renderList(20, 3, 'w — swarm topology · K kill · q quit'), 1200)
+  await show(renderSwarmScreen(20), 3000)
+  await show(renderPerfScreen(22), 3000)
+  await show(renderFeaturePanel(
+    'Schedules',
+    'Persistent recurring work with daemon-safe execution',
+    [
+      ['dependency-audit', '0 8 * * 1 · Explore · next 6d', 'ENABLED'],
+      ['nightly-regression', '0 2 * * * · general-purpose · next 3h', 'ENABLED'],
+      ['release-readiness', 'every 6h · Plan · next 54m', 'ENABLED']
+    ]
+  ), 2800)
+  await show(renderFeaturePanel(
+    'Settings',
+    'Runtime controls persisted in .pi/subagent-settings.json',
+    [
+      ['maxConcurrent', '3 agents'],
+      ['orchestrationMode', 'single · crew/swarm opt-in'],
+      ['promptCompressionLevel', 'balanced'],
+      ['animationStyle', 'orchestrator'],
+      ['maxEndHookRevisions', '0 · fail closed']
+    ]
+  ), 2800)
+  await show(renderFeaturePanel(
+    'Structured handoff',
+    'Machine-readable completion with evidence and remaining work',
+    [
+      ['status', 'completed', 'VERIFIED'],
+      ['summary', 'release artifact built and inspected'],
+      ['artifacts', 'test report · package manifest · media'],
+      ['next', 'review → merge → publish']
+    ]
+  ), 3000)
+  await show(renderTitle(), 1800)
   process.stdout.write(`${CSI}0m`)
 }
 
