@@ -447,6 +447,56 @@ describe("AgentRunnerError", () => {
   });
 });
 
+describe("duration quota (regression: must not crash the host)", () => {
+  it("aborts gracefully with timedOut=true instead of throwing an uncaughtException", async () => {
+    const { session, listeners } = createSession("partial");
+    // Emit a turn_start event during prompt() so the duration subscriber runs.
+    (session.prompt as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      for (const l of listeners) l({ type: "turn_start" } as AgentSessionEvent);
+      session.messages.push({
+        role: "assistant",
+        content: [{ type: "text", text: "partial" }],
+      } as AgentSession["messages"][number]);
+    });
+    createAgentSession.mockResolvedValue({ session });
+
+    // maxDurationMs < 0 makes the quota always exceeded (any elapsedMs > -1),
+    // so the very first event trips the check deterministically — no timers.
+    const result = await runAgent(ctx, "Explore", "do work", {
+      pi,
+      quotas: { maxDurationMs: -1 },
+    });
+
+    // The critical regression assertion: no throw escapes runAgent. Instead the
+    // run resolves with an explicit, inspectable abort outcome.
+    expect(result.aborted).toBe(true);
+    expect(result.timedOut).toBe(true);
+    expect(session.abort).toHaveBeenCalled();
+  });
+
+  it("does not abort when the duration quota has not been reached", async () => {
+    const { session, listeners } = createSession("done");
+    (session.prompt as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      for (const l of listeners) l({ type: "turn_start" } as AgentSessionEvent);
+      session.messages.push({
+        role: "assistant",
+        content: [{ type: "text", text: "done" }],
+      } as AgentSession["messages"][number]);
+    });
+    createAgentSession.mockResolvedValue({ session });
+
+    const result = await runAgent(ctx, "Explore", "do work", {
+      pi,
+      quotas: { maxDurationMs: 60_000 },
+    });
+
+    expect(result.aborted).toBe(false);
+    expect(result.timedOut).toBe(false);
+    expect(session.abort).not.toHaveBeenCalled();
+    expect(result.responseText).toBe("done");
+  });
+});
+
 describe("ModelCircuitBreaker", () => {
   it("resets consecutive failures to 0 on a successful call in closed state", async () => {
     // Reset/ensure closed state and 0 failures

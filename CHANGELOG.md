@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- **Duration quota no longer crashes the host**: `checkDurationQuota` threw
+  an `AgentRunnerError` from inside the sync session-event subscriber, which
+  escaped the run loop and surfaced as an `uncaughtException` that killed the
+  entire Pi host process. It now aborts the session gracefully and surfaces the
+  outcome as `{ aborted: true, timedOut: true }` on `RunResult` (mirroring the
+  token/tool-call quota handling), so a long-running agent times out cleanly
+  instead of taking the whole session down.
 - Agent tool-call lifecycle hardening (#327): stable spawn-time completion
   promises, cancellable foreground crew/swarm waits, queued
   `get_subagent_result(wait:true)`, and `Agent` `executionMode: "sequential"`.

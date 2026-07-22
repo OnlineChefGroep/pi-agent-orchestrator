@@ -307,6 +307,8 @@ export interface RunResult {
   responseText: string;
   session: AgentSession;
   aborted: boolean;
+  /** True when the run was aborted because it exceeded its duration quota. */
+  timedOut?: boolean;
   steered: boolean;
   validationResults?: ValidationResult[];
   validated?: boolean;
@@ -399,16 +401,22 @@ export async function runAgent(
     maxToolCalls: options.quotas?.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS,
   };
 
-  // Check duration quota early
-  const checkDurationQuota = () => {
+  // Check duration quota early. Returns true once the quota is exceeded so the
+  // subscriber can abort the session gracefully. We intentionally do NOT throw
+  // here: this runs inside a sync session event subscriber invoked by the host
+  // emitter, and a throw escapes the run loop and surfaces as an uncaught
+  // exception that kills the whole host process. Quota exhaustion is a normal
+  // runtime outcome and must be handled like the token/tool-call quotas below
+  // (abort + flag + return).
+  let durationQuotaTripped = false;
+  const checkDurationQuota = (): boolean => {
+    if (durationQuotaTripped) return true;
     const elapsedMs = performance.now() - startTime;
     if (elapsedMs > quotas.maxDurationMs) {
-      throw new AgentRunnerError(
-        `Agent exceeded max duration quota (${quotas.maxDurationMs}ms)`,
-        "timeout",
-        { elapsedMs, maxDurationMs: quotas.maxDurationMs },
-      );
+      durationQuotaTripped = true;
+      return true;
     }
+    return false;
   };
 
   const config = getConfig(type, options.parentConfig, options.partitions);
@@ -652,11 +660,23 @@ export async function runAgent(
   const maxTurns = normalizeMaxTurns(options.maxTurns ?? agentConfig?.maxTurns ?? defaultMaxTurns);
   let softLimitReached = false;
   let aborted = false;
+  let timedOut = false;
 
   let currentMessageText = "";
   const unsubTurns = session.subscribe((event: AgentSessionEvent) => {
     // Quota checks
-    checkDurationQuota();
+    if (checkDurationQuota()) {
+      const elapsedMs = performance.now() - startTime;
+      logger.warn(`Duration quota exceeded`, {
+        agentId: options.agentId,
+        elapsedMs,
+        maxDurationMs: quotas.maxDurationMs,
+      });
+      timedOut = true;
+      session.abort();
+      aborted = true;
+      return;
+    }
     const totalTokens = tokensIn + tokensOut;
     if (totalTokens > quotas.maxTokens) {
       logger.warn(`Token quota exceeded`, { agentId: options.agentId, totalTokens, maxTokens: quotas.maxTokens });
@@ -922,10 +942,12 @@ export async function runAgent(
     validatorResults: validationResults?.map((r) => ({ passed: r.passed, summary: r.summary })),
   });
 
-  // End OpenTelemetry agent span
+  // End OpenTelemetry agent span. `timedOut` implies `aborted`, but we record
+  // the cause in the span so the trace still distinguishes a quota timeout.
   const finalStatus = aborted ? "aborted" : softLimitReached ? "steered" : "completed";
   endAgentSpan(agentSpan, {
     status: finalStatus,
+    ...(timedOut ? { error: `Duration quota exceeded (${quotas.maxDurationMs}ms)` } : {}),
     durationMs: duration,
     turns: turnCount,
     toolCalls: toolCallCount,
@@ -945,7 +967,7 @@ export async function runAgent(
     latencyToFirstTokenMs: latencyToFirstToken,
   };
 
-  return { responseText, session, aborted, steered: softLimitReached, validationResults, validated, handoff, metrics };
+  return { responseText, session, aborted, timedOut, steered: softLimitReached, validationResults, validated, handoff, metrics };
 }
 
 // ============================================================================
