@@ -11,7 +11,8 @@ import {
 } from "./promo-data.js";
 import {layout} from "./theme.js";
 
-const TERMINAL_DURATION_IN_FRAMES = 480;
+// Matches showcase/remotion/public/showcase.json durationSeconds (~37s live-demo tour).
+const TERMINAL_DURATION_IN_FRAMES = Math.ceil(36.669 * layout.fps);
 
 export const RemotionRoot = () => {
   return (

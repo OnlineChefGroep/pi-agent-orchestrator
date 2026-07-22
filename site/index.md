@@ -6,7 +6,7 @@ Pi Agent Orchestrator runs inside the Pi coding-agent host. It adds a bounded co
 
 ## Terminal showcase
 
-The showcase video is generated from the compiled dashboard, resource top-view, and widget renderers. Remotion frames and encodes the video, but the terminal content comes from the real implementation.
+The tracked dashboard preview is a short programmatic cast from the compiled dashboard, resource top-view, and widget renderers. Remotion owns the product film and promo stills; the framed Remotion terminal hero is regenerated separately when publishing that encode.
 
 - [Watch the MP4 terminal showcase](./assets/dashboard_preview.mp4)
 - [Open the poster image](./assets/dashboard_preview.gif)

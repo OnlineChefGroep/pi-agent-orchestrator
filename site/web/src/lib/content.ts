@@ -106,19 +106,19 @@ export const showcasePipelines: Array<{
   {
     id: "remotion",
     label: "Remotion",
-    summary: "Source-derived promo suite: product film, terminal hero, feature tour, architecture stills, and social cards.",
+    summary: "Source-derived promo suite: product film, feature tour, architecture stills, and social cards (framed terminal hero when re-rendered).",
     command: "npm run showcase:remotion",
   },
   {
     id: "programmatic",
     label: "Programmatic",
-    summary: "CI-safe casts from compiled dashboard, top, and widget renderers — no external recorder deps.",
+    summary: "CI-safe casts from compiled dashboard, top, and widget renderers — supplies the committed dashboard_preview hero today.",
     command: "npm run showcase:ci",
   },
   {
     id: "tmux",
     label: "Tmux",
-    summary: "Full scripted terminal session with scene labels and compressed MP4 output.",
+    summary: "Full scripted ~37s terminal session from the live-demo tour, compressed to MP4.",
     command: "npm run showcase:tmux",
   },
   {
@@ -181,7 +181,8 @@ export const showcaseMedia: ShowcaseMedium[] = [
   {
     id: "tmux-session",
     title: "Tmux session recording",
-    description: "Seven-scene dashboard tour with calm pacing and title overlays.",
+    description:
+      "Single ~37s deterministic run of the compiled dashboard tour (list, help, top, widget, swarm, perf, schedules, settings, handoff) without title overlays.",
     href: "/assets/showcase_tmux.mp4",
     kind: "video",
     pipeline: "tmux",

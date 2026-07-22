@@ -43,7 +43,7 @@ echo "═══ E) tmux-based showcase (current compiled renderers) ═══"
 
 # ── Build project first ──
 cd "$ROOT"
-npm run build --silent 2>/dev/null || true
+npm run build
 
 # ── Start tmux session ──
 tmux kill-session -t "$SESSION" 2>/dev/null || true

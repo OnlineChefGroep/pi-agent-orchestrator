@@ -33,7 +33,7 @@ const fallback: ShowcaseData = {
   version: 1,
   cols: 110,
   rows: 32,
-  durationSeconds: 16,
+  durationSeconds: 36.669,
   generatedAt: "fallback",
   source: "scripts/showcase-live-demo.mjs --auto",
   frames: [
@@ -45,7 +45,7 @@ const fallback: ShowcaseData = {
         "├────────────────────────────────────────────────────────────────────────────────────┤\n" +
         "│  ● Explore          Trace RPC + swarm health handlers                    running │\n" +
         "│  ● Explore          Scan test/ coverage gaps                             running │\n" +
-        "│  ● Plan             Release checklist                                   running │\n" +
+        "│  ● Plan             Verify v0.17.6 release artifact                      running │\n" +
         "│  ○ general-purpose  Virtual scroll + heatmap polish                      queued  │\n" +
         "│  ✓ Analysis         Benchmark fastTruncate                               done    │\n" +
         "│  × Plan             Schedule bounds audit                                error   │\n" +
@@ -54,13 +54,18 @@ const fallback: ShowcaseData = {
   ],
 };
 
+// Cue windows follow scripts/showcase-live-demo.mjs --auto (~37s expanded tour).
 const cues = [
-  {from: 0.8, to: 3.7, key: "j / k", label: "navigate agents"},
-  {from: 3.7, to: 5.3, key: "?", label: "open help"},
-  {from: 5.3, to: 8.9, key: "t", label: "resource top view"},
-  {from: 8.9, to: 10.9, key: "l", label: "sort by last seen"},
-  {from: 10.9, to: 13.8, key: "widget", label: "live editor telemetry"},
-  {from: 13.8, to: 16.0, key: "w", label: "swarm topology"},
+  {from: 0.0, to: 3.5, key: "intro", label: "deterministic tour"},
+  {from: 3.5, to: 8.5, key: "j / k", label: "navigate agents"},
+  {from: 8.5, to: 11.5, key: "?", label: "open help"},
+  {from: 11.5, to: 18.5, key: "t", label: "resource top view"},
+  {from: 18.5, to: 22.5, key: "widget", label: "live editor telemetry"},
+  {from: 22.5, to: 26.0, key: "w", label: "swarm topology"},
+  {from: 26.0, to: 29.0, key: "perf", label: "render metrics"},
+  {from: 29.0, to: 32.0, key: "sched", label: "persistent schedules"},
+  {from: 32.0, to: 35.0, key: "cfg", label: "runtime settings"},
+  {from: 35.0, to: 36.7, key: "handoff", label: "structured completion"},
 ];
 
 const useShowcaseData = () => {

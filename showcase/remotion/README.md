@@ -34,6 +34,7 @@ For focused work inside this directory:
 npm install
 npm run promo:data
 npm run promo:data:check
+npm run showcase:data:check
 npm run typecheck
 npm run lint
 npm test
@@ -44,7 +45,10 @@ npm run promo:all
 
 `promo:data:check` ignores only the volatile `generatedAt` value. Every product
 claim, table row, and architecture line must otherwise match the canonical
-repository documents. `npm run verify` executes the package typecheck, static
+repository documents. `showcase:data:check` validates committed
+`public/showcase.json` schema/freshness (package version, ~37s duration, frame
+count) without re-recording; regenerate with root `npm run build` then
+`npm run showcase:data`. `npm run verify` executes the package typecheck, static
 checks, and snapshot test before media is rendered.
 
 See `references/remotion-conventions.md` for visual and rendering invariants.

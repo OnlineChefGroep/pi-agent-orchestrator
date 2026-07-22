@@ -43,9 +43,9 @@ export function LandingPage() {
         <div className="flex flex-col gap-3">
           <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">The actual terminal, not a mockup.</h2>
           <p className="max-w-2xl text-muted-foreground">
-            The capture is generated from the compiled dashboard, top-view, and widget renderers.
-            Remotion supplies the framing and final encode; the terminal frames come from the real
-            implementation.
+            The capture is a programmatic cast from the compiled dashboard, top-view, and widget
+            renderers. Remotion still builds the product film and promo stills; the framed terminal
+            hero encode is published separately when re-rendered.
           </p>
         </div>
         <TerminalShowcase />

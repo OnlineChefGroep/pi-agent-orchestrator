@@ -265,6 +265,7 @@ describe("transactional release workflow", () => {
 
   it("publishes one immutable tarball with provenance and verifies registry integrity", () => {
     const content = readRoot(".github/workflows/release.yml");
+    const baseline = readRoot(".github/workflows/publish-baseline.yml");
     expect(content).toMatch(/registry-url:\s*"https:\/\/registry\.npmjs\.org"/);
     expect(content).toContain("actions/upload-artifact@");
     expect(content).toContain("actions/download-artifact@");
@@ -277,6 +278,9 @@ describe("transactional release workflow", () => {
     expect(content).toContain("node scripts/release-recovery.mjs ensure-github-release");
     expect(content).not.toContain("<<'NODE'");
     expect(content).not.toMatch(/LATEST="\$\(npm view/);
+    // Regression guard: never weaken integrity verification (#317-style digest-mismatch warn|ignore).
+    expect(content).not.toMatch(/digest-mismatch:\s*(warn|ignore)/);
+    expect(baseline).not.toMatch(/digest-mismatch:\s*(warn|ignore)/);
     expect(readRoot("scripts/release-recovery.mjs")).toContain("gh release create");
     expect(fileExists("scripts/verify-published-package.mjs")).toBe(true);
     expect(fileExists("scripts/write-release-manifest.mjs")).toBe(true);
