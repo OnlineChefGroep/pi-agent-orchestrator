@@ -91,7 +91,11 @@ export interface AgentConfig {
     contextStalenessMs?: number;
     /** Per-agent override for MAX_MEMORY_LINES. Falls back to global default (200). */
     maxMemoryLines?: number;
-    /** Number of conversation turns to keep fully intact during pruning. Default: 5. */
+    /**
+     * Intended keep-turns for local tool-output pruning in `src/compaction.ts`.
+     * Not consumed by `runAgent` today — subagent compaction is Pi upstream
+     * auto-compaction only (#325). Kept for config/schema compatibility.
+     */
     compactionKeepTurns?: number;
     /** Partitioned state: mapping partition name → allowed tool names for that partition. */
     partitionMembership?: Record<string, readonly string[]>;
@@ -119,6 +123,12 @@ export interface AgentRecord {
     completedAt?: number;
     session?: AgentSession;
     abortController?: AbortController;
+    /**
+     * Stable completion promise assigned synchronously in `AgentManager.spawn()`.
+     * Settles exactly once for completed, stopped, errored, queued-aborted, and
+     * startup-failed records. Optional only for test fixtures that construct
+     * records without going through spawn.
+     */
     promise?: Promise<string>;
     groupId?: string;
     swarmId?: string;
@@ -144,7 +154,11 @@ export interface AgentRecord {
     lifetimeUsage: LifetimeUsage;
     /** Number of times this agent's session has compacted. Initialized to 0 at spawn. */
     compactionCount: number;
-    /** Metrics from the most recent compaction (undefined if never compacted). */
+    /**
+     * Metrics from the most recent local prune helper (`src/compaction.ts`).
+     * Not populated by the live runner — only `compactionCount` / hook
+     * `tokensBefore` are observed from upstream Pi compaction (#325).
+     */
     lastCompaction?: CompactResult;
     /** Resolved spawn params, captured for UI display. Fixed at spawn time. */
     invocation?: AgentInvocation;

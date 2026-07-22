@@ -500,20 +500,108 @@ describe("AgentManager — isolation: worktree fails loud, no silent fallback", 
     vi.mocked(runAgent).mockClear();
 
     manager = new AgentManager();
-    manager.spawn(mockPi, mockCtx, "general-purpose", "test", {
+    const id = manager.spawn(mockPi, mockCtx, "general-purpose", "test", {
       description: "test",
       isolation: "worktree",
     });
+    const promise = manager.getRecord(id)!.promise!;
 
-    // Wait for the async startup to fail (catch handler runs in microtask)
-    // and for the rejected promise to settle
-    await new Promise((r) => setTimeout(r, 20));
-    // Flush microtasks to ensure unhandled rejections are processed
-    await new Promise((r) => queueMicrotask(r));
+    await expect(promise).rejects.toThrow(/isolation: "worktree"/);
 
     // Cleaned up — no orphan in listAgents()
     expect(manager.listAgents()).toEqual([]);
     // runAgent never invoked — strict, no silent fallback
+    expect(runAgent).not.toHaveBeenCalled();
+  });
+});
+
+describe("AgentManager — stable spawn-time completion promises (#327)", () => {
+  let manager: AgentManager;
+
+  afterEach(() => {
+    manager?.dispose();
+  });
+
+  it("exposes a completion promise immediately for queued background agents", async () => {
+    manager = new AgentManager();
+    manager.setMaxConcurrent(1);
+    vi.mocked(runAgent).mockImplementation(() => new Promise(() => {}));
+
+    const runningId = manager.spawn(mockPi, mockCtx, "general-purpose", "run", {
+      description: "running",
+      isBackground: true,
+    });
+    const queuedId = manager.spawn(mockPi, mockCtx, "general-purpose", "queued", {
+      description: "queued",
+      isBackground: true,
+    });
+
+    const queued = manager.getRecord(queuedId)!;
+    expect(queued.status).toBe("queued");
+    expect(queued.promise).toBeInstanceOf(Promise);
+
+    let settled = false;
+    void queued.promise!.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    expect(manager.abort(queuedId)).toBe(true);
+    await expect(queued.promise).resolves.toBe("");
+    expect(settled).toBe(true);
+
+    manager.abort(runningId);
+  });
+
+  it("settles the spawn-time promise exactly once when a queued agent is aborted", async () => {
+    manager = new AgentManager();
+    manager.setMaxConcurrent(1);
+    vi.mocked(runAgent).mockImplementation(() => new Promise(() => {}));
+
+    const runningId = manager.spawn(mockPi, mockCtx, "general-purpose", "run", {
+      description: "running",
+      isBackground: true,
+    });
+    const queuedId = manager.spawn(mockPi, mockCtx, "general-purpose", "queued", {
+      description: "queued",
+      isBackground: true,
+    });
+    const promise = manager.getRecord(queuedId)!.promise!;
+
+    manager.abort(queuedId);
+    manager.abort(queuedId); // second abort is a no-op
+    await expect(promise).resolves.toBe("");
+
+    manager.abort(runningId);
+  });
+
+  it("abandons worktree startup when the parent signal aborts during setup", async () => {
+    const { createWorktree } = await import("../src/worktree.js");
+    let resolveWorktree!: (value: { path: string; branch: string }) => void;
+    vi.mocked(createWorktree).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveWorktree = resolve;
+        }),
+    );
+    vi.mocked(runAgent).mockClear();
+
+    manager = new AgentManager();
+    const controller = new AbortController();
+    const id = manager.spawn(mockPi, mockCtx, "general-purpose", "test", {
+      description: "test",
+      isolation: "worktree",
+      signal: controller.signal,
+    });
+    const record = manager.getRecord(id)!;
+    const promise = record.promise!;
+
+    controller.abort();
+    resolveWorktree({ path: "/tmp/wt", branch: "agent-test" });
+
+    await expect(promise).resolves.toBe("");
+    expect(record.status).toBe("stopped");
     expect(runAgent).not.toHaveBeenCalled();
   });
 });

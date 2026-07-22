@@ -121,12 +121,15 @@ export interface ToolResultData {
 }
 
 export interface CompactionStartData {
-  messageCount: number;
+  /** Upstream Pi compaction reason (`threshold` | `overflow` | `manual`, etc.). */
+  reason: string;
 }
 
 export interface CompactionEndData {
-  before: number;
-  after: number;
+  /** Upstream Pi compaction reason. */
+  reason: string;
+  /** Estimated tokens before the successful compaction summary. */
+  tokensBefore: number;
 }
 
 export interface TurnStartData {
@@ -167,8 +170,8 @@ export const TYPED_HOOK_PAYLOAD_MAP = {
   "subagent:steer": { instruction: "" } as AgentSteerData,
   "tool:call": { toolName: "", input: null } as ToolCallData,
   "tool:result": { toolName: "", result: null } as ToolResultData,
-  "compaction:start": { messageCount: 0 } as CompactionStartData,
-  "compaction:end": { before: 0, after: 0 } as CompactionEndData,
+  "compaction:start": { reason: "threshold" } as CompactionStartData,
+  "compaction:end": { reason: "threshold", tokensBefore: 0 } as CompactionEndData,
   "turn:start": { turnNumber: 0 } as TurnStartData,
   "turn:end": { turnNumber: 0 } as TurnEndData,
   "swarm:join": { swarmId: "", agentId: "" } as SwarmJoinData,

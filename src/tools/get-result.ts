@@ -1,5 +1,6 @@
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
+import { isAbortError, waitForPromiseOrAbort } from "../abort-wait.js";
 import { getAgentConversation } from "../agent-runner.js";
 import { formatLifetimeTokens, textResult } from "../tool-result-helpers.js";
 import type { AgentRecord } from "../types.js";
@@ -21,60 +22,12 @@ interface ResultWaitState {
  */
 const resultWaitStates = new WeakMap<AgentRecord, ResultWaitState>();
 
-function createAbortError(signal: AbortSignal): Error {
-  const reason = signal.reason;
-  if (reason instanceof Error && reason.name === "AbortError") return reason;
-
-  const message =
-    reason instanceof Error
-      ? reason.message
-      : typeof reason === "string"
-        ? reason
-        : "get_subagent_result wait aborted";
-  return new DOMException(message, "AbortError");
-}
-
-function isAbortError(error: unknown): error is Error {
-  return error instanceof Error && error.name === "AbortError";
-}
-
 function isTerminal(record: AgentRecord): boolean {
   return record.status !== "running" && record.status !== "queued";
 }
 
-async function waitForPromiseOrAbort(promise: Promise<unknown>, signal?: AbortSignal): Promise<void> {
-  if (!signal) {
-    await promise;
-    return;
-  }
-
-  if (signal.aborted) throw createAbortError(signal);
-
-  await new Promise<void>((resolve, reject) => {
-    let settled = false;
-
-    const cleanup = () => signal.removeEventListener("abort", onAbort);
-    const settle = (callback: () => void) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      callback();
-    };
-    const onAbort = () => settle(() => reject(createAbortError(signal)));
-
-    signal.addEventListener("abort", onAbort, { once: true });
-
-    // Close the race between the initial aborted check and listener registration.
-    if (signal.aborted) {
-      onAbort();
-      return;
-    }
-
-    promise.then(
-      () => settle(resolve),
-      error => settle(() => reject(error)),
-    );
-  });
+function canWaitForRecord(record: AgentRecord): boolean {
+  return Boolean(record.promise) && (record.status === "running" || record.status === "queued");
 }
 
 async function waitForAgentResult(record: AgentRecord, signal: AbortSignal | undefined, ctx: ToolContext): Promise<void> {
@@ -96,7 +49,7 @@ async function waitForAgentResult(record: AgentRecord, signal: AbortSignal | und
   ctx.cancelNudge(record.id);
 
   try {
-    await waitForPromiseOrAbort(record.promise!, signal);
+    await waitForPromiseOrAbort(record.promise!, signal, "get_subagent_result wait aborted");
     state.promiseSettled = true;
   } catch (error) {
     const cancelledWait = signal?.aborted === true && isAbortError(error);
@@ -158,7 +111,7 @@ export function createGetResultTool(ctx: ToolContext) {
         return textResult(`Agent not found: "${params.agent_id}". It may have been cleaned up.`);
       }
 
-      if (params.wait && record.status === "running" && record.promise) {
+      if (params.wait && canWaitForRecord(record)) {
         await waitForAgentResult(record, signal, ctx);
       }
 
@@ -177,8 +130,11 @@ export function createGetResultTool(ctx: ToolContext) {
         `Type: ${displayName} | Status: ${record.status} | ${statsParts.join(" | ")}\n` +
         `Description: ${record.description}\n\n`;
 
-      if (record.status === "running") {
-        output += "Agent is still running. Use wait: true (Esc cancels only the wait) or check back later.";
+      if (record.status === "running" || record.status === "queued") {
+        output +=
+          record.status === "queued"
+            ? "Agent is queued. Use wait: true (Esc cancels only the wait) or check back later."
+            : "Agent is still running. Use wait: true (Esc cancels only the wait) or check back later.";
       } else if (record.status === "error") {
         output += `Error: ${record.error}`;
       } else {

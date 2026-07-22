@@ -2,6 +2,7 @@ import type { Model, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type AgentToolResult, defineTool, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
+import { createAbortError } from "../abort-wait.js";
 import type { AgentManager } from "../agent-manager.js";
 import { buildTypeListText, getDefaultJoinMode, getOrchestrationMode, isSchedulingEnabled, reloadCustomAgents } from "../agent-registry.js";
 import { getDefaultMaxTurns, normalizeMaxTurns } from "../agent-runner.js";
@@ -228,6 +229,8 @@ interface OrchestratedDispatchArgs {
   pi: ExtensionAPI;
   piCtx: ExtensionContext;
   toolCallId: string;
+  /** Parent tool AbortSignal — Esc cancels the whole foreground fan-out. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -274,6 +277,10 @@ async function runOrchestratedDispatch(
         invocation: args.agentInvocation,
       }),
       isBackground: true,
+      // Foreground fan-out must stop every member when the parent tool aborts.
+      // Background fan-out stays independent after this tool returns, so we only
+      // attach the parent signal in foreground mode.
+      ...(args.runInBackground ? {} : { signal: args.signal }),
       ...bgCallbacks,
     };
     let id: string;
@@ -334,21 +341,56 @@ async function runOrchestratedDispatch(
   await args.batchOrchestrator.flush();
 
   // Foreground mode: await each member and aggregate.
-  // Every spawned id MUST have a record (spawn stores synchronously). If
-  // some id is missing it's a bookkeeping bug worth surfacing, not hiding.
+  // Every spawned id MUST have a record with a spawn-time completion promise.
   const records = spawned.map((s) => {
     const r = args.manager.getRecord(s.id);
     if (!r) throw new Error(`orchestrated dispatch: missing record for ${s.id}`);
+    if (!r.promise) throw new Error(`orchestrated dispatch: missing completion promise for ${s.id}`);
     return r;
   });
-  // `AgentRecord.promise` is typed as optional because the agent manager
-  // // populates it asynchronously in startAgent. After `manager.spawn`
-  // returns, startAgent is scheduled and the promise is set on the next
-  // microtask. We assert non-null at this point: if it ever IS null we're
-  // already broken and want to surface it.
-  const settled = await Promise.allSettled(
-    records.map((r) => r.promise as Promise<string>),
-  );
+
+  const memberPromises = records.map((r) => r.promise!);
+  const abortMembers = () => {
+    for (const record of records) {
+      args.manager.abort(record.id);
+    }
+  };
+
+  let settled: PromiseSettledResult<string>[];
+  if (!args.signal) {
+    settled = await Promise.allSettled(memberPromises);
+  } else if (args.signal.aborted) {
+    abortMembers();
+    throw createAbortError(args.signal, "Agent orchestration aborted");
+  } else {
+    settled = await new Promise<PromiseSettledResult<string>[]>((resolve, reject) => {
+      let done = false;
+      const cleanup = () => args.signal!.removeEventListener("abort", onAbort);
+      const onAbort = () => {
+        if (done) return;
+        done = true;
+        cleanup();
+        abortMembers();
+        // Reject the parent tool immediately. Member completion promises settle
+        // via abortController → runAgent (or the queued abort gate).
+        reject(createAbortError(args.signal!, "Agent orchestration aborted"));
+      };
+
+      args.signal!.addEventListener("abort", onAbort, { once: true });
+      if (args.signal!.aborted) {
+        onAbort();
+        return;
+      }
+
+      void Promise.allSettled(memberPromises).then((results) => {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve(results);
+      });
+    });
+  }
+
   const aggregate = formatOrchestratedAggregate(args, dispatch, spawned, records, settled);
   return textResult(aggregate);
 }
@@ -437,6 +479,9 @@ export function createAgentTool(ctx: ToolContext) {
   return defineTool({
     name: "Agent",
     label: "Agent",
+    // Foreground Agent calls must not race each other when the model emits
+    // multiple Agent tool calls in one assistant message.
+    executionMode: "sequential",
     description: `Launch a new agent to handle complex, multi-step tasks autonomously.
 
 The Agent tool launches specialized agents that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.
@@ -720,6 +765,7 @@ Guidelines:
           pi,
           piCtx,
           toolCallId,
+          signal,
         });
       }
 

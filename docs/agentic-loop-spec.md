@@ -50,7 +50,7 @@ This document formalizes the loop architecture, its phases, the decision heurist
 │  │   ├─ Token budget (default 500k)                           │
 │  │   ├─ Duration budget (default 10min)                       │
 │  │   └─ Tool call budget (default 100)                        │
-│  ├─ Compaction (dual-phase, keep 5 turns)                     │
+│  ├─ Compaction (Pi upstream AgentSession auto-compaction; local prune helpers unwired — #325) │
 │  ├─ OTel tracing (spans: agent → turn → tool)                 │
 │  ├─ Swarm heartbeat + inter-agent messaging                   │
 │  └─ Mid-run steering (steer_subagent queue injection)         │
