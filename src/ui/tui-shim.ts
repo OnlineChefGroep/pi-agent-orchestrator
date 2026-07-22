@@ -5,7 +5,8 @@
  * it declares structurally compatible local declarations for the subset of
  * the framework that its UI components consume: `Component` (interface),
  * `TUI` (interface), `Text` (class), and the text helpers `visibleWidth`,
- * `truncateToWidth`, `wrapTextWithAnsi`, `matchesKey`.
+ * `truncateToWidth`, `wrapTextWithAnsi`, plus `matchesKey` (implemented in
+ * `./keys.ts` against raw terminal bytes — the host does not pre-normalise).
  *
  * The host continues to supply a runtime that uses the upstream package
  * internally. We deliberately do not reach into it — we only declare the
