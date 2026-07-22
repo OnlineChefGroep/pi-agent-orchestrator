@@ -2,7 +2,7 @@
 name: pi-typescript-extension-engineering
 description: Engineer, review, debug, and harden TypeScript for pi.dev extensions and SDK-hosted agent systems. Use when changing Pi extension entry points, custom tools, AgentSession orchestration, steering/abort flows, settings, persistence, TUI components, package metadata, tests, or release gates. Includes the stricter OnlineChefGroep pi-agent-orchestrator conventions.
 license: MIT
-compatibility: Pi TypeScript extensions or SDK integrations using @earendil-works/pi-* packages; Node.js 22+ recommended. Repository-local AGENTS.md and package versions remain authoritative.
+compatibility: Pi TypeScript extensions or SDK integrations using @earendil-works/pi-* packages; Node.js >=22.19.0. Repository-local AGENTS.md and package versions remain authoritative.
 metadata:
   author: OnlineChefGroep
   version: "1.0.0"
