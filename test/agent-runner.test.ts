@@ -322,6 +322,81 @@ describe("agent-runner usage callback wiring", () => {
 
     expect(seen).toEqual([{ reason: "threshold", tokensBefore: 12345 }]);
   });
+
+  it("dispatches compaction:start/{reason} and compaction:end/{reason,tokensBefore} hooks", async () => {
+    const { session, listeners } = createSession("OK");
+    createAgentSession.mockResolvedValue({ session });
+
+    const hooks = new HookRegistry();
+    const starts: unknown[] = [];
+    const ends: unknown[] = [];
+    hooks.register("compaction:start", async (payload) => {
+      starts.push(payload.data);
+      return "allow";
+    });
+    hooks.register("compaction:end", async (payload) => {
+      ends.push(payload.data);
+      return "allow";
+    });
+
+    session.prompt = vi.fn(async () => {
+      for (const l of listeners) l({ type: "compaction_start", reason: "threshold" });
+      for (const l of listeners) l({
+        type: "compaction_end",
+        aborted: false,
+        reason: "threshold",
+        result: { tokensBefore: 12345 },
+      });
+      session.messages.push({ role: "assistant", content: [{ type: "text", text: "OK" }] });
+    });
+
+    await runAgent(ctx, "Explore", "go", {
+      pi,
+      agentId: "agent-compact",
+      hooks,
+    });
+
+    await vi.waitFor(() => {
+      expect(starts).toEqual([{ reason: "threshold" }]);
+      expect(ends).toEqual([{ reason: "threshold", tokensBefore: 12345 }]);
+    });
+  });
+
+  it("resumeAgent dispatches compaction hooks the same way as runAgent", async () => {
+    const { session, listeners } = createSession("RESUMED");
+    const hooks = new HookRegistry();
+    const starts: unknown[] = [];
+    const ends: unknown[] = [];
+    hooks.register("compaction:start", async (payload) => {
+      starts.push(payload.data);
+      return "allow";
+    });
+    hooks.register("compaction:end", async (payload) => {
+      ends.push(payload.data);
+      return "allow";
+    });
+
+    session.prompt = vi.fn(async () => {
+      for (const l of listeners) l({ type: "compaction_start", reason: "overflow" });
+      for (const l of listeners) l({
+        type: "compaction_end",
+        aborted: false,
+        reason: "overflow",
+        result: { tokensBefore: 42 },
+      });
+      session.messages.push({ role: "assistant", content: [{ type: "text", text: "RESUMED" }] });
+    });
+
+    await resumeAgent(session as any, "continue", {
+      agentId: "agent-resume",
+      hooks,
+    });
+
+    await vi.waitFor(() => {
+      expect(starts).toEqual([{ reason: "overflow" }]);
+      expect(ends).toEqual([{ reason: "overflow", tokensBefore: 42 }]);
+    });
+  });
 });
 
 

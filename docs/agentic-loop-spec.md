@@ -195,10 +195,13 @@ This invariant is critical for autonomous safety: a handoff-chain agent cannot a
 
 ### 5.2 Compaction (autonomous context management)
 
-Dual-phase compaction fires automatically when the context window approaches the model limit:
+Live compaction is **Pi upstream `AgentSession` auto-compaction only** (#325). Local prune helpers in `src/compaction.ts` exist but are **not wired** into `runAgent` / `resumeAgent`.
 
-- **Phase 1:** Prune old tool outputs (keep last 5 turns)
-- **Phase 2:** Per-agent memory limits
+When the upstream session compacts, the runner forwards:
+
+- `onCompaction({ reason, tokensBefore })`
+- hook events `compaction:start` (`{ reason }`) and `compaction:end` (`{ reason, tokensBefore }`)
+- bus event `subagents:compacted` (`reason`, `tokensBefore`, `compactionCount`)
 
 No human intervention needed. The agent continues after compaction seamlessly.
 
@@ -1235,7 +1238,7 @@ These are the ONLY dashboard interactions that modify loop state:
 
 **Mistake:** Expecting an agent to remember tool outputs from 10 turns ago.
 
-**Reality:** Compaction phase 1 prunes tool outputs older than 5 turns. If an agent references a file it read 6 turns ago, the content is gone. The agent must either re-read or preserve key findings in its assistant messages.
+**Reality:** Upstream Pi auto-compaction may summarize or drop older context when the session window fills (#325). Local tool-output prune helpers are unwired — do not assume a fixed “last 5 turns” retention policy. The agent must either re-read files or preserve key findings in its assistant messages.
 
 ### 22.7 Steering during compaction
 
@@ -1334,7 +1337,7 @@ All benchmarks emit structured `[BENCHMARK]` lines via `test/helpers/benchmark-l
 | `src/handoff.ts` | Structured handoff parse/render + legacy coercion |
 | `src/validators.ts` | Adversarial validator prompt/parse |
 | `src/schedule.ts` | Autonomous cron/interval scheduler |
-| `src/compaction.ts` | Context window management (prune old tool outputs) |
+| `src/compaction.ts` | Local prune helpers (unwired; live compaction is Pi upstream auto-compaction — #325) |
 | `src/worktree.ts` | Git worktree isolation (safe parallel file edits) |
 | `src/tools/steer.ts` | Mid-run agent steering (steer_subagent tool) |
 | `src/agent-tree.ts` | Execution tree visualization (Mermaid/text/JSON) |

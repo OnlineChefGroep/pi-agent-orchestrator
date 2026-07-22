@@ -669,6 +669,8 @@ export class AgentManager {
 
     try {
       const responseText = await resumeAgent(record.session, prompt, {
+        agentId: id,
+        hooks: this.hooks,
         onToolActivity: (activity) => {
           if (activity.type === "end") record.toolUses++;
         },
@@ -815,21 +817,19 @@ export class AgentManager {
   /** Abort all running and queued agents immediately. */
   abortAll(): number {
     let count = 0;
-    // Clear queued agents first — they never reach finalizeAgent.
-    for (const queued of this.queue) {
-      const record = this.agents.get(queued.id);
-      if (record && record.status === "queued") {
+    this.queue = [];
+    // Settle every non-terminal record — including agents dequeued into
+    // async startAgent() worktree setup (status still "queued", no longer
+    // in this.queue). Those never reach finalizeAgent on their own.
+    for (const record of this.agents.values()) {
+      if (record.status === "queued") {
         record.status = "stopped";
         record.completedAt = Date.now();
-        this.resolveCompletion(queued.id, "");
+        this.resolveCompletion(record.id, "");
         try { this.onComplete?.(record); } catch { /* ignore completion side-effect errors */ }
         count++;
-      }
-    }
-    this.queue = [];
-    // Abort running agents (onComplete fires via finalizeAgent when the run settles)
-    for (const record of this.agents.values()) {
-      if (record.status === "running") {
+      } else if (record.status === "running") {
+        // onComplete fires via finalizeAgent when the run settles
         record.abortController?.abort();
         record.status = "stopped";
         record.completedAt = Date.now();
@@ -856,20 +856,15 @@ export class AgentManager {
 
   dispose() {
     clearInterval(this.cleanupInterval);
-    // Settle queued agents — they never reach finalizeAgent and would otherwise
-    // leave spawn-time completion gates pending for waitForAll()/get-result callers.
-    for (const queued of this.queue) {
-      const record = this.agents.get(queued.id);
-      if (record?.status === "queued") {
-        record.status = "stopped";
-        record.completedAt = Date.now();
-        this.resolveCompletion(queued.id, "");
-      }
-    }
     this.queue = [];
+    // Settle every non-terminal record — queue members, dequeued-but-still-
+    // starting (status "queued"), and running. Clearing the gate map alone
+    // would leave spawn-time promises pending for waitForAll()/get-result.
     for (const [id, record] of this.agents) {
-      if (record.status === "running") {
-        record.abortController?.abort();
+      if (record.status === "queued" || record.status === "running") {
+        if (record.status === "running") {
+          record.abortController?.abort();
+        }
         record.status = "stopped";
         record.completedAt = Date.now();
         this.resolveCompletion(id, record.result ?? "");

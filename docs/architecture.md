@@ -42,7 +42,7 @@
         │   src/agent-runner.ts   │
         │  - createSubagent()     │
         │  - runAgent()           │
-        │  - compaction logic     │
+        │  - Pi compaction hooks  │
         │  - permission inherit   │
         └────────────┬────────────┘
                      │
@@ -180,7 +180,7 @@ resolveModel() ──→ createSubagent() ──→ runAgent()
   │                      │                  │
   │                      │                  ├── Tool invoke matrix
   │                      │                  │      └── Runtime boundary validation
-  │                      │                  ├── Memory compaction prune
+  │                      │                  ├── Pi upstream auto-compaction hooks (#325)
   │                      │                  ├── Interrupt hooks
   │                      │                  └── Handoff JSON payload struct
   │                      │
