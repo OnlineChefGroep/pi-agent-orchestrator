@@ -173,14 +173,6 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
   const width = Math.max(20, options.tui.terminal.columns);
   const truncate = (line: string): string => fastTruncate(line, width);
 
-  // Cap finished lines to available viewport space: MAX_WIDGET_LINES minus
-  // header, queued budget (≈10), and running budget (≈6) ≈ MAX_WIDGET_LINES - 16
-  // We keep at least 2 finished lines visible for context.
-  const maxFinishedVisible = Math.max(2, MAX_WIDGET_LINES - Math.min(queued.length, 10) - Math.min(running.length, 6) - 1);
-  const finishedLines = finished.slice(0, maxFinishedVisible).map((agent) =>
-    truncate(`${theme.fg("dim", tree)} ${renderFinishedLine(agent, options.agentActivity.get(agent.id), theme)}`),
-  );
-
   const queuedByType = new Map<string, { name: string; count: number; firstId: string }>();
   for (const agent of queued) {
     const group = queuedByType.get(agent.type);
@@ -245,6 +237,19 @@ export function renderAgentWidget(options: RenderAgentWidgetOptions): string[] {
     }
     runningLines.push(pair);
   }
+
+  // Cap finished lines to the viewport budget remaining after the *rendered*
+  // active and queued lines. Each running agent emits one line, or a two-line
+  // pair when the activity stream is enabled, so counting only `running.length`
+  // under-reserved the viewport: six running agents reserved six lines but
+  // rendered twelve, pushing active rows into "+N more" while finished rows
+  // stayed fully visible. Allow zero finished lines when active content
+  // consumes the viewport; body render order is unchanged.
+  const activeLineCount = runningLines.reduce((sum, pair) => sum + pair.length, 0);
+  const maxFinishedVisible = Math.max(0, MAX_WIDGET_LINES - 1 - activeLineCount - queuedLines.length);
+  const finishedLines = finished.slice(0, maxFinishedVisible).map((agent) =>
+    truncate(`${theme.fg("dim", tree)} ${renderFinishedLine(agent, options.agentActivity.get(agent.id), theme)}`),
+  );
 
   const pageIndex = options.pageIndex ?? 0;
   const pageCount = options.pageCount ?? 1;
