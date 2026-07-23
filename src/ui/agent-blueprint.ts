@@ -1,14 +1,10 @@
 /**
- * agent-blueprint.ts — deterministic parsing and validation for AI-generated
- * agent-system blueprints.
- *
- * The architect model is intentionally not allowed to write files directly.
- * It returns one strict JSON blueprint; the host validates every resource and
- * performs the writes itself. This removes the historical "generation
- * completed but file was not created" failure mode and makes multi-file agent
- * system creation deterministic.
+ * Deterministic parsing and host-side validation for AI-generated agent systems.
+ * The architect returns JSON only; it never receives write access.
  */
 
+import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
+import { BUILTIN_TOOL_NAMES } from "../agent-types.js";
 import type { ThinkingLevel } from "../types.js";
 
 export type AgentArchitectureMode =
@@ -20,13 +16,15 @@ export type AgentArchitectureMode =
   | "scheduled"
   | "full";
 
-export type AgentAutonomyProfile =
-  | "safe"
-  | "read-only"
-  | "implementation"
-  | "full";
-
+export type AgentAutonomyProfile = "safe" | "read-only" | "implementation" | "full";
 export type SkillGenerationPolicy = "auto" | "always" | "never";
+export type ScheduleRequestMode = "none" | "optional" | "required" | "exact";
+
+export interface ScheduleRequest {
+  mode: ScheduleRequestMode;
+  hint: string;
+  expectedExpression?: string;
+}
 
 export interface AgentBlueprintFile {
   name: string;
@@ -65,15 +63,57 @@ export interface GenerationPromptInput {
   architecture: AgentArchitectureMode;
   autonomy: AgentAutonomyProfile;
   skillPolicy: SkillGenerationPolicy;
-  scheduleHint?: string;
+  scheduleRequest: ScheduleRequest;
   targetAgentDir: string;
   targetSkillDir: string;
+}
+
+export interface BlueprintSelectionContext {
+  architecture: AgentArchitectureMode;
+  autonomy: AgentAutonomyProfile;
+  skillPolicy: SkillGenerationPolicy;
+  scheduleRequest: ScheduleRequest;
+}
+
+export interface AgentDefinitionInspection {
+  frontmatter: Record<string, unknown>;
+  tools?: string[];
+  disallowedTools: string[];
+  extensions?: boolean | string;
+  isolated?: boolean;
+  isolation?: "worktree";
+  handoff: boolean;
+  validators: readonly { agentId: string; criteria: readonly string[] }[];
 }
 
 const SAFE_RESOURCE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const MAX_AGENT_FILES = 6;
 const MAX_SKILL_FILES = 8;
 const MAX_FILE_CONTENT = 100_000;
+const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+const AGENT_FIELDS = new Set([
+  "display_name",
+  "description",
+  "tools",
+  "disallowed_tools",
+  "extensions",
+  "skills",
+  "model",
+  "thinking",
+  "max_turns",
+  "prompt_mode",
+  "inherit_context",
+  "run_in_background",
+  "isolated",
+  "memory",
+  "isolation",
+  "handoff",
+  "prompt_compression",
+  "validators",
+  "enabled",
+  "version",
+  "template",
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -84,69 +124,188 @@ function requireString(
   field: string,
   options: { allowEmpty?: boolean; maxLength?: number } = {},
 ): string {
-  if (typeof value !== "string") {
-    throw new Error(`${field} must be a string`);
-  }
-  const trimmed = value.trim();
-  if (!options.allowEmpty && !trimmed) {
-    throw new Error(`${field} must not be empty`);
-  }
+  if (typeof value !== "string") throw new Error(`${field} must be a string`);
+  if (!options.allowEmpty && !value.trim()) throw new Error(`${field} must not be empty`);
   const maxLength = options.maxLength ?? MAX_FILE_CONTENT;
-  if (value.length > maxLength) {
-    throw new Error(`${field} exceeds ${maxLength} characters`);
-  }
+  if (value.length > maxLength) throw new Error(`${field} exceeds ${maxLength} characters`);
   return value;
 }
 
 function requireSafeName(value: unknown, field: string): string {
   const name = requireString(value, field, { maxLength: 100 }).trim();
   if (!SAFE_RESOURCE_NAME.test(name) || name === "." || name === "..") {
-    throw new Error(
-      `${field} must use only letters, numbers, dot, underscore, and dash; no spaces or paths`,
-    );
+    throw new Error(`${field} must use only letters, numbers, dot, underscore, and dash; no spaces or paths`);
   }
   return name;
 }
 
-function requireDefinitionFile(content: unknown, field: string): string {
-  const value = requireString(content, field);
-  const normalized = value.trimStart();
-  if (!normalized.startsWith("---")) {
-    throw new Error(`${field} must start with YAML frontmatter`);
+function requireBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (value === true || value === false) return value;
+  if (typeof value === "string") {
+    if (value.toLowerCase() === "true") return true;
+    if (value.toLowerCase() === "false") return false;
   }
-  const closing = normalized.indexOf("\n---", 3);
-  if (closing < 0) {
-    throw new Error(`${field} is missing the closing YAML frontmatter delimiter`);
-  }
-  if (!normalized.slice(closing + 4).trim()) {
-    throw new Error(`${field} must contain an instruction body after frontmatter`);
-  }
-  return value.endsWith("\n") ? value : `${value}\n`;
+  throw new Error(`${field} must be a boolean`);
 }
 
-/**
- * Remove terminal control characters that can leak into a TUI input value
- * (notably DEL / 0x7f from backspace) and validate the resulting filename.
- */
+function parseCsv(value: unknown, field: string): string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw new Error(`${field} must be a comma-separated string`);
+  const normalized = value.trim();
+  if (!normalized || normalized === "none") return [];
+  return normalized.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function parseValidators(
+  value: unknown,
+  field: string,
+): readonly { agentId: string; criteria: readonly string[] }[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new Error(`${field} must be a YAML array`);
+  return value.map((item, index) => {
+    if (!isRecord(item)) throw new Error(`${field}[${index}] must be an object`);
+    const agentId = requireSafeName(item.agentId, `${field}[${index}].agentId`);
+    if (!Array.isArray(item.criteria) || item.criteria.length === 0) {
+      throw new Error(`${field}[${index}].criteria must be a non-empty string array`);
+    }
+    const criteria = item.criteria.map((criterion, criterionIndex) =>
+      requireString(criterion, `${field}[${index}].criteria[${criterionIndex}]`, { maxLength: 2_000 }).trim(),
+    );
+    return { agentId, criteria };
+  });
+}
+
+function parseDefinition(
+  content: unknown,
+  field: string,
+): { value: string; frontmatter: Record<string, unknown>; body: string } {
+  const value = requireString(content, field);
+  if (!value.trimStart().startsWith("---")) throw new Error(`${field} must start with YAML frontmatter`);
+
+  let parsed: { frontmatter: Record<string, unknown>; body: string };
+  try {
+    parsed = parseFrontmatter<Record<string, unknown>>(value);
+  } catch (error) {
+    throw new Error(`${field} has invalid YAML frontmatter: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  if (!isRecord(parsed.frontmatter)) throw new Error(`${field} frontmatter must be a YAML mapping`);
+  if (!parsed.body.trim()) throw new Error(`${field} must contain an instruction body after frontmatter`);
+  return {
+    value: value.endsWith("\n") ? value : `${value}\n`,
+    frontmatter: parsed.frontmatter,
+    body: parsed.body,
+  };
+}
+
+function validateAgentFrontmatter(frontmatter: Record<string, unknown>, field: string): AgentDefinitionInspection {
+  for (const key of Object.keys(frontmatter)) {
+    if (!AGENT_FIELDS.has(key)) throw new Error(`${field} contains unsupported frontmatter field "${key}"`);
+  }
+
+  requireString(frontmatter.description, `${field}.description`, { maxLength: 100_000 });
+  if (frontmatter.display_name !== undefined) requireString(frontmatter.display_name, `${field}.display_name`, { maxLength: 100 });
+  if (frontmatter.model !== undefined) requireString(frontmatter.model, `${field}.model`, { maxLength: 200 });
+  if (frontmatter.version !== undefined) requireString(frontmatter.version, `${field}.version`, { maxLength: 100 });
+
+  const tools = parseCsv(frontmatter.tools, `${field}.tools`);
+  if (tools) {
+    const knownTools = new Set(BUILTIN_TOOL_NAMES);
+    const unknown = tools.filter((tool) => !knownTools.has(tool));
+    if (unknown.length > 0) throw new Error(`${field}.tools contains unknown built-in tool(s): ${unknown.join(", ")}`);
+  }
+  const disallowedTools = parseCsv(frontmatter.disallowed_tools, `${field}.disallowed_tools`) ?? [];
+
+  for (const key of ["extensions", "skills"] as const) {
+    const value = frontmatter[key];
+    if (value !== undefined && typeof value !== "boolean" && typeof value !== "string") {
+      throw new Error(`${field}.${key} must be a boolean or comma-separated string`);
+    }
+  }
+
+  if (frontmatter.thinking !== undefined) {
+    const thinking = requireString(frontmatter.thinking, `${field}.thinking`, { maxLength: 20 }).trim();
+    if (!THINKING_LEVELS.has(thinking)) throw new Error(`${field}.thinking is not supported`);
+  }
+  if (frontmatter.max_turns !== undefined) {
+    if (!Number.isInteger(frontmatter.max_turns) || (frontmatter.max_turns as number) < 0) {
+      throw new Error(`${field}.max_turns must be a non-negative integer`);
+    }
+  }
+  if (frontmatter.prompt_mode !== undefined && frontmatter.prompt_mode !== "replace" && frontmatter.prompt_mode !== "append") {
+    throw new Error(`${field}.prompt_mode must be replace or append`);
+  }
+  if (frontmatter.memory !== undefined && !["user", "project", "local"].includes(String(frontmatter.memory))) {
+    throw new Error(`${field}.memory must be user, project, or local`);
+  }
+  if (frontmatter.isolation !== undefined && frontmatter.isolation !== "worktree") {
+    throw new Error(`${field}.isolation must be worktree`);
+  }
+  if (
+    frontmatter.prompt_compression !== undefined
+    && !["minimal", "balanced", "aggressive"].includes(String(frontmatter.prompt_compression))
+  ) {
+    throw new Error(`${field}.prompt_compression must be minimal, balanced, or aggressive`);
+  }
+
+  const inheritContext = requireBoolean(frontmatter.inherit_context, `${field}.inherit_context`);
+  const runInBackground = requireBoolean(frontmatter.run_in_background, `${field}.run_in_background`);
+  const isolated = requireBoolean(frontmatter.isolated, `${field}.isolated`);
+  const handoff = requireBoolean(frontmatter.handoff, `${field}.handoff`) ?? false;
+  const enabled = requireBoolean(frontmatter.enabled, `${field}.enabled`);
+  const template = requireBoolean(frontmatter.template, `${field}.template`);
+  void inheritContext;
+  void runInBackground;
+  void enabled;
+  void template;
+
+  return {
+    frontmatter,
+    tools,
+    disallowedTools,
+    extensions: frontmatter.extensions as boolean | string | undefined,
+    isolated,
+    isolation: frontmatter.isolation === "worktree" ? "worktree" : undefined,
+    handoff,
+    validators: parseValidators(frontmatter.validators, `${field}.validators`),
+  };
+}
+
+function requireAgentDefinitionFile(content: unknown, field: string): string {
+  const parsed = parseDefinition(content, field);
+  validateAgentFrontmatter(parsed.frontmatter, `${field}.frontmatter`);
+  return parsed.value;
+}
+
+function requireSkillDefinitionFile(content: unknown, expectedName: string, field: string): string {
+  const parsed = parseDefinition(content, field);
+  const name = requireSafeName(parsed.frontmatter.name, `${field}.frontmatter.name`);
+  if (name !== expectedName) throw new Error(`${field} skill name must equal "${expectedName}"`);
+  requireString(parsed.frontmatter.description, `${field}.frontmatter.description`, { maxLength: 10_000 });
+  return parsed.value;
+}
+
+export function inspectAgentDefinition(content: string, field = "agent"): AgentDefinitionInspection {
+  const parsed = parseDefinition(content, field);
+  return validateAgentFrontmatter(parsed.frontmatter, `${field}.frontmatter`);
+}
+
+/** Remove terminal control characters (including DEL/backspace leakage) and validate the filename. */
 export function normalizeWizardName(raw: string): string {
-  const normalized = raw.replace(/[\u0000-\u001f\u007f]/g, "").trim();
-  return requireSafeName(normalized, "Agent name");
+  return requireSafeName(raw.replace(/[\u0000-\u001f\u007f]/g, "").trim(), "Agent name");
 }
 
 function extractJsonPayload(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) throw new Error("Architect returned an empty response");
-
   const unfenced = trimmed
-  .replace(/^```(?:json)?\s*/i, "")
+    .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "")
     .trim();
-
   const start = unfenced.indexOf("{");
   const end = unfenced.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    throw new Error("Architect response did not contain a JSON object");
-  }
+  if (start < 0 || end <= start) throw new Error("Architect response did not contain a JSON object");
   return unfenced.slice(start, end + 1);
 }
 
@@ -154,72 +313,36 @@ function parseSchedule(value: unknown, requestedName: string): ScheduleBlueprint
   if (value === undefined || value === null) return undefined;
   if (!isRecord(value)) throw new Error("schedule must be an object or null");
 
-  const schedule = requireString(value.schedule, "schedule.schedule", { maxLength: 200 }).trim();
-  const prompt = requireString(value.prompt, "schedule.prompt", { maxLength: 50_000 });
-  const name = value.name === undefined
-    ? `${requestedName}-schedule`
-    : requireSafeName(value.name, "schedule.name");
-  const description = value.description === undefined
-    ? `Scheduled execution for ${requestedName}`
-    : requireString(value.description, "schedule.description", { maxLength: 500 }).trim();
-
   const result: ScheduleBlueprint = {
-    name,
-    description,
-    schedule,
-    prompt,
+    name: value.name === undefined ? `${requestedName}-schedule` : requireSafeName(value.name, "schedule.name"),
+    description: value.description === undefined
+      ? `Scheduled execution for ${requestedName}`
+      : requireString(value.description, "schedule.description", { maxLength: 500 }).trim(),
+    schedule: requireString(value.schedule, "schedule.schedule", { maxLength: 200 }).trim(),
+    prompt: requireString(value.prompt, "schedule.prompt", { maxLength: 50_000 }),
   };
 
-  if (value.model !== undefined) {
-    result.model = requireString(value.model, "schedule.model", { maxLength: 200 }).trim();
-  }
+  if (value.model !== undefined) result.model = requireString(value.model, "schedule.model", { maxLength: 200 }).trim();
   if (value.thinking !== undefined) {
     const thinking = requireString(value.thinking, "schedule.thinking", { maxLength: 20 }).trim();
-    const allowedThinking = new Set([
-      "off", "minimal", "low", "medium", "high", "xhigh", "max",
-    ]);
-    if (!allowedThinking.has(thinking)) {
-      throw new Error("schedule.thinking is not a supported thinking level");
-    }
+    if (!THINKING_LEVELS.has(thinking)) throw new Error("schedule.thinking is not supported");
     result.thinking = thinking as ThinkingLevel;
   }
   if (value.max_turns !== undefined) {
-    if (
-      typeof value.max_turns !== "number"
-      || !Number.isInteger(value.max_turns)
-      || value.max_turns < 0
-    ) {
+    if (!Number.isInteger(value.max_turns) || (value.max_turns as number) < 0) {
       throw new Error("schedule.max_turns must be a non-negative integer");
     }
-    result.max_turns = value.max_turns;
+    result.max_turns = value.max_turns as number;
   }
-  if (value.isolated !== undefined) {
-    if (typeof value.isolated !== "boolean") {
-      throw new Error("schedule.isolated must be a boolean");
-    }
-    result.isolated = value.isolated;
-  }
+  if (value.isolated !== undefined) result.isolated = requireBoolean(value.isolated, "schedule.isolated");
   if (value.isolation !== undefined) {
-    if (value.isolation !== "worktree") {
-      throw new Error('schedule.isolation must be "worktree" when provided');
-    }
+    if (value.isolation !== "worktree") throw new Error('schedule.isolation must be "worktree"');
     result.isolation = "worktree";
   }
-
   return result;
 }
 
-/**
- * Parse and strictly validate the architect response.
- *
- * The requested filename must be present and must be the only primary agent.
- * No paths are accepted in generated names, so writes remain inside the
- * selected agent/skill roots.
- */
-export function parseAgentSystemBlueprint(
-  raw: string,
-  requestedName: string,
-): AgentSystemBlueprint {
+export function parseAgentSystemBlueprint(raw: string, requestedName: string): AgentSystemBlueprint {
   let parsed: unknown;
   try {
     parsed = JSON.parse(extractJsonPayload(raw));
@@ -232,9 +355,7 @@ export function parseAgentSystemBlueprint(
   if (!Array.isArray(parsed.agents) || parsed.agents.length === 0) {
     throw new Error("Blueprint must contain at least one agent");
   }
-  if (parsed.agents.length > MAX_AGENT_FILES) {
-    throw new Error(`Blueprint may contain at most ${MAX_AGENT_FILES} agents`);
-  }
+  if (parsed.agents.length > MAX_AGENT_FILES) throw new Error(`Blueprint may contain at most ${MAX_AGENT_FILES} agents`);
 
   const seenAgents = new Set<string>();
   const agents: AgentBlueprintFile[] = parsed.agents.map((item, index) => {
@@ -242,32 +363,32 @@ export function parseAgentSystemBlueprint(
     const name = requireSafeName(item.name, `agents[${index}].name`);
     if (seenAgents.has(name)) throw new Error(`Duplicate agent name: ${name}`);
     seenAgents.add(name);
-
     return {
       name,
-      content: requireDefinitionFile(item.content, `agents[${index}].content`),
+      content: requireAgentDefinitionFile(item.content, `agents[${index}].content`),
       primary: item.primary === true,
     };
   });
 
   const requested = agents.find((agent) => agent.name === requestedName);
-  if (!requested) {
-    throw new Error(`Blueprint must contain the requested primary agent "${requestedName}"`);
-  }
-
+  if (!requested) throw new Error(`Blueprint must contain the requested primary agent "${requestedName}"`);
   const markedPrimary = agents.filter((agent) => agent.primary);
-  if (markedPrimary.length === 0) {
-    requested.primary = true;
-  } else if (markedPrimary.length !== 1 || markedPrimary[0].name !== requestedName) {
+  if (markedPrimary.length === 0) requested.primary = true;
+  else if (markedPrimary.length !== 1 || markedPrimary[0].name !== requestedName) {
     throw new Error(`"${requestedName}" must be the only primary agent`);
+  }
+  if (agents[0].name !== requestedName) throw new Error(`"${requestedName}" must be first in agents execution order`);
+
+  for (const agent of agents) {
+    const inspection = inspectAgentDefinition(agent.content, `agent ${agent.name}`);
+    for (const validator of inspection.validators) {
+      if (validator.agentId === agent.name) throw new Error(`Agent "${agent.name}" cannot validate itself`);
+    }
   }
 
   const rawSkills = parsed.skills ?? [];
   if (!Array.isArray(rawSkills)) throw new Error("skills must be an array");
-  if (rawSkills.length > MAX_SKILL_FILES) {
-    throw new Error(`Blueprint may contain at most ${MAX_SKILL_FILES} skills`);
-  }
-
+  if (rawSkills.length > MAX_SKILL_FILES) throw new Error(`Blueprint may contain at most ${MAX_SKILL_FILES} skills`);
   const seenSkills = new Set<string>();
   const skills: SkillBlueprintFile[] = rawSkills.map((item, index) => {
     if (!isRecord(item)) throw new Error(`skills[${index}] must be an object`);
@@ -276,7 +397,7 @@ export function parseAgentSystemBlueprint(
     seenSkills.add(name);
     return {
       name,
-      content: requireDefinitionFile(item.content, `skills[${index}].content`),
+      content: requireSkillDefinitionFile(item.content, name, `skills[${index}].content`),
     };
   });
 
@@ -290,12 +411,10 @@ export function parseAgentSystemBlueprint(
         .slice(0, 20)
       : (() => { throw new Error("warnings must be an array of strings"); })();
 
-  const summary = parsed.summary === undefined
-    ? `Generated ${agents.length} agent(s) and ${skills.length} skill(s)`
-    : requireString(parsed.summary, "summary", { maxLength: 2_000 }).trim();
-
   return {
-    summary,
+    summary: parsed.summary === undefined
+      ? `Generated ${agents.length} agent(s) and ${skills.length} skill(s)`
+      : requireString(parsed.summary, "summary", { maxLength: 2_000 }).trim(),
     warnings,
     agents,
     skills,
@@ -303,42 +422,105 @@ export function parseAgentSystemBlueprint(
   };
 }
 
+export function validateBlueprintForSelections(
+  blueprint: AgentSystemBlueprint,
+  selection: BlueprintSelectionContext,
+): string | undefined {
+  if (selection.architecture === "single" && blueprint.agents.length !== 1) {
+    return "Single-agent mode must produce exactly one agent.";
+  }
+  if (selection.architecture === "skill" && blueprint.skills.length === 0) {
+    return "Agent + skills mode must produce at least one skill.";
+  }
+  if (selection.architecture === "chain") {
+    if (blueprint.agents.length < 2) return "Handoff-chain mode must produce at least two agents.";
+    const missingHandoff = blueprint.agents
+      .slice(0, -1)
+      .find((agent) => !inspectAgentDefinition(agent.content, agent.name).handoff);
+    if (missingHandoff) return `Chain stage "${missingHandoff.name}" must set handoff: true.`;
+  }
+  if (selection.architecture === "loop") {
+    const primary = blueprint.agents.find((agent) => agent.primary);
+    if (!primary || inspectAgentDefinition(primary.content, primary.name).validators.length === 0) {
+      return "Agentic-loop mode requires adversarial validators on the primary agent.";
+    }
+  }
+  if (selection.skillPolicy === "always" && blueprint.skills.length === 0) {
+    return "The selected skill policy requires at least one generated skill.";
+  }
+  if (selection.skillPolicy === "never" && blueprint.skills.length > 0) {
+    return "The selected skill policy forbids generated skills.";
+  }
+
+  const { scheduleRequest } = selection;
+  if (scheduleRequest.mode === "none" && blueprint.schedule) {
+    return "On-demand activation forbids a generated schedule.";
+  }
+  if ((scheduleRequest.mode === "required" || scheduleRequest.mode === "exact") && !blueprint.schedule) {
+    return "The selected activation mode requires a schedule.";
+  }
+  if (
+    scheduleRequest.mode === "exact"
+    && blueprint.schedule?.schedule !== scheduleRequest.expectedExpression?.trim()
+  ) {
+    return `Generated schedule must exactly match "${scheduleRequest.expectedExpression}".`;
+  }
+  if (selection.architecture === "scheduled" && !blueprint.schedule) {
+    return "Scheduled-agent mode must produce a schedule.";
+  }
+
+  if (selection.autonomy === "read-only") {
+    for (const agent of blueprint.agents) {
+      const inspection = inspectAgentDefinition(agent.content, agent.name);
+      if (!inspection.tools) return `Read-only agent "${agent.name}" must declare an explicit tools allowlist.`;
+      if (inspection.tools.includes("edit") || inspection.tools.includes("write")) {
+        return `Read-only agent "${agent.name}" may not grant edit or write.`;
+      }
+      if (!inspection.disallowedTools.includes("edit") || !inspection.disallowedTools.includes("write")) {
+        return `Read-only agent "${agent.name}" must explicitly disallow edit and write.`;
+      }
+      if (inspection.extensions !== false) {
+        return `Read-only agent "${agent.name}" must set extensions: false.`;
+      }
+      if (inspection.isolated !== true) {
+        return `Read-only agent "${agent.name}" must set isolated: true.`;
+      }
+    }
+    if (blueprint.schedule && blueprint.schedule.isolated !== true) {
+      return "A schedule for a read-only system must set isolated: true.";
+    }
+  }
+
+  return undefined;
+}
+
 const ARCHITECTURE_GUIDANCE: Record<AgentArchitectureMode, string> = {
   auto: "Choose the smallest architecture that fully satisfies the goal. Add supporting agents, skills, validation, or scheduling only when operationally justified.",
-  single: "Create one specialist agent. Do not create companion agents. Add a skill only when it prevents a large system prompt from being reusable.",
-  skill: "Create one primary agent plus one or more reusable Agent Skills. Keep stable methodology in skills and task-specific operating rules in the agent.",
-  chain: "Create a bounded multi-agent handoff chain (for example planner -> executor -> reviewer). Every hop must have explicit inputs, outputs, stop conditions, and failure behavior.",
-  loop: "Create a closed self-validating agentic loop with bounded retries, explicit success criteria, failure escalation, and a structured handoff. Never create an unbounded self-spawn loop.",
-  scheduled: "Create an agent intended for autonomous timed execution and include a concrete schedule object. The scheduled prompt must be self-contained.",
-  full: "Create a production-grade autonomous system: primary coordinator, only necessary companion agents, reusable skills, validation/retry behavior, structured handoffs, worktree isolation where writes occur, and a schedule when the goal implies recurrence.",
+  single: "Create one specialist agent. Do not create companion agents.",
+  skill: "Create one primary agent plus one or more reusable Agent Skills.",
+  chain: "Create a bounded multi-agent handoff chain. Every non-final stage must set handoff: true and define explicit inputs, outputs, stop conditions, and failure behavior.",
+  loop: "Create a closed self-validating agentic loop. The primary must declare adversarial validators, bounded retries, success criteria, and failure escalation.",
+  scheduled: "Create an agent intended for autonomous timed execution and include a concrete schedule object.",
+  full: "Create a production-grade autonomous system with only necessary agents, reusable skills, validators, handoffs, worktree isolation for writes, and scheduling when required.",
 };
 
 const AUTONOMY_GUIDANCE: Record<AgentAutonomyProfile, string> = {
   safe: "Use least privilege. Prefer read-only tools and isolated extensions unless writes or external tools are essential.",
-  "read-only": "All agents must be read-only. Use tools: read, bash, grep and disallowed_tools: write, edit. Do not create implementation agents.",
+  "read-only": "Every agent must use an explicit read-only tools allowlist, disallowed_tools: write, edit, extensions: false, and isolated: true. Any schedule must also set isolated: true.",
   implementation: "Implementation agents may use read, bash, grep, edit, write. Use worktree isolation for mutation and add a read-only reviewer when useful.",
-  full: "Allow autonomous implementation, delegation, validation, handoff, and persistent project memory where justified. Keep hard budgets, bounded retries, and worktree isolation for code changes.",
+  full: "Allow autonomous implementation, validation, and handoff while keeping hard budgets, bounded retries, and worktree isolation for code changes.",
 };
 
 const SKILL_GUIDANCE: Record<SkillGenerationPolicy, string> = {
-  auto: "Create skills only for stable, reusable procedures or domain knowledge that should be shared across agents.",
+  auto: "Create skills only for stable, reusable procedures or domain knowledge shared across agents.",
   always: "Create at least one reusable skill and preload it explicitly from the relevant agent frontmatter.",
   never: "Do not create skill files. Keep all required behavior in agent definitions.",
 };
 
-/**
- * Build the architect instruction. It describes only runtime features that the
- * repository actually supports; schedules are deliberately represented as a
- * separate object rather than unsupported agent frontmatter.
- */
 export function buildAgentSystemPrompt(input: GenerationPromptInput): string {
-  const scheduleInstruction = input.scheduleHint
-    ? `Activation requirement: ${input.scheduleHint}`
-    : "Activation requirement: on demand only; return schedule: null.";
-
   return `You are the agent-system architect for @onlinechefgroep/pi-agent-orchestrator.
 
-Design a complete, executable custom-agent system for this request:
+Design a complete executable custom-agent system.
 
 REQUESTED PRIMARY AGENT NAME: ${input.requestedName}
 USER GOAL:
@@ -353,61 +535,46 @@ ${AUTONOMY_GUIDANCE[input.autonomy]}
 SKILL POLICY:
 ${SKILL_GUIDANCE[input.skillPolicy]}
 
-${scheduleInstruction}
+ACTIVATION REQUIREMENT:
+${input.scheduleRequest.hint}
 
 TARGETS:
-- Agent definitions will be written by the host to: ${input.targetAgentDir}/<name>.md
-- Skills will be written by the host to: ${input.targetSkillDir}/<name>/SKILL.md
-- You may use read, grep, and read-only bash commands to inspect existing agents and skills.
+- Agent definitions: ${input.targetAgentDir}/<name>.md
+- Skills: ${input.targetSkillDir}/<name>/SKILL.md
+- You may inspect existing agents and skills with read, grep, and read-only bash.
 - You must NOT call write/edit or create files yourself.
 
 SUPPORTED AGENT FRONTMATTER:
-- display_name: string
-- description: one line
-- tools: CSV of read, bash, edit, write, grep; use "none" for no built-ins
-- disallowed_tools: CSV hard denylist
-- extensions: true, false, or CSV extension names
-- skills: true, false, or CSV names of generated/existing skills
-- model: optional provider/modelId
+- display_name, description, tools, disallowed_tools, extensions, skills, model
 - thinking: off|minimal|low|medium|high|xhigh|max
-- max_turns: non-negative integer, 0 means unlimited
-- prompt_mode: replace|append
-- inherit_context: boolean
-- run_in_background: boolean
-- isolated: boolean
-- memory: user|project|local
-- isolation: worktree
-- handoff: boolean
-- prompt_compression: minimal|balanced|aggressive
-- validators: YAML array of { agentId, criteria[] }
-- enabled: boolean
+- max_turns, prompt_mode: replace|append, inherit_context, run_in_background
+- isolated, memory: user|project|local, isolation: worktree, handoff
+- prompt_compression: minimal|balanced|aggressive, validators, enabled
 
 RUNTIME RULES:
-1. The primary agent name must be exactly "${input.requestedName}".
-2. Use only supported frontmatter. Scheduling is NOT frontmatter; put it in the separate schedule object.
-3. Inspect existing agent and skill definitions when useful. Reuse existing skills by name instead of generating duplicates.
-4. Every agent definition must start with YAML frontmatter and contain a substantial system-prompt body.
-5. Write agents must use isolation: worktree unless the goal explicitly requires the live checkout.
-6. Read-only agents must explicitly deny write and edit.
-7. Chains and loops must be bounded: explicit completion criteria, retry ceiling, error handoff, and no recursive self-spawn without a hard level/task budget.
-8. The agents array is execution order and the requested primary agent must be first. A handoff chain is run by the parent/wizard; custom agents cannot assume they can directly spawn the next agent.
-9. Handoff agents must explain the structured artifact/summary they emit and what the next stage should consume.
-10. Validators must be adversarial and objective; do not use the mutating agent as its own validator.
-11. Scheduled prompts must be self-contained because they may run in a fresh future context.
-12. A schedule launches only the primary agent. The primary must therefore complete the scheduled job independently; companion agents are for explicit chain runs unless validation is attached through validators.
-13. Prefer 1-3 agents. Never exceed 6 agents or 8 skills.
-14. Do not invent unavailable tools or external services.
-15. Return strict JSON only. No markdown fence, commentary, or trailing text.
+1. The first agent and only primary must be exactly "${input.requestedName}".
+2. Use only supported frontmatter. Scheduling belongs only in the separate schedule object.
+3. Reuse existing skills when appropriate; do not generate duplicates.
+4. Every definition must contain parseable YAML frontmatter plus a substantial body.
+5. Write-capable agents use isolation: worktree unless the goal explicitly requires the live checkout.
+6. Obey the autonomy profile literally; host validation rejects broader permissions.
+7. Chains and loops are bounded. No recursive self-spawn without a hard depth/task budget.
+8. The agents array is execution order. The wizard runs explicit chains in that order.
+9. Non-final chain stages set handoff: true and emit a concrete structured handoff.
+10. Loop primaries declare adversarial validators and never validate themselves.
+11. Scheduled prompts are self-contained. A schedule launches only the primary agent.
+12. Use 1-3 agents where possible; maximum 6 agents and 8 skills.
+13. Return strict JSON only: no markdown fence, commentary, or trailing text.
 
 JSON SCHEMA:
 {
   "summary": "short architecture summary",
-  "warnings": ["only real operational caveats"],
+  "warnings": ["real operational caveats only"],
   "agents": [
     {
       "name": "${input.requestedName}",
       "primary": true,
-      "content": "---\\ndisplay_name: ...\\ndescription: ...\\ntools: ...\\nprompt_mode: replace\\n---\\n\\nComplete system prompt..."
+      "content": "---\\ndescription: ...\\ntools: ...\\nprompt_mode: replace\\n---\\n\\nComplete system prompt..."
     }
   ],
   "skills": [
@@ -419,16 +586,16 @@ JSON SCHEMA:
   "schedule": null
 }
 
-When scheduling is requested, replace schedule:null with:
+When scheduling is required, replace schedule:null with:
 {
   "name": "${input.requestedName}-schedule",
   "description": "one line",
-  "schedule": "cron expression, interval such as 30m/2h, one-shot +10m, or ISO timestamp",
+  "schedule": "cron, interval, +duration, or ISO timestamp exactly as requested",
   "prompt": "self-contained execution prompt",
   "model": "optional provider/modelId",
   "thinking": "optional level",
   "max_turns": 20,
-  "isolated": false,
+  "isolated": true,
   "isolation": "worktree"
 }`;
 }
