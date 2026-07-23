@@ -8,6 +8,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import {useEffect, useState} from "react";
+import {interFamily, jetBrainsMonoFamily} from "./Fonts.js";
 import {
   getShowcasePlaybackRange,
   loadShowcaseData,
@@ -15,6 +16,7 @@ import {
   type TerminalFrame,
   type TerminalShowcaseProps,
 } from "./showcase-data.js";
+import {TERMINAL_CHROME, fitTerminalTypography} from "./terminal-layout.js";
 
 const converter = new Convert({
   fg: "#d5d8df",
@@ -85,6 +87,7 @@ export const PiTerminalShowcase = ({
     : 0;
 
   const terminalHtml = converter.toHtml(terminalFrame.screen);
+  const typography = fitTerminalTypography(data.rows);
 
   const intro = poster
     ? 1
@@ -123,8 +126,7 @@ export const PiTerminalShowcase = ({
         background:
           "radial-gradient(circle at 50% 15%, rgba(83,91,107,0.28), transparent 40%), linear-gradient(145deg, #08090b 0%, #111318 52%, #090a0d 100%)",
         color: "#f4f4f5",
-        fontFamily:
-          "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+        fontFamily: interFamily,
         opacity: intro * exit,
         overflow: "hidden",
       }}
@@ -143,9 +145,9 @@ export const PiTerminalShowcase = ({
       <div
         style={{
           position: "absolute",
-          left: 144,
-          right: 144,
-          top: 70,
+          left: TERMINAL_CHROME.left,
+          right: TERMINAL_CHROME.right,
+          top: 42,
           display: "flex",
           alignItems: "flex-end",
           justifyContent: "space-between",
@@ -154,17 +156,17 @@ export const PiTerminalShowcase = ({
         <div>
           <div
             style={{
-              fontSize: 22,
-              letterSpacing: 4.6,
+              fontSize: 16,
+              letterSpacing: 3.8,
               textTransform: "uppercase",
               color: "#a8adb7",
               fontWeight: 650,
-              marginBottom: 14,
+              marginBottom: 8,
             }}
           >
-            OnlineChefGroep / Pi extension
+            OnlineChefGroep / Pi CLI
           </div>
-          <div style={{fontSize: 62, fontWeight: 720, letterSpacing: -2.5, lineHeight: 1}}>
+          <div style={{fontSize: 42, fontWeight: 720, letterSpacing: -1.8, lineHeight: 1}}>
             Pi Agent Orchestrator
           </div>
         </div>
@@ -173,26 +175,27 @@ export const PiTerminalShowcase = ({
             border: "1px solid rgba(255,255,255,0.16)",
             background: "rgba(13,15,19,0.76)",
             borderRadius: 999,
-            padding: "12px 18px",
-            fontSize: 18,
+            padding: "10px 16px",
+            fontSize: 15,
             letterSpacing: 1.1,
             color: "#c8cbd2",
+            fontFamily: jetBrainsMonoFamily,
           }}
         >
-          ACTUAL TUI RENDERERS · {data.cols}×{data.rows}
+          LIVE PI SESSION · {data.cols}×{data.rows}
         </div>
       </div>
 
       <div
         style={{
           position: "absolute",
-          left: 144,
-          right: 144,
-          top: 190,
-          height: 760,
+          left: TERMINAL_CHROME.left,
+          right: TERMINAL_CHROME.right,
+          top: TERMINAL_CHROME.top,
+          height: TERMINAL_CHROME.height,
           transform: `translateY(${terminalY}px)`,
           border: "1px solid rgba(255,255,255,0.16)",
-          borderRadius: 22,
+          borderRadius: 18,
           background: "rgba(8,10,13,0.97)",
           boxShadow:
             "0 42px 110px rgba(0,0,0,0.62), 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)",
@@ -201,21 +204,21 @@ export const PiTerminalShowcase = ({
       >
         <div
           style={{
-            height: 60,
+            height: TERMINAL_CHROME.titleBar,
             borderBottom: "1px solid rgba(255,255,255,0.09)",
             display: "flex",
             alignItems: "center",
-            padding: "0 24px",
+            padding: "0 20px",
             background: "linear-gradient(180deg, #17191f 0%, #101216 100%)",
           }}
         >
-          <div style={{display: "flex", gap: 11}}>
+          <div style={{display: "flex", gap: 10}}>
             {["#ff5f57", "#febc2e", "#28c840"].map((color) => (
               <div
                 key={color}
                 style={{
-                  width: 13,
-                  height: 13,
+                  width: 12,
+                  height: 12,
                   borderRadius: "50%",
                   background: color,
                   boxShadow: `0 0 0 1px ${color}55`,
@@ -229,48 +232,47 @@ export const PiTerminalShowcase = ({
               left: 0,
               right: 0,
               textAlign: "center",
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: 600,
               color: "#aeb2bc",
               letterSpacing: 0.2,
             }}
           >
-            pi — /agents
+            pi — coding agent
           </div>
           <div
             style={{
               marginLeft: "auto",
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-              fontSize: 14,
+              fontFamily: jetBrainsMonoFamily,
+              fontSize: 13,
               color: "#747985",
             }}
           >
-            xterm-256color
+            {data.cols}×{data.rows}
           </div>
         </div>
 
         <div
           style={{
             position: "absolute",
-            inset: "60px 0 0 0",
-            padding: "24px 28px",
+            inset: `${TERMINAL_CHROME.titleBar}px 0 ${TERMINAL_CHROME.progressBar}px 0`,
+            padding: `${TERMINAL_CHROME.paddingY}px ${TERMINAL_CHROME.paddingX}px`,
             background:
               "radial-gradient(circle at 25% 0%, rgba(59,80,99,0.10), transparent 36%), #080a0d",
+            overflow: "hidden",
           }}
         >
           <pre
             style={{
               margin: 0,
               color: "#d5d8df",
-              fontFamily:
-                "Berkeley Mono, JetBrains Mono, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace",
-              fontSize: 17.5,
-              lineHeight: 1.29,
-              letterSpacing: -0.22,
+              fontFamily: jetBrainsMonoFamily,
+              fontSize: typography.fontSize,
+              lineHeight: typography.lineHeight,
+              letterSpacing: 0,
               whiteSpace: "pre",
               fontVariantLigatures: "none",
               textRendering: "geometricPrecision",
-              filter: "drop-shadow(0 0 7px rgba(177,205,226,0.05))",
             }}
             dangerouslySetInnerHTML={{__html: terminalHtml}}
           />
@@ -282,7 +284,7 @@ export const PiTerminalShowcase = ({
             left: 0,
             right: 0,
             bottom: 0,
-            height: 3,
+            height: TERMINAL_CHROME.progressBar,
             background: "rgba(255,255,255,0.06)",
           }}
         >
@@ -299,45 +301,45 @@ export const PiTerminalShowcase = ({
       <div
         style={{
           position: "absolute",
-          left: 144,
-          bottom: 54,
+          left: TERMINAL_CHROME.left,
+          bottom: 22,
           color: "#8e939e",
-          fontSize: 17,
-          letterSpacing: 0.4,
+          fontSize: 15,
+          letterSpacing: 0.3,
         }}
       >
-        Captured from <span style={{color: "#c9ccd3"}}>{data.source}</span> · v
-        {data.packageVersion} · composed with Remotion
+        Captured from <span style={{color: "#c9ccd3"}}>{data.source}</span> · Pi CLI · v
+        {data.packageVersion}
       </div>
 
       <div
         style={{
           position: "absolute",
-          right: 144,
-          bottom: 42,
+          right: TERMINAL_CHROME.right,
+          bottom: 16,
           display: "flex",
           alignItems: "center",
-          gap: 14,
+          gap: 12,
           opacity: cueOpacity,
           transform: `translateY(${(1 - cueOpacity) * 12}px)`,
         }}
       >
         <div
           style={{
-            padding: "9px 13px",
-            borderRadius: 9,
+            padding: "8px 12px",
+            borderRadius: 8,
             border: "1px solid rgba(255,255,255,0.18)",
             background: "rgba(26,29,35,0.9)",
             boxShadow: "inset 0 -2px 0 rgba(0,0,0,0.5)",
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            fontFamily: jetBrainsMonoFamily,
             fontWeight: 700,
-            fontSize: 18,
+            fontSize: 16,
             color: "#f5f5f5",
           }}
         >
           {scene?.cue.key ?? ""}
         </div>
-        <div style={{fontSize: 19, color: "#b8bcc5"}}>{scene?.cue.label ?? ""}</div>
+        <div style={{fontSize: 17, color: "#b8bcc5"}}>{scene?.cue.label ?? ""}</div>
       </div>
     </AbsoluteFill>
   );
