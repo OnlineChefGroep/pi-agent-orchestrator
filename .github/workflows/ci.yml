@@ -238,6 +238,7 @@ jobs:
       - dependency-review
       - benchmarks
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Verify required jobs
         env:
