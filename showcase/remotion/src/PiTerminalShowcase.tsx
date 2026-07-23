@@ -3,104 +3,57 @@ import {
   AbsoluteFill,
   Easing,
   interpolate,
-  staticFile,
   useCurrentFrame,
   useDelayRender,
   useVideoConfig,
 } from "remotion";
-import {useEffect, useMemo, useState} from "react";
+import {useEffect, useState} from "react";
+import {
+  getShowcasePlaybackRange,
+  loadShowcaseData,
+  type ShowcaseData,
+  type TerminalFrame,
+  type TerminalShowcaseProps,
+} from "./showcase-data.js";
 
-interface TerminalFrame {
-  t: number;
-  screen: string;
-}
+const converter = new Convert({
+  fg: "#d5d8df",
+  bg: "transparent",
+  newline: true,
+  escapeXML: true,
+  stream: false,
+});
 
-interface ShowcaseData {
-  version: number;
-  cols: number;
-  rows: number;
-  durationSeconds: number;
-  generatedAt: string;
-  source: string;
-  frames: TerminalFrame[];
-}
-
-export interface PiTerminalShowcaseProps {
-  poster?: boolean;
-}
-
-const fallback: ShowcaseData = {
-  version: 1,
-  cols: 110,
-  rows: 32,
-  durationSeconds: 16,
-  generatedAt: "fallback",
-  source: "scripts/showcase-live-demo.mjs --auto",
-  frames: [
-    {
-      t: 0,
-      screen:
-        "\u001b[38;5;81m╭─ PI AGENT ORCHESTRATOR ─────────────────────────────────────────────────────────────╮\u001b[0m\n" +
-        "│  RUNNING 3   QUEUED 1   DONE 1   ERROR 1                                         │\n" +
-        "├────────────────────────────────────────────────────────────────────────────────────┤\n" +
-        "│  ● Explore          Trace RPC + swarm health handlers                    running │\n" +
-        "│  ● Explore          Scan test/ coverage gaps                             running │\n" +
-        "│  ● Plan             Release checklist                                   running │\n" +
-        "│  ○ general-purpose  Virtual scroll + heatmap polish                      queued  │\n" +
-        "│  ✓ Analysis         Benchmark fastTruncate                               done    │\n" +
-        "│  × Plan             Schedule bounds audit                                error   │\n" +
-        "╰────────────────────────────────────────────────────────────────────────────────────╯",
-    },
-  ],
-};
-
-const cues = [
-  {from: 0.8, to: 3.7, key: "j / k", label: "navigate agents"},
-  {from: 3.7, to: 5.3, key: "?", label: "open help"},
-  {from: 5.3, to: 8.9, key: "t", label: "resource top view"},
-  {from: 8.9, to: 10.9, key: "l", label: "sort by last seen"},
-  {from: 10.9, to: 13.8, key: "widget", label: "live editor telemetry"},
-  {from: 13.8, to: 16.0, key: "w", label: "swarm topology"},
-];
-
-const useShowcaseData = () => {
-  const [data, setData] = useState<ShowcaseData>(fallback);
+const useShowcaseData = (dataFile: string) => {
+  const [data, setData] = useState<ShowcaseData | null>(null);
   const {delayRender, continueRender, cancelRender} = useDelayRender();
   const [handle] = useState(() => delayRender("Loading terminal capture"));
 
   useEffect(() => {
     let active = true;
-    fetch(staticFile("showcase.json"))
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`showcase.json returned ${response.status}`);
-        }
-        return response.json() as Promise<ShowcaseData>;
-      })
+    loadShowcaseData(dataFile)
       .then((value) => {
-        if (active && value.frames?.length) {
+        if (active) {
           setData(value);
         }
         continueRender(handle);
       })
       .catch((error: unknown) => {
         if (active) {
-          setData(fallback);
+          cancelRender(error instanceof Error ? error : new Error(String(error)));
         }
-        console.warn("Using fallback terminal capture", error);
-        continueRender(handle);
       });
 
     return () => {
       active = false;
     };
-  }, [cancelRender, continueRender, handle]);
+  }, [cancelRender, continueRender, dataFile, handle]);
 
   return data;
 };
 
 const selectFrame = (frames: TerminalFrame[], seconds: number) => {
-  let selected = frames[0] ?? fallback.frames[0];
+  let selected = frames[0];
   for (const candidate of frames) {
     if (candidate.t > seconds) break;
     selected = candidate;
@@ -108,29 +61,30 @@ const selectFrame = (frames: TerminalFrame[], seconds: number) => {
   return selected;
 };
 
-export const PiTerminalShowcase = ({poster = false}: PiTerminalShowcaseProps = {}) => {
+export const PiTerminalShowcase = ({
+  dataFile = "showcase.json",
+  fromScene,
+  toScene,
+  poster = false,
+}: TerminalShowcaseProps) => {
   const frame = useCurrentFrame();
   const {fps, durationInFrames} = useVideoConfig();
-  const data = useShowcaseData();
-  const seconds = poster ? 7 : frame / fps;
-  const terminalFrame = selectFrame(data.frames, seconds);
-  const cue = cues.find((candidate) => seconds >= candidate.from && seconds < candidate.to);
+  const data = useShowcaseData(dataFile);
+  if (!data) return null;
 
-  const converter = useMemo(
-    () =>
-      new Convert({
-        fg: "#d5d8df",
-        bg: "transparent",
-        newline: true,
-        escapeXML: true,
-        stream: false,
-      }),
-    [],
+  const range = getShowcasePlaybackRange(data, {fromScene, toScene});
+  const seconds = poster
+    ? range.startSeconds + (range.endSeconds - range.startSeconds) / 2
+    : range.startSeconds + frame / fps;
+  const terminalFrame = selectFrame(data.frames, seconds);
+  const scene = data.scenes.find(
+    (candidate) => seconds >= candidate.startSeconds && seconds < candidate.endSeconds,
   );
-  const terminalHtml = useMemo(
-    () => converter.toHtml(terminalFrame.screen),
-    [converter, terminalFrame.screen],
-  );
+  const cueFadeSeconds = scene
+    ? Math.min(0.18, (scene.endSeconds - scene.startSeconds) / 3)
+    : 0;
+
+  const terminalHtml = converter.toHtml(terminalFrame.screen);
 
   const intro = poster
     ? 1
@@ -147,12 +101,17 @@ export const PiTerminalShowcase = ({poster = false}: PiTerminalShowcaseProps = {
       });
   const terminalY = interpolate(intro, [0, 1], [34, 0]);
   const progress = poster ? 0.48 : Math.min(1, frame / Math.max(1, durationInFrames - 1));
-  const cueOpacity = cue
+  const cueOpacity = scene
     ? poster
       ? 1
       : interpolate(
           seconds,
-          [cue.from, cue.from + 0.18, cue.to - 0.18, cue.to],
+          [
+            scene.startSeconds,
+            scene.startSeconds + cueFadeSeconds,
+            scene.endSeconds - cueFadeSeconds,
+            scene.endSeconds,
+          ],
           [0, 1, 1, 0],
           {extrapolateLeft: "clamp", extrapolateRight: "clamp"},
         )
@@ -347,7 +306,8 @@ export const PiTerminalShowcase = ({poster = false}: PiTerminalShowcaseProps = {
           letterSpacing: 0.4,
         }}
       >
-        Captured from <span style={{color: "#c9ccd3"}}>scripts/showcase-live-demo.mjs</span> · composed with Remotion
+        Captured from <span style={{color: "#c9ccd3"}}>{data.source}</span> · v
+        {data.packageVersion} · composed with Remotion
       </div>
 
       <div
@@ -375,9 +335,9 @@ export const PiTerminalShowcase = ({poster = false}: PiTerminalShowcaseProps = {
             color: "#f5f5f5",
           }}
         >
-          {cue?.key ?? "t"}
+          {scene?.cue.key ?? ""}
         </div>
-        <div style={{fontSize: 19, color: "#b8bcc5"}}>{cue?.label ?? "resource top view"}</div>
+        <div style={{fontSize: 19, color: "#b8bcc5"}}>{scene?.cue.label ?? ""}</div>
       </div>
     </AbsoluteFill>
   );
