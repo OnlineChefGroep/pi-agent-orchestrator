@@ -3,18 +3,35 @@ import {
   buildAgentSystemPrompt,
   normalizeWizardName,
   parseAgentSystemBlueprint,
+  validateBlueprintForSelections,
 } from "../src/ui/agent-blueprint.js";
 
-function agentContent(description = "Primary test agent"): string {
+function agentContent(
+  description = "Primary test agent",
+  extraFrontmatter = "",
+): string {
   return `---
 description: ${description}
 tools: read, bash, grep
 disallowed_tools: write, edit
+extensions: false
+isolated: true
 prompt_mode: replace
----
+${extraFrontmatter}---
 
 Perform the requested work and return evidence.
 `;
+}
+
+function blueprintJson(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    summary: "Test system",
+    warnings: [],
+    agents: [{ name: "ChefSystem", primary: true, content: agentContent() }],
+    skills: [],
+    schedule: null,
+    ...overrides,
+  });
 }
 
 describe("normalizeWizardName", () => {
@@ -51,7 +68,7 @@ ${JSON.stringify({
       summary: "Scheduled validation loop",
       warnings: ["Scheduler is session-scoped"],
       agents: [
-        { name: "ChefSystem", primary: true, content: agentContent() },
+        { name: "ChefSystem", primary: true, content: agentContent("Primary", "handoff: true\n") },
         { name: "ChefReviewer", primary: false, content: agentContent("Reviewer") },
       ],
       skills: [{
@@ -71,6 +88,7 @@ Require file paths and concrete verification.
         prompt: "Inspect the current project and validate the target.",
         thinking: "high",
         max_turns: 20,
+        isolated: true,
         isolation: "worktree",
       },
     }), "ChefSystem");
@@ -81,11 +99,37 @@ Require file paths and concrete verification.
     expect(result.schedule?.thinking).toBe("high");
   });
 
-  it("rejects a missing requested primary agent", () => {
+  it("rejects malformed YAML and unsupported runtime fields", () => {
+    expect(() => parseAgentSystemBlueprint(blueprintJson({
+      agents: [{
+        name: "ChefSystem",
+        primary: true,
+        content: "---\ndescription: [unterminated\n---\n\nBody\n",
+      }],
+    }), "ChefSystem")).toThrow(/invalid YAML frontmatter/);
+
+    expect(() => parseAgentSystemBlueprint(blueprintJson({
+      agents: [{
+        name: "ChefSystem",
+        primary: true,
+        content: agentContent("Bad field", "invented_runtime_option: true\n"),
+      }],
+    }), "ChefSystem")).toThrow(/unsupported frontmatter field/);
+  });
+
+  it("rejects a missing or out-of-order requested primary agent", () => {
     expect(() => parseAgentSystemBlueprint(JSON.stringify({
       agents: [{ name: "Other", primary: true, content: agentContent() }],
       skills: [],
     }), "ChefSystem")).toThrow(/must contain the requested primary agent/);
+
+    expect(() => parseAgentSystemBlueprint(JSON.stringify({
+      agents: [
+        { name: "Other", primary: false, content: agentContent() },
+        { name: "ChefSystem", primary: true, content: agentContent() },
+      ],
+      skills: [],
+    }), "ChefSystem")).toThrow(/must be first/);
   });
 
   it("rejects duplicate or unsafe resource names", () => {
@@ -97,44 +141,117 @@ Require file paths and concrete verification.
       skills: [],
     }), "ChefSystem")).toThrow(/Duplicate agent name/);
 
-    expect(() => parseAgentSystemBlueprint(JSON.stringify({
-      agents: [{ name: "ChefSystem", primary: true, content: agentContent() }],
+    expect(() => parseAgentSystemBlueprint(blueprintJson({
       skills: [{ name: "../escape", content: agentContent() }],
     }), "ChefSystem")).toThrow(/no spaces or paths/);
   });
 
   it("rejects definitions without frontmatter and instruction bodies", () => {
-    expect(() => parseAgentSystemBlueprint(JSON.stringify({
+    expect(() => parseAgentSystemBlueprint(blueprintJson({
       agents: [{ name: "ChefSystem", primary: true, content: "plain text" }],
-      skills: [],
     }), "ChefSystem")).toThrow(/must start with YAML frontmatter/);
 
-    expect(() => parseAgentSystemBlueprint(JSON.stringify({
+    expect(() => parseAgentSystemBlueprint(blueprintJson({
       agents: [{ name: "ChefSystem", primary: true, content: "---\ndescription: empty\n---\n" }],
-      skills: [],
     }), "ChefSystem")).toThrow(/instruction body/);
   });
 });
 
+describe("validateBlueprintForSelections", () => {
+  it("rejects mutation permissions under strictly read-only selection", () => {
+    const blueprint = parseAgentSystemBlueprint(blueprintJson({
+      agents: [{
+        name: "ChefSystem",
+        primary: true,
+        content: `---
+description: Unsafe agent
+tools: read, edit, write
+prompt_mode: replace
+---
+
+Mutate files.
+`,
+      }],
+    }), "ChefSystem");
+
+    expect(validateBlueprintForSelections(blueprint, {
+      architecture: "single",
+      autonomy: "read-only",
+      skillPolicy: "never",
+      scheduleRequest: { mode: "none", hint: "On demand only" },
+    })).toMatch(/may not grant edit or write/);
+  });
+
+  it("enforces an exact one-shot or recurring expression", () => {
+    const blueprint = parseAgentSystemBlueprint(blueprintJson({
+      schedule: {
+        name: "ChefSystem-schedule",
+        description: "Wrong timing",
+        schedule: "1h",
+        prompt: "Run once.",
+        isolated: true,
+      },
+    }), "ChefSystem");
+
+    expect(validateBlueprintForSelections(blueprint, {
+      architecture: "scheduled",
+      autonomy: "read-only",
+      skillPolicy: "never",
+      scheduleRequest: {
+        mode: "exact",
+        hint: "Run once exactly at the requested time",
+        expectedExpression: "2099-01-01T12:00:00Z",
+      },
+    })).toContain("must exactly match");
+  });
+
+  it("requires handoffs for chains and validators for agentic loops", () => {
+    const twoAgents = parseAgentSystemBlueprint(blueprintJson({
+      agents: [
+        { name: "ChefSystem", primary: true, content: agentContent() },
+        { name: "ChefReviewer", primary: false, content: agentContent("Reviewer") },
+      ],
+    }), "ChefSystem");
+    expect(validateBlueprintForSelections(twoAgents, {
+      architecture: "chain",
+      autonomy: "safe",
+      skillPolicy: "never",
+      scheduleRequest: { mode: "none", hint: "On demand" },
+    })).toMatch(/handoff: true/);
+
+    const single = parseAgentSystemBlueprint(blueprintJson(), "ChefSystem");
+    expect(validateBlueprintForSelections(single, {
+      architecture: "loop",
+      autonomy: "safe",
+      skillPolicy: "never",
+      scheduleRequest: { mode: "none", hint: "On demand" },
+    })).toMatch(/requires adversarial validators/);
+  });
+});
+
 describe("buildAgentSystemPrompt", () => {
-  it("describes supported agents, skills, loops, and schedule output without granting file writes", () => {
+  it("describes agents, skills, loops, and exact scheduling without granting file writes", () => {
     const prompt = buildAgentSystemPrompt({
       requestedName: "ChefSystem",
       description: "Build a scheduled review and repair loop",
       architecture: "full",
       autonomy: "full",
       skillPolicy: "always",
-      scheduleHint: 'Create a cron schedule using exactly "0 9 * * 1-5".',
+      scheduleRequest: {
+        mode: "exact",
+        hint: 'Create a cron schedule using exactly "0 9 * * 1-5".',
+        expectedExpression: "0 9 * * 1-5",
+      },
       targetAgentDir: "/repo/.pi/agents",
       targetSkillDir: "/repo/.pi/skills",
     });
 
     expect(prompt).toContain("REQUESTED PRIMARY AGENT NAME: ChefSystem");
-    expect(prompt).toContain("validators:");
-    expect(prompt).toContain("handoff:");
-    expect(prompt).toContain("schedule");
+    expect(prompt).toContain("validators");
+    expect(prompt).toContain("handoff");
+    expect(prompt).toContain('exactly "0 9 * * 1-5"');
     expect(prompt).toContain("/repo/.pi/skills/<name>/SKILL.md");
     expect(prompt).toContain("You must NOT call write/edit or create files yourself.");
-    expect(prompt).toContain("Return strict JSON only.");
+    expect(prompt).toContain("Return strict JSON only");
   });
 });
