@@ -182,7 +182,10 @@ describe("0.18 release policy", () => {
     // version currently on main, not a hardcoded literal, so any approved
     // sourceBaseline (0.17.5, 0.17.6, ...) can be published.
     expect(content).not.toContain("inputs.confirm == '0.17.5'");
-    expect(content).toContain("test \"$REQUESTED\" = \"$VERSION\"");
+    // User input must never pass through bash double-quote expansion.
+    expect(content).toContain("printenv CONFIRM_VERSION | grep -Eq");
+    expect(content).toContain("printenv CONFIRM_VERSION | grep -Fxq");
+    expect(content).not.toContain('REQUESTED="$CONFIRM_VERSION"');
     expect(content).toContain("node scripts/release-policy.mjs baseline");
     expect(content).toContain("npm publish");
   });
