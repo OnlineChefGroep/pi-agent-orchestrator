@@ -32,6 +32,15 @@ export interface SubagentsSettings {
   defaultJoinMode?: JoinMode;
   schedulingEnabled?: boolean;
   tracingEnabled?: boolean;
+  /**
+   * Override the model used by spawned subagents.
+   * - `"inherit"`: use the session-default (parent) model — useful when a
+   *   built-in read-only agent's configured model (e.g. Explore's pinned
+   *   `anthropic/claude-haiku-4-5`) is unreachable in this install.
+   * - `"<provider>/<modelId>"`: pin a specific model.
+   * - `undefined` (default): each agent uses its own configured model.
+   */
+  subagentModel?: string;
   /** Persisted motion profile; legacy single-spinner values remain valid. */
   animationStyle?: AnimationStyle;
   uiStyle?: "premium" | "retro" | "plain";

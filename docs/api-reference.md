@@ -184,6 +184,7 @@ interface SubagentsSettings {
   defaultJoinMode?: JoinMode;          // Agent join topology (default: "smart")
   schedulingEnabled?: boolean;         // Master switch for cron scheduling (default: true)
   tracingEnabled?: boolean;           // Master switch for OpenTelemetry span emission in agent-runner (default: true). When false, every span helper in telemetry-otel.ts short-circuits to a shared no-op span.
+  subagentModel?: string;             // Override the model used by spawned subagents. `"inherit"` uses the session-default (parent) model; `"<provider>/<modelId>"` pins a specific model; unset (default) keeps each agent's own configured model. Escape hatch when a built-in read-only agent's pinned model is unreachable (e.g. Explore's claude-haiku returning a provider 401).
   animationStyle?: "braille" | "dots" | "lines" | "classic" | "none";  // Spinner style (default: "braille")
   uiStyle?: "premium" | "retro" | "plain";  // UI theme (default: "premium")
   showActivityStream?: boolean;        // Show real-time activity stream in widget (default: true)
