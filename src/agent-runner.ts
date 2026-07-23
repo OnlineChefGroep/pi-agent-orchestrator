@@ -313,6 +313,12 @@ export interface RunResult {
   handoff?: AgentHandoff;
   /** Execution metrics. */
   metrics: RunMetrics;
+  /**
+   * Set when the run ended because the model/provider errored on its final
+   * turn (no thrown exception). Callers that key off status should treat a
+   * non-empty `error` as a failure even though `session.prompt` resolved.
+   */
+  error?: string;
 }
 
 export interface RunMetrics {
@@ -366,7 +372,11 @@ function getLastAssistantError(session: AgentSession): string | undefined {
   for (let i = session.messages.length - 1; i >= 0; i--) {
     const msg = session.messages[i];
     if (msg.role !== "assistant") continue;
-    if (msg.stopReason === "error" && msg.errorMessage) return msg.errorMessage;
+    // Only the most recent assistant turn reflects the run's final outcome.
+    // An earlier errored turn is stale once a later assistant turn exists
+    // (e.g. a retry/revision that produced an empty-but-non-error turn), so we
+    // do not scan past the latest assistant message.
+    return msg.stopReason === "error" && msg.errorMessage ? msg.errorMessage : undefined;
   }
   return undefined;
 }
@@ -892,16 +902,19 @@ export async function runAgent(
   }
 
   let responseText = gatedResponseText || collector.getText().trim() || getLastAssistantText(session);
+  let runError: string | undefined;
   const modelError = getLastAssistantError(session);
   if (!responseText && modelError) {
-    // The run produced no text because the model/provider errored on a turn
-    // (e.g. 401 auth, unavailable model). Surface it instead of returning an
-    // empty "completed" result that hides the failure from the caller.
+    // The run produced no text because the model/provider errored on its final
+    // turn (e.g. 401 auth, unavailable model). Surface it instead of returning
+    // an empty "completed" result that hides the failure from the caller, and
+    // record it on the result so the manager finalizes the agent as failed.
     logger.warn("Subagent stopped with a model/provider error", {
       agentId: options.agentId ?? "unknown",
       error: modelError,
     });
     responseText = `Agent stopped with a model/provider error: ${modelError}`;
+    runError = modelError;
     options.hooks
       ?.dispatch("subagent:error", options.agentId ?? "unknown", { error: modelError })
       .catch((hookErr) => {
@@ -979,7 +992,7 @@ export async function runAgent(
     latencyToFirstTokenMs: latencyToFirstToken,
   };
 
-  return { responseText, session, aborted, steered: softLimitReached, validationResults, validated, handoff, metrics };
+  return { responseText, session, aborted, steered: softLimitReached, validationResults, validated, handoff, metrics, error: runError };
 }
 
 // ============================================================================

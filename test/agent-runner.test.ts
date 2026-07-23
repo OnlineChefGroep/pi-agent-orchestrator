@@ -135,6 +135,54 @@ function createSessionWithError(errorMessage: string): {
   return { session, listeners };
 }
 
+/**
+ * Simulate a run that recovered from an earlier provider error: the first
+ * turn errors, then a revision produces a later assistant turn that is
+ * non-error (but empty). The stale error must not be surfaced as the final
+ * outcome. See the "Recovered Run Reuses Stale Error" review thread.
+ */
+function createSessionWithRecoveredError(errorMessage: string): {
+  session: AgentSession;
+  listeners: Array<(event: AgentSessionEvent) => void>;
+} {
+  const listeners: Array<(event: AgentSessionEvent) => void> = [];
+  let call = 0;
+  const session = {
+    messages: [] as AgentSession["messages"],
+    subscribe: vi.fn((listener: (event: AgentSessionEvent) => void) => {
+      listeners.push(listener);
+      return () => {};
+    }),
+    prompt: vi.fn(async () => {
+      call++;
+      if (call === 1) {
+        // First turn: provider error, no text.
+        session.messages.push({
+          role: "assistant",
+          content: [],
+          stopReason: "error",
+          errorMessage,
+        } as AgentSession["messages"][number]);
+        return;
+      }
+      // Later turn: non-error recovery that still produced no text. The stale
+      // error from turn 1 must not be reported as the final outcome.
+      session.messages.push({
+        role: "assistant",
+        content: [],
+        stopReason: "end_turn",
+      } as AgentSession["messages"][number]);
+    }),
+    abort: vi.fn(),
+    steer: vi.fn(),
+    getActiveToolNames: vi.fn(() => ["read"]),
+    setActiveToolsByName: vi.fn(),
+    setSessionName: vi.fn(),
+    bindExtensions: vi.fn(async () => {}),
+  } as unknown as AgentSession;
+  return { session, listeners };
+}
+
 const ctx = {
   cwd: "/tmp",
   model: { provider: "test", id: "test-model" },
@@ -176,6 +224,36 @@ describe("agent-runner final output capture", () => {
     expect(result.responseText).not.toBe("");
     expect(result.responseText).toContain("model/provider error");
     expect(result.responseText).toContain("User not found");
+    // The run must be recorded as a failure so the manager finalizes the agent
+    // with status "error" rather than "completed".
+    expect(result.error).toBe('401: {"message":"User not found.","code":401}');
+  });
+
+  it("does not surface a stale provider error after a later non-error turn", async () => {
+    // Regression ("Recovered Run Reuses Stale Error"): getLastAssistantError
+    // previously scanned the full history, so an earlier failed turn stayed
+    // eligible after a revision added a later non-error (but empty) assistant
+    // turn. The final outcome must not be misreported as a provider error.
+    const { session } = createSessionWithRecoveredError('401: {"message":"User not found.","code":401}');
+    createAgentSession.mockResolvedValue({ session });
+    const hooks = new HookRegistry();
+    let endCalls = 0;
+    hooks.register("subagent:end", async () => {
+      endCalls++;
+      if (endCalls === 1) return { action: "block" as const, feedback: "retry" };
+      return "allow";
+    });
+
+    const result = await runAgent(ctx, "Explore", "go", {
+      pi,
+      hooks,
+      agentId: "agent-recovered",
+      maxEndHookRevisions: 1,
+    });
+
+    expect(session.prompt).toHaveBeenCalledTimes(2);
+    expect(result.error).toBeUndefined();
+    expect(result.responseText).not.toContain("model/provider error");
   });
 
   it("binds extensions before prompting", async () => {
