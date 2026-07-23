@@ -223,6 +223,22 @@ function sanitize(raw: unknown): SubagentsSettings {
   const footerStatus = sanitizeFooterStatusConfig(source.footerStatus);
   if (footerStatus) settings.footerStatus = footerStatus;
 
+  // PostHog bridge config: preserve explicitly set string fields so a saved
+  // `posthog.key` survives sanitization and reaches the bridge at activation.
+  const rawPostHog = source.posthog;
+  if (rawPostHog && typeof rawPostHog === "object" && !Array.isArray(rawPostHog)) {
+    const phSource = rawPostHog as Record<string, unknown>;
+    const posthog: PostHogConfig = {};
+    if (typeof phSource.key === "string" && phSource.key) posthog.key = phSource.key;
+    if (typeof phSource.host === "string" && phSource.host) posthog.host = phSource.host;
+    if (typeof phSource.distinctId === "string" && phSource.distinctId) {
+      posthog.distinctId = phSource.distinctId;
+    }
+    if (posthog.key !== undefined || posthog.host !== undefined || posthog.distinctId !== undefined) {
+      settings.posthog = posthog;
+    }
+  }
+
   return settings;
 }
 
