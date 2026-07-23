@@ -29,7 +29,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -51,10 +51,12 @@ jobs:
           package-manager-cache: false
 
       - name: Validate maintenance baseline policy
+        env:
+          CONFIRM_VERSION: ${{ inputs.confirm }}
         shell: bash
         run: |
           set -euo pipefail
-          REQUESTED="${{ inputs.confirm }}"
+          REQUESTED="$CONFIRM_VERSION"
           VERSION="$(node -p "require('./package.json').version")"
           test "$REQUESTED" = "$VERSION" || {
             echo "Requested baseline '$REQUESTED' does not match package.json version '$VERSION' on main." >&2
@@ -102,7 +104,7 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.verify.outputs.version }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -158,7 +160,7 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.verify.outputs.version }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0

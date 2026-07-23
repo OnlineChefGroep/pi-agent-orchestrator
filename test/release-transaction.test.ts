@@ -177,9 +177,10 @@ describe("v0.18 release transaction", () => {
     writeFileSync(join(root, "package-lock.json"), `${JSON.stringify(lock, null, 2)}\n`);
 
     const originalChangelog = readFileSync(join(root, "CHANGELOG.md"), "utf8");
-    const separator = "\n---\n";
-    const separatorIndex = originalChangelog.indexOf(separator);
-    expect(separatorIndex, "CHANGELOG must keep the [Unreleased] --- separator").toBeGreaterThan(-1);
+    const separatorMatch = originalChangelog.match(/\r?\n---\r?\n/);
+    expect(separatorMatch, "CHANGELOG must keep the [Unreleased] --- separator").not.toBeNull();
+    const separator = separatorMatch![0];
+    const separatorIndex = separatorMatch!.index!;
     const datedChangelog =
       originalChangelog.slice(0, separatorIndex + separator.length) +
       "\n## v0.17.6 (2026-07-22)\n\nDuration quota crash fix and patch baseline.\n\n" +

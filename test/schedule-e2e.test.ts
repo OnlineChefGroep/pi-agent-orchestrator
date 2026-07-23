@@ -222,6 +222,10 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
     });
 
     await waitFor(() => manager.spawn.mock.calls.length === 1);
+    await waitFor(
+      () => scheduler.list().find(j => j.id === job.id)?.lastStatus === "success",
+      5000,
+    );
 
     const eventTypes = pi.events.emit.mock.calls
       .filter((c: any[]) => c[0] === "subagents:scheduled")
@@ -230,10 +234,13 @@ describe("SubagentScheduler — end-to-end with real timers", () => {
     expect(eventTypes).toContain("added");
     expect(eventTypes).toContain("fired");
 
-    await scheduler.removeJob(job.id);
-    const after = pi.events.emit.mock.calls
-      .filter((c: any[]) => c[0] === "subagents:scheduled")
-      .map((c: any[]) => c[1].type);
-    expect(after).toContain("removed");
+    expect(await scheduler.removeJob(job.id)).toBe(true);
+    await waitFor(
+      () =>
+        pi.events.emit.mock.calls.some(
+          (c: any[]) => c[0] === "subagents:scheduled" && c[1].type === "removed",
+        ),
+      5000,
+    );
   });
 });
