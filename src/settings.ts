@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { AnimationStyle, OrchestrationMode } from "./agent-registry.js";
 import { logger } from "./logger.js";
+import type { PostHogConfig } from "./posthog-bridge.js";
 import type { JoinMode, PromptCompressionLevel } from "./types.js";
 import type { DashboardKeybindingsOverride } from "./ui/dashboard-keybindings.js";
 import { sanitizeDashboardKeybindings } from "./ui/dashboard-keybindings.js";
@@ -32,6 +33,13 @@ export interface SubagentsSettings {
   defaultJoinMode?: JoinMode;
   schedulingEnabled?: boolean;
   tracingEnabled?: boolean;
+  /**
+   * Optional PostHog product-analytics bridge. Inert unless `posthog.key`
+   * (or `POSTHOG_KEY`) is set, so a default install ships zero outbound
+   * analytics. When enabled, agent lifecycle events are captured to the
+   * configured project.
+   */
+  posthog?: PostHogConfig;
   /** Persisted motion profile; legacy single-spinner values remain valid. */
   animationStyle?: AnimationStyle;
   uiStyle?: "premium" | "retro" | "plain";

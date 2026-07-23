@@ -52,11 +52,12 @@ import {
 } from "./debug-capture.js";
 import { GroupJoinManager } from "./group-join.js";
 import { HookRegistry } from "./hooks.js";
+import { createPostHogBridge } from "./posthog-bridge.js";
 import { clearSubagentsApi, registerSubagentsApi } from "./public-api.js";
 import type { ScheduleChangeEvent } from "./schedule.js";
 import { SubagentScheduler } from "./schedule.js";
 import { resolveStorePath, ScheduleStore } from "./schedule-store.js";
-import { applyAndEmitLoaded } from "./settings.js";
+import { applyAndEmitLoaded, loadSettings } from "./settings.js";
 import { SwarmCoordinator, setActiveSwarmCoordinator } from "./swarm-join.js";
 import { onTelemetry } from "./telemetry.js";
 import {
@@ -361,6 +362,29 @@ export default async function (pi: ExtensionAPI) {
     }),
   );
 
+  // ---- PostHog product-analytics bridge (opt-in, inert without a key) ----
+  // No project key is hardcoded: the bridge stays null unless the user sets
+  // `posthog.key` (or POSTHOG_KEY), so a default install ships zero outbound
+  // analytics. When enabled, agent lifecycle events flow to the user's own
+  // PostHog project.
+  const posthogBridge = await createPostHogBridge(loadSettings().posthog ?? {});
+  const posthogUnsubs: Array<() => void> = [];
+  if (posthogBridge) {
+    posthogUnsubs.push(
+      onTelemetry("agent:spawned", (p) => posthogBridge.capture("agent_spawned", p)),
+      onTelemetry("agent:completed", (p) => posthogBridge.capture("agent_completed", p)),
+      onTelemetry("subagent:dispatch_decision", (p) =>
+        posthogBridge.capture("subagent_dispatch", p),
+      ),
+      onTelemetry("agent:validation-failed", (p) =>
+        posthogBridge.capture("agent_validation_failed", p),
+      ),
+      onTelemetry("agent:unknown-tools", (p) =>
+        posthogBridge.capture("agent_unknown_tools", p),
+      ),
+    );
+  }
+
   // Schedule firings + errors arrive on the cross-extension event bus.
   const scheduleUnsub = pi.events.on("subagents:scheduled", (payload) => {
     if (!isDebugCaptureSinkOn()) return;
@@ -518,6 +542,8 @@ export default async function (pi: ExtensionAPI) {
     // already swallow errors, and disable() is idempotent.
     disableDebugCapture(true);
     for (const unsub of debugTelemetryUnsubs) unsub();
+    for (const unsub of posthogUnsubs) unsub();
+    if (posthogBridge) posthogBridge.shutdown();
     if (scheduleUnsub) scheduleUnsub();
   });
 
