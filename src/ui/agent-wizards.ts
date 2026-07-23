@@ -3,16 +3,20 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { AgentManager } from "../agent-manager.js";
 import { reloadCustomAgents } from "../agent-registry.js";
-import { BUILTIN_TOOL_NAMES } from "../agent-types.js";
+import { BUILTIN_TOOL_NAMES, getAgentConfig } from "../agent-types.js";
 import type { SubagentScheduler } from "../schedule.js";
+import { writeBlueprintFilesAtomically } from "./agent-blueprint-writer.js";
 import {
   type AgentArchitectureMode,
   type AgentAutonomyProfile,
   type AgentSystemBlueprint,
+  type BlueprintSelectionContext,
   buildAgentSystemPrompt,
   normalizeWizardName,
   parseAgentSystemBlueprint,
+  type ScheduleRequest,
   type SkillGenerationPolicy,
+  validateBlueprintForSelections,
 } from "./agent-blueprint.js";
 import { personalAgentsDir, projectAgentsDir } from "./agent-file-helpers.js";
 
@@ -55,50 +59,55 @@ function agentPath(targetDir: string, name: string): string {
   return join(targetDir, `${name}.md`);
 }
 
-function skillDir(targetDir: string, name: string): string {
-  return join(targetDir, "..", "skills", name);
-}
-
 function skillPath(targetDir: string, name: string): string {
-  return join(skillDir(targetDir, name), "SKILL.md");
+  return join(targetDir, "..", "skills", name, "SKILL.md");
 }
 
 function formatBlueprintSummary(blueprint: AgentSystemBlueprint): string {
-  const agentNames = blueprint.agents
+  const agents = blueprint.agents
     .map((agent) => `${agent.name}${agent.primary ? " (primary)" : ""}`)
     .join(", ");
-  const skillNames = blueprint.skills.length > 0
+  const skills = blueprint.skills.length > 0
     ? blueprint.skills.map((skill) => skill.name).join(", ")
     : "none";
   const lines = [
     blueprint.summary,
     "",
-    `Agents: ${agentNames}`,
-    `Skills: ${skillNames}`,
-    `Schedule: ${blueprint.schedule ? blueprint.schedule.schedule : "none"}`,
+    `Agents: ${agents}`,
+    `Skills: ${skills}`,
+    `Schedule: ${blueprint.schedule?.schedule ?? "none"}`,
   ];
-  if (blueprint.warnings.length > 0) {
-    lines.push("", `Warnings: ${blueprint.warnings.join(" | ")}`);
-  }
+  if (blueprint.warnings.length > 0) lines.push("", `Warnings: ${blueprint.warnings.join(" | ")}`);
   return lines.join("\n");
 }
 
-async function collectScheduleHint(
+async function collectScheduleRequest(
   ctx: ExtensionCommandContext,
   architecture: AgentArchitectureMode,
-): Promise<string | undefined | null> {
+): Promise<ScheduleRequest | null> {
   const activation = await ctx.ui.select("Activation", [...ACTIVATION_OPTIONS]);
   if (!activation) return null;
 
   if (activation === "On demand only") {
-    return architecture === "scheduled"
-      ? "A concrete schedule is required. Infer the safest useful cadence from the user's goal."
-      : undefined;
+    if (architecture === "scheduled") {
+      return {
+        mode: "required",
+        hint: "A concrete schedule is required. Infer the safest useful cadence from the user's goal.",
+      };
+    }
+    return { mode: "none", hint: "On demand only. Return schedule: null." };
   }
+
   if (activation === "Let Claude propose timing when the goal requires it") {
     return architecture === "scheduled"
-      ? "A concrete schedule is required. Choose the safest useful cadence from the user's goal."
-      : "Propose a schedule only when timing or recurrence is materially required by the user's goal.";
+      ? {
+        mode: "required",
+        hint: "A concrete schedule is required. Choose the safest useful cadence from the user's goal.",
+      }
+      : {
+        mode: "optional",
+        hint: "Propose a schedule only when recurrence or timing is materially required by the goal.",
+      };
   }
 
   const defaults: Record<string, string> = {
@@ -106,16 +115,19 @@ async function collectScheduleHint(
     "Repeat on interval — e.g. 30m, 2h": "1h",
     "Cron schedule — e.g. 0 9 * * 1-5": "0 9 * * 1-5",
   };
-  const schedule = await ctx.ui.input("Schedule expression", defaults[activation]);
-  if (!schedule?.trim()) return null;
+  const expression = (await ctx.ui.input("Schedule expression", defaults[activation]))?.trim();
+  if (!expression) return null;
 
-  if (activation.startsWith("Run once")) {
-    return `Create a one-shot schedule using exactly "${schedule.trim()}".`;
-  }
-  if (activation.startsWith("Repeat")) {
-    return `Create a recurring interval schedule using exactly "${schedule.trim()}".`;
-  }
-  return `Create a cron schedule using exactly "${schedule.trim()}".`;
+  const kind = activation.startsWith("Run once")
+    ? "one-shot"
+    : activation.startsWith("Repeat")
+      ? "recurring interval"
+      : "cron";
+  return {
+    mode: "exact",
+    expectedExpression: expression,
+    hint: `Create a ${kind} schedule using exactly "${expression}". Do not substitute another cadence.`,
+  };
 }
 
 function preflightOverwrite(
@@ -127,8 +139,8 @@ function preflightOverwrite(
     ...blueprint.agents.map((agent) => agentPath(targetDir, agent.name)),
     ...blueprint.skills.map((skill) => skillPath(targetDir, skill.name)),
   ].filter(existsSync);
-
   if (existing.length === 0) return Promise.resolve(true);
+
   const preview = existing.length <= 8
     ? existing.join("\n")
     : `${existing.slice(0, 8).join("\n")}\n…and ${existing.length - 8} more`;
@@ -138,42 +150,27 @@ function preflightOverwrite(
   );
 }
 
-function writeBlueprint(targetDir: string, blueprint: AgentSystemBlueprint): void {
-  mkdirSync(targetDir, { recursive: true });
-  for (const agent of blueprint.agents) {
-    writeFileSync(agentPath(targetDir, agent.name), agent.content, "utf-8");
+async function persistBlueprint(targetDir: string, blueprint: AgentSystemBlueprint): Promise<void> {
+  const transaction = writeBlueprintFilesAtomically(targetDir, blueprint);
+  try {
+    await reloadCustomAgents();
+    const unavailable = blueprint.agents.filter((agent) => {
+      const config = getAgentConfig(agent.name);
+      return !config || config.enabled === false;
+    });
+    if (unavailable.length > 0) {
+      throw new Error(`Generated agent(s) failed runtime loading: ${unavailable.map((agent) => agent.name).join(", ")}`);
+    }
+    transaction.finalize();
+  } catch (error) {
+    transaction.rollback();
+    try {
+      await reloadCustomAgents();
+    } catch {
+      // Preserve the original persistence/validation error.
+    }
+    throw error;
   }
-
-  for (const skill of blueprint.skills) {
-    mkdirSync(skillDir(targetDir, skill.name), { recursive: true });
-    writeFileSync(skillPath(targetDir, skill.name), skill.content, "utf-8");
-  }
-}
-
-function validateBlueprintSelections(
-  blueprint: AgentSystemBlueprint,
-  architecture: AgentArchitectureMode,
-  skillPolicy: SkillGenerationPolicy,
-): string | undefined {
-  if (architecture === "single" && blueprint.agents.length !== 1) {
-    return "Single-agent mode must produce exactly one agent.";
-  }
-  if (architecture === "skill" && blueprint.skills.length === 0) {
-    return "Agent + skills mode must produce at least one skill.";
-  }
-  if (architecture === "chain" && blueprint.agents.length < 2) {
-    return "Handoff-chain mode must produce at least two agents.";
-  }
-  if (architecture === "scheduled" && !blueprint.schedule) {
-    return "Scheduled-agent mode must produce a schedule.";
-  }
-  if (skillPolicy === "always" && blueprint.skills.length === 0) {
-    return "The selected skill policy requires at least one generated skill.";
-  }
-  if (skillPolicy === "never" && blueprint.skills.length > 0) {
-    return "The selected skill policy forbids generated skills.";
-  }
-  return undefined;
 }
 
 async function generateValidatedBlueprint(
@@ -182,8 +179,7 @@ async function generateValidatedBlueprint(
   manager: AgentManager,
   name: string,
   generatePrompt: string,
-  architecture: AgentArchitectureMode,
-  skillPolicy: SkillGenerationPolicy,
+  selection: BlueprintSelectionContext,
 ): Promise<AgentSystemBlueprint | undefined> {
   ctx.ui.notify("Architecting agent system...", "info");
   let record = await manager.spawnAndWait(pi, ctx, "Explore", generatePrompt, {
@@ -206,7 +202,7 @@ async function generateValidatedBlueprint(
     } else {
       try {
         const blueprint = parseAgentSystemBlueprint(output, name);
-        rejection = validateBlueprintSelections(blueprint, architecture, skillPolicy) ?? "";
+        rejection = validateBlueprintForSelections(blueprint, selection) ?? "";
         if (!rejection) return blueprint;
       } catch (error) {
         rejection = error instanceof Error ? error.message : String(error);
@@ -219,10 +215,7 @@ async function generateValidatedBlueprint(
       return undefined;
     }
 
-    ctx.ui.notify(
-      `Blueprint rejected (${attempt}/3): ${rejection} Asking Claude to repair it...`,
-      "warning",
-    );
+    ctx.ui.notify(`Blueprint rejected (${attempt}/3): ${rejection} Asking Claude to repair it...`, "warning");
     const repaired = await manager.resume(
       record.id,
       `Your previous blueprint was rejected by the host validator.
@@ -230,7 +223,7 @@ async function generateValidatedBlueprint(
 REJECTION:
 ${rejection}
 
-Return a COMPLETE replacement blueprint as strict JSON only. Preserve the requested primary name "${name}", obey the selected architecture and skill policy, use no markdown fence, and do not call tools.`,
+Return a COMPLETE replacement blueprint as strict JSON only. Preserve primary name "${name}". Obey the selected architecture, autonomy, skill policy, and activation requirement literally. Do not use a markdown fence and do not call tools.`,
     );
     if (!repaired) {
       ctx.ui.notify("Claude session could not be resumed for blueprint repair.", "warning");
@@ -238,7 +231,6 @@ Return a COMPLETE replacement blueprint as strict JSON only. Preserve the reques
     }
     record = repaired;
   }
-
   return undefined;
 }
 
@@ -298,7 +290,6 @@ async function runPrimaryNow(
 ): Promise<void> {
   const primary = blueprint.agents.find((agent) => agent.primary)?.name;
   if (!primary) return;
-
   const initialPrompt = await ctx.ui.editor(
     `Initial task for ${primary}`,
     blueprint.schedule?.prompt ?? fallbackPrompt,
@@ -309,12 +300,12 @@ async function runPrimaryNow(
   const record = await manager.spawnAndWait(pi, ctx, primary, initialPrompt.trim(), {
     description: `Run generated agent ${primary}`,
   });
-
-  if (record.status === "error") {
-    ctx.ui.notify(`Agent failed: ${record.error ?? "unknown error"}`, "warning");
-  } else {
-    ctx.ui.notify(`${primary} finished with status ${record.status}.`, "info");
-  }
+  ctx.ui.notify(
+    record.status === "error"
+      ? `Agent failed: ${record.error ?? "unknown error"}`
+      : `${primary} finished with status ${record.status}.`,
+    record.status === "error" ? "warning" : "info",
+  );
 }
 
 async function runCompleteChainNow(
@@ -324,52 +315,36 @@ async function runCompleteChainNow(
   blueprint: AgentSystemBlueprint,
   fallbackPrompt: string,
 ): Promise<void> {
-  const primary = blueprint.agents.find((agent) => agent.primary);
-  if (!primary) return;
-
-  const initialPrompt = await ctx.ui.editor(
-    "Initial task for the generated chain",
-    fallbackPrompt,
-  );
+  const initialPrompt = await ctx.ui.editor("Initial task for the generated chain", fallbackPrompt);
   if (!initialPrompt?.trim()) return;
 
-  const orderedAgents = [
-    primary,
-    ...blueprint.agents.filter((agent) => agent.name !== primary.name),
-  ];
   let previousOutput = "";
-
-  for (let index = 0; index < orderedAgents.length; index++) {
-    const agent = orderedAgents[index];
-    const stagePrompt = `Execute stage ${index + 1}/${orderedAgents.length} of this generated agent chain.
+  for (let index = 0; index < blueprint.agents.length; index++) {
+    const agent = blueprint.agents[index];
+    const stagePrompt = `Execute stage ${index + 1}/${blueprint.agents.length} of this generated chain.
 
 ORIGINAL TASK:
 ${initialPrompt.trim()}
 
 ${previousOutput
-  ? `PREVIOUS STAGE OUTPUT / HANDOFF:
-${previousOutput}`
+  ? `PREVIOUS STAGE OUTPUT / HANDOFF:\n${previousOutput}`
   : "This is the first stage; there is no previous handoff."}
 
-Complete your own role, verify its exit criteria, and return a concrete handoff for the next stage.`;
+Complete your role, verify its exit criteria, and emit a concrete handoff for the next stage.`;
 
-    ctx.ui.notify(`Running chain stage ${index + 1}/${orderedAgents.length}: ${agent.name}`, "info");
+    ctx.ui.notify(`Running chain stage ${index + 1}/${blueprint.agents.length}: ${agent.name}`, "info");
     const record = await manager.spawnAndWait(pi, ctx, agent.name, stagePrompt, {
       description: `Chain stage ${index + 1}: ${agent.name}`,
     });
-
     if (record.status === "error" || !record.result?.trim()) {
-      ctx.ui.notify(
-        `Chain stopped at ${agent.name}: ${record.error ?? "agent returned no output"}`,
-        "warning",
-      );
+      ctx.ui.notify(`Chain stopped at ${agent.name}: ${record.error ?? "agent returned no output"}`, "warning");
       return;
     }
     previousOutput = record.result;
   }
 
   await ctx.ui.editor("Chain result", previousOutput);
-  ctx.ui.notify(`Completed ${orderedAgents.length}-stage agent chain.`, "info");
+  ctx.ui.notify(`Completed ${blueprint.agents.length}-stage agent chain.`, "info");
 }
 
 export async function showCreateWizard(
@@ -383,7 +358,6 @@ export async function showCreateWizard(
     `Personal (${personalAgentsDir()})`,
   ]);
   if (!location) return;
-
   const targetDir = location.startsWith("Project") ? projectAgentsDir() : personalAgentsDir();
 
   const method = await ctx.ui.select("Creation method", [
@@ -391,12 +365,8 @@ export async function showCreateWizard(
     "Manual single-agent configuration",
   ]);
   if (!method) return;
-
-  if (method.startsWith("Generate")) {
-    await showGenerateWizard(ctx, targetDir, pi, manager, scheduler);
-  } else {
-    await showManualWizard(ctx, targetDir);
-  }
+  if (method.startsWith("Generate")) await showGenerateWizard(ctx, targetDir, pi, manager, scheduler);
+  else await showManualWizard(ctx, targetDir);
 }
 
 export async function showGenerateWizard(
@@ -414,7 +384,6 @@ export async function showGenerateWizard(
 
   const rawName = await ctx.ui.input("Primary agent name (filename, no spaces)");
   if (!rawName) return;
-
   let name: string;
   try {
     name = normalizeWizardName(rawName);
@@ -428,59 +397,46 @@ export async function showGenerateWizard(
     ARCHITECTURE_OPTIONS,
   );
   if (!architecture) return;
-
   const autonomy = mapChoice(
     await ctx.ui.select("Autonomy and permissions", Object.keys(AUTONOMY_OPTIONS)),
     AUTONOMY_OPTIONS,
   );
   if (!autonomy) return;
-
   const skillPolicy = mapChoice(
     await ctx.ui.select("Reusable skills", Object.keys(SKILL_OPTIONS)),
     SKILL_OPTIONS,
   );
   if (!skillPolicy) return;
+  const scheduleRequest = await collectScheduleRequest(ctx, architecture);
+  if (!scheduleRequest) return;
 
-  const scheduleHint = await collectScheduleHint(ctx, architecture);
-  if (scheduleHint === null) return;
-
-  const targetSkillDir = join(targetDir, "..", "skills");
+  const selection: BlueprintSelectionContext = {
+    architecture,
+    autonomy,
+    skillPolicy,
+    scheduleRequest,
+  };
   const generatePrompt = buildAgentSystemPrompt({
     requestedName: name,
     description: description.trim(),
     architecture,
     autonomy,
     skillPolicy,
-    scheduleHint,
+    scheduleRequest,
     targetAgentDir: targetDir,
-    targetSkillDir,
+    targetSkillDir: join(targetDir, "..", "skills"),
   });
-
-  const blueprint = await generateValidatedBlueprint(
-    ctx,
-    pi,
-    manager,
-    name,
-    generatePrompt,
-    architecture,
-    skillPolicy,
-  );
+  const blueprint = await generateValidatedBlueprint(ctx, pi, manager, name, generatePrompt, selection);
   if (!blueprint) return;
 
-  const approved = await ctx.ui.confirm(
-    "Create this agent system?",
-    formatBlueprintSummary(blueprint),
-  );
-  if (!approved) return;
-
+  if (!(await ctx.ui.confirm("Create this agent system?", formatBlueprintSummary(blueprint)))) return;
   if (!(await preflightOverwrite(ctx, targetDir, blueprint))) return;
 
   try {
-    writeBlueprint(targetDir, blueprint);
-    await reloadCustomAgents();
+    await persistBlueprint(targetDir, blueprint);
   } catch (error) {
     ctx.ui.notify(
-      `Failed to create agent system: ${error instanceof Error ? error.message : String(error)}`,
+      `Failed to create agent system; all file changes were rolled back: ${error instanceof Error ? error.message : String(error)}`,
       "warning",
     );
     return;
@@ -495,29 +451,24 @@ export async function showGenerateWizard(
     blueprint.warnings.length > 0 ? "warning" : "info",
   );
 
-  const postAction = await ctx.ui.select("Next action", [
+  const nextAction = await ctx.ui.select("Next action", [
     "Finish",
     "Run primary agent now",
     ...(blueprint.agents.length > 1 ? ["Run complete chain now"] : []),
-    ...(blueprint.schedule && scheduler?.isActive() && !scheduled
-      ? ["Activate generated schedule"]
-      : []),
+    ...(blueprint.schedule && scheduler?.isActive() && !scheduled ? ["Activate generated schedule"] : []),
   ]);
-
-  if (postAction === "Run primary agent now") {
+  if (nextAction === "Run primary agent now") {
     await runPrimaryNow(ctx, pi, manager, blueprint, description.trim());
-  } else if (postAction === "Run complete chain now") {
+  } else if (nextAction === "Run complete chain now") {
     await runCompleteChainNow(ctx, pi, manager, blueprint, description.trim());
-  } else if (postAction === "Activate generated schedule") {
+  } else if (nextAction === "Activate generated schedule") {
     await activateSchedule(ctx, scheduler, blueprint);
   }
 }
 
 export async function showManualWizard(ctx: ExtensionCommandContext, targetDir: string): Promise<void> {
-  // 1. Name
   const rawName = await ctx.ui.input("Agent name (filename, no spaces)");
   if (!rawName) return;
-
   let name: string;
   try {
     name = normalizeWizardName(rawName);
@@ -526,30 +477,24 @@ export async function showManualWizard(ctx: ExtensionCommandContext, targetDir: 
     return;
   }
 
-  // 2. Description
   const description = await ctx.ui.input("Description (one line)");
   if (!description) return;
 
-  // 3. Tools
   const readOnlyTools = BUILTIN_TOOL_NAMES.filter((tool) => tool !== "edit" && tool !== "write");
   const readOnlyLabel = `read-only (${readOnlyTools.join(", ")})`;
   const toolChoice = await ctx.ui.select("Tools", ["all", "none", readOnlyLabel, "custom..."]);
   if (!toolChoice) return;
 
   let tools: string;
-  if (toolChoice === "all") {
-    tools = BUILTIN_TOOL_NAMES.join(", ");
-  } else if (toolChoice === "none") {
-    tools = "none";
-  } else if (toolChoice === readOnlyLabel) {
-    tools = readOnlyTools.join(", ");
-  } else {
+  if (toolChoice === "all") tools = BUILTIN_TOOL_NAMES.join(", ");
+  else if (toolChoice === "none") tools = "none";
+  else if (toolChoice === readOnlyLabel) tools = readOnlyTools.join(", ");
+  else {
     const customTools = await ctx.ui.input("Tools (comma-separated)", BUILTIN_TOOL_NAMES.join(", "));
     if (!customTools) return;
     tools = customTools;
   }
 
-  // 4. Model
   const modelChoice = await ctx.ui.select("Model", [
     "inherit (parent model)",
     "haiku",
@@ -558,7 +503,6 @@ export async function showManualWizard(ctx: ExtensionCommandContext, targetDir: 
     "custom...",
   ]);
   if (!modelChoice) return;
-
   let modelLine = "";
   if (modelChoice === "haiku") modelLine = "\nmodel: anthropic/claude-haiku-4-5-20251001";
   else if (modelChoice === "sonnet") modelLine = "\nmodel: anthropic/claude-sonnet-4-6";
@@ -568,7 +512,6 @@ export async function showManualWizard(ctx: ExtensionCommandContext, targetDir: 
     if (customModel) modelLine = `\nmodel: ${customModel}`;
   }
 
-  // 5. Thinking
   const thinkingChoice = await ctx.ui.select("Thinking level", [
     "inherit",
     "off",
@@ -581,21 +524,16 @@ export async function showManualWizard(ctx: ExtensionCommandContext, targetDir: 
   ]);
   if (!thinkingChoice) return;
   if (thinkingChoice === "max") {
-    const ok = await ctx.ui.confirm(
+    const confirmed = await ctx.ui.confirm(
       "Thinking level: max",
-      "max requires a supporting model (GPT-5.6 / adaptive Claude). Unsupported models will error or fall back to a lower level. Continue?",
+      "max requires a supporting model (GPT-5.6 / adaptive Claude). Unsupported models will error or fall back. Continue?",
     );
-    if (!ok) return;
+    if (!confirmed) return;
   }
+  const thinkingLine = thinkingChoice === "inherit" ? "" : `\nthinking: ${thinkingChoice}`;
 
-  let thinkingLine = "";
-  if (thinkingChoice !== "inherit") thinkingLine = `\nthinking: ${thinkingChoice}`;
-
-  // 6. System prompt
   const systemPrompt = await ctx.ui.editor("System prompt", "");
   if (systemPrompt === undefined) return;
-
-  // Build the file
   const content = `---
 description: ${description}
 tools: ${tools}${modelLine}${thinkingLine}
@@ -607,12 +545,10 @@ ${systemPrompt}
 
   mkdirSync(targetDir, { recursive: true });
   const targetPath = agentPath(targetDir, name);
-
   if (existsSync(targetPath)) {
     const overwrite = await ctx.ui.confirm("Overwrite", `${targetPath} already exists. Overwrite?`);
     if (!overwrite) return;
   }
-
   writeFileSync(targetPath, content, "utf-8");
   await reloadCustomAgents();
   ctx.ui.notify(`Created ${targetPath}`, "info");
