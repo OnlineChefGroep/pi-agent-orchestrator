@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+<<<<<<< HEAD
+=======
+### Added
+
+- Real-session showcase pipeline: asciinema scene markers, a dynamic
+  1920×1080/60fps Remotion master, focused skill/subagent/dashboard/handoff
+  clips, and strict codec/frame/version verification.
+- Native `real-product-showcase` skill: realism rules and progressive
+  references for terminal, browser, desktop/mobile capture, Remotion post,
+  and quality gates (no synthetic hero UI).
+
+>>>>>>> 98c90d6 (feat(skills): add native real-product-showcase skill)
 ### Fixed
 
 - Agent tool-call lifecycle hardening (#327): stable spawn-time completion
