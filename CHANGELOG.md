@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Real-session showcase pipeline: asciinema scene markers, a dynamic
+  1920×1080/60fps Remotion master, focused skill/subagent/dashboard/handoff
+  clips, and strict codec/frame/version verification.
+
 ### Fixed
 
 - Agent tool-call lifecycle hardening (#327): stable spawn-time completion

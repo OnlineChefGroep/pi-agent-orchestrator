@@ -28,7 +28,7 @@ try {
 
 const cast = await readFile(castPath, "utf8");
 const payload = await parseAsciicast(cast, {
-  source: path.relative(root, castPath),
+  source: `real asciinema session · ${path.basename(castPath)}`,
   packageVersion,
 });
 

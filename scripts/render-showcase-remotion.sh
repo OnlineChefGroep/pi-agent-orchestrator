@@ -36,11 +36,30 @@ render() {
   npm --prefix "$REMOTION_DIR" run "$1" -- "${EXTRA_ARGS[@]}"
 }
 
+normalize_terminal_video() {
+  local video="$1"
+  local normalized="${video%.mp4}.normalized.mp4"
+  local -a ffmpeg_command=(ffmpeg)
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    ffmpeg_command=(npm --prefix "$REMOTION_DIR" exec -- remotion ffmpeg)
+  fi
+  "${ffmpeg_command[@]}" -loglevel error -y -i "$video" \
+    -vf "scale=in_range=pc:out_range=tv" \
+    -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -color_range tv \
+    -an -movflags +faststart "$normalized"
+  mv "$normalized" "$video"
+}
+
 render render:master
 render render:skill-creation
 render render:subagent-run
 render render:dashboard-top
 render render:handoff
+normalize_terminal_video "$OUT_DIR/dashboard_preview.mp4"
+normalize_terminal_video "$OUT_DIR/showcase_skill_creation.mp4"
+normalize_terminal_video "$OUT_DIR/showcase_subagent_run.mp4"
+normalize_terminal_video "$OUT_DIR/showcase_dashboard_top.mp4"
+normalize_terminal_video "$OUT_DIR/showcase_handoff.mp4"
 render poster
 render promo:banner
 render promo:social

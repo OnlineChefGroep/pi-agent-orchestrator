@@ -1,5 +1,8 @@
-import {SerializeAddon} from "@xterm/addon-serialize";
-import {Terminal} from "@xterm/headless";
+import serializeAddon from "@xterm/addon-serialize";
+import headlessTerminal from "@xterm/headless";
+
+const {SerializeAddon} = serializeAddon;
+const {Terminal} = headlessTerminal;
 
 export const SHOWCASE_FPS = 60;
 export const REQUIRED_SHOWCASE_SCENES = [
@@ -7,21 +10,25 @@ export const REQUIRED_SHOWCASE_SCENES = [
     id: "skill-creation",
     title: "Skill creation",
     cue: {key: "/skill", label: "create a reusable skill"},
+    maxDurationSeconds: 10,
   },
   {
     id: "subagent-run",
     title: "Subagent run",
     cue: {key: "subagent", label: "run a real subagent"},
+    maxDurationSeconds: 12,
   },
   {
     id: "dashboard-top",
     title: "Dashboard and top",
     cue: {key: "t", label: "inspect live resource usage"},
+    maxDurationSeconds: 10,
   },
   {
     id: "handoff",
     title: "Structured handoff",
     cue: {key: "handoff", label: "return verified work"},
+    maxDurationSeconds: 8,
   },
 ];
 
@@ -50,7 +57,14 @@ const parseHeader = (value) => {
     throw new Error("Asciicast header must include positive width and height");
   }
 
-  return {cols, rows};
+  const idleTimeLimit =
+    typeof value.idle_time_limit === "number" &&
+    Number.isFinite(value.idle_time_limit) &&
+    value.idle_time_limit > 0
+      ? value.idle_time_limit
+      : null;
+
+  return {cols, rows, idleTimeLimit};
 };
 
 const parseEvent = (value, lineNumber, previousTime) => {
@@ -128,6 +142,62 @@ const parseResize = (data) => {
   return {cols: Number(match[1]), rows: Number(match[2])};
 };
 
+const roundTime = (value) => Number(value.toFixed(6));
+
+const normalizeShowcaseTimeline = (frames, scenes, durationSeconds) => {
+  if (scenes.length === 0) {
+    return {frames, scenes, durationSeconds};
+  }
+
+  const limits = new Map(
+    REQUIRED_SHOWCASE_SCENES.map((scene) => [scene.id, scene.maxDurationSeconds]),
+  );
+  const segments = [];
+  const preludeEnd = scenes[0].startSeconds;
+  const preludeDuration = Math.min(preludeEnd, 3);
+  segments.push({
+    rawStart: 0,
+    rawEnd: preludeEnd,
+    playbackStart: 0,
+    playbackEnd: preludeDuration,
+  });
+
+  let playbackCursor = preludeDuration;
+  for (const scene of scenes) {
+    const rawDuration = scene.endSeconds - scene.startSeconds;
+    const playbackDuration = Math.min(rawDuration, limits.get(scene.id) ?? rawDuration);
+    segments.push({
+      rawStart: scene.startSeconds,
+      rawEnd: scene.endSeconds,
+      playbackStart: playbackCursor,
+      playbackEnd: playbackCursor + playbackDuration,
+    });
+    playbackCursor += playbackDuration;
+  }
+
+  const mapTime = (time) => {
+    const segment =
+      segments.find((candidate) => time <= candidate.rawEnd) ?? segments.at(-1);
+    const rawDuration = segment.rawEnd - segment.rawStart;
+    if (rawDuration <= 0) return roundTime(segment.playbackStart);
+    const progress = Math.max(0, Math.min(1, (time - segment.rawStart) / rawDuration));
+    return roundTime(
+      segment.playbackStart +
+        progress * (segment.playbackEnd - segment.playbackStart),
+    );
+  };
+
+  return {
+    frames: frames.map((frame) => ({...frame, t: mapTime(frame.t)})),
+    scenes: scenes.map((scene) => ({
+      ...scene,
+      startSeconds: mapTime(scene.startSeconds),
+      endSeconds: mapTime(scene.endSeconds),
+    })),
+    durationSeconds: roundTime(playbackCursor),
+  };
+};
+
 export const parseAsciicast = async (text, options = {}) => {
   const lines = text.split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) {
@@ -147,15 +217,29 @@ export const parseAsciicast = async (text, options = {}) => {
   const frames = [];
   const sceneStarts = [];
   const sceneIds = new Set();
-  let previousTime = -1;
+  let previousRawTime = 0;
+  let playbackTime = 0;
   let durationSeconds = 0;
   let cols = initialSize.cols;
   let rows = initialSize.rows;
 
   for (let index = 1; index < lines.length; index++) {
-    const event = parseEvent(parseJsonLine(lines[index], index + 1), index + 1, previousTime);
-    previousTime = event.time;
-    durationSeconds = Math.max(durationSeconds, event.time);
+    const event = parseEvent(
+      parseJsonLine(lines[index], index + 1),
+      index + 1,
+      previousRawTime,
+    );
+    const rawDelta = event.time - previousRawTime;
+    playbackTime = roundTime(
+      (
+        playbackTime +
+        (initialSize.idleTimeLimit
+          ? Math.min(rawDelta, initialSize.idleTimeLimit)
+          : rawDelta)
+      ),
+    );
+    previousRawTime = event.time;
+    durationSeconds = playbackTime;
 
     if (event.code === "o") {
       if (typeof event.data !== "string") {
@@ -164,7 +248,7 @@ export const parseAsciicast = async (text, options = {}) => {
       await writeTerminal(terminal, event.data);
       const screen = serializer.serialize({scrollback: 0, excludeModes: true});
       if (screen && frames.at(-1)?.screen !== screen) {
-        frames.push({t: event.time, screen});
+        frames.push({t: playbackTime, screen});
       }
       continue;
     }
@@ -176,7 +260,7 @@ export const parseAsciicast = async (text, options = {}) => {
           throw new Error(`Duplicate showcase scene marker: ${marker.id}`);
         }
         sceneIds.add(marker.id);
-        sceneStarts.push({...marker, startSeconds: event.time});
+        sceneStarts.push({...marker, startSeconds: playbackTime});
       }
       continue;
     }
@@ -204,18 +288,19 @@ export const parseAsciicast = async (text, options = {}) => {
     ...scene,
     endSeconds: sceneStarts[index + 1]?.startSeconds ?? durationSeconds,
   }));
+  const timeline = normalizeShowcaseTimeline(frames, scenes, durationSeconds);
 
   return {
     version: 2,
     fps: SHOWCASE_FPS,
     cols,
     rows,
-    durationSeconds: Number(durationSeconds.toFixed(6)),
+    durationSeconds: timeline.durationSeconds,
     generatedAt: options.generatedAt ?? new Date().toISOString(),
     source: options.source ?? "asciicast",
     packageVersion: options.packageVersion ?? "unknown",
-    frames,
-    scenes,
+    frames: timeline.frames,
+    scenes: timeline.scenes,
   };
 };
 

@@ -10,9 +10,15 @@ import {
   SHOWCASE_FPS,
 } from "../showcase/remotion/src/showcase-timing.js";
 
-const cast = (events: unknown[]) =>
+const cast = (events: unknown[], header: Record<string, unknown> = {}) =>
   [
-    JSON.stringify({version: 2, width: 100, height: 30, timestamp: 1_700_000_000}),
+    JSON.stringify({
+      version: 2,
+      width: 100,
+      height: 30,
+      timestamp: 1_700_000_000,
+      ...header,
+    }),
     ...events.map((event) => JSON.stringify(event)),
   ].join("\n");
 
@@ -87,6 +93,51 @@ describe("real showcase asciicast parsing", () => {
     ]);
 
     await expect(parseAsciicast(input)).rejects.toThrow("not ordered");
+  });
+
+  it("applies the recorder idle limit to frames and scene ranges", async () => {
+    const input = cast(
+      [
+        [0.1, "m", sceneMarker(0)],
+        [0.2, "o", "skill"],
+        [120.2, "m", sceneMarker(1)],
+        [120.3, "o", "agent"],
+        [240.3, "m", sceneMarker(2)],
+        [240.4, "o", "dashboard"],
+        [360.4, "m", sceneMarker(3)],
+        [360.5, "o", "handoff"],
+      ],
+      {idle_time_limit: 2},
+    );
+
+    const parsed = await parseAsciicast(input, {generatedAt: "test"});
+
+    expect(parsed.durationSeconds).toBe(6.5);
+    expect(parsed.scenes.map((scene) => scene.startSeconds)).toEqual([0.1, 2.2, 4.3, 6.4]);
+    expect(parsed.frames.at(-1)?.t).toBe(6.5);
+  });
+
+  it("time-compresses long real scenes without dropping their frames", async () => {
+    const input = cast([
+      [3, "m", sceneMarker(0)],
+      [4, "o", "skill starts"],
+      [203, "m", sceneMarker(1)],
+      [204, "o", "agent starts"],
+      [603, "m", sceneMarker(2)],
+      [604, "o", "dashboard starts"],
+      [663, "m", sceneMarker(3)],
+      [664, "o", "handoff starts"],
+      [743, "o", "handoff complete"],
+    ]);
+
+    const parsed = await parseAsciicast(input, {generatedAt: "test"});
+
+    expect(parsed.durationSeconds).toBe(43);
+    expect(parsed.scenes.map((scene) => scene.endSeconds - scene.startSeconds)).toEqual([
+      10, 12, 10, 8,
+    ]);
+    expect(parsed.frames).toHaveLength(5);
+    expect(parsed.frames.at(-1)?.screen).toContain("handoff complete");
   });
 });
 
