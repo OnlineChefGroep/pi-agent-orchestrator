@@ -610,7 +610,7 @@ describe("AgentManager — stable spawn-time completion promises (#327)", () => 
     manager.setMaxConcurrent(1);
     vi.mocked(runAgent).mockImplementation(() => new Promise(() => {}));
 
-    const runningId = manager.spawn(mockPi, mockCtx, "general-purpose", "run", {
+    const _runningId = manager.spawn(mockPi, mockCtx, "general-purpose", "run", {
       description: "running",
       isBackground: true,
     });
