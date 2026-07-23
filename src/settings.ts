@@ -197,6 +197,13 @@ function sanitize(raw: unknown): SubagentsSettings {
   const compression = validateEnum(source, "promptCompressionLevel", VALID_COMPRESSION_LEVELS);
   if (compression) settings.promptCompressionLevel = compression;
 
+  // subagentModel override: "inherit" falls back to the session-default model;
+  // any other non-empty string pins a provider/modelId. Dropped otherwise so
+  // each agent keeps its own configured model (resolveConfiguredModel contract).
+  if (typeof source.subagentModel === "string" && source.subagentModel) {
+    settings.subagentModel = source.subagentModel;
+  }
+
   const booleanFields = [
     "schedulingEnabled",
     "tracingEnabled",

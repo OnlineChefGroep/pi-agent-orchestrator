@@ -298,6 +298,34 @@ describe("settings persistence", () => {
       expect(loadSettings(projectDir)).toEqual({ promptCompressionLevel: "aggressive" });
     });
 
+    it("preserves subagentModel: 'inherit' (session-default escape hatch)", () => {
+      writeProject({ subagentModel: "inherit" });
+      expect(loadSettings(projectDir)).toEqual({ subagentModel: "inherit" });
+    });
+
+    it("preserves a pinned provider/model subagentModel", () => {
+      writeProject({ subagentModel: "zai-env/glm-5.2" });
+      expect(loadSettings(projectDir)).toEqual({ subagentModel: "zai-env/glm-5.2" });
+    });
+
+    it("round-trips subagentModel through save + load", () => {
+      saveSettings({ subagentModel: "inherit" }, projectDir);
+      expect(loadSettings(projectDir)).toEqual({ subagentModel: "inherit" });
+      saveSettings({ subagentModel: "anthropic/claude-haiku-4-5" }, projectDir);
+      expect(loadSettings(projectDir)).toEqual({ subagentModel: "anthropic/claude-haiku-4-5" });
+    });
+
+    it("drops non-string and empty subagentModel silently", () => {
+      writeProject({ subagentModel: 42 } as any);
+      expect(loadSettings(projectDir)).toEqual({});
+      writeProject({ subagentModel: "" } as any);
+      expect(loadSettings(projectDir)).toEqual({});
+      writeProject({ subagentModel: null } as any);
+      expect(loadSettings(projectDir)).toEqual({});
+      writeProject({ subagentModel: { model: "x" } } as any);
+      expect(loadSettings(projectDir)).toEqual({});
+    });
+
     it("accepts all valid uiStyle values", () => {
       for (const style of ["premium", "retro", "plain"] as const) {
         writeProject({ uiStyle: style });
