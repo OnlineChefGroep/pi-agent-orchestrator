@@ -1,42 +1,42 @@
 # Desktop and mobile app capture
 
-Use this when the product is a native or hybrid app: Electron, Tauri, VS Code extension host UI outside the terminal, iOS, Android, or desktop installers.
+Use this for native or hybrid apps: Electron, Tauri, VS Code extension UI outside the terminal, iOS, Android, installers.
 
-## Tooling
+## Tools
 
-| Platform | Capture options |
-|----------|-----------------|
+| Platform | Capture |
+|----------|---------|
 | macOS | `screencapture` video, QuickTime, `ffmpeg` avfoundation |
 | Windows | Xbox Game Bar, OBS, `ffmpeg` dshow/gdigrab |
 | Linux | OBS, `ffmpeg` x11grab/PipeWire |
 | iOS Simulator | `xcrun simctl io booted recordVideo` |
-| Android Emulator | `adb shell screenrecord` / Android Studio recorder |
-| VS Code / Electron | Extension host + OS recorder, or Playwright Electron |
+| Android Emulator | `adb shell screenrecord` or Android Studio |
+| VS Code / Electron | Extension host plus OS recorder, or Playwright Electron |
 
-## Recording recipe
+## Recording
 
-1. Install or build the **exact version** being advertised.
-2. Use a clean profile / guest user when possible.
-3. Fix display resolution and color profile; disable OS notifications.
-4. Keep **app chrome** visible: title bar, traffic lights/menu, tab strip, or mobile status/navigation where it identifies the product.
-5. Mark beats with an on-screen slate, voice note timestamps, or a sidecar JSON of `{t, id, label}` written by the automation driver.
-6. Show success inside the app (toast, completed list, saved file in Finder/Explorer only as a secondary proof).
+1. Install or build the exact version you advertise.
+2. Prefer a clean profile or guest user.
+3. Fix resolution and color profile. Kill OS notifications.
+4. Keep app chrome visible: title bar, menus, tab strip, or mobile status/nav when that identifies the product.
+5. Mark beats with an on-screen slate, voice timestamps, or a sidecar `{t, id, label}` from the driver.
+6. Show success inside the app. A Finder/Explorer file is secondary proof only.
 
-## Automation tips
+## Automation
 
-- Prefer driving the app through its real IPC/CLI when available (Pi commands, extension commands), then record the visible result.
-- For store demos, script the happy path; keep one alternate take for a recovery story only if requested.
-- Sync clocks if you stitch webcam + app later; default is app-only.
+- Drive the app through real IPC or CLI when you can, then record what appears.
+- For store demos, script the happy path. Shoot a recovery take only if someone asked for it.
+- If you later stitch webcam and app, sync clocks. Default is app-only.
 
-## Mobile specifics
+## Mobile
 
-- Prefer simulator/emulator for CI-friendly takes; use a device recording when performance or camera hardware matters.
-- Lock to one orientation; do not rotate mid-scene.
-- Include the app name in the first frame via splash or navigation title.
+- Simulator/emulator for CI-friendly takes. Device recording when camera or real performance matters.
+- One orientation. No mid-scene rotate.
+- Put the app name in the first frame (splash or nav title).
 
-## Anti-patterns
+## Bad take
 
-- Mockups or Figma prototype recordings labeled as the shipped app
-- Cropping the title bar so Electron could be any Chromium shell
-- Permission dialogs and notification spam left in the hero take
-- Variable refresh / huge idle with no app state change
+- Figma or mockups labeled as the shipped app
+- Title bar cropped so Electron looks like any Chromium shell
+- Permission dialogs and notification spam left in
+- Huge idle with no state change

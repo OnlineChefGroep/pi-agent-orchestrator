@@ -1,15 +1,15 @@
-# Post-production (Remotion and friends)
+# Post-production
 
-Turn one marked real capture into a master plus focused clips without inventing frames.
+Take one marked real capture. Cut a master and short clips. Do not invent frames.
 
 ## Goals
 
 - Keep every scene from the capture
-- Compress idle so the story fits a short hero length
-- Preserve product chrome (scale/fit; do not crop identity away)
-- Emit reviewable H.264 assets
+- Compress idle so the hero stays short
+- Keep product chrome (scale to fit, do not crop identity away)
+- Emit H.264 files people can review
 
-## This package pipeline
+## This package
 
 ```bash
 npm run showcase:label-scenes -- /path/to/real-session.cast
@@ -17,39 +17,37 @@ npm run showcase:remotion -- /path/to/real-session.cast
 npm run showcase:verify-media
 ```
 
-Key modules:
-
 | File | Job |
 |------|-----|
-| `scripts/lib/showcase-cast.mjs` | Parse asciicast, idle caps, scene timeline normalize |
+| `scripts/lib/showcase-cast.mjs` | Parse asciicast, cap idle, normalize scene times |
 | `showcase/remotion/scripts/capture-terminal.mjs` | Build `showcase.json` frames |
-| `showcase/remotion/src/PiTerminalShowcase.tsx` | Compose 1080p terminal film |
+| `showcase/remotion/src/PiTerminalShowcase.tsx` | 1080p terminal composition |
 | `showcase/remotion/src/terminal-layout.ts` | Fit font size to captured rows |
-| `scripts/verify-showcase-media.mjs` | Codec / fps / scene contract |
+| `scripts/verify-showcase-media.mjs` | Codec, fps, scene contract |
 
-## Timeline rules
+## Timeline
 
-- Cap per-scene duration (skill ~10s, subagent ~12s, dashboard ~10s, handoff ~8s) by time-compressing idle, not by deleting markers.
-- Prelude before the first marker may be trimmed.
-- Floating timestamps must stay stable (`roundTime` style) so tests do not flake.
+- Cap scene length by compressing idle (about 10s skill, 12s subagent, 10s dashboard, 8s handoff). Do not delete markers.
+- You may trim prelude before the first marker.
+- Keep timestamps stable (`roundTime` style) so tests do not flake.
 
-## Framing rules
+## Framing
 
-- Video canvas is independent of capture rows; **content** must still show all rows.
-- Derive `fontSize` from `contentHeight / (rows * lineHeight)`.
-- After changing chrome padding/height, re-render and visually confirm the prompt/URL/app bar.
+- The video canvas size is not the cast row count. The content must still show every row.
+- `fontSize = contentHeight / (rows * lineHeight)`.
+- After chrome padding or height changes, re-render and check the prompt, URL, or app bar by eye.
 
 ## Encoding
 
-Normalize with ffmpeg when the renderer emits `yuvj420p`:
+If the renderer emits `yuvj420p`:
 
 ```bash
 ffmpeg -y -i in.mp4 -vf "scale=in_range=pc:out_range=tv" \
   -c:v libx264 -pix_fmt yuv420p -color_range tv -an -movflags +faststart out.mp4
 ```
 
-Target for heroes: **1920×1080**, **60 fps** (or 30 if source is 30), **H.264**, **yuv420p**.
+Hero target: 1920×1080, 60 fps (or 30 if the source is 30), H.264, `yuv420p`.
 
-## Multi-surface note
+## Browser and app takes
 
-Browser/app captures follow the same cut logic even without Remotion: marker sidecar → edit decision list → ffmpeg segment extracts → concat master. Remotion is optional polish, not a license to replace the capture with synthetic UI.
+Same cut logic without Remotion: marker sidecar, edit list, ffmpeg segment extract, concat master. Remotion is polish. It is not permission to replace the capture with fake UI.

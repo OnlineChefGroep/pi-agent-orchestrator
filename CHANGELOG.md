@@ -4,9 +4,8 @@
 
 ### Added
 
-- Native `real-product-showcase` skill: realism rules and progressive
-  references for terminal, browser, desktop/mobile capture, Remotion post,
-  and quality gates (no synthetic hero UI).
+- Packaged `real-product-showcase` skill for real terminal, browser, and app
+  demo capture, plus post and quality-gate references.
 
 ### Fixed
 
