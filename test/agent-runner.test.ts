@@ -103,6 +103,38 @@ function createSession(finalText: string): {
   return { session, listeners };
 }
 
+function createSessionWithError(errorMessage: string): {
+  session: AgentSession;
+  listeners: Array<(event: AgentSessionEvent) => void>;
+} {
+  const listeners: Array<(event: AgentSessionEvent) => void> = [];
+  const session = {
+    messages: [] as AgentSession["messages"],
+    subscribe: vi.fn((listener: (event: AgentSessionEvent) => void) => {
+      listeners.push(listener);
+      return () => {};
+    }),
+    prompt: vi.fn(async () => {
+      // Simulate a host-surfaced model/provider failure: an assistant turn
+      // with stopReason "error", an errorMessage, and no text content. This is
+      // exactly how a 401 "User not found" or "model unavailable" surfaces.
+      session.messages.push({
+        role: "assistant",
+        content: [],
+        stopReason: "error",
+        errorMessage,
+      } as AgentSession["messages"][number]);
+    }),
+    abort: vi.fn(),
+    steer: vi.fn(),
+    getActiveToolNames: vi.fn(() => ["read"]),
+    setActiveToolsByName: vi.fn(),
+    setSessionName: vi.fn(),
+    bindExtensions: vi.fn(async () => {}),
+  } as unknown as AgentSession;
+  return { session, listeners };
+}
+
 const ctx = {
   cwd: "/tmp",
   model: { provider: "test", id: "test-model" },
@@ -129,6 +161,21 @@ describe("agent-runner final output capture", () => {
     const result = await runAgent(ctx, "Explore", "Say LOCKED", { pi });
 
     expect(result.responseText).toBe("LOCKED");
+  });
+
+  it("surfaces a model/provider error instead of returning empty output", async () => {
+    // Regression: when the configured model errors on the only turn (e.g. 401
+    // auth, unavailable model), the host ends the session with stopReason
+    // "error" + errorMessage and no text. Previously runAgent returned an
+    // empty "completed" result, hiding the failure from the caller.
+    const { session } = createSessionWithError('401: {"message":"User not found.","code":401}');
+    createAgentSession.mockResolvedValue({ session });
+
+    const result = await runAgent(ctx, "Explore", "audit the PRs", { pi });
+
+    expect(result.responseText).not.toBe("");
+    expect(result.responseText).toContain("model/provider error");
+    expect(result.responseText).toContain("User not found");
   });
 
   it("binds extensions before prompting", async () => {

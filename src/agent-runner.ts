@@ -353,6 +353,24 @@ function getLastAssistantText(session: AgentSession): string {
   return "";
 }
 
+/**
+ * Return the most recent assistant turn's model/provider error, if any.
+ *
+ * The host surfaces a model or provider failure (401 auth, unavailable model,
+ * rate limit, etc.) as an AssistantMessage with `stopReason: "error"` and an
+ * `errorMessage`. The run loop does not throw for these — the session simply
+ * ends — so without this check the error is silently dropped and the agent
+ * appears to complete with empty output.
+ */
+function getLastAssistantError(session: AgentSession): string | undefined {
+  for (let i = session.messages.length - 1; i >= 0; i--) {
+    const msg = session.messages[i];
+    if (msg.role !== "assistant") continue;
+    if (msg.stopReason === "error" && msg.errorMessage) return msg.errorMessage;
+  }
+  return undefined;
+}
+
 function forwardAbortSignal(session: AgentSession, signal?: AbortSignal): () => void {
   if (!signal) return () => {};
   const onAbort = () => session.abort();
@@ -874,6 +892,22 @@ export async function runAgent(
   }
 
   let responseText = gatedResponseText || collector.getText().trim() || getLastAssistantText(session);
+  const modelError = getLastAssistantError(session);
+  if (!responseText && modelError) {
+    // The run produced no text because the model/provider errored on a turn
+    // (e.g. 401 auth, unavailable model). Surface it instead of returning an
+    // empty "completed" result that hides the failure from the caller.
+    logger.warn("Subagent stopped with a model/provider error", {
+      agentId: options.agentId ?? "unknown",
+      error: modelError,
+    });
+    responseText = `Agent stopped with a model/provider error: ${modelError}`;
+    options.hooks
+      ?.dispatch("subagent:error", options.agentId ?? "unknown", { error: modelError })
+      .catch((hookErr) => {
+        logger.debug(`Hook dispatch error: ${hookErr instanceof Error ? hookErr.message : String(hookErr)}`);
+      });
+  }
   const duration = performance.now() - startTime;
 
   // Structured handoff parsing
