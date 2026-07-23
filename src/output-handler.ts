@@ -62,6 +62,8 @@ export interface AgentsMenuDeps {
   settingsGetters: SettingsGetters;
   /** Write-side counterpart of `settingsGetters`. */
   settingsSetters: SettingsSetters;
+  /** UI-layer refresh after Agent top widget toggle (keeps registry free of UI hooks). */
+  onAgentTopWidgetToggle?: () => void;
 }
 
 /** Re-open the agents menu after a sub-flow completes. */
@@ -257,6 +259,7 @@ export async function showAgentsMenu(
   } else if (choice.startsWith("Agent top widget:")) {
     const next = !isShowAgentTopWidget();
     setShowAgentTopWidget(next);
+    deps.onAgentTopWidgetToggle?.();
     notifyApplied(
       ctx,
       deps.pi,

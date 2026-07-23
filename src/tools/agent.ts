@@ -225,7 +225,7 @@ interface OrchestratedDispatchArgs {
   manager: AgentManager;
   batchOrchestrator: BatchOrchestrator;
   agentActivity: Map<string, ActivityTrackerState>;
-  widget: { ensureTimer: () => void; debouncedUpdate: () => void };
+  liveWidgets: { ensureTimer: () => void; debouncedUpdate: () => void };
   pi: ExtensionAPI;
   piCtx: ExtensionContext;
   toolCallId: string;
@@ -303,8 +303,8 @@ async function runOrchestratedDispatch(
     spawned.push({ id, description: member.description, role: member.role });
   }
 
-  args.widget.ensureTimer();
-  args.widget.debouncedUpdate();
+  args.liveWidgets.ensureTimer();
+  args.liveWidgets.debouncedUpdate();
 
   // Background mode: fire-and-forget flush (so the swarm/group is created
   // before any member can complete during the 100ms debounce window). Don't
@@ -579,13 +579,12 @@ Guidelines:
     // ---- Execute ----
 
     execute: async (toolCallId, params, signal, onUpdate, piCtx) => {
-      const { pi, manager, widget, topWidget, agentActivity, batchOrchestrator, scheduler } = ctx;
+      const { pi, manager, liveWidgets, agentActivity, batchOrchestrator, scheduler } = ctx;
 
       // Ensure we have UI context for widget rendering
       const uiCtx = piCtx && typeof piCtx.ui === "object" ? (piCtx.ui as UICtx) : undefined;
       if (uiCtx) {
-        widget.setUICtx(uiCtx);
-        topWidget.setUICtx(uiCtx);
+        liveWidgets.setUICtx(uiCtx);
       }
 
       // Reload custom agents so new .pi/agents/*.md files are picked up without restart
@@ -764,7 +763,7 @@ Guidelines:
           manager,
           batchOrchestrator,
           agentActivity,
-          widget,
+          liveWidgets,
           pi,
           piCtx,
           toolCallId,
@@ -830,8 +829,8 @@ Guidelines:
         }
 
         agentActivity.set(id, bgState);
-        widget.ensureTimer();
-        widget.debouncedUpdate();
+        liveWidgets.ensureTimer();
+        liveWidgets.debouncedUpdate();
 
         // Emit created event
         pi.events.emit("subagents:created", {
@@ -881,13 +880,13 @@ Guidelines:
 
       const { state: fgState, callbacks: fgCallbacks } = createActivityTracker(effectiveMaxTurns, streamUpdate);
 
-      // Wire session creation to register in widget
+      // Wire session creation to register in live widgets
       setupSessionCallbacks(fgCallbacks, (session) => {
         for (const a of manager.listAgents()) {
           if (a.session === session) {
             fgId = a.id;
             agentActivity.set(a.id, fgState);
-            widget.ensureTimer();
+            liveWidgets.ensureTimer();
             break;
           }
         }
@@ -927,9 +926,8 @@ Guidelines:
       // Clean up foreground agent from widgets
       if (fgId) {
         agentActivity.delete(fgId);
-        widget.markFinished(fgId);
-        topWidget.markFinished(fgId);
-        topWidget.update();
+        liveWidgets.markFinished(fgId);
+        liveWidgets.update();
       }
 
       // Get final token count

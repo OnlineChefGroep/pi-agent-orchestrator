@@ -188,14 +188,6 @@ export function isShowAgentTopWidget(): boolean {
 
 export function setShowAgentTopWidget(enabled: boolean): void {
   showAgentTopWidget = enabled;
-  agentTopRefreshHandler?.();
-}
-
-/** Optional refresh hook so `/agents` toggles redraw the above-editor strip immediately. */
-let agentTopRefreshHandler: (() => void) | undefined;
-
-export function setAgentTopRefreshHandler(handler: (() => void) | undefined): void {
-  agentTopRefreshHandler = handler;
 }
 
 // ---- Prompt compression level ----

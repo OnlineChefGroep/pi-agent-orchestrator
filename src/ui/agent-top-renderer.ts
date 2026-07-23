@@ -114,8 +114,9 @@ export function formatCellTokens(count: number): string {
 
 /** Human runtime: `12.3s` / `4m41s` / `1h05m`. */
 export function formatCellRuntime(ms: number): string {
-  const totalSec = Math.max(0, Math.floor(ms / 1000));
-  if (totalSec < 60) return `${(ms / 1000).toFixed(1)}s`;
+  const clamped = Number.isFinite(ms) ? Math.max(0, ms) : 0;
+  const totalSec = Math.floor(clamped / 1000);
+  if (totalSec < 60) return `${(clamped / 1000).toFixed(1)}s`;
   const minutes = Math.floor(totalSec / 60);
   const seconds = totalSec % 60;
   if (minutes < 60) return `${minutes}m${String(seconds).padStart(2, "0")}s`;

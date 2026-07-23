@@ -81,4 +81,32 @@ describe("AgentTopWidget", () => {
     top.forceRefresh();
     expect(ui.setWidget).toHaveBeenCalledWith("agent-top", undefined);
   });
+
+  it("keeps an idle tick alive so toggles apply without a registry handler", () => {
+    const manager = new MockManager();
+    manager.agents = [runningAgent("a1")];
+    const activity = new Map<string, AgentActivity>();
+    const ui = { setWidget: vi.fn(), setStatus: vi.fn() };
+    const top = new AgentTopWidget(manager as never, activity);
+    top.setUICtx(ui as never);
+    top.update();
+    expect(ui.setWidget).toHaveBeenCalled();
+
+    setShowAgentTopWidget(false);
+    ui.setWidget.mockClear();
+    // Idle tick (1000ms) should clear the strip without forceRefresh.
+    vi.advanceTimersByTime(1000);
+    expect(ui.setWidget).toHaveBeenCalledWith("agent-top", undefined);
+
+    setShowAgentTopWidget(true);
+    ui.setWidget.mockClear();
+    vi.advanceTimersByTime(1000);
+    expect(ui.setWidget).toHaveBeenCalledWith(
+      "agent-top",
+      expect.any(Function),
+      { placement: "aboveEditor" },
+    );
+
+    top.dispose();
+  });
 });

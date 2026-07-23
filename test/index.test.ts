@@ -34,7 +34,6 @@ vi.mock("../src/agent-registry.js", () => ({
   setShowAgentTopWidget: vi.fn(),
   setShowTokenUsage: vi.fn(),
   setShowTurnProgress: vi.fn(),
-  setAgentTopRefreshHandler: vi.fn(),
   isShowAgentTopWidget: vi.fn(() => true),
   setTracingEnabled: vi.fn(),
   setUiStyle: vi.fn(),

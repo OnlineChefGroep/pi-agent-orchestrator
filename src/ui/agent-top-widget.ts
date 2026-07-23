@@ -1,15 +1,18 @@
 /**
  * agent-top-widget.ts — Persistent AGENT TOP strip above the editor.
  *
- * Unlike the old fullscreen `/agents → Agent top` overlay (which replaced the
- * session), this registers a Pi `setWidget` above the editor and only appears
- * while agents are running/queued (plus a short linger for finished ones).
- * The session chat stays fully usable underneath.
+ * Registers a Pi `setWidget` above the editor and only paints while agents are
+ * running/queued (plus a short linger for finished ones). The session chat
+ * stays fully usable underneath.
+ *
+ * The adaptive tick stays alive whenever a UI context is bound so settings
+ * toggles are picked up on the next tick without a registry-level refresh hook.
  */
 
 import type { AgentManager } from "../agent-manager.js";
 import { isShowAgentTopWidget } from "../agent-registry.js";
 import type { AgentRecord } from "../types.js";
+import { AdaptiveTick } from "./adaptive-tick.js";
 import {
   getAgentTopEntries,
   renderTopTable,
@@ -28,24 +31,30 @@ const WIDGET_KEY = "agent-top";
 /** Max agent rows in the above-editor strip (keeps the session readable). */
 const WIDGET_PAGE_SIZE = 5;
 const ERROR_LINGER_TURNS = 2;
+/** Fixed default sort for the strip (interactive re-sort lives in dashboard `t`). */
+const SORT_KEY: SortKey = "tokens";
+const SORT_ASC = false;
 
 export class AgentTopWidget {
   private closed = false;
   private uiCtx: UICtx | undefined;
   private widgetRegistered = false;
   private tui: TUI | undefined;
-  private tickTimer: ReturnType<typeof setTimeout> | undefined;
-  private currentIntervalMs = ACTIVE_REFRESH_MS;
   private dirty = true;
   private snapshotHash = 0;
-  private sortKey: SortKey = "tokens";
-  private sortAsc = false;
   private finishedTurnAge = new Map<string, number>();
+  private readonly tick: AdaptiveTick;
 
   constructor(
     private manager: AgentManager,
     private agentActivity: Map<string, AgentActivity>,
-  ) {}
+  ) {
+    this.tick = new AdaptiveTick(
+      () => Boolean(this.uiCtx) && !this.closed,
+      () => this.update(),
+      ACTIVE_REFRESH_MS,
+    );
+  }
 
   setUICtx(ctx: UICtx): void {
     if (ctx !== this.uiCtx) {
@@ -60,7 +69,7 @@ export class AgentTopWidget {
   }
 
   ensureTimer(): void {
-    if (!this.tickTimer) this.scheduleNextTick(ACTIVE_REFRESH_MS);
+    this.tick.ensure(ACTIVE_REFRESH_MS);
   }
 
   onTurnStart(): void {
@@ -77,21 +86,10 @@ export class AgentTopWidget {
     }
   }
 
-  /** Force a redraw after settings toggles. */
+  /** Immediate redraw (e.g. menu toggle). Prefer this over registry callbacks. */
   forceRefresh(): void {
     this.dirty = true;
     this.update();
-  }
-
-  private scheduleNextTick(intervalMs: number): void {
-    if (this.tickTimer) clearTimeout(this.tickTimer);
-    this.tickTimer = setTimeout(() => {
-      if (!this.uiCtx || this.closed) return;
-      this.update();
-      if (this.tickTimer !== undefined) {
-        this.scheduleNextTick(this.currentIntervalMs);
-      }
-    }, intervalMs);
   }
 
   private shouldShowFinished(agentId: string, status: string): boolean {
@@ -126,12 +124,13 @@ export class AgentTopWidget {
   update(): void {
     if (this.closed || !this.uiCtx) return;
 
+    // Keep the idle tick alive while UI is bound so toggles / new agents are
+    // observed without a cross-layer refresh handler in agent-registry.
+    this.tick.setIntervalMs(IDLE_REFRESH_MS);
+    this.tick.ensure();
+
     if (!isShowAgentTopWidget()) {
       this.clearWidget();
-      if (this.tickTimer) {
-        clearTimeout(this.tickTimer);
-        this.tickTimer = undefined;
-      }
       return;
     }
 
@@ -139,7 +138,6 @@ export class AgentTopWidget {
     const agents = this.visibleAgents(allAgents);
     const hasActive = agents.some((a) => a.status === "running" || a.status === "queued");
 
-    // Age bookkeeping for removed agents
     const ids = new Set(allAgents.map((a) => a.id));
     for (const [id] of this.finishedTurnAge) {
       if (!ids.has(id)) this.finishedTurnAge.delete(id);
@@ -147,15 +145,10 @@ export class AgentTopWidget {
 
     if (agents.length === 0) {
       this.clearWidget();
-      if (this.tickTimer) {
-        clearTimeout(this.tickTimer);
-        this.tickTimer = undefined;
-      }
       return;
     }
 
-    this.currentIntervalMs = hasActive ? ACTIVE_REFRESH_MS : IDLE_REFRESH_MS;
-    this.ensureTimer();
+    this.tick.setIntervalMs(hasActive ? ACTIVE_REFRESH_MS : IDLE_REFRESH_MS);
 
     const nextHash = buildSnapshotHash(agents);
     if (nextHash !== this.snapshotHash) {
@@ -193,13 +186,13 @@ export class AgentTopWidget {
     const agents = this.visibleAgents(this.manager.listAgents());
     const entries = sortEntries(
       getAgentTopEntries(agents, this.agentActivity),
-      this.sortKey,
-      this.sortAsc,
+      SORT_KEY,
+      SORT_ASC,
     );
     return renderTopTable(
       entries,
-      this.sortKey,
-      this.sortAsc,
+      SORT_KEY,
+      SORT_ASC,
       0,
       WIDGET_PAGE_SIZE,
       getThemeColors(),
@@ -210,10 +203,7 @@ export class AgentTopWidget {
 
   dispose(): void {
     this.closed = true;
-    if (this.tickTimer) {
-      clearTimeout(this.tickTimer);
-      this.tickTimer = undefined;
-    }
+    this.tick.stop();
     this.clearWidget();
   }
 }

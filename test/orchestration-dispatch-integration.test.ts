@@ -116,18 +116,15 @@ function buildToolContext() {
     onAgentComplete: vi.fn(() => "pass" as const),
     listSwarms: vi.fn(() => []),
   } as any;
-  const widget = {
+  const liveWidgets = {
     ensureTimer: vi.fn(),
     debouncedUpdate: vi.fn(),
     markFinished: vi.fn(),
     setUICtx: vi.fn(),
-  } as any;
-  const topWidget = {
-    ensureTimer: vi.fn(),
     update: vi.fn(),
-    markFinished: vi.fn(),
-    setUICtx: vi.fn(),
-    forceRefresh: vi.fn(),
+    onTurnStart: vi.fn(),
+    bind: vi.fn(),
+    dispose: vi.fn(),
   } as any;
   const agentActivity = new Map<string, any>();
   const batchOrchestrator = new BatchOrchestrator({
@@ -150,8 +147,7 @@ function buildToolContext() {
   const ctx: ToolContext = {
     pi,
     manager,
-    widget,
-    topWidget,
+    liveWidgets,
     agentActivity,
     batchOrchestrator,
     scheduler,
@@ -162,7 +158,7 @@ function buildToolContext() {
     scheduleNudge: vi.fn(),
   };
 
-  return { ctx, manager, groupJoin, swarmJoin, batchOrchestrator, agentActivity, widget, piCtx, pi, scheduler };
+  return { ctx, manager, groupJoin, swarmJoin, batchOrchestrator, agentActivity, liveWidgets, piCtx, pi, scheduler };
 }
 
 /**
