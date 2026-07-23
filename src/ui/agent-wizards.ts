@@ -6,10 +6,10 @@ import { reloadCustomAgents } from "../agent-registry.js";
 import { BUILTIN_TOOL_NAMES } from "../agent-types.js";
 import type { SubagentScheduler } from "../schedule.js";
 import {
-  buildAgentSystemPrompt,
   type AgentArchitectureMode,
   type AgentAutonomyProfile,
   type AgentSystemBlueprint,
+  buildAgentSystemPrompt,
   normalizeWizardName,
   parseAgentSystemBlueprint,
   type SkillGenerationPolicy,
