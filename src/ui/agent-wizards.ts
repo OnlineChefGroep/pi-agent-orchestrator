@@ -5,7 +5,6 @@ import type { AgentManager } from "../agent-manager.js";
 import { reloadCustomAgents } from "../agent-registry.js";
 import { BUILTIN_TOOL_NAMES, getAgentConfig } from "../agent-types.js";
 import type { SubagentScheduler } from "../schedule.js";
-import { writeBlueprintFilesAtomically } from "./agent-blueprint-writer.js";
 import {
   type AgentArchitectureMode,
   type AgentAutonomyProfile,
@@ -18,6 +17,7 @@ import {
   type SkillGenerationPolicy,
   validateBlueprintForSelections,
 } from "./agent-blueprint.js";
+import { writeBlueprintFilesAtomically } from "./agent-blueprint-writer.js";
 import { personalAgentsDir, projectAgentsDir } from "./agent-file-helpers.js";
 
 const ARCHITECTURE_OPTIONS: Record<string, AgentArchitectureMode> = {
