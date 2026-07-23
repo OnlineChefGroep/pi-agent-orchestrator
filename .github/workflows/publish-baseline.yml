@@ -1,12 +1,14 @@
 name: Publish maintenance baseline
 
-# Publishes an approved pre-train baseline already landed on main (e.g. 0.17.5).
-# The locked 0.18 transactional publisher remains separate — see release.yml.
+# Publishes an approved pre-train baseline already landed on main (e.g. 0.17.5,
+# 0.17.6). The version is validated against .release-policy.json#sourceBaselines
+# and must equal the package.json version currently on main. The locked 0.18
+# transactional publisher remains separate — see release.yml.
 on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: "Type the exact baseline version to publish (e.g. 0.17.5)"
+        description: "Type the exact baseline version to publish (must match package.json on main and be in sourceBaselines)"
         required: true
         type: string
 
@@ -19,7 +21,7 @@ concurrency:
 jobs:
   verify:
     name: Verify and build baseline artifact
-    if: github.ref == 'refs/heads/main' && inputs.confirm == '0.17.5'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -52,7 +54,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          REQUESTED="${{ inputs.confirm }}"
           VERSION="$(node -p "require('./package.json').version")"
+          test "$REQUESTED" = "$VERSION" || {
+            echo "Requested baseline '$REQUESTED' does not match package.json version '$VERSION' on main." >&2
+            exit 1
+          }
           node scripts/release-policy.mjs baseline "$VERSION"
 
       - run: npm ci
