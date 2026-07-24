@@ -73,8 +73,7 @@
     "@sinclair/typebox": "^0.34.52",
     "croner": "^10.0.1",
     "nanoid": "^5.1.16",
-    "proper-lockfile": "^4.1.2",
-    "@earendil-works/pi-coding-agent": ">=0.80.10"
+    "proper-lockfile": "^4.1.2"
   },
   "scripts": {
     "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc",
